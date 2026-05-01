@@ -35,7 +35,7 @@
   var deckPanStartY = 0;
   var deckPanScrollX = 0;
   var deckPanMoved = false;
-  var deckTouchPanSpeed = 5.2;
+  var deckTouchPanSpeed = 10;
   var suppressDeckClick = false;
   var deckTouchPendingCardId = null;
   var deckTouchLongPressTimer = null;
