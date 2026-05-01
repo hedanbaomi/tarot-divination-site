@@ -170,6 +170,8 @@ body {
   align-items: center;
   justify-content: center;
   user-select: none;
+  touch-action: none;
+  -webkit-touch-callout: none;
   transition: box-shadow 0.12s;
   z-index: 1;
 }

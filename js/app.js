@@ -18,6 +18,11 @@
   var canvasDragStartY = 0;
   var canvasDragOrigX = 0;
   var canvasDragOrigY = 0;
+  var canvasTouchPendingCardId = null;
+  var canvasTouchLongPressTimer = null;
+  var canvasTouchPointerId = null;
+  var canvasTouchStartX = 0;
+  var canvasTouchStartY = 0;
 
   var boardPanning = false;
   var boardPanStartX = 0;
@@ -157,6 +162,54 @@
       el.style.left = spreadCards[cardId].x + "px";
       el.style.top = spreadCards[cardId].y + "px";
     }
+  }
+
+  function styleCanvasDragging(cardId, isDragging) {
+    var el = elements.spreadBoard.querySelector('.canvas-card[data-card-id="' + cardId + '"]');
+    if (!el) return;
+    el.style.zIndex = isDragging ? "200" : "1";
+    el.style.transition = isDragging ? "none" : "box-shadow 0.15s";
+    el.style.cursor = isDragging ? "grabbing" : "grab";
+  }
+
+  function startCanvasDrag(cardId, clientX, clientY) {
+    var pos = spreadCards[cardId];
+    if (!pos) return;
+    canvasCardDragging = cardId;
+    canvasDragStartX = clientX;
+    canvasDragStartY = clientY;
+    canvasDragOrigX = pos.x;
+    canvasDragOrigY = pos.y;
+    styleCanvasDragging(cardId, true);
+  }
+
+  function finishCanvasDrag() {
+    if (canvasCardDragging) {
+      styleCanvasDragging(canvasCardDragging, false);
+      canvasCardDragging = null;
+    }
+  }
+
+  function cancelCanvasTouchPending() {
+    if (canvasTouchLongPressTimer) {
+      clearTimeout(canvasTouchLongPressTimer);
+      canvasTouchLongPressTimer = null;
+    }
+    canvasTouchPendingCardId = null;
+  }
+
+  function cleanupCanvasTouchDrag() {
+    cancelCanvasTouchPending();
+    finishCanvasDrag();
+    canvasTouchPointerId = null;
+  }
+
+  function startCanvasTouchDrag(cardId, clientX, clientY) {
+    canvasTouchLongPressTimer = null;
+    canvasTouchPendingCardId = null;
+    boardPanning = false;
+    elements.spreadBoard.classList.remove("panning");
+    startCanvasDrag(cardId, clientX, clientY);
   }
 
   function isPointInsideBoard(clientX, clientY) {
@@ -370,15 +423,40 @@
       el.addEventListener("mousedown", function (e) {
         if (e.target === removeBtn || e.target.closest(".remove-btn")) return;
         e.preventDefault();
-        canvasCardDragging = cardId;
-        canvasDragStartX = e.clientX;
-        canvasDragStartY = e.clientY;
-        canvasDragOrigX = pos.x;
-        canvasDragOrigY = pos.y;
-        el.style.zIndex = "200";
-        el.style.transition = "none";
-        el.style.cursor = "grabbing";
+        startCanvasDrag(cardId, e.clientX, e.clientY);
       });
+
+      if (window.PointerEvent) {
+        el.addEventListener("pointerdown", function (e) {
+          if ((e.pointerType !== "touch" && e.pointerType !== "pen") ||
+              e.target === removeBtn || e.target.closest(".remove-btn")) return;
+          e.preventDefault();
+          canvasTouchPointerId = e.pointerId;
+          canvasTouchPendingCardId = cardId;
+          canvasTouchStartX = e.clientX;
+          canvasTouchStartY = e.clientY;
+          if (canvasTouchLongPressTimer) clearTimeout(canvasTouchLongPressTimer);
+          canvasTouchLongPressTimer = setTimeout(function () {
+            startCanvasTouchDrag(cardId, canvasTouchStartX, canvasTouchStartY);
+          }, 360);
+          if (el.setPointerCapture) {
+            try { el.setPointerCapture(e.pointerId); } catch (err) {}
+          }
+        });
+      }
+
+      el.addEventListener("touchstart", function (e) {
+        if (window.PointerEvent || e.touches.length !== 1 ||
+            e.target === removeBtn || e.target.closest(".remove-btn")) return;
+        e.preventDefault();
+        canvasTouchPendingCardId = cardId;
+        canvasTouchStartX = e.touches[0].clientX;
+        canvasTouchStartY = e.touches[0].clientY;
+        if (canvasTouchLongPressTimer) clearTimeout(canvasTouchLongPressTimer);
+        canvasTouchLongPressTimer = setTimeout(function () {
+          startCanvasTouchDrag(cardId, canvasTouchStartX, canvasTouchStartY);
+        }, 360);
+      }, { passive: false });
 
       board.appendChild(el);
     });
@@ -761,15 +839,7 @@
     });
 
     document.addEventListener("mouseup", function () {
-      if (canvasCardDragging) {
-        var el = elements.spreadBoard.querySelector('.canvas-card[data-card-id="' + canvasCardDragging + '"]');
-        if (el) {
-          el.style.zIndex = "1";
-          el.style.transition = "box-shadow 0.15s";
-          el.style.cursor = "grab";
-        }
-        canvasCardDragging = null;
-      }
+      finishCanvasDrag();
 
       if (boardPanning) {
         boardPanning = false;
@@ -787,6 +857,34 @@
         }, 0);
       }
     });
+
+    if (window.PointerEvent) {
+      document.addEventListener("pointermove", function (e) {
+        if (canvasTouchPointerId !== e.pointerId) return;
+        var dx = e.clientX - canvasTouchStartX;
+        var dy = e.clientY - canvasTouchStartY;
+
+        if (canvasCardDragging) {
+          e.preventDefault();
+          moveCardOnCanvas(canvasCardDragging, canvasDragOrigX + dx, canvasDragOrigY + dy);
+          return;
+        }
+
+        if (canvasTouchPendingCardId && Math.hypot(dx, dy) > 10) {
+          cancelCanvasTouchPending();
+        }
+      });
+
+      document.addEventListener("pointerup", function (e) {
+        if (canvasTouchPointerId !== e.pointerId) return;
+        cleanupCanvasTouchDrag();
+      });
+
+      document.addEventListener("pointercancel", function (e) {
+        if (canvasTouchPointerId !== e.pointerId) return;
+        cleanupCanvasTouchDrag();
+      });
+    }
 
     document.addEventListener("click", function (e) {
       if (!e.target.closest(".fan-card") && !e.target.closest(".canvas-card")) {
@@ -821,6 +919,15 @@
             deckTouchLongPressTimer = null;
           }
           deckTouchPendingCardId = null;
+        }
+      }
+
+      if (canvasTouchPendingCardId) {
+        var canvasPendingTouch = e.touches[0];
+        var canvasPendingDx = canvasPendingTouch.clientX - canvasTouchStartX;
+        var canvasPendingDy = canvasPendingTouch.clientY - canvasTouchStartY;
+        if (Math.hypot(canvasPendingDx, canvasPendingDy) > 10) {
+          cancelCanvasTouchPending();
         }
       }
 
@@ -888,8 +995,12 @@
         }
       }
 
+      if (canvasTouchPendingCardId) {
+        cancelCanvasTouchPending();
+      }
+
       if (canvasCardDragging) {
-        canvasCardDragging = null;
+        finishCanvasDrag();
       }
       if (boardPanning) {
         boardPanning = false;
@@ -909,6 +1020,7 @@
 
     document.addEventListener("touchcancel", function () {
       cleanupDeckTouchDrag();
+      cleanupCanvasTouchDrag();
       if (boardPanning) {
         boardPanning = false;
         elements.spreadBoard.classList.remove("panning");
@@ -917,7 +1029,6 @@
         deckPanning = false;
         elements.deckFan.classList.remove("panning");
       }
-      canvasCardDragging = null;
       setTimeout(function () {
         suppressDeckClick = false;
       }, 250);
