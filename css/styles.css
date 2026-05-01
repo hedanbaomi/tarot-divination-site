@@ -190,10 +190,7 @@ body {
   pointer-events: none;
   user-select: none;
 }
-.has-image::before { content: none; }
 .has-image::after { border-color: rgba(255,255,255,0.22); }
-.canvas-card.has-image.face-down::after { content: none; }
-.canvas-card.face-down .card-image { filter: saturate(0.82) brightness(0.72); }
 .canvas-card.face-up .card-image { filter: saturate(1.05) brightness(1.02); }
 .canvas-card.face-up .card-name-mini {
   position: relative;
@@ -297,7 +294,6 @@ body {
   user-select: none;
   -webkit-touch-callout: none;
 }
-.fan-card.has-image { background: #111; }
 .fan-card:last-child { margin-right: 0; }
 .fan-card::after {
   content: "";

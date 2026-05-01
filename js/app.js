@@ -416,13 +416,11 @@
       el.setAttribute("data-card-id", cardId);
       el.style.left = pos.x + "px";
       el.style.top = pos.y + "px";
-      if (card.image) {
-        el.classList.add("has-image");
-        el.appendChild(createCardImage(card, "card-image"));
-      }
 
       if (revealedCards[cardId]) {
         el.classList.add("face-up");
+        el.classList.add("has-image");
+        el.appendChild(createCardImage(card, "card-image"));
         var nameEl = document.createElement("span");
         nameEl.className = "card-name-mini";
         nameEl.textContent = card.name;
