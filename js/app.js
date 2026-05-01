@@ -31,10 +31,15 @@
   var deckPanScrollX = 0;
   var deckPanMoved = false;
   var suppressDeckClick = false;
+  var deckTouchPendingCardId = null;
+  var deckTouchLongPressTimer = null;
   var deckTouchCardDragging = null;
   var deckTouchCardMoved = false;
+  var deckTouchPointerId = null;
   var deckTouchStartX = 0;
   var deckTouchStartY = 0;
+  var deckTouchLastX = 0;
+  var deckTouchLastY = 0;
   var deckTouchGhost = null;
 
   var elements = {};
@@ -190,6 +195,11 @@
   }
 
   function cleanupDeckTouchDrag() {
+    if (deckTouchLongPressTimer) {
+      clearTimeout(deckTouchLongPressTimer);
+      deckTouchLongPressTimer = null;
+    }
+    deckTouchPendingCardId = null;
     if (deckTouchGhost) {
       deckTouchGhost.remove();
       deckTouchGhost = null;
@@ -197,6 +207,32 @@
     elements.spreadBoard.classList.remove("drag-over-board");
     deckTouchCardDragging = null;
     deckTouchCardMoved = false;
+    deckTouchPointerId = null;
+  }
+
+  function cancelDeckTouchPending() {
+    if (deckTouchLongPressTimer) {
+      clearTimeout(deckTouchLongPressTimer);
+      deckTouchLongPressTimer = null;
+    }
+    deckTouchPendingCardId = null;
+  }
+
+  function startDeckTouchDrag(cardId, clientX, clientY) {
+    if (!cardId || cardDrawnIds[cardId]) return;
+    deckTouchLongPressTimer = null;
+    deckTouchPendingCardId = null;
+    deckPanning = false;
+    elements.deckFan.classList.remove("panning");
+    activatedCardId = cardId;
+    suppressDeckClick = true;
+    deckTouchCardDragging = cardId;
+    deckTouchCardMoved = true;
+    deckTouchLastX = clientX;
+    deckTouchLastY = clientY;
+    renderDeckFan();
+    createDeckTouchGhost(cardId, clientX, clientY);
+    moveDeckTouchGhost(clientX, clientY);
   }
 
   function activateCard(cardId) {
@@ -569,15 +605,111 @@
       fan.classList.add("panning");
     });
 
+    if (window.PointerEvent) {
+      fan.addEventListener("pointerdown", function (e) {
+        if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+        var cardEl = e.target.closest(".fan-card");
+        if (!cardEl || cardEl.classList.contains("placed")) return;
+        e.preventDefault();
+        deckTouchPointerId = e.pointerId;
+        deckTouchPendingCardId = cardEl.getAttribute("data-card-id");
+        deckTouchCardMoved = false;
+        deckTouchStartX = e.clientX;
+        deckTouchStartY = e.clientY;
+        deckTouchLastX = e.clientX;
+        deckTouchLastY = e.clientY;
+        deckPanMoved = false;
+        deckPanScrollX = fan.scrollLeft;
+        suppressDeckClick = false;
+        if (deckTouchLongPressTimer) clearTimeout(deckTouchLongPressTimer);
+        deckTouchLongPressTimer = setTimeout(function () {
+          startDeckTouchDrag(deckTouchPendingCardId, deckTouchStartX, deckTouchStartY);
+        }, 360);
+        if (fan.setPointerCapture) {
+          try { fan.setPointerCapture(e.pointerId); } catch (err) {}
+        }
+      });
+
+      fan.addEventListener("pointermove", function (e) {
+        if (deckTouchPointerId !== e.pointerId) return;
+        var dx = e.clientX - deckTouchStartX;
+        var dy = e.clientY - deckTouchStartY;
+
+        if (deckTouchCardDragging) {
+          e.preventDefault();
+          deckTouchLastX = e.clientX;
+          deckTouchLastY = e.clientY;
+          moveDeckTouchGhost(e.clientX, e.clientY);
+          return;
+        }
+
+        if (!deckTouchPendingCardId) return;
+        if (Math.hypot(dx, dy) > 10) {
+          cancelDeckTouchPending();
+        }
+        if (Math.abs(dx) > Math.abs(dy)) {
+          e.preventDefault();
+          fan.scrollLeft = deckPanScrollX - dx;
+          deckPanMoved = true;
+          suppressDeckClick = true;
+        }
+      });
+
+      fan.addEventListener("pointerup", function (e) {
+        if (deckTouchPointerId !== e.pointerId) return;
+        if (deckTouchCardDragging) {
+          var dropX = e.clientX || deckTouchLastX;
+          var dropY = e.clientY || deckTouchLastY;
+          if (isPointInsideBoard(dropX, dropY)) {
+            var pos = getBoardDropPosition(dropX, dropY);
+            placeCardOnSpread(deckTouchCardDragging, pos.x, pos.y);
+          }
+          suppressDeckClick = true;
+          setTimeout(function () {
+            suppressDeckClick = false;
+          }, 250);
+          cleanupDeckTouchDrag();
+          return;
+        }
+
+        if (deckTouchPendingCardId) {
+          var pendingCardId = deckTouchPendingCardId;
+          cancelDeckTouchPending();
+          if (!deckPanMoved) {
+            suppressDeckClick = true;
+            activateCard(pendingCardId);
+            setTimeout(function () {
+              suppressDeckClick = false;
+            }, 250);
+          }
+        }
+
+        deckTouchPointerId = null;
+      });
+
+      fan.addEventListener("pointercancel", function (e) {
+        if (deckTouchPointerId !== e.pointerId) return;
+        cleanupDeckTouchDrag();
+        setTimeout(function () {
+          suppressDeckClick = false;
+        }, 250);
+      });
+    }
+
     fan.addEventListener("touchstart", function (e) {
       if (e.touches.length !== 1) return;
-      var activeCard = e.target.closest(".fan-card.activated");
-      if (activeCard) {
-        deckTouchCardDragging = activeCard.getAttribute("data-card-id");
+      var cardEl = e.target.closest(".fan-card");
+      if (cardEl && window.PointerEvent) return;
+      if (cardEl && !cardEl.classList.contains("placed")) {
+        e.preventDefault();
+        deckTouchPendingCardId = cardEl.getAttribute("data-card-id");
         deckTouchCardMoved = false;
         deckTouchStartX = e.touches[0].clientX;
         deckTouchStartY = e.touches[0].clientY;
-        return;
+        if (deckTouchLongPressTimer) clearTimeout(deckTouchLongPressTimer);
+        deckTouchLongPressTimer = setTimeout(function () {
+          startDeckTouchDrag(deckTouchPendingCardId, deckTouchStartX, deckTouchStartY);
+        }, 360);
       }
       deckPanning = true;
       deckPanMoved = false;
@@ -585,7 +717,7 @@
       deckPanStartY = e.touches[0].clientY;
       deckPanScrollX = fan.scrollLeft;
       fan.classList.add("panning");
-    }, { passive: true });
+    }, { passive: false });
 
     fan.addEventListener("wheel", function (e) {
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) && e.deltaX === 0) return;
@@ -679,6 +811,19 @@
         return;
       }
 
+      if (deckTouchPendingCardId) {
+        var pendingTouch = e.touches[0];
+        var pendingDx = pendingTouch.clientX - deckTouchStartX;
+        var pendingDy = pendingTouch.clientY - deckTouchStartY;
+        if (Math.hypot(pendingDx, pendingDy) > 10) {
+          if (deckTouchLongPressTimer) {
+            clearTimeout(deckTouchLongPressTimer);
+            deckTouchLongPressTimer = null;
+          }
+          deckTouchPendingCardId = null;
+        }
+      }
+
       if (canvasCardDragging) {
         e.preventDefault();
         var cardTouch = e.touches[0];
@@ -727,6 +872,22 @@
         return;
       }
 
+      if (deckTouchPendingCardId) {
+        var pendingCardId = deckTouchPendingCardId;
+        if (deckTouchLongPressTimer) {
+          clearTimeout(deckTouchLongPressTimer);
+          deckTouchLongPressTimer = null;
+        }
+        deckTouchPendingCardId = null;
+        if (!deckPanMoved) {
+          suppressDeckClick = true;
+          activateCard(pendingCardId);
+          setTimeout(function () {
+            suppressDeckClick = false;
+          }, 250);
+        }
+      }
+
       if (canvasCardDragging) {
         canvasCardDragging = null;
       }
@@ -744,6 +905,22 @@
           suppressDeckClick = false;
         }, 0);
       }
+    });
+
+    document.addEventListener("touchcancel", function () {
+      cleanupDeckTouchDrag();
+      if (boardPanning) {
+        boardPanning = false;
+        elements.spreadBoard.classList.remove("panning");
+      }
+      if (deckPanning) {
+        deckPanning = false;
+        elements.deckFan.classList.remove("panning");
+      }
+      canvasCardDragging = null;
+      setTimeout(function () {
+        suppressDeckClick = false;
+      }, 250);
     });
   }
 

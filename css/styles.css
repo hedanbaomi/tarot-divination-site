@@ -266,6 +266,10 @@ body {
   transform: rotate(var(--fan-angle, 0deg));
   z-index: 1;
   overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 .fan-card:last-child { margin-right: 0; }
 .fan-card::after {
