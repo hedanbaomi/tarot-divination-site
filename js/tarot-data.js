@@ -317,6 +317,10 @@ function reversedText(cardName, uprightText) {
   return cardName + "逆位时，这股力量不是消失，而是受阻、过量或方向错位。请回到它的正位主题，检查哪里需要节制、承担或重新平衡。";
 }
 
+function getCardImagePath(cardId) {
+  return `assets/cards/${cardId}.jpeg`;
+}
+
 function buildMinorArcana() {
   const cards = [];
   for (const suitKey of Object.keys(minorArcanaSuits)) {
@@ -338,6 +342,7 @@ function buildMinorArcana() {
         reversedKeywords: reverseKeywords(uprightKeywords),
         uprightMeaning,
         reversedMeaning: reversedText(name, uprightMeaning),
+        image: getCardImagePath(id),
         source: quareiaSource
       });
     }
@@ -347,6 +352,7 @@ function buildMinorArcana() {
 
 tarotDeck.forEach(function (card) {
   card.source = quareiaSource;
+  card.image = getCardImagePath(card.id);
 });
 
 const minorArcana = buildMinorArcana();

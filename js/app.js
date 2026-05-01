@@ -127,6 +127,16 @@
     return null;
   }
 
+  function createCardImage(card, className) {
+    var img = document.createElement("img");
+    img.className = className || "card-image";
+    img.src = card.image;
+    img.alt = card.name;
+    img.loading = "lazy";
+    img.decoding = "async";
+    return img;
+  }
+
   function getSmartCanvasPosition() {
     var x = nextCanvasX;
     var y = nextCanvasY;
@@ -242,7 +252,7 @@
     var source = elements.deckFan.querySelector('.fan-card[data-card-id="' + cardId + '"]');
     if (!source) return;
     var rect = source.getBoundingClientRect();
-    deckTouchGhost = source.cloneNode(false);
+    deckTouchGhost = source.cloneNode(true);
     deckTouchGhost.className = "fan-card deck-drag-ghost activated";
     deckTouchGhost.style.width = rect.width + "px";
     deckTouchGhost.style.height = rect.height + "px";
@@ -347,6 +357,11 @@
         cardEl.classList.add("activated");
       }
 
+      if (card.image) {
+        cardEl.classList.add("has-image");
+        cardEl.appendChild(createCardImage(card, "card-image"));
+      }
+
       if (!isPlaced) {
         cardEl.addEventListener("click", function (e) {
           e.stopPropagation();
@@ -406,6 +421,10 @@
       el.setAttribute("data-card-id", cardId);
       el.style.left = pos.x + "px";
       el.style.top = pos.y + "px";
+      if (card.image) {
+        el.classList.add("has-image");
+        el.appendChild(createCardImage(card, "card-image"));
+      }
 
       if (revealedCards[cardId]) {
         el.classList.add("face-up");
@@ -498,6 +517,11 @@
 
       var resultCard = document.createElement("div");
       resultCard.className = "result-card";
+
+      if (card.image) {
+        var resultImage = createCardImage(card, "result-card-image");
+        resultCard.appendChild(resultImage);
+      }
 
       var header = document.createElement("div");
       header.className = "result-header";

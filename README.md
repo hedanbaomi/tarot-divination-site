@@ -43,6 +43,10 @@ https://hedanbaomi.github.io/tarot-divination-site/
 
 牌意文本为面向本网站的整理与改写，参考《21世纪的塔罗技能》和 Quareia 训练语境。原始 PDF 资料不包含在开源仓库中。
 
+## Card Image Source
+
+The 78 Rider-Waite-Smith card face images are local 420px derivatives from Wikimedia Commons' public-domain "Roses & Lilies" set. See `assets/cards/SOURCE.md`.
+
 ## License
 
 MIT
