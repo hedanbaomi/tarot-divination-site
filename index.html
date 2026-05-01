@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>塔罗占卜 · Tarot Divination</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="page-wrapper">
+    <header class="header">
+      <h1>塔罗占卜</h1>
+      <p class="subtitle">TAROT DIVINATION · 参考 Quareia 体系</p>
+    </header>
+
+    <section class="settings-panel">
+      <div class="setting-row">
+        <div class="setting-group">
+          <label for="modeSelect">牌位模式</label>
+          <select id="modeSelect">
+            <option value="upright-only">全正位（推荐）</option>
+            <option value="mixed">正逆位混合</option>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label for="arcanaFilter">牌组筛选</label>
+          <select id="arcanaFilter">
+            <option value="mixed">混合抽取</option>
+            <option value="major-only">仅大阿卡那</option>
+            <option value="minor-only">仅小阿卡那</option>
+            <option value="major-then-minor">先大后小</option>
+            <option value="minor-then-major">先小后大</option>
+          </select>
+        </div>
+      </div>
+      <div class="setting-row setting-actions">
+        <button class="btn btn-primary" id="shuffleBtn">洗牌</button>
+        <button class="btn btn-switch-arcana" id="switchArcanaBtn" style="display:none;">切换牌组</button>
+        <button class="btn btn-secondary" id="clearSpreadBtn">清空</button>
+        <button class="btn btn-accent" id="revealBtn" style="display:none;">开牌解读</button>
+      </div>
+    </section>
+
+    <div class="status-bar" id="statusBar">
+      <span>已摆放：<span class="card-count" id="spreadPosCount">0</span> 张</span>
+      <span class="status-divider">|</span>
+      <span class="phase-label" id="phaseLabel"></span>
+    </div>
+
+    <section class="spread-section" id="spreadSection">
+      <h2>自由牌阵</h2>
+      <p class="spread-hint">点击牌可激活；再次点击会自动放入牌阵。激活后也可拖到牌阵任意位置。</p>
+      <div class="spread-board" id="spreadBoard">
+        <p class="spread-placeholder">从下方牌组选择一张牌放到这里</p>
+      </div>
+    </section>
+
+    <section class="deck-section">
+      <h2><span id="deckTitle">牌组</span></h2>
+      <p class="deck-hint">按住牌组任意位置左右拖动即可浏览，不必点击滚动条；滚轮也可横向移动牌组。</p>
+      <div class="deck-fan" id="deckFan" aria-label="塔罗牌组"></div>
+    </section>
+
+    <section class="results-section" id="resultsSection" style="display:none;">
+      <h2>解读结果</h2>
+      <button class="btn btn-secondary" id="openAllBtn">全部翻开</button>
+      <div class="results-list" id="resultsList"></div>
+    </section>
+
+    <footer class="footer">
+      <p>牌意参考《21世纪的塔罗技能》与 Quareia 训练语境整理 · 仅供娱乐，请理性看待占卜结果</p>
+    </footer>
+  </div>
+
+  <script src="js/tarot-data.js"></script>
+  <script src="js/spreads.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
