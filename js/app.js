@@ -357,11 +357,6 @@
         cardEl.classList.add("activated");
       }
 
-      if (card.image) {
-        cardEl.classList.add("has-image");
-        cardEl.appendChild(createCardImage(card, "card-image"));
-      }
-
       if (!isPlaced) {
         cardEl.addEventListener("click", function (e) {
           e.stopPropagation();
@@ -545,7 +540,7 @@
       if (card.suit) {
         var suitEl = document.createElement("span");
         suitEl.className = "result-suit";
-        suitEl.textContent = card.suit + " · " + card.element + " · " + card.direction;
+        suitEl.textContent = card.suit + " · " + card.element + (card.direction ? " · " + card.direction : "");
         header.appendChild(suitEl);
       }
 
