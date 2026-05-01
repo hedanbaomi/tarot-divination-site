@@ -31,6 +31,11 @@
   var deckPanScrollX = 0;
   var deckPanMoved = false;
   var suppressDeckClick = false;
+  var deckTouchCardDragging = null;
+  var deckTouchCardMoved = false;
+  var deckTouchStartX = 0;
+  var deckTouchStartY = 0;
+  var deckTouchGhost = null;
 
   var elements = {};
 
@@ -147,6 +152,51 @@
       el.style.left = spreadCards[cardId].x + "px";
       el.style.top = spreadCards[cardId].y + "px";
     }
+  }
+
+  function isPointInsideBoard(clientX, clientY) {
+    var rect = elements.spreadBoard.getBoundingClientRect();
+    return clientX >= rect.left && clientX <= rect.right &&
+      clientY >= rect.top && clientY <= rect.bottom;
+  }
+
+  function getBoardDropPosition(clientX, clientY) {
+    var board = elements.spreadBoard;
+    var rect = board.getBoundingClientRect();
+    return {
+      x: clientX - rect.left + board.scrollLeft - 29,
+      y: clientY - rect.top + board.scrollTop - 43
+    };
+  }
+
+  function createDeckTouchGhost(cardId, clientX, clientY) {
+    var source = elements.deckFan.querySelector('.fan-card[data-card-id="' + cardId + '"]');
+    if (!source) return;
+    var rect = source.getBoundingClientRect();
+    deckTouchGhost = source.cloneNode(false);
+    deckTouchGhost.className = "fan-card deck-drag-ghost activated";
+    deckTouchGhost.style.width = rect.width + "px";
+    deckTouchGhost.style.height = rect.height + "px";
+    deckTouchGhost.style.left = (clientX - rect.width / 2) + "px";
+    deckTouchGhost.style.top = (clientY - rect.height / 2) + "px";
+    document.body.appendChild(deckTouchGhost);
+  }
+
+  function moveDeckTouchGhost(clientX, clientY) {
+    if (!deckTouchGhost) return;
+    deckTouchGhost.style.left = (clientX - deckTouchGhost.offsetWidth / 2) + "px";
+    deckTouchGhost.style.top = (clientY - deckTouchGhost.offsetHeight / 2) + "px";
+    elements.spreadBoard.classList.toggle("drag-over-board", isPointInsideBoard(clientX, clientY));
+  }
+
+  function cleanupDeckTouchDrag() {
+    if (deckTouchGhost) {
+      deckTouchGhost.remove();
+      deckTouchGhost = null;
+    }
+    elements.spreadBoard.classList.remove("drag-over-board");
+    deckTouchCardDragging = null;
+    deckTouchCardMoved = false;
   }
 
   function activateCard(cardId) {
@@ -478,10 +528,8 @@
       var cardId = e.dataTransfer.getData("text/plain") || draggedCardId;
       if (!cardId) return;
 
-      var rect = board.getBoundingClientRect();
-      var x = e.clientX - rect.left + board.scrollLeft - 29;
-      var y = e.clientY - rect.top + board.scrollTop - 43;
-      placeCardOnSpread(cardId, x, y);
+      var pos = getBoardDropPosition(e.clientX, e.clientY);
+      placeCardOnSpread(cardId, pos.x, pos.y);
       draggedCardId = null;
     });
 
@@ -523,6 +571,14 @@
 
     fan.addEventListener("touchstart", function (e) {
       if (e.touches.length !== 1) return;
+      var activeCard = e.target.closest(".fan-card.activated");
+      if (activeCard) {
+        deckTouchCardDragging = activeCard.getAttribute("data-card-id");
+        deckTouchCardMoved = false;
+        deckTouchStartX = e.touches[0].clientX;
+        deckTouchStartY = e.touches[0].clientY;
+        return;
+      }
       deckPanning = true;
       deckPanMoved = false;
       deckPanStartX = e.touches[0].clientX;
@@ -607,6 +663,22 @@
     });
 
     document.addEventListener("touchmove", function (e) {
+      if (deckTouchCardDragging) {
+        var deckCardTouch = e.touches[0];
+        var deckCardDx = deckCardTouch.clientX - deckTouchStartX;
+        var deckCardDy = deckCardTouch.clientY - deckTouchStartY;
+        if (!deckTouchCardMoved && Math.hypot(deckCardDx, deckCardDy) > 8) {
+          deckTouchCardMoved = true;
+          suppressDeckClick = true;
+          createDeckTouchGhost(deckTouchCardDragging, deckCardTouch.clientX, deckCardTouch.clientY);
+        }
+        if (deckTouchCardMoved) {
+          e.preventDefault();
+          moveDeckTouchGhost(deckCardTouch.clientX, deckCardTouch.clientY);
+        }
+        return;
+      }
+
       if (canvasCardDragging) {
         e.preventDefault();
         var cardTouch = e.touches[0];
@@ -638,7 +710,23 @@
       }
     }, { passive: false });
 
-    document.addEventListener("touchend", function () {
+    document.addEventListener("touchend", function (e) {
+      if (deckTouchCardDragging) {
+        if (deckTouchCardMoved && e.changedTouches.length > 0) {
+          var endTouch = e.changedTouches[0];
+          if (isPointInsideBoard(endTouch.clientX, endTouch.clientY)) {
+            var pos = getBoardDropPosition(endTouch.clientX, endTouch.clientY);
+            placeCardOnSpread(deckTouchCardDragging, pos.x, pos.y);
+          }
+          suppressDeckClick = true;
+          setTimeout(function () {
+            suppressDeckClick = false;
+          }, 250);
+        }
+        cleanupDeckTouchDrag();
+        return;
+      }
+
       if (canvasCardDragging) {
         canvasCardDragging = null;
       }

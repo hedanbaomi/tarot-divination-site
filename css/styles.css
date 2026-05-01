@@ -305,6 +305,14 @@ body {
   transform: rotate(var(--fan-angle, 0deg)) !important;
 }
 .fan-card.dragging { opacity: 0.18; }
+.deck-drag-ghost {
+  position: fixed;
+  margin: 0 !important;
+  pointer-events: none;
+  transform: none !important;
+  z-index: 3000 !important;
+  opacity: 0.92;
+}
 
 .results-section { margin-bottom: 16px; }
 .results-section #openAllBtn { display: block; margin: 0 auto 8px; }
