@@ -4,7 +4,11 @@
 
 ## 在线使用
 
-部署到 GitHub Pages 后，可直接通过仓库的 Pages 地址访问，无需后端服务。
+访问地址：
+
+https://hedanbaomi.github.io/tarot-divination-site/
+
+无需后端服务，任何现代浏览器都可以直接打开。
 
 ## 功能
 
