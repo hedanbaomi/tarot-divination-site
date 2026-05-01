@@ -35,6 +35,7 @@
   var deckPanStartY = 0;
   var deckPanScrollX = 0;
   var deckPanMoved = false;
+  var deckTouchPanSpeed = 2.8;
   var suppressDeckClick = false;
   var deckTouchPendingCardId = null;
   var deckTouchLongPressTimer = null;
@@ -162,6 +163,10 @@
       el.style.left = spreadCards[cardId].x + "px";
       el.style.top = spreadCards[cardId].y + "px";
     }
+  }
+
+  function getDeckTouchScroll(deltaX) {
+    return deckPanScrollX - deltaX * deckTouchPanSpeed;
   }
 
   function styleCanvasDragging(cardId, isDragging) {
@@ -727,7 +732,7 @@
         }
         if (Math.abs(dx) > Math.abs(dy)) {
           e.preventDefault();
-          fan.scrollLeft = deckPanScrollX - dx;
+          fan.scrollLeft = getDeckTouchScroll(dx);
           deckPanMoved = true;
           suppressDeckClick = true;
         }
@@ -955,7 +960,7 @@
         var deckDy = deckTouch.clientY - deckPanStartY;
         if (Math.abs(deckDx) > Math.abs(deckDy)) {
           e.preventDefault();
-          elements.deckFan.scrollLeft = deckPanScrollX - deckDx;
+          elements.deckFan.scrollLeft = getDeckTouchScroll(deckDx);
           deckPanMoved = true;
           suppressDeckClick = true;
         }
