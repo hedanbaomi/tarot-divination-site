@@ -35,7 +35,9 @@
   var deckPanStartY = 0;
   var deckPanScrollX = 0;
   var deckPanMoved = false;
-  var deckTouchPanSpeed = 10;
+  var deckPanStartTime = 0;
+  var deckTouchMinPanSpeed = 1.05;
+  var deckTouchMaxPanSpeed = 10;
   var suppressDeckClick = false;
   var deckTouchPendingCardId = null;
   var deckTouchLongPressTimer = null;
@@ -166,7 +168,11 @@
   }
 
   function getDeckTouchScroll(deltaX) {
-    return deckPanScrollX - deltaX * deckTouchPanSpeed;
+    var elapsed = Math.max(16, performance.now() - deckPanStartTime);
+    var velocity = Math.abs(deltaX) / elapsed;
+    var boost = Math.pow(velocity * 4.2, 1.25);
+    var speed = deckTouchMinPanSpeed + Math.min(deckTouchMaxPanSpeed - deckTouchMinPanSpeed, boost);
+    return deckPanScrollX - deltaX * speed;
   }
 
   function styleCanvasDragging(cardId, isDragging) {
@@ -685,6 +691,7 @@
       deckPanStartX = e.clientX;
       deckPanStartY = e.clientY;
       deckPanScrollX = fan.scrollLeft;
+      deckPanStartTime = performance.now();
       fan.classList.add("panning");
     });
 
@@ -703,6 +710,7 @@
         deckTouchLastY = e.clientY;
         deckPanMoved = false;
         deckPanScrollX = fan.scrollLeft;
+        deckPanStartTime = performance.now();
         suppressDeckClick = false;
         if (deckTouchLongPressTimer) clearTimeout(deckTouchLongPressTimer);
         deckTouchLongPressTimer = setTimeout(function () {
@@ -726,8 +734,7 @@
           return;
         }
 
-        if (!deckTouchPendingCardId) return;
-        if (Math.hypot(dx, dy) > 10) {
+        if (deckTouchPendingCardId && Math.hypot(dx, dy) > 10) {
           cancelDeckTouchPending();
         }
         if (Math.abs(dx) > Math.abs(dy)) {
@@ -799,6 +806,7 @@
       deckPanStartX = e.touches[0].clientX;
       deckPanStartY = e.touches[0].clientY;
       deckPanScrollX = fan.scrollLeft;
+      deckPanStartTime = performance.now();
       fan.classList.add("panning");
     }, { passive: false });
 
