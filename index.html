@@ -42,19 +42,14 @@
       </div>
     </section>
 
-    <!-- 牌堆：轻点抽牌 -->
+    <!-- 牌堆：左右滑动浏览，轻点任意一张抽出 -->
     <section class="deck-area">
-      <button class="deck-stack" id="deckStack" aria-label="抽一张牌">
-        <span class="deck-stack-visual" aria-hidden="true">
-          <span class="deck-back deck-back-3"></span>
-          <span class="deck-back deck-back-2"></span>
-          <span class="deck-back deck-back-1">
-            <span class="deck-emblem">✦</span>
-          </span>
-        </span>
-        <span class="deck-remaining" id="deckRemaining">剩 78 张</span>
-      </button>
-      <p class="deck-cta" id="deckCta">轻点牌堆抽一张牌</p>
+      <div class="deck-head">
+        <h2>牌堆 · <span class="deck-remaining" id="deckRemaining">剩 78 张</span></h2>
+        <button class="btn-mini" id="shuffleBtn" type="button">🔀 洗牌</button>
+      </div>
+      <p class="deck-cta" id="deckCta">左右滑动浏览牌堆，轻点任意一张牌抽出</p>
+      <div class="deck-spread" id="deckSpread" role="list" aria-label="塔罗牌堆，左右滑动浏览，轻点抽牌"></div>
       <button class="btn btn-switch-arcana" id="switchArcanaBtn" style="display:none;">切换牌组</button>
     </section>
 
