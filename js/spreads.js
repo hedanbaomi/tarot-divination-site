@@ -427,12 +427,19 @@ function getMystagogusSpread(id) {
 }
 
 function getSpreadsForDeck(deckType) {
-  if (deckType === "mystagogus") return mystagogusSpreads.slice();
+  // M 牌可用 M 牌阵 + 全部塔罗牌阵；塔罗只能用塔罗牌阵。
+  if (deckType === "mystagogus") {
+    return mystagogusSpreads.concat(tarotSpreads);
+  }
   return tarotSpreads.slice();
 }
 
 function getSpreadById(deckType, id) {
-  if (deckType === "mystagogus") return getMystagogusSpread(id);
+  if (deckType === "mystagogus") {
+    var mSpread = mystagogusSpreads.filter(function (spread) { return spread.id === id; })[0];
+    if (mSpread) return mSpread;
+  }
+  // Tarot deck never resolves Mystagogus-only layouts.
   return getTarotSpread(id);
 }
 
