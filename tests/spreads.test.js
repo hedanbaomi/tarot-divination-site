@@ -103,16 +103,21 @@ test("all position coordinates match the Chapter 6 diagrams", function () {
   });
 });
 
-test("Mystagogus deck only exposes M-card spreads", function () {
+test("M deck can use M + tarot spreads; tarot cannot use M layout", function () {
   var mSpreads = catalogue.getSpreadsForDeck("mystagogus");
-  assert.equal(mSpreads.length, 1);
+  assert.equal(mSpreads.length, catalogue.mystagogusSpreads.length + catalogue.tarotSpreads.length);
   assert.equal(mSpreads[0].id, "mystagogus-layout");
-  assert.equal(mSpreads[0].positions.length, 18);
+  assert.ok(mSpreads.some(function (s) { return s.id === "three-card-horizontal"; }));
   assert.equal(catalogue.validateTarotSpreads(catalogue.mystagogusSpreads), true);
 
   var tarotOnly = catalogue.getSpreadsForDeck("tarot");
   assert.equal(tarotOnly.length, catalogue.tarotSpreads.length);
   assert.ok(tarotOnly.every(function (s) { return s.id !== "mystagogus-layout"; }));
+
+  assert.equal(catalogue.getSpreadById("mystagogus", "mystagogus-layout").id, "mystagogus-layout");
+  assert.equal(catalogue.getSpreadById("mystagogus", "yes-no").id, "yes-no");
+  // Tarot deck falls back to first tarot spread if given an M-only id.
+  assert.notEqual(catalogue.getSpreadById("tarot", "mystagogus-layout").id, "mystagogus-layout");
 });
 
 test("Mystagogus layout coordinates follow the zigzag diagram", function () {

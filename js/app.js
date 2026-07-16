@@ -576,14 +576,30 @@
   function populateSpreadSelect() {
     el.spreadSelect.innerHTML = "";
     var catalogue = getSpreadsForDeck(deckType);
-    catalogue.forEach(function (spreadDefinition) {
-      var option = document.createElement("option");
-      option.value = spreadDefinition.id;
-      option.textContent = spreadDefinition.name + " · " + spreadDefinition.positions.length + " 张";
-      el.spreadSelect.appendChild(option);
-    });
+    if (deckType === "mystagogus") {
+      var mGroup = document.createElement("optgroup");
+      mGroup.label = "M 牌牌阵";
+      var tGroup = document.createElement("optgroup");
+      tGroup.label = "塔罗牌阵（M 牌可用）";
+      catalogue.forEach(function (spreadDefinition) {
+        var option = document.createElement("option");
+        option.value = spreadDefinition.id;
+        option.textContent = spreadDefinition.name + " · " + spreadDefinition.positions.length + " 张";
+        if (spreadDefinition.deck === "mystagogus") mGroup.appendChild(option);
+        else tGroup.appendChild(option);
+      });
+      el.spreadSelect.appendChild(mGroup);
+      el.spreadSelect.appendChild(tGroup);
+    } else {
+      catalogue.forEach(function (spreadDefinition) {
+        var option = document.createElement("option");
+        option.value = spreadDefinition.id;
+        option.textContent = spreadDefinition.name + " · " + spreadDefinition.positions.length + " 张";
+        el.spreadSelect.appendChild(option);
+      });
+    }
     if (!catalogue.some(function (s) { return s.id === selectedSpreadId; })) {
-      selectedSpreadId = catalogue[0].id;
+      selectedSpreadId = defaultSpreadIdForDeck(deckType);
     }
     el.spreadSelect.value = selectedSpreadId;
   }
@@ -596,7 +612,18 @@
       return;
     }
     deckType = newDeck;
-    selectedSpreadId = defaultSpreadIdForDeck(deckType);
+    // Tarot cannot keep a Mystagogus-only layout.
+    if (deckType === "tarot" && selectedSpreadId === "mystagogus-layout") {
+      selectedSpreadId = defaultSpreadIdForDeck("tarot");
+    } else if (deckType === "mystagogus") {
+      // Keep current tarot spread if still valid; only fall back when needed.
+      var allowed = getSpreadsForDeck("mystagogus");
+      if (!allowed.some(function (s) { return s.id === selectedSpreadId; })) {
+        selectedSpreadId = defaultSpreadIdForDeck("mystagogus");
+      }
+    } else {
+      selectedSpreadId = defaultSpreadIdForDeck(deckType);
+    }
     applyDeckUi();
     populateSpreadSelect();
     renderSpreadDefinition();
