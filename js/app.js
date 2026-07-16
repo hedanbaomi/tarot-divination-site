@@ -5,6 +5,7 @@
   var mode = "upright-only";       // upright-only | mixed
   var arcanaFilter = "mixed";      // mixed | major-only | minor-only | major-then-minor | minor-then-major
   var currentPhase = "major";      // used by phase filters
+  var selectedSpreadId = "three-card-horizontal";
 
   var pile = [];       // remaining face-down cards (shuffled)
   var spread = [];      // drawn cards: { uid, card, orientation, revealed }
@@ -17,6 +18,8 @@
     el.settingsToggle = document.getElementById("settingsToggle");
     el.modeSelect = document.getElementById("modeSelect");
     el.arcanaFilter = document.getElementById("arcanaFilter");
+    el.spreadSelect = document.getElementById("spreadSelect");
+    el.spreadSettingSummary = document.getElementById("spreadSettingSummary");
     el.shuffleBtn = document.getElementById("shuffleBtn");
     el.switchArcanaBtn = document.getElementById("switchArcanaBtn");
     el.deckSpread = document.getElementById("deckSpread");
@@ -24,11 +27,15 @@
     el.deckCta = document.getElementById("deckCta");
     el.spreadArea = document.getElementById("spreadArea");
     el.spreadGrid = document.getElementById("spreadGrid");
+    el.spreadBoardScroll = document.getElementById("spreadBoardScroll");
+    el.spreadTitle = document.getElementById("spreadTitle");
     el.spreadCount = document.getElementById("spreadCount");
     el.phaseLabel = document.getElementById("phaseLabel");
     el.revealBtn = document.getElementById("revealBtn");
     el.clearBtn = document.getElementById("clearBtn");
     el.spreadHint = document.getElementById("spreadHint");
+    el.positionGuide = document.getElementById("positionGuide");
+    el.positionGuideList = document.getElementById("positionGuideList");
     el.resultsSection = document.getElementById("resultsSection");
     el.resultsList = document.getElementById("resultsList");
   }
@@ -52,12 +59,27 @@
     pile = shuffle(getDeckByArcanaFilter(arcanaFilter, currentPhase));
   }
 
+  function selectedSpread() { return getTarotSpread(selectedSpreadId); }
+
+  function orderedSpreadEntries() {
+    return spread.slice().sort(function (a, b) { return a.slotIndex - b.slotIndex; });
+  }
+
+  function nextOpenSlotIndex() {
+    var used = {};
+    spread.forEach(function (entry) { used[entry.slotIndex] = true; });
+    for (var i = 0; i < selectedSpread().positions.length; i++) {
+      if (!used[i]) return i;
+    }
+    return -1;
+  }
+
   // Full reset: rebuild pile and clear the spread.
   function resetDeck() {
     currentPhase = "major";
     buildPile();
     spread = [];
-    el.spreadGrid.innerHTML = "";
+    renderSpreadCards();
     renderDeckSpread();
     renderSpreadMeta();
     renderResults();
@@ -79,6 +101,7 @@
   function renderDeckSpread() {
     var prevScroll = el.deckSpread.scrollLeft;
     el.deckSpread.innerHTML = "";
+    var spreadIsFull = nextOpenSlotIndex() === -1;
 
     if (pile.length === 0) {
       el.deckSpread.classList.add("empty");
@@ -88,11 +111,17 @@
     } else {
       el.deckSpread.classList.remove("empty");
       pile.forEach(function (card, index) {
-        var cardEl = document.createElement("div");
-        cardEl.className = "deck-card";
-        cardEl.setAttribute("role", "listitem");
-        cardEl.setAttribute("aria-label", "第 " + (index + 1) + " 张，轻点抽出");
-        cardEl.addEventListener("click", function () { drawAt(index); });
+        var cardEl = document.createElement("button");
+        cardEl.type = "button";
+        cardEl.className = "deck-card" + (spreadIsFull ? " disabled" : "");
+        cardEl.setAttribute("aria-label", spreadIsFull
+          ? "牌阵已完成"
+          : "第 " + (index + 1) + " 张，轻点抽到" + selectedSpread().positions[nextOpenSlotIndex()].name);
+        if (spreadIsFull) {
+          cardEl.disabled = true;
+        } else {
+          cardEl.addEventListener("click", function () { drawAt(index); });
+        }
         el.deckSpread.appendChild(cardEl);
       });
       el.deckSpread.scrollLeft = prevScroll;
@@ -100,12 +129,19 @@
 
     el.deckRemaining.textContent = "剩 " + pile.length + " 张";
 
-    if (pile.length === 0) {
+    if (spreadIsFull) {
+      el.deckCta.classList.add("complete");
+      el.deckCta.classList.remove("empty");
+      el.deckCta.textContent = selectedSpread().name + "已完成，可以开牌解读";
+    } else if (pile.length === 0) {
       el.deckCta.classList.add("empty");
+      el.deckCta.classList.remove("complete");
       el.deckCta.textContent = "牌堆已空，翻开你的牌，或重新洗牌再来一次";
     } else {
       el.deckCta.classList.remove("empty");
-      el.deckCta.textContent = "左右滑动浏览牌堆，轻点任意一张牌抽出";
+      el.deckCta.classList.remove("complete");
+      var nextPosition = selectedSpread().positions[nextOpenSlotIndex()];
+      el.deckCta.textContent = "下一张：位置 " + nextPosition.number + " · " + nextPosition.name + "（轻点任意一张牌抽出）";
     }
 
     if (isPhaseFilter(arcanaFilter)) {
@@ -119,12 +155,22 @@
   // ---------- Spread (drawn cards) ----------
   function buildSpreadCardEl(entry) {
     var card = entry.card;
+    var position = selectedSpread().positions[entry.slotIndex];
 
     var cardEl = document.createElement("div");
-    cardEl.className = "spread-card is-new";
+    cardEl.className = "spread-card" + (entry.isNew ? " is-new" : "");
     cardEl.setAttribute("data-uid", entry.uid);
-    cardEl.setAttribute("role", "button");
-    cardEl.setAttribute("aria-label", "轻点翻开这张牌");
+    cardEl.setAttribute("role", "listitem");
+    cardEl.style.gridColumn = position.column + " / span " + (position.columnSpan || 1);
+    cardEl.style.gridRow = position.row + " / span " + (position.rowSpan || 1);
+    cardEl.style.setProperty("--position-offset-x", (position.offsetX || 0) + "%");
+    cardEl.style.setProperty("--position-offset-y", (position.offsetY || 0) + "%");
+    cardEl.style.zIndex = String(position.number);
+
+    var flipButton = document.createElement("button");
+    flipButton.className = "spread-card-flip";
+    flipButton.type = "button";
+    flipButton.setAttribute("aria-label", "位置 " + position.number + "，" + position.name + "，轻点翻开这张牌");
 
     var inner = document.createElement("div");
     inner.className = "spread-card-inner";
@@ -133,7 +179,12 @@
     back.className = "spread-card-face spread-card-back";
     var posNum = document.createElement("span");
     posNum.className = "pos-num";
+    posNum.textContent = position.number;
     back.appendChild(posNum);
+    var posName = document.createElement("span");
+    posName.className = "pos-name";
+    posName.textContent = position.name;
+    back.appendChild(posName);
 
     // Front face is built up-front but hidden by backface-visibility until flipped,
     // so we get an instant, smooth 3D flip without leaking the card face.
@@ -155,7 +206,8 @@
 
     inner.appendChild(back);
     inner.appendChild(front);
-    cardEl.appendChild(inner);
+    flipButton.appendChild(inner);
+    cardEl.appendChild(flipButton);
 
     var removeBtn = document.createElement("button");
     removeBtn.className = "remove-btn";
@@ -168,10 +220,47 @@
     });
     cardEl.appendChild(removeBtn);
 
-    cardEl.addEventListener("click", function () { revealEntry(entry); });
+    flipButton.addEventListener("click", function () { revealEntry(entry); });
 
     if (entry.revealed) cardEl.classList.add("revealed");
     return cardEl;
+  }
+
+  function renderSpreadCards() {
+    var spreadDefinition = selectedSpread();
+    var hadRenderedCards = Boolean(el.spreadGrid.querySelector(".spread-card"));
+    var previousScrollLeft = el.spreadBoardScroll.scrollLeft;
+    el.spreadGrid.innerHTML = "";
+    el.spreadGrid.style.setProperty("--spread-columns", spreadDefinition.columns);
+    el.spreadGrid.style.setProperty("--spread-rows", spreadDefinition.rows);
+    el.spreadGrid.style.setProperty("--spread-min-width", Math.max(280, spreadDefinition.columns * 76) + "px");
+    var usedSlots = {};
+    spread.forEach(function (entry) { usedSlots[entry.slotIndex] = true; });
+    spreadDefinition.positions.forEach(function (position, index) {
+      if (usedSlots[index]) return;
+      var slot = document.createElement("div");
+      slot.className = "spread-slot";
+      slot.setAttribute("aria-hidden", "true");
+      slot.style.gridColumn = position.column + " / span " + (position.columnSpan || 1);
+      slot.style.gridRow = position.row + " / span " + (position.rowSpan || 1);
+      slot.style.setProperty("--position-offset-x", (position.offsetX || 0) + "%");
+      slot.style.setProperty("--position-offset-y", (position.offsetY || 0) + "%");
+      var slotNumber = document.createElement("span");
+      slotNumber.textContent = position.number;
+      var slotName = document.createElement("small");
+      slotName.textContent = position.name;
+      slot.appendChild(slotNumber);
+      slot.appendChild(slotName);
+      el.spreadGrid.appendChild(slot);
+    });
+    orderedSpreadEntries().forEach(function (entry) {
+      el.spreadGrid.appendChild(buildSpreadCardEl(entry));
+    });
+    requestAnimationFrame(function () {
+      el.spreadBoardScroll.scrollLeft = hadRenderedCards
+        ? previousScrollLeft
+        : Math.max(0, (el.spreadBoardScroll.scrollWidth - el.spreadBoardScroll.clientWidth) / 2);
+    });
   }
 
   function getSpreadEl(entry) {
@@ -180,11 +269,20 @@
 
   function drawAt(index) {
     if (index < 0 || index >= pile.length) return;
+    var slotIndex = nextOpenSlotIndex();
+    if (slotIndex === -1) return;
     var card = pile.splice(index, 1)[0];
-    var entry = { uid: ++uidCounter, card: card, orientation: orientationFor(), revealed: false };
+    var entry = { uid: ++uidCounter, card: card, orientation: orientationFor(), revealed: false, slotIndex: slotIndex, isNew: true };
     spread.push(entry);
 
-    el.spreadGrid.appendChild(buildSpreadCardEl(entry));
+    renderSpreadCards();
+    requestAnimationFrame(function () {
+      entry.isNew = false;
+      var cardEl = getSpreadEl(entry);
+      if (cardEl) {
+        setTimeout(function () { cardEl.classList.remove("is-new"); }, 340);
+      }
+    });
     renderDeckSpread();
     renderSpreadMeta();
 
@@ -204,7 +302,11 @@
       // the class here triggers the 3D flip transition directly.
       cardEl.classList.remove("is-new");
       cardEl.classList.add("revealed");
-      cardEl.setAttribute("aria-label", entry.card.name + " · " + getOrientationLabel(entry.orientation));
+      var position = selectedSpread().positions[entry.slotIndex];
+      var flipButton = cardEl.querySelector(".spread-card-flip");
+      if (flipButton) {
+        flipButton.setAttribute("aria-label", "位置 " + position.number + " · " + position.name + " · " + entry.card.name + " · " + getOrientationLabel(entry.orientation));
+      }
     }
     renderSpreadMeta();
     renderResults();
@@ -214,13 +316,11 @@
     var idx = spread.indexOf(entry);
     if (idx === -1) return;
     spread.splice(idx, 1);
-    var cardEl = getSpreadEl(entry);
-    if (cardEl) cardEl.remove();
-
     // Return the card to a random spot in the pile so it can be redrawn.
     var pos = Math.floor(Math.random() * (pile.length + 1));
     pile.splice(pos, 0, entry.card);
 
+    renderSpreadCards();
     renderDeckSpread();
     renderSpreadMeta();
     renderResults();
@@ -242,13 +342,16 @@
     el.spreadCount.textContent = spread.length;
 
     // Keep position numbers on face-down cards in sync after removals.
-    spread.forEach(function (entry, index) {
+    spread.forEach(function (entry) {
       var cardEl = getSpreadEl(entry);
       if (cardEl) {
         var posNum = cardEl.querySelector(".pos-num");
-        if (posNum) posNum.textContent = index + 1;
+        if (posNum) posNum.textContent = selectedSpread().positions[entry.slotIndex].number;
       }
     });
+
+    el.spreadTitle.textContent = selectedSpread().name;
+    el.spreadCount.textContent = spread.length + " / " + selectedSpread().positions.length;
 
     if (isPhaseFilter(arcanaFilter)) {
       el.phaseLabel.style.display = "inline-block";
@@ -272,9 +375,10 @@
     el.resultsSection.style.display = "block";
     el.resultsList.innerHTML = "";
 
-    spread.forEach(function (entry, index) {
+    orderedSpreadEntries().forEach(function (entry) {
       if (!entry.revealed) return;
       var card = entry.card;
+      var position = selectedSpread().positions[entry.slotIndex];
       var isUpright = entry.orientation === "upright";
       var showReversed = mode === "mixed" && !isUpright;
       var keywords = showReversed ? card.reversedKeywords : card.uprightKeywords;
@@ -292,7 +396,7 @@
 
       var posEl = document.createElement("span");
       posEl.className = "result-pos";
-      posEl.textContent = "位置 " + (index + 1);
+      posEl.textContent = "位置 " + position.number + " · " + position.name;
 
       var nameEl = document.createElement("span");
       nameEl.className = "result-name";
@@ -326,11 +430,16 @@
       meaningEl.className = "result-meaning";
       meaningEl.textContent = meaning;
 
+      var positionMeaningEl = document.createElement("div");
+      positionMeaningEl.className = "result-position-meaning";
+      positionMeaningEl.textContent = "牌位：" + position.meaning;
+
       var sourceEl = document.createElement("div");
       sourceEl.className = "result-source";
       sourceEl.textContent = card.source || quareiaSource;
 
       resultCard.appendChild(header);
+      resultCard.appendChild(positionMeaningEl);
       resultCard.appendChild(keywordsEl);
       resultCard.appendChild(meaningEl);
       resultCard.appendChild(sourceEl);
@@ -373,6 +482,46 @@
     resetDeck();
   }
 
+  function handleSpreadChange() {
+    var newSpreadId = el.spreadSelect.value;
+    if (newSpreadId === selectedSpreadId) return;
+    if (!confirmIfSpread("切换牌阵会清空当前抽牌并重新洗牌，是否继续？")) {
+      el.spreadSelect.value = selectedSpreadId;
+      return;
+    }
+    selectedSpreadId = newSpreadId;
+    renderSpreadDefinition();
+    resetDeck();
+  }
+
+  function populateSpreadSelect() {
+    el.spreadSelect.innerHTML = "";
+    tarotSpreads.forEach(function (spreadDefinition) {
+      var option = document.createElement("option");
+      option.value = spreadDefinition.id;
+      option.textContent = spreadDefinition.name + " · " + spreadDefinition.positions.length + " 张";
+      el.spreadSelect.appendChild(option);
+    });
+    el.spreadSelect.value = selectedSpreadId;
+  }
+
+  function renderSpreadDefinition() {
+    var spreadDefinition = selectedSpread();
+    el.spreadSettingSummary.textContent = spreadDefinition.positions.length + " 张 · " + spreadDefinition.description;
+    el.positionGuideList.innerHTML = "";
+    spreadDefinition.positions.forEach(function (position) {
+      var item = document.createElement("li");
+      var title = document.createElement("strong");
+      title.textContent = position.number + ". " + position.name;
+      var meaning = document.createElement("span");
+      meaning.textContent = position.meaning;
+      item.appendChild(title);
+      item.appendChild(meaning);
+      el.positionGuideList.appendChild(item);
+    });
+    el.positionGuide.open = false;
+  }
+
   function handleShuffle() {
     if (!confirmIfSpread("确定要重新洗牌吗？这会清空当前牌阵。")) return;
     resetDeck();
@@ -389,10 +538,14 @@
 
     mode = el.modeSelect.value;
     arcanaFilter = el.arcanaFilter.value;
+    populateSpreadSelect();
+    selectedSpreadId = el.spreadSelect.value;
+    renderSpreadDefinition();
 
     el.settingsToggle.addEventListener("click", toggleSettings);
     el.modeSelect.addEventListener("change", handleModeChange);
     el.arcanaFilter.addEventListener("change", handleArcanaChange);
+    el.spreadSelect.addEventListener("change", handleSpreadChange);
     el.shuffleBtn.addEventListener("click", handleShuffle);
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);

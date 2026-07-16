@@ -39,6 +39,11 @@
             <option value="minor-then-major">先小后大</option>
           </select>
         </div>
+        <div class="setting-group setting-group-spread">
+          <label for="spreadSelect">预设牌阵</label>
+          <select id="spreadSelect" aria-describedby="spreadSettingSummary"></select>
+          <p class="setting-summary" id="spreadSettingSummary"></p>
+        </div>
       </div>
     </section>
 
@@ -49,22 +54,28 @@
         <button class="btn-mini" id="shuffleBtn" type="button">🔀 洗牌</button>
       </div>
       <p class="deck-cta" id="deckCta">左右滑动浏览牌堆，轻点任意一张牌抽出</p>
-      <div class="deck-spread" id="deckSpread" role="list" aria-label="塔罗牌堆，左右滑动浏览，轻点抽牌"></div>
+      <div class="deck-spread" id="deckSpread" role="group" aria-label="塔罗牌堆，左右滑动浏览，轻点抽牌"></div>
       <button class="btn btn-switch-arcana" id="switchArcanaBtn" style="display:none;">切换牌组</button>
     </section>
 
     <!-- 牌阵：抽到的牌自动排列 -->
     <section class="spread-area" id="spreadArea" style="display:none;">
       <div class="spread-head">
-        <h2>你的牌阵 · <span class="card-count" id="spreadCount">0</span> 张</h2>
+        <h2><span id="spreadTitle">你的牌阵</span> · <span class="card-count" id="spreadCount">0 / 3</span></h2>
         <span class="phase-label" id="phaseLabel"></span>
       </div>
-      <div class="spread-grid" id="spreadGrid"></div>
+      <div class="spread-board-scroll" id="spreadBoardScroll">
+        <div class="spread-grid" id="spreadGrid" role="list" aria-label="抽取的塔罗牌按所选牌阵自动排列"></div>
+      </div>
       <div class="spread-actions">
         <button class="btn btn-accent" id="revealBtn">开牌解读</button>
         <button class="btn btn-secondary" id="clearBtn">重新洗牌</button>
       </div>
       <p class="spread-hint" id="spreadHint">轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开。</p>
+      <details class="position-guide" id="positionGuide">
+        <summary>查看牌位说明</summary>
+        <ol id="positionGuideList"></ol>
+      </details>
     </section>
 
     <!-- 解读结果 -->
