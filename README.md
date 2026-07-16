@@ -1,6 +1,6 @@
-# Tarot Divination Site
+# Quareia 占卜站点
 
-一个纯前端塔罗占卜网站：左右滑动牌堆、轻点任意一张牌抽出，翻牌解读，支持正位/逆位模式、大小阿卡那筛选和基于 Quareia 语境整理的牌意解读。为手机端优化，单手轻点即可完成占卜。
+一个纯前端 Quareia 占卜网站：支持**塔罗牌**与 **Mystagogus（M 牌）** 两套牌组。左右滑动牌堆、轻点任意一张牌抽出，翻牌解读；塔罗支持正位/逆位模式、大小阿卡那筛选与第六章牌阵，M 牌仅可使用 Mystagogus 专用牌阵。为手机端优化，单手轻点即可完成占卜。
 
 ## 为什么会有这个项目
 
@@ -16,19 +16,20 @@ https://hedanbaomi.github.io/tarot-divination-site/
 
 ## 功能
 
-- 78 张塔罗牌完整牌组
-- 大阿卡那、小阿卡那、混合、先大后小 / 先小后大筛选
+- **双牌组**：塔罗 78 张 / Mystagogus（M 牌）78 张，可在设置中切换
+- 切换为 M 牌时，仅可使用 Mystagogus 布局（18 张），不能选用塔罗牌阵
+- 塔罗：大阿卡那、小阿卡那、混合、先大后小 / 先小后大筛选
 - 全正位或正逆位混合模式
 - 牌堆铺开成一排，左右滑动浏览，轻点任意一张牌抽出（可自由挑选，不只是最上面一张）
 - 抽到的牌自动排列成牌阵，无需拖拽
-- 可预先选择 15 种牌阵：第六章收录的 14 种布局，以及额外的横向三张牌阵
+- 塔罗可预先选择 15 种牌阵：第六章收录的 14 种布局，以及额外的横向三张牌阵
 - 每张牌自动进入对应牌位，牌位编号、名称与含义会同步显示
 - 固定牌位不会因移除其他牌而错位；重新抽牌会补回空缺位置
 - 轻点任意一张牌单独翻开，或一键「开牌解读」全部翻开
 - 逆位牌面自动旋转，翻牌带 3D 动画
 - 每张牌可随手移除并放回牌堆
 - 移动端优先：大号点击区域、单手可用、适配刘海屏安全区
-- 开牌后展示关键词、元素方向和解读
+- 开牌后展示关键词与解读（M 牌关键词译自英文索引）
 
 ## 本地打开
 
@@ -52,22 +53,38 @@ https://hedanbaomi.github.io/tarot-divination-site/
 ├── js/
 │   ├── app.js
 │   ├── spreads.js
-│   └── tarot-data.js
+│   ├── tarot-data.js
+│   └── mystagogus-data.js
 └── assets/
-    ├── cards/
+    ├── cards/          # 塔罗牌面
+    │   └── m/          # Mystagogus 牌面 m-01…m-78 与 m-back
+    ├── support/        # 支持作者收款码
     └── icons/
 ```
 
 ## 说明
 
-牌意文本为面向本网站的整理与改写，参考《21世纪的塔罗技能》和 Quareia 训练语境。原始 PDF 资料不包含在开源仓库中。
-
-健康布局仅用于记录牌阵结构与个人反思，不能替代医生诊断、治疗或其他专业医疗建议。
+- **塔罗**牌意文本为面向本网站的整理与改写，参考《21世纪的塔罗技能》和 Quareia 训练语境。
+- **M 牌**关键词与牌阵译自 Josephine McCarthy《Mystagogus》关键词索引与 Layout PDF；牌面图像版权归原作者所有，仅供本站本地使用。
+- 健康布局仅用于记录牌阵结构与个人反思，不能替代医生诊断、治疗或其他专业医疗建议。
 
 ## Card Image Source
 
-The 78 Rider-Waite-Smith card face images are local 420px derivatives from Wikimedia Commons' public-domain "Roses & Lilies" set. See `assets/cards/SOURCE.md`.
+- Tarot: 78 Rider-Waite-Smith faces are local 420px derivatives from Wikimedia Commons' public-domain "Roses & Lilies" set. See `assets/cards/SOURCE.md`.
+- Mystagogus: high-res local JPEGs for offline UI (`assets/cards/m/`), plus shared card back `m-back.jpeg`. © Josephine McCarthy. See `assets/cards/m/SOURCE.md`.
 
 ## License
 
 MIT
+
+## 支持作者
+
+如果这个小站对你有用，欢迎随意打赏，感谢支持。
+
+### 微信支付
+
+![微信支付收款码](assets/support/pay-wechat.jpg)
+
+### 支付宝
+
+![支付宝收款码](assets/support/pay-alipay.jpg)

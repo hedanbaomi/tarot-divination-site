@@ -4,15 +4,38 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#12151f">
-  <meta name="description" content="纯前端塔罗占卜：轻点牌堆抽牌，翻牌解读，支持正逆位与大小阿卡那筛选。">
-  <title>塔罗占卜 · Tarot Divination</title>
+  <meta name="description" content="Quareia 占卜：支持塔罗与 Mystagogus（M 牌），轻点牌堆抽牌，翻牌解读，预设牌阵与正逆位模式。">
+  <title>Quareia 占卜 · Quareia Divination</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+  <button type="button" class="support-fab" id="supportBtn" aria-haspopup="dialog" aria-controls="supportModal">
+    支持作者
+  </button>
+
+  <div class="support-modal" id="supportModal" hidden>
+    <div class="support-modal-backdrop" data-close-support></div>
+    <div class="support-modal-panel" role="dialog" aria-modal="true" aria-labelledby="supportModalTitle">
+      <button type="button" class="support-modal-close" data-close-support aria-label="关闭">×</button>
+      <h2 id="supportModalTitle">支持作者</h2>
+      <p class="support-modal-note">如果这个小站对你有用，欢迎随意打赏。感谢！</p>
+      <div class="support-qr-grid">
+        <figure class="support-qr">
+          <img src="assets/support/pay-wechat.jpg" alt="微信支付收款码" width="300" height="409" loading="lazy">
+          <figcaption>微信支付</figcaption>
+        </figure>
+        <figure class="support-qr">
+          <img src="assets/support/pay-alipay.jpg" alt="支付宝收款码" width="300" height="450" loading="lazy">
+          <figcaption>支付宝</figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+
   <div class="page-wrapper">
     <header class="header">
-      <h1>塔罗占卜</h1>
-      <p class="subtitle">TAROT DIVINATION · 参考 Quareia 体系</p>
+      <h1>Quareia 占卜</h1>
+      <p class="subtitle">QUAREIA DIVINATION · 塔罗 / Mystagogus</p>
     </header>
 
     <!-- 设置：可折叠，默认展开 -->
@@ -23,13 +46,20 @@
       </button>
       <div class="settings-body" id="settingsBody">
         <div class="setting-group">
+          <label for="deckSelect">牌组</label>
+          <select id="deckSelect">
+            <option value="tarot">塔罗牌（Rider–Waite 体系）</option>
+            <option value="mystagogus">M 牌（Mystagogus）</option>
+          </select>
+        </div>
+        <div class="setting-group">
           <label for="modeSelect">牌位模式</label>
           <select id="modeSelect">
             <option value="upright-only">全正位（推荐）</option>
             <option value="mixed">正逆位混合</option>
           </select>
         </div>
-        <div class="setting-group">
+        <div class="setting-group" id="arcanaFilterGroup">
           <label for="arcanaFilter">牌组筛选</label>
           <select id="arcanaFilter">
             <option value="mixed">混合抽取</option>
@@ -54,7 +84,7 @@
         <button class="btn-mini" id="shuffleBtn" type="button">🔀 洗牌</button>
       </div>
       <p class="deck-cta" id="deckCta">左右滑动浏览牌堆，轻点任意一张牌抽出</p>
-      <div class="deck-spread" id="deckSpread" role="group" aria-label="塔罗牌堆，左右滑动浏览，轻点抽牌"></div>
+      <div class="deck-spread" id="deckSpread" role="group" aria-label="牌堆，左右滑动浏览，轻点抽牌"></div>
       <button class="btn btn-switch-arcana" id="switchArcanaBtn" style="display:none;">切换牌组</button>
     </section>
 
@@ -65,7 +95,7 @@
         <span class="phase-label" id="phaseLabel"></span>
       </div>
       <div class="spread-board-scroll" id="spreadBoardScroll">
-        <div class="spread-grid" id="spreadGrid" role="list" aria-label="抽取的塔罗牌按所选牌阵自动排列"></div>
+        <div class="spread-grid" id="spreadGrid" role="list" aria-label="抽取的牌按所选牌阵自动排列"></div>
       </div>
       <div class="spread-actions">
         <button class="btn btn-accent" id="revealBtn">开牌解读</button>
@@ -85,11 +115,12 @@
     </section>
 
     <footer class="footer">
-      <p>牌意参考《21世纪的塔罗技能》与 Quareia 训练语境整理 · 仅供娱乐，请理性看待占卜结果</p>
+      <p>塔罗牌意参考《21世纪的塔罗技能》与 Quareia 语境；M 牌关键词译自 Josephine McCarthy《Mystagogus》· 仅供娱乐，请理性看待占卜结果</p>
     </footer>
   </div>
 
   <script src="js/tarot-data.js"></script>
+  <script src="js/mystagogus-data.js"></script>
   <script src="js/spreads.js"></script>
   <script src="js/app.js"></script>
 </body>

@@ -59,11 +59,23 @@ test("every spread has continuous, bounded positions and the expected card count
     );
     spread.positions.forEach(function (position) {
       assert.ok(position.name.length > 0, spread.id + " position name");
+      assert.ok(position.nameEn && position.nameEn.length > 0, spread.id + " position nameEn");
       assert.ok(position.meaning.length > 0, spread.id + " position meaning");
       assert.ok(position.column >= 1 && position.column <= spread.columns, spread.id + " column");
       assert.ok(position.row >= 1 && position.row <= spread.rows, spread.id + " row");
     });
   });
+});
+
+test("formatPositionName joins Chinese and English labels", function () {
+  assert.equal(
+    catalogue.formatPositionName({ name: "过去", nameEn: "Past" }, "slash"),
+    "过去 / Past"
+  );
+  assert.equal(
+    catalogue.formatPositionName({ name: "现在", nameEn: "Present" }, "dot"),
+    "现在 · Present"
+  );
 });
 
 test("overlapping cross cards preserve the chapter diagrams", function () {
@@ -89,4 +101,28 @@ test("all position coordinates match the Chapter 6 diagrams", function () {
       spread.id
     );
   });
+});
+
+test("Mystagogus deck only exposes M-card spreads", function () {
+  var mSpreads = catalogue.getSpreadsForDeck("mystagogus");
+  assert.equal(mSpreads.length, 1);
+  assert.equal(mSpreads[0].id, "mystagogus-layout");
+  assert.equal(mSpreads[0].positions.length, 18);
+  assert.equal(catalogue.validateTarotSpreads(catalogue.mystagogusSpreads), true);
+
+  var tarotOnly = catalogue.getSpreadsForDeck("tarot");
+  assert.equal(tarotOnly.length, catalogue.tarotSpreads.length);
+  assert.ok(tarotOnly.every(function (s) { return s.id !== "mystagogus-layout"; }));
+});
+
+test("Mystagogus layout coordinates follow the zigzag diagram", function () {
+  var expected = [
+    "2,1", "3,2", "1,2", "2,3", "2,4", "3,5", "1,5", "2,6",
+    "3,7", "1,7", "3,8", "1,8", "2,9", "2,10", "3,11", "1,11", "2,12", "2,13"
+  ];
+  var spread = catalogue.getMystagogusSpread("mystagogus-layout");
+  assert.deepEqual(
+    spread.positions.map(function (position) { return position.column + "," + position.row; }),
+    expected
+  );
 });

@@ -1,5 +1,9 @@
 tarotbook+for+Q+website.zh-CN.pdf
 .codex-tools/
 .claude/
+.codegraph/
 .DS_Store
 Thumbs.db
+# Local source materials (PDFs / master art); site uses processed assets/
+m牌/
+scripts/

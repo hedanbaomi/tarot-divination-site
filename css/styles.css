@@ -223,6 +223,21 @@ body {
   opacity: 0.25;
   pointer-events: none;
 }
+.deck-card-m {
+  background: #0e1018;
+  overflow: hidden;
+  border-color: rgba(212, 168, 79, 0.35);
+}
+.deck-card-m::after { content: none; }
+.deck-card-back-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  border-radius: inherit;
+}
 .deck-card:active {
   transform: translateY(-12px) scale(1.03);
   border-color: var(--accent);
@@ -332,12 +347,25 @@ body {
   pointer-events: none;
   transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0));
 }
-.spread-slot span { font-size: 0.72rem; font-weight: 700; }
-.spread-slot small {
-  max-width: calc(100% - 8px);
-  font-size: 0.52rem;
-  line-height: 1.2;
+.spread-slot > span:first-child { font-size: 0.72rem; font-weight: 700; }
+.spread-slot .slot-name {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  max-width: calc(100% - 6px);
   text-align: center;
+  line-height: 1.15;
+}
+.spread-slot .slot-name-zh {
+  font-size: 0.52rem;
+  font-weight: 600;
+}
+.spread-slot .slot-name-en {
+  font-size: 0.42rem;
+  font-weight: 500;
+  opacity: 0.85;
+  letter-spacing: 0.01em;
 }
 .spread-card.is-new { animation: dealIn 0.32s ease both; }
 @keyframes dealIn {
@@ -371,7 +399,21 @@ body {
   justify-content: center;
   gap: 6px;
 }
+.spread-card-back-m {
+  background: #0e1018;
+  border-color: rgba(212, 168, 79, 0.4);
+}
+.spread-card-back-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
 .spread-card-back .pos-num {
+  position: relative;
+  z-index: 1;
   font-size: 0.9rem;
   color: var(--text-secondary);
   font-weight: 700;
@@ -380,13 +422,39 @@ body {
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
 }
+.spread-card-back-m .pos-num {
+  color: #f3e6c4;
+  background: rgba(0, 0, 0, 0.55);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
 .spread-card-back .pos-name {
-  max-width: calc(100% - 10px);
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  max-width: calc(100% - 8px);
   color: var(--text-secondary);
-  font-size: 0.58rem;
-  line-height: 1.25;
+  line-height: 1.15;
   text-align: center;
   font-weight: 600;
+}
+.spread-card-back .pos-name-zh {
+  font-size: 0.56rem;
+}
+.spread-card-back .pos-name-en {
+  font-size: 0.42rem;
+  font-weight: 500;
+  opacity: 0.9;
+  letter-spacing: 0.01em;
+}
+.spread-card-back-m .pos-name {
+  color: #f6edd8;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.42);
+  border-radius: 4px;
+  padding: 2px 4px;
 }
 .spread-card-front {
   transform: rotateY(180deg);
@@ -400,6 +468,10 @@ body {
   inset: 0;
   width: 100%; height: 100%;
   object-fit: cover;
+}
+.spread-card-front .card-image-m {
+  object-fit: contain;
+  background: #0c0e14;
 }
 .spread-card-front.reversed .card-image { transform: rotate(180deg); }
 .spread-card-caption {
@@ -529,6 +601,7 @@ body {
   background: #111;
 }
 .result-card-image.reversed { transform: rotate(180deg); }
+.result-card-image-m { object-fit: contain; }
 .result-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
 .result-pos {
   font-size: 0.66rem;
@@ -559,6 +632,117 @@ body {
 .result-source { font-size: 0.64rem; color: var(--text-secondary); opacity: 0.55; margin-top: 6px; }
 
 .footer { text-align: center; padding: 20px 6px 6px; color: var(--text-secondary); font-size: 0.66rem; opacity: 0.5; }
+
+/* ---------- Support author (non-intrusive FAB) ---------- */
+.support-fab {
+  position: fixed;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 40;
+  border: 1px solid rgba(212, 168, 79, 0.35);
+  background: rgba(22, 26, 38, 0.88);
+  color: var(--accent-light);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 8px 11px;
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  -webkit-tap-highlight-color: transparent;
+}
+.support-fab:active { transform: scale(0.97); }
+@media (hover: hover) {
+  .support-fab:hover { border-color: var(--accent); filter: brightness(1.08); }
+}
+
+.support-modal[hidden] { display: none !important; }
+.support-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+.support-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 8, 14, 0.72);
+}
+.support-modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(520px, 100%);
+  max-height: min(88vh, 720px);
+  overflow: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  padding: 18px 16px 16px;
+}
+.support-modal-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.support-modal-panel h2 {
+  margin: 0 28px 8px 0;
+  font-size: 1.05rem;
+  color: var(--text-primary);
+}
+.support-modal-note {
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.support-qr-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.support-qr {
+  margin: 0;
+  text-align: center;
+}
+.support-qr img {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  display: block;
+}
+.support-qr figcaption {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+@media (max-width: 420px) {
+  .support-qr-grid { grid-template-columns: 1fr; }
+  .support-fab {
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    font-size: 0.68rem;
+    padding: 7px 10px;
+  }
+}
 
 /* ---------- Responsive ---------- */
 @media (max-width: 480px) {
