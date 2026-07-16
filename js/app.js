@@ -2,9 +2,10 @@
   "use strict";
 
   // ---------- State ----------
+  var deckType = "tarot";          // tarot | mystagogus
   var mode = "upright-only";       // upright-only | mixed
   var arcanaFilter = "mixed";      // mixed | major-only | minor-only | major-then-minor | minor-then-major
-  var currentPhase = "major";      // used by phase filters
+  var currentPhase = "major";      // used by phase filters (tarot only)
   var selectedSpreadId = "three-card-horizontal";
 
   var pile = [];       // remaining face-down cards (shuffled)
@@ -16,8 +17,10 @@
   function cacheElements() {
     el.settings = document.getElementById("settings");
     el.settingsToggle = document.getElementById("settingsToggle");
+    el.deckSelect = document.getElementById("deckSelect");
     el.modeSelect = document.getElementById("modeSelect");
     el.arcanaFilter = document.getElementById("arcanaFilter");
+    el.arcanaFilterGroup = document.getElementById("arcanaFilterGroup");
     el.spreadSelect = document.getElementById("spreadSelect");
     el.spreadSettingSummary = document.getElementById("spreadSettingSummary");
     el.shuffleBtn = document.getElementById("shuffleBtn");
@@ -38,6 +41,8 @@
     el.positionGuideList = document.getElementById("positionGuideList");
     el.resultsSection = document.getElementById("resultsSection");
     el.resultsList = document.getElementById("resultsList");
+    el.supportBtn = document.getElementById("supportBtn");
+    el.supportModal = document.getElementById("supportModal");
   }
 
   // ---------- Deck helpers ----------
@@ -55,11 +60,32 @@
     return Math.random() > 0.5 ? "upright" : "reversed";
   }
 
-  function buildPile() {
-    pile = shuffle(getDeckByArcanaFilter(arcanaFilter, currentPhase));
+  function activeDeckCards() {
+    if (deckType === "mystagogus") return mystagogusDeckFull.slice();
+    return getDeckByArcanaFilter(arcanaFilter, currentPhase);
   }
 
-  function selectedSpread() { return getTarotSpread(selectedSpreadId); }
+  function buildPile() {
+    pile = shuffle(activeDeckCards());
+  }
+
+  function selectedSpread() { return getSpreadById(deckType, selectedSpreadId); }
+
+  function defaultSpreadIdForDeck(type) {
+    if (type === "mystagogus") return mystagogusSpreads[0].id;
+    return "three-card-horizontal";
+  }
+
+  function applyDeckUi() {
+    var isM = deckType === "mystagogus";
+    if (el.arcanaFilterGroup) {
+      el.arcanaFilterGroup.style.display = isM ? "none" : "";
+    }
+    el.deckSpread.setAttribute(
+      "aria-label",
+      isM ? "Mystagogus 牌堆，左右滑动浏览，轻点抽牌" : "塔罗牌堆，左右滑动浏览，轻点抽牌"
+    );
+  }
 
   function orderedSpreadEntries() {
     return spread.slice().sort(function (a, b) { return a.slotIndex - b.slotIndex; });
@@ -87,6 +113,8 @@
 
   function getOrientationLabel(o) { return o === "upright" ? "正位" : "逆位"; }
 
+  var MYSTAGOGUS_BACK = "assets/cards/m/m-back.jpeg";
+
   function createCardImage(card, className, orientation) {
     var img = document.createElement("img");
     img.className = className + (orientation === "reversed" ? " reversed" : "");
@@ -95,6 +123,34 @@
     img.loading = "lazy";
     img.decoding = "async";
     return img;
+  }
+
+  function createBackArtImage(className) {
+    var img = document.createElement("img");
+    img.className = className;
+    img.src = MYSTAGOGUS_BACK;
+    img.alt = "";
+    img.decoding = "async";
+    img.setAttribute("aria-hidden", "true");
+    return img;
+  }
+
+  /** Append Chinese + English position labels into a parent element. */
+  function appendPositionLabels(parent, position, baseClass) {
+    var wrap = document.createElement("span");
+    wrap.className = baseClass;
+    var zh = document.createElement("span");
+    zh.className = baseClass + "-zh";
+    zh.textContent = position.name;
+    wrap.appendChild(zh);
+    if (position.nameEn) {
+      var en = document.createElement("span");
+      en.className = baseClass + "-en";
+      en.textContent = position.nameEn;
+      wrap.appendChild(en);
+    }
+    parent.appendChild(wrap);
+    return wrap;
   }
 
   // ---------- Deck spread (pick any card) ----------
@@ -113,10 +169,15 @@
       pile.forEach(function (card, index) {
         var cardEl = document.createElement("button");
         cardEl.type = "button";
-        cardEl.className = "deck-card" + (spreadIsFull ? " disabled" : "");
+        cardEl.className = "deck-card" +
+          (deckType === "mystagogus" ? " deck-card-m" : "") +
+          (spreadIsFull ? " disabled" : "");
         cardEl.setAttribute("aria-label", spreadIsFull
           ? "牌阵已完成"
-          : "第 " + (index + 1) + " 张，轻点抽到" + selectedSpread().positions[nextOpenSlotIndex()].name);
+          : "第 " + (index + 1) + " 张，轻点抽到" + formatPositionName(selectedSpread().positions[nextOpenSlotIndex()], "slash"));
+        if (deckType === "mystagogus") {
+          cardEl.appendChild(createBackArtImage("deck-card-back-img"));
+        }
         if (spreadIsFull) {
           cardEl.disabled = true;
         } else {
@@ -141,10 +202,11 @@
       el.deckCta.classList.remove("empty");
       el.deckCta.classList.remove("complete");
       var nextPosition = selectedSpread().positions[nextOpenSlotIndex()];
-      el.deckCta.textContent = "下一张：位置 " + nextPosition.number + " · " + nextPosition.name + "（轻点任意一张牌抽出）";
+      el.deckCta.textContent = "下一张：位置 " + nextPosition.number + " · " +
+        formatPositionName(nextPosition, "slash") + "（轻点任意一张牌抽出）";
     }
 
-    if (isPhaseFilter(arcanaFilter)) {
+    if (deckType === "tarot" && isPhaseFilter(arcanaFilter)) {
       el.switchArcanaBtn.style.display = "inline-block";
       el.switchArcanaBtn.textContent = getOtherPhaseLabel(arcanaFilter, currentPhase);
     } else {
@@ -170,28 +232,34 @@
     var flipButton = document.createElement("button");
     flipButton.className = "spread-card-flip";
     flipButton.type = "button";
-    flipButton.setAttribute("aria-label", "位置 " + position.number + "，" + position.name + "，轻点翻开这张牌");
+    flipButton.setAttribute(
+      "aria-label",
+      "位置 " + position.number + "，" + formatPositionName(position, "slash") + "，轻点翻开这张牌"
+    );
 
     var inner = document.createElement("div");
     inner.className = "spread-card-inner";
 
     var back = document.createElement("div");
-    back.className = "spread-card-face spread-card-back";
+    back.className = "spread-card-face spread-card-back" +
+      (deckType === "mystagogus" ? " spread-card-back-m" : "");
+    if (deckType === "mystagogus") {
+      back.appendChild(createBackArtImage("spread-card-back-img"));
+    }
     var posNum = document.createElement("span");
     posNum.className = "pos-num";
     posNum.textContent = position.number;
     back.appendChild(posNum);
-    var posName = document.createElement("span");
-    posName.className = "pos-name";
-    posName.textContent = position.name;
-    back.appendChild(posName);
+    appendPositionLabels(back, position, "pos-name");
 
     // Front face is built up-front but hidden by backface-visibility until flipped,
     // so we get an instant, smooth 3D flip without leaking the card face.
     var front = document.createElement("div");
     front.className = "spread-card-face spread-card-front" +
       (entry.orientation === "reversed" ? " reversed" : "");
-    front.appendChild(createCardImage(card, "card-image", entry.orientation));
+    var faceImg = createCardImage(card, "card-image", entry.orientation);
+    if (deckType === "mystagogus") faceImg.classList.add("card-image-m");
+    front.appendChild(faceImg);
     var caption = document.createElement("div");
     caption.className = "spread-card-caption";
     var nameEl = document.createElement("span");
@@ -247,10 +315,8 @@
       slot.style.setProperty("--position-offset-y", (position.offsetY || 0) + "%");
       var slotNumber = document.createElement("span");
       slotNumber.textContent = position.number;
-      var slotName = document.createElement("small");
-      slotName.textContent = position.name;
       slot.appendChild(slotNumber);
-      slot.appendChild(slotName);
+      appendPositionLabels(slot, position, "slot-name");
       el.spreadGrid.appendChild(slot);
     });
     orderedSpreadEntries().forEach(function (entry) {
@@ -305,7 +371,11 @@
       var position = selectedSpread().positions[entry.slotIndex];
       var flipButton = cardEl.querySelector(".spread-card-flip");
       if (flipButton) {
-        flipButton.setAttribute("aria-label", "位置 " + position.number + " · " + position.name + " · " + entry.card.name + " · " + getOrientationLabel(entry.orientation));
+        flipButton.setAttribute(
+          "aria-label",
+          "位置 " + position.number + " · " + formatPositionName(position, "slash") +
+            " · " + entry.card.name + " · " + getOrientationLabel(entry.orientation)
+        );
       }
     }
     renderSpreadMeta();
@@ -353,7 +423,7 @@
     el.spreadTitle.textContent = selectedSpread().name;
     el.spreadCount.textContent = spread.length + " / " + selectedSpread().positions.length;
 
-    if (isPhaseFilter(arcanaFilter)) {
+    if (deckType === "tarot" && isPhaseFilter(arcanaFilter)) {
       el.phaseLabel.style.display = "inline-block";
       el.phaseLabel.textContent = "当前：" + getPhaseArcanaLabel(arcanaFilter, currentPhase);
     } else {
@@ -388,7 +458,9 @@
       resultCard.className = "result-card";
 
       if (card.image) {
-        resultCard.appendChild(createCardImage(card, "result-card-image", entry.orientation));
+        var resultImg = createCardImage(card, "result-card-image", entry.orientation);
+        if (card.deck === "mystagogus") resultImg.classList.add("result-card-image-m");
+        resultCard.appendChild(resultImg);
       }
 
       var header = document.createElement("div");
@@ -396,7 +468,7 @@
 
       var posEl = document.createElement("span");
       posEl.className = "result-pos";
-      posEl.textContent = "位置 " + position.number + " · " + position.name;
+      posEl.textContent = "位置 " + position.number + " · " + formatPositionName(position, "slash");
 
       var nameEl = document.createElement("span");
       nameEl.className = "result-name";
@@ -415,6 +487,11 @@
         suitEl.className = "result-suit";
         suitEl.textContent = card.suit + " · " + card.element + (card.direction ? " · " + card.direction : "");
         header.appendChild(suitEl);
+      } else if (card.deck === "mystagogus" && card.nameEn) {
+        var enEl = document.createElement("span");
+        enEl.className = "result-suit";
+        enEl.textContent = "M" + card.number + " · " + card.nameEn;
+        header.appendChild(enEl);
       }
 
       var keywordsEl = document.createElement("div");
@@ -449,6 +526,7 @@
 
   // ---------- Settings / phase ----------
   function switchArcanaPhase() {
+    if (deckType !== "tarot") return;
     currentPhase = currentPhase === "major" ? "minor" : "major";
     buildPile();
     renderDeckSpread();
@@ -472,9 +550,10 @@
   }
 
   function handleArcanaChange() {
+    if (deckType !== "tarot") return;
     var newFilter = el.arcanaFilter.value;
     if (newFilter === arcanaFilter) return;
-    if (!confirmIfSpread("切换牌组会清空当前牌阵并重新洗牌，是否继续？")) {
+    if (!confirmIfSpread("切换筛选会清空当前牌阵并重新洗牌，是否继续？")) {
       el.arcanaFilter.value = arcanaFilter;
       return;
     }
@@ -496,13 +575,32 @@
 
   function populateSpreadSelect() {
     el.spreadSelect.innerHTML = "";
-    tarotSpreads.forEach(function (spreadDefinition) {
+    var catalogue = getSpreadsForDeck(deckType);
+    catalogue.forEach(function (spreadDefinition) {
       var option = document.createElement("option");
       option.value = spreadDefinition.id;
       option.textContent = spreadDefinition.name + " · " + spreadDefinition.positions.length + " 张";
       el.spreadSelect.appendChild(option);
     });
+    if (!catalogue.some(function (s) { return s.id === selectedSpreadId; })) {
+      selectedSpreadId = catalogue[0].id;
+    }
     el.spreadSelect.value = selectedSpreadId;
+  }
+
+  function handleDeckChange() {
+    var newDeck = el.deckSelect.value;
+    if (newDeck === deckType) return;
+    if (!confirmIfSpread("切换牌组会清空当前牌阵并重新洗牌，是否继续？")) {
+      el.deckSelect.value = deckType;
+      return;
+    }
+    deckType = newDeck;
+    selectedSpreadId = defaultSpreadIdForDeck(deckType);
+    applyDeckUi();
+    populateSpreadSelect();
+    renderSpreadDefinition();
+    resetDeck();
   }
 
   function renderSpreadDefinition() {
@@ -512,7 +610,7 @@
     spreadDefinition.positions.forEach(function (position) {
       var item = document.createElement("li");
       var title = document.createElement("strong");
-      title.textContent = position.number + ". " + position.name;
+      title.textContent = position.number + ". " + formatPositionName(position, "slash");
       var meaning = document.createElement("span");
       meaning.textContent = position.meaning;
       item.appendChild(title);
@@ -532,17 +630,48 @@
     el.settingsToggle.setAttribute("aria-expanded", String(!collapsed));
   }
 
+  function openSupportModal() {
+    if (!el.supportModal) return;
+    el.supportModal.hidden = false;
+    document.body.style.overflow = "hidden";
+    var closeBtn = el.supportModal.querySelector(".support-modal-close");
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function closeSupportModal() {
+    if (!el.supportModal || el.supportModal.hidden) return;
+    el.supportModal.hidden = true;
+    document.body.style.overflow = "";
+    if (el.supportBtn) el.supportBtn.focus();
+  }
+
+  function bindSupportModal() {
+    if (!el.supportBtn || !el.supportModal) return;
+    el.supportBtn.addEventListener("click", openSupportModal);
+    el.supportModal.addEventListener("click", function (ev) {
+      if (ev.target && ev.target.hasAttribute && ev.target.hasAttribute("data-close-support")) {
+        closeSupportModal();
+      }
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") closeSupportModal();
+    });
+  }
+
   // ---------- Init ----------
   function init() {
     cacheElements();
 
+    deckType = el.deckSelect.value || "tarot";
     mode = el.modeSelect.value;
     arcanaFilter = el.arcanaFilter.value;
+    applyDeckUi();
     populateSpreadSelect();
     selectedSpreadId = el.spreadSelect.value;
     renderSpreadDefinition();
 
     el.settingsToggle.addEventListener("click", toggleSettings);
+    el.deckSelect.addEventListener("change", handleDeckChange);
     el.modeSelect.addEventListener("change", handleModeChange);
     el.arcanaFilter.addEventListener("change", handleArcanaChange);
     el.spreadSelect.addEventListener("change", handleSpreadChange);
@@ -550,6 +679,7 @@
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);
     el.clearBtn.addEventListener("click", handleShuffle);
+    bindSupportModal();
 
     resetDeck();
   }
