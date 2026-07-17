@@ -426,21 +426,25 @@ function getMystagogusSpread(id) {
   return mystagogusSpreads.filter(function (spread) { return spread.id === id; })[0] || mystagogusSpreads[0];
 }
 
+/** Label spread origin for UI: 出自 M 牌 / 出自塔罗牌 */
+function getSpreadOriginLabel(spread) {
+  return (spread && spread.deck === "mystagogus") ? "出自 M 牌" : "出自塔罗牌";
+}
+
 function getSpreadsForDeck(deckType) {
-  // M 牌可用 M 牌阵 + 全部塔罗牌阵；塔罗只能用塔罗牌阵。
+  // 塔罗与 M 牌均可使用对方牌阵；当前牌组的本族牌阵排在前面。
   if (deckType === "mystagogus") {
     return mystagogusSpreads.concat(tarotSpreads);
   }
-  return tarotSpreads.slice();
+  return tarotSpreads.concat(mystagogusSpreads);
 }
 
 function getSpreadById(deckType, id) {
-  if (deckType === "mystagogus") {
-    var mSpread = mystagogusSpreads.filter(function (spread) { return spread.id === id; })[0];
-    if (mSpread) return mSpread;
-  }
-  // Tarot deck never resolves Mystagogus-only layouts.
-  return getTarotSpread(id);
+  var mSpread = mystagogusSpreads.filter(function (spread) { return spread.id === id; })[0];
+  if (mSpread) return mSpread;
+  var tSpread = tarotSpreads.filter(function (spread) { return spread.id === id; })[0];
+  if (tSpread) return tSpread;
+  return deckType === "mystagogus" ? mystagogusSpreads[0] : tarotSpreads[0];
 }
 
 function validateTarotSpreads(spreads) {
@@ -475,6 +479,7 @@ if (typeof module !== "undefined" && module.exports) {
     mystagogusSpreads: mystagogusSpreads,
     getTarotSpread: getTarotSpread,
     getMystagogusSpread: getMystagogusSpread,
+    getSpreadOriginLabel: getSpreadOriginLabel,
     getSpreadsForDeck: getSpreadsForDeck,
     getSpreadById: getSpreadById,
     formatPositionName: formatPositionName,
