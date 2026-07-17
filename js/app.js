@@ -193,7 +193,8 @@
     if (spreadIsFull) {
       el.deckCta.classList.add("complete");
       el.deckCta.classList.remove("empty");
-      el.deckCta.textContent = selectedSpread().name + "已完成，可以开牌解读";
+      el.deckCta.textContent = selectedSpread().name + " · " +
+        getSpreadOriginLabel(selectedSpread()) + " 已完成，可以开牌解读";
     } else if (pile.length === 0) {
       el.deckCta.classList.add("empty");
       el.deckCta.classList.remove("complete");
@@ -420,8 +421,9 @@
       }
     });
 
-    el.spreadTitle.textContent = selectedSpread().name;
-    el.spreadCount.textContent = spread.length + " / " + selectedSpread().positions.length;
+    var activeSpread = selectedSpread();
+    el.spreadTitle.textContent = activeSpread.name + " · " + getSpreadOriginLabel(activeSpread);
+    el.spreadCount.textContent = spread.length + " / " + activeSpread.positions.length;
 
     if (deckType === "tarot" && isPhaseFilter(arcanaFilter)) {
       el.phaseLabel.style.display = "inline-block";
@@ -576,27 +578,25 @@
   function populateSpreadSelect() {
     el.spreadSelect.innerHTML = "";
     var catalogue = getSpreadsForDeck(deckType);
+    var mGroup = document.createElement("optgroup");
+    mGroup.label = "M 牌牌阵";
+    var tGroup = document.createElement("optgroup");
+    tGroup.label = "塔罗牌阵";
+    catalogue.forEach(function (spreadDefinition) {
+      var option = document.createElement("option");
+      option.value = spreadDefinition.id;
+      option.textContent = spreadDefinition.name + " · " + getSpreadOriginLabel(spreadDefinition) +
+        " · " + spreadDefinition.positions.length + " 张";
+      if (spreadDefinition.deck === "mystagogus") mGroup.appendChild(option);
+      else tGroup.appendChild(option);
+    });
+    // 当前牌组本族牌阵分组排在前面
     if (deckType === "mystagogus") {
-      var mGroup = document.createElement("optgroup");
-      mGroup.label = "M 牌牌阵";
-      var tGroup = document.createElement("optgroup");
-      tGroup.label = "塔罗牌阵（M 牌可用）";
-      catalogue.forEach(function (spreadDefinition) {
-        var option = document.createElement("option");
-        option.value = spreadDefinition.id;
-        option.textContent = spreadDefinition.name + " · " + spreadDefinition.positions.length + " 张";
-        if (spreadDefinition.deck === "mystagogus") mGroup.appendChild(option);
-        else tGroup.appendChild(option);
-      });
       el.spreadSelect.appendChild(mGroup);
       el.spreadSelect.appendChild(tGroup);
     } else {
-      catalogue.forEach(function (spreadDefinition) {
-        var option = document.createElement("option");
-        option.value = spreadDefinition.id;
-        option.textContent = spreadDefinition.name + " · " + spreadDefinition.positions.length + " 张";
-        el.spreadSelect.appendChild(option);
-      });
+      el.spreadSelect.appendChild(tGroup);
+      el.spreadSelect.appendChild(mGroup);
     }
     if (!catalogue.some(function (s) { return s.id === selectedSpreadId; })) {
       selectedSpreadId = defaultSpreadIdForDeck(deckType);
@@ -612,16 +612,9 @@
       return;
     }
     deckType = newDeck;
-    // Tarot cannot keep a Mystagogus-only layout.
-    if (deckType === "tarot" && selectedSpreadId === "mystagogus-layout") {
-      selectedSpreadId = defaultSpreadIdForDeck("tarot");
-    } else if (deckType === "mystagogus") {
-      // Keep current tarot spread if still valid; only fall back when needed.
-      var allowed = getSpreadsForDeck("mystagogus");
-      if (!allowed.some(function (s) { return s.id === selectedSpreadId; })) {
-        selectedSpreadId = defaultSpreadIdForDeck("mystagogus");
-      }
-    } else {
+    // 双方均可使用对方牌阵；仅在 id 无效时回退默认。
+    var allowed = getSpreadsForDeck(deckType);
+    if (!allowed.some(function (s) { return s.id === selectedSpreadId; })) {
       selectedSpreadId = defaultSpreadIdForDeck(deckType);
     }
     applyDeckUi();
@@ -632,7 +625,8 @@
 
   function renderSpreadDefinition() {
     var spreadDefinition = selectedSpread();
-    el.spreadSettingSummary.textContent = spreadDefinition.positions.length + " 张 · " + spreadDefinition.description;
+    el.spreadSettingSummary.textContent = getSpreadOriginLabel(spreadDefinition) + " · " +
+      spreadDefinition.positions.length + " 张 · " + spreadDefinition.description;
     el.positionGuideList.innerHTML = "";
     spreadDefinition.positions.forEach(function (position) {
       var item = document.createElement("li");
