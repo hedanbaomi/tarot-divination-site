@@ -103,21 +103,28 @@ test("all position coordinates match the Chapter 6 diagrams", function () {
   });
 });
 
-test("M deck can use M + tarot spreads; tarot cannot use M layout", function () {
+test("both decks can use each other's spreads with origin labels", function () {
+  var total = catalogue.mystagogusSpreads.length + catalogue.tarotSpreads.length;
+
   var mSpreads = catalogue.getSpreadsForDeck("mystagogus");
-  assert.equal(mSpreads.length, catalogue.mystagogusSpreads.length + catalogue.tarotSpreads.length);
+  assert.equal(mSpreads.length, total);
   assert.equal(mSpreads[0].id, "mystagogus-layout");
   assert.ok(mSpreads.some(function (s) { return s.id === "three-card-horizontal"; }));
   assert.equal(catalogue.validateTarotSpreads(catalogue.mystagogusSpreads), true);
 
-  var tarotOnly = catalogue.getSpreadsForDeck("tarot");
-  assert.equal(tarotOnly.length, catalogue.tarotSpreads.length);
-  assert.ok(tarotOnly.every(function (s) { return s.id !== "mystagogus-layout"; }));
+  var tarotCatalogue = catalogue.getSpreadsForDeck("tarot");
+  assert.equal(tarotCatalogue.length, total);
+  assert.equal(tarotCatalogue[0].id, catalogue.tarotSpreads[0].id);
+  assert.ok(tarotCatalogue.some(function (s) { return s.id === "mystagogus-layout"; }));
 
   assert.equal(catalogue.getSpreadById("mystagogus", "mystagogus-layout").id, "mystagogus-layout");
   assert.equal(catalogue.getSpreadById("mystagogus", "yes-no").id, "yes-no");
-  // Tarot deck falls back to first tarot spread if given an M-only id.
-  assert.notEqual(catalogue.getSpreadById("tarot", "mystagogus-layout").id, "mystagogus-layout");
+  assert.equal(catalogue.getSpreadById("tarot", "mystagogus-layout").id, "mystagogus-layout");
+  assert.equal(catalogue.getSpreadById("tarot", "yes-no").id, "yes-no");
+
+  assert.equal(catalogue.getSpreadOriginLabel(catalogue.mystagogusSpreads[0]), "出自 M 牌");
+  assert.equal(catalogue.getSpreadOriginLabel(catalogue.tarotSpreads[0]), "出自塔罗牌");
+  assert.equal(catalogue.getSpreadOriginLabel(null), "出自塔罗牌");
 });
 
 test("Mystagogus layout coordinates follow the zigzag diagram", function () {
