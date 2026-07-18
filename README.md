@@ -81,9 +81,25 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 - Mystagogus: high-res local JPEGs for offline UI (`assets/cards/m/`), plus shared card back `m-back.jpeg`. © Josephine McCarthy. See `assets/cards/m/SOURCE.md`.
 - LXXXI Magician's Deck: 81 local JPEGs for offline UI (`assets/cards/lxxxi/`), plus shared card back `lxxxi-back.jpeg`. © Josephine McCarthy, Stuart Littlejohn, Cassandra Beanland. See `assets/cards/lxxxi/SOURCE.md`.
 
-## 致谢
+## 贡献者 ✨
 
-感谢 [WeirdCorn](https://github.com/WeirdCorn) 帮助扫描 LXXXI 魔法牌实体卡，为本站牌面素材的整理提供了重要支持。
+感谢以下伙伴对项目做出的贡献（展示形式参考 [All Contributors](https://allcontributors.org/) 规范）：
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<table>
+  <tr>
+    <td align="center" valign="top" width="14.28%">
+      <a href="https://github.com/WeirdCorn">
+        <img src="https://github.com/WeirdCorn.png" width="100px;" alt="WeirdCorn"/><br />
+        <sub><b>WeirdCorn</b></sub>
+      </a><br />
+      <span title="LXXXI 魔法牌实体卡扫描">📷</span>
+    </td>
+  </tr>
+</table>
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+<sub>📷 LXXXI 魔法牌实体卡扫描</sub>
 
 ## License
 
