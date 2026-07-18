@@ -57,11 +57,14 @@
 
   function orientationFor() {
     if (mode === "upright-only") return "upright";
+    // LXXXI 魔法牌固定全正位（说明书未提供逆位含义）。
+    if (deckType === "lxxxi") return "upright";
     return Math.random() > 0.5 ? "upright" : "reversed";
   }
 
   function activeDeckCards() {
     if (deckType === "mystagogus") return mystagogusDeckFull.slice();
+    if (deckType === "lxxxi") return lxxxiDeckFull.slice();
     return getDeckByArcanaFilter(arcanaFilter, currentPhase);
   }
 
@@ -73,18 +76,29 @@
 
   function defaultSpreadIdForDeck(type) {
     if (type === "mystagogus") return mystagogusSpreads[0].id;
+    if (type === "lxxxi") return lxxxiSpreads[0].id;
     return "three-card-horizontal";
   }
 
   function applyDeckUi() {
-    var isM = deckType === "mystagogus";
+    var nonTarot = isNonTarotDeck();
     if (el.arcanaFilterGroup) {
-      el.arcanaFilterGroup.style.display = isM ? "none" : "";
+      el.arcanaFilterGroup.style.display = nonTarot ? "none" : "";
     }
-    el.deckSpread.setAttribute(
-      "aria-label",
-      isM ? "Mystagogus 牌堆，左右滑动浏览，轻点抽牌" : "塔罗牌堆，左右滑动浏览，轻点抽牌"
-    );
+    // M 牌与 LXXXI 魔法牌固定全正位（说明书未提供逆位含义）：
+    // 禁用「正逆位混合」选项，并把已选中的 mixed 回退为全正位。
+    if (el.modeSelect) {
+      var mixedOption = el.modeSelect.querySelector('option[value="mixed"]');
+      if (mixedOption) mixedOption.disabled = nonTarot;
+      if (nonTarot && mode === "mixed") {
+        mode = "upright-only";
+        el.modeSelect.value = "upright-only";
+      }
+    }
+    var label = "塔罗牌堆，左右滑动浏览，轻点抽牌";
+    if (deckType === "mystagogus") label = "Mystagogus 牌堆，左右滑动浏览，轻点抽牌";
+    else if (deckType === "lxxxi") label = "LXXXI 魔法牌堆，左右滑动浏览，轻点抽牌";
+    el.deckSpread.setAttribute("aria-label", label);
   }
 
   function orderedSpreadEntries() {
@@ -114,6 +128,17 @@
   function getOrientationLabel(o) { return o === "upright" ? "正位" : "逆位"; }
 
   var MYSTAGOGUS_BACK = "assets/cards/m/m-back.jpeg";
+  var LXXXI_BACK = "assets/cards/lxxxi/lxxxi-back.jpeg";
+
+  // Non-tarot decks (Mystagogus, LXXXI) use a fixed deck back and no arcana filter.
+  function isNonTarotDeck() {
+    return deckType === "mystagogus" || deckType === "lxxxi";
+  }
+
+  function deckBackImage() {
+    if (deckType === "lxxxi") return LXXXI_BACK;
+    return MYSTAGOGUS_BACK;
+  }
 
   function createCardImage(card, className, orientation) {
     var img = document.createElement("img");
@@ -128,7 +153,7 @@
   function createBackArtImage(className) {
     var img = document.createElement("img");
     img.className = className;
-    img.src = MYSTAGOGUS_BACK;
+    img.src = deckBackImage();
     img.alt = "";
     img.decoding = "async";
     img.setAttribute("aria-hidden", "true");
@@ -169,13 +194,15 @@
       pile.forEach(function (card, index) {
         var cardEl = document.createElement("button");
         cardEl.type = "button";
+        var isM = deckType === "mystagogus";
         cardEl.className = "deck-card" +
-          (deckType === "mystagogus" ? " deck-card-m" : "") +
+          (isM ? " deck-card-m" : "") +
+          (deckType === "lxxxi" ? " deck-card-lxxxi" : "") +
           (spreadIsFull ? " disabled" : "");
         cardEl.setAttribute("aria-label", spreadIsFull
           ? "牌阵已完成"
           : "第 " + (index + 1) + " 张，轻点抽到" + formatPositionName(selectedSpread().positions[nextOpenSlotIndex()], "slash"));
-        if (deckType === "mystagogus") {
+        if (isNonTarotDeck()) {
           cardEl.appendChild(createBackArtImage("deck-card-back-img"));
         }
         if (spreadIsFull) {
@@ -243,8 +270,9 @@
 
     var back = document.createElement("div");
     back.className = "spread-card-face spread-card-back" +
-      (deckType === "mystagogus" ? " spread-card-back-m" : "");
-    if (deckType === "mystagogus") {
+      (deckType === "mystagogus" ? " spread-card-back-m" : "") +
+      (deckType === "lxxxi" ? " spread-card-back-lxxxi" : "");
+    if (isNonTarotDeck()) {
       back.appendChild(createBackArtImage("spread-card-back-img"));
     }
     var posNum = document.createElement("span");
@@ -260,6 +288,7 @@
       (entry.orientation === "reversed" ? " reversed" : "");
     var faceImg = createCardImage(card, "card-image", entry.orientation);
     if (deckType === "mystagogus") faceImg.classList.add("card-image-m");
+    if (deckType === "lxxxi") faceImg.classList.add("card-image-lxxxi");
     front.appendChild(faceImg);
     var caption = document.createElement("div");
     caption.className = "spread-card-caption";
@@ -462,6 +491,7 @@
       if (card.image) {
         var resultImg = createCardImage(card, "result-card-image", entry.orientation);
         if (card.deck === "mystagogus") resultImg.classList.add("result-card-image-m");
+        if (card.deck === "lxxxi") resultImg.classList.add("result-card-image-lxxxi");
         resultCard.appendChild(resultImg);
       }
 
@@ -493,6 +523,11 @@
         var enEl = document.createElement("span");
         enEl.className = "result-suit";
         enEl.textContent = "M" + card.number + " · " + card.nameEn;
+        header.appendChild(enEl);
+      } else if (card.deck === "lxxxi" && card.nameEn) {
+        var enEl = document.createElement("span");
+        enEl.className = "result-suit";
+        enEl.textContent = card.number + "/81 · " + card.nameEn;
         header.appendChild(enEl);
       }
 
@@ -543,6 +578,11 @@
   function handleModeChange() {
     var newMode = el.modeSelect.value;
     if (newMode === mode) return;
+    // M 牌与 LXXXI 魔法牌不支持逆位，拒绝切换到混合模式。
+    if (newMode === "mixed" && isNonTarotDeck()) {
+      el.modeSelect.value = mode;
+      return;
+    }
     if (!confirmIfSpread("切换模式会清空当前牌阵并重新洗牌，是否继续？")) {
       el.modeSelect.value = mode;
       return;
@@ -582,21 +622,30 @@
     mGroup.label = "M 牌牌阵";
     var tGroup = document.createElement("optgroup");
     tGroup.label = "塔罗牌阵";
+    var lGroup = document.createElement("optgroup");
+    lGroup.label = "LXXXI 牌阵";
     catalogue.forEach(function (spreadDefinition) {
       var option = document.createElement("option");
       option.value = spreadDefinition.id;
       option.textContent = spreadDefinition.name + " · " + getSpreadOriginLabel(spreadDefinition) +
         " · " + spreadDefinition.positions.length + " 张";
       if (spreadDefinition.deck === "mystagogus") mGroup.appendChild(option);
+      else if (spreadDefinition.deck === "lxxxi") lGroup.appendChild(option);
       else tGroup.appendChild(option);
     });
     // 当前牌组本族牌阵分组排在前面
     if (deckType === "mystagogus") {
       el.spreadSelect.appendChild(mGroup);
       el.spreadSelect.appendChild(tGroup);
+      el.spreadSelect.appendChild(lGroup);
+    } else if (deckType === "lxxxi") {
+      el.spreadSelect.appendChild(lGroup);
+      el.spreadSelect.appendChild(tGroup);
+      el.spreadSelect.appendChild(mGroup);
     } else {
       el.spreadSelect.appendChild(tGroup);
       el.spreadSelect.appendChild(mGroup);
+      el.spreadSelect.appendChild(lGroup);
     }
     if (!catalogue.some(function (s) { return s.id === selectedSpreadId; })) {
       selectedSpreadId = defaultSpreadIdForDeck(deckType);

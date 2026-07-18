@@ -229,6 +229,13 @@ body {
   border-color: rgba(212, 168, 79, 0.35);
 }
 .deck-card-m::after { content: none; }
+/* LXXXI 魔法牌牌堆：深色卡背，满图铺满 */
+.deck-card-lxxxi {
+  background: #0e1018;
+  overflow: hidden;
+  border-color: rgba(212, 168, 79, 0.35);
+}
+.deck-card-lxxxi::after { content: none; }
 .deck-card-back-img {
   position: absolute;
   inset: 0;
@@ -403,6 +410,10 @@ body {
   background: #0e1018;
   border-color: rgba(212, 168, 79, 0.4);
 }
+.spread-card-back-lxxxi {
+  background: #0e1018;
+  border-color: rgba(212, 168, 79, 0.4);
+}
 .spread-card-back-img {
   position: absolute;
   inset: 0;
@@ -450,6 +461,13 @@ body {
   letter-spacing: 0.01em;
 }
 .spread-card-back-m .pos-name {
+  color: #f6edd8;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.42);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+.spread-card-back-lxxxi .pos-name {
   color: #f6edd8;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
   background: rgba(0, 0, 0, 0.42);
@@ -602,6 +620,9 @@ body {
 }
 .result-card-image.reversed { transform: rotate(180deg); }
 .result-card-image-m { object-fit: contain; }
+/* LXXXI 牌图含边框，完整显示 */
+.result-card-image-lxxxi { object-fit: contain; background: #0c0e14; }
+.spread-card-front .card-image-lxxxi { object-fit: contain; background: #0c0e14; }
 .result-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
 .result-pos {
   font-size: 0.66rem;

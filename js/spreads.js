@@ -426,25 +426,133 @@ function getMystagogusSpread(id) {
   return mystagogusSpreads.filter(function (spread) { return spread.id === id; })[0] || mystagogusSpreads[0];
 }
 
-/** Label spread origin for UI: 出自 M 牌 / 出自塔罗牌 */
+// LXXXI / Quareia Magician's Deck spreads — from 《LXXXI 奎瑞亚魔法牌说明书》第十章
+// Note: 景色牌阵与塔罗「景观布局」牌位意义与摆放几乎相同，故不重复收录。
+var lxxxiSpreads = [
+  {
+    id: "lxxxi-occult-map",
+    name: "基础／神秘学地图牌阵(LXXXI牌)",
+    deck: "lxxxi",
+    category: "LXXXI 牌阵",
+    description: "大规模神秘学地图：观察一生中创造与毁灭的深层力量、命运模式、先祖与内在联系。不宜频繁用于世俗问题。",
+    source: "LXXXI 奎瑞亚魔法牌说明书 · 第十章",
+    columns: 5,
+    rows: 7,
+    positions: [
+      spreadPosition(1, "大地之母", "Mother Earth", "占卜的中心点：人的身体、所居之地或相关土地；容器、健康与当下状态。", 3, 4),
+      spreadPosition(2, "结合", "Union", "交叉第一张牌：与主题相关的关系、重要人物，或正造成最大影响的互动／力量。", 3, 4, { offsetX: 14, offsetY: 32 }),
+      spreadPosition(3, "星辰之父", "Star Father", "长远未来：若沿当前道路继续，正在形成的长期命运模式与结局。", 3, 1),
+      spreadPosition(4, "深渊", "Abyss", "地下世界深处：已逝去且不会再回来的事物；久远的过去。", 3, 7),
+      spreadPosition(5, "过去之门", "Gate of the Past", "正远离主题的事物；大门双向——可能回头、停驻，或继续沉入过去。", 1, 4),
+      spreadPosition(6, "祖庙", "Temple of Ancestors", "血脉、当地先祖或侍奉先祖的祭司所流出的影响、建议或继承的技巧与天赋。", 2, 2),
+      spreadPosition(7, "内在神殿", "Inner Temple", "主题更玄妙、深刻的魔法或内在层面；内在联系者、天使与众神所在之处。", 4, 2),
+      spreadPosition(8, "血脉先祖", "Blood Ancestor", "地下世界最深处的血源先祖：直接赋予的天赋或问题，以及先祖是否活跃。", 5, 6),
+      spreadPosition(9, "基石", "Foundation", "深处的锚点：过去已发生且深远影响未来的事件；不可改变的立足根基。", 1, 6),
+      spreadPosition(10, "创造织者", "Weaver of Creation", "当前沉浸其中的命运模式主题；与基石位置直接相关，宜一并解读。", 2, 3),
+      spreadPosition(11, "砥砺石", "The Grindstone", "当前限制与必须克服的困难；磨砺人使之更强的努力与功课。", 3, 3),
+      spreadPosition(12, "魔法殿堂", "Magical Temple", "魔法生命中正在发生的事、流入的力量，或宗教集体意识的影响。", 4, 3),
+      spreadPosition(13, "家与壁炉", "Home and Hearth", "家、家族、种族、地方社区与周围外部世界的日常生活。", 4, 5),
+      spreadPosition(14, "分解者", "The Unraveller", "正被分解、经过去之门进入过去的事物；已达巅峰、将离开主题一生的内容。", 3, 5),
+      spreadPosition(15, "梦之河", "River of Dreams", "沉睡、梦境、灵视与夜晚；强大时宜对照创造织者、祖庙与内在神殿。", 2, 5),
+      spreadPosition(16, "赫丘利之路", "Path of Hercules", "短期未来：已成型、正展开行动的前方道路与直接结果。", 5, 4)
+    ]
+  },
+  {
+    id: "lxxxi-tree-of-life-occult",
+    name: "生命之树牌阵(LXXXI牌,神秘学方法)",
+    deck: "lxxxi",
+    category: "LXXXI 牌阵",
+    description: "依生命之树深层力量解读：概念如何经时间、限制与平衡而显化为结果。适于魔法与神秘学占卜，而非简单是／否。",
+    source: "LXXXI 奎瑞亚魔法牌说明书 · 第十章 · 深度解法",
+    columns: 3,
+    rows: 7,
+    positions: [
+      spreadPosition(1, "星辰之父", "Star Father I", "开始、概念、宇宙创始；从魔法东方／内在世界流出、将要显化的东西。", 2, 1),
+      spreadPosition(2, "时间创造者", "Creator of Time II", "赋予形状、给予时间；包含时间与命运、已被触发以使命运显化的深层力量。", 3, 2),
+      spreadPosition(3, "持光者", "Holder of Light III", "正被扣押、休眠中，或被收回的事物。", 1, 2),
+      spreadPosition(4, "光之承载", "Light Bearer IV", "路径的建造者、道路的开拓者。", 3, 3),
+      spreadPosition(5, "监禁者", "Imprisoner V", "必要的限制；必须被扣押才能使道路得以展开的力量。", 1, 3),
+      spreadPosition(6, "纯粹平衡", "Pure Balance VI", "支点；保持平衡、使命运得以展现的力量。", 2, 4),
+      spreadPosition(7, "砥砺石", "Grindstone VII", "使主题成长的苦难、边界与控制；物质上的困难与命运模式。", 3, 5),
+      spreadPosition(8, "分解者", "Unraveller VIII", "使主题失败的松懈、失去边界、缺乏控制；心理或魔法上的难处。", 1, 5),
+      spreadPosition(9, "界线守卫", "Threshold Guardian IX", "创造、内在灵视与内在景观；允许内在力量流到外在的内在桥梁。", 2, 6),
+      spreadPosition(10, "大地之母", "Mother Earth X", "身体、土地、结果；开始的完成与开花结果。", 2, 7)
+    ]
+  },
+  {
+    id: "lxxxi-tree-of-life-simple",
+    name: "生命之树牌阵(LXXXI牌,简易方法)",
+    deck: "lxxxi",
+    category: "LXXXI 牌阵",
+    description: "通俗解读：看主题得失、命运所给与所失，以及答案如何形成。第十位为结果／答案，适合一般占卜与是／否问题。",
+    source: "LXXXI 奎瑞亚魔法牌说明书 · 第十章 · 简易解法",
+    columns: 3,
+    rows: 7,
+    positions: [
+      spreadPosition(1, "占卜主题概论", "Subject Overview", "占卜主题的总体概况。", 2, 1),
+      spreadPosition(2, "得的面向", "Gaining Aspect", "主题积极、获得或给予的面向。", 3, 2),
+      spreadPosition(3, "失的面向", "Losing Aspect", "主题消极、失去或被隐瞒的面向。", 1, 2),
+      spreadPosition(4, "命运给予的", "What Fate Gives", "命运所给予的、必要的条件与支持。", 3, 3),
+      spreadPosition(5, "失去的", "What Is Lost", "被拿走、失去或被剥夺的内容。", 1, 3),
+      spreadPosition(6, "现状的中心点", "Core of the Present", "当前状况的关键与核心。", 2, 4),
+      spreadPosition(7, "情感与负担", "Emotion & Burden", "情感层面，以及需要承担的负担。", 3, 5),
+      spreadPosition(8, "心智与分解", "Mind & Unravelling", "心智、魔法层面，以及正在分解中的事物。", 1, 5),
+      spreadPosition(9, "族群家与先祖", "Clan, Home & Ancestors", "族群、家与先祖的影响。", 2, 6),
+      spreadPosition(10, "结果", "Outcome", "问题的结果或答案。", 2, 7)
+    ]
+  },
+  {
+    id: "lxxxi-four-directions",
+    name: "四方位牌阵(LXXXI牌)",
+    deck: "lxxxi",
+    category: "LXXXI 牌阵",
+    description: "六张牌检视从各方位流入并影响主题的力量，以及与主题的最大互动。可用于人、情况、地点或时间点。",
+    source: "LXXXI 奎瑞亚魔法牌说明书 · 第十章",
+    columns: 3,
+    rows: 3,
+    positions: [
+      spreadPosition(1, "中央", "Centre", "身体、地点、土地、人或物体——关于占卜主题本身。", 2, 2),
+      spreadPosition(2, "东方", "East", "诞生、潜力、风元素、话语、春天、到来、学习。", 3, 2),
+      spreadPosition(3, "南方", "South", "前方的路、未来、火元素、夏天、工作。", 2, 3),
+      spreadPosition(4, "西方", "West", "家庭、家、老化、水元素、秋天、消失、遗留物。", 1, 2),
+      spreadPosition(5, "北方", "North", "先祖、死亡、过去、冬天、土元素。", 2, 1),
+      spreadPosition(6, "结合", "Union", "交叉第一张牌：对主题最大的影响、关系或投入。", 2, 2, { offsetX: 14, offsetY: 32 })
+    ]
+  }
+];
+
+function getLxxxiSpread(id) {
+  return lxxxiSpreads.filter(function (spread) { return spread.id === id; })[0] || lxxxiSpreads[0];
+}
+
+/** Label spread origin for UI: 出自 M 牌 / 出自 LXXXI 牌 / 出自塔罗牌 */
 function getSpreadOriginLabel(spread) {
-  return (spread && spread.deck === "mystagogus") ? "出自 M 牌" : "出自塔罗牌";
+  if (spread && spread.deck === "mystagogus") return "出自 M 牌";
+  if (spread && spread.deck === "lxxxi") return "出自 LXXXI 牌";
+  return "出自塔罗牌";
 }
 
 function getSpreadsForDeck(deckType) {
-  // 塔罗与 M 牌均可使用对方牌阵；当前牌组的本族牌阵排在前面。
+  // 各牌组均可使用对方牌阵；当前牌组的本族牌阵排在前面。
   if (deckType === "mystagogus") {
-    return mystagogusSpreads.concat(tarotSpreads);
+    return mystagogusSpreads.concat(tarotSpreads, lxxxiSpreads);
   }
-  return tarotSpreads.concat(mystagogusSpreads);
+  if (deckType === "lxxxi") {
+    return lxxxiSpreads.concat(tarotSpreads, mystagogusSpreads);
+  }
+  return tarotSpreads.concat(mystagogusSpreads, lxxxiSpreads);
 }
 
 function getSpreadById(deckType, id) {
+  var lSpread = lxxxiSpreads.filter(function (spread) { return spread.id === id; })[0];
+  if (lSpread) return lSpread;
   var mSpread = mystagogusSpreads.filter(function (spread) { return spread.id === id; })[0];
   if (mSpread) return mSpread;
   var tSpread = tarotSpreads.filter(function (spread) { return spread.id === id; })[0];
   if (tSpread) return tSpread;
-  return deckType === "mystagogus" ? mystagogusSpreads[0] : tarotSpreads[0];
+  if (deckType === "mystagogus") return mystagogusSpreads[0];
+  if (deckType === "lxxxi") return lxxxiSpreads[0];
+  return tarotSpreads[0];
 }
 
 function validateTarotSpreads(spreads) {
@@ -472,13 +580,16 @@ function validateTarotSpreads(spreads) {
 
 validateTarotSpreads(tarotSpreads);
 validateTarotSpreads(mystagogusSpreads);
+validateTarotSpreads(lxxxiSpreads);
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     tarotSpreads: tarotSpreads,
     mystagogusSpreads: mystagogusSpreads,
+    lxxxiSpreads: lxxxiSpreads,
     getTarotSpread: getTarotSpread,
     getMystagogusSpread: getMystagogusSpread,
+    getLxxxiSpread: getLxxxiSpread,
     getSpreadOriginLabel: getSpreadOriginLabel,
     getSpreadsForDeck: getSpreadsForDeck,
     getSpreadById: getSpreadById,

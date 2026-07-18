@@ -103,27 +103,40 @@ test("all position coordinates match the Chapter 6 diagrams", function () {
   });
 });
 
-test("both decks can use each other's spreads with origin labels", function () {
-  var total = catalogue.mystagogusSpreads.length + catalogue.tarotSpreads.length;
+test("all decks can use each other's spreads with origin labels", function () {
+  var total =
+    catalogue.mystagogusSpreads.length +
+    catalogue.tarotSpreads.length +
+    catalogue.lxxxiSpreads.length;
 
   var mSpreads = catalogue.getSpreadsForDeck("mystagogus");
   assert.equal(mSpreads.length, total);
   assert.equal(mSpreads[0].id, "mystagogus-layout");
   assert.ok(mSpreads.some(function (s) { return s.id === "three-card-horizontal"; }));
+  assert.ok(mSpreads.some(function (s) { return s.id === "lxxxi-occult-map"; }));
   assert.equal(catalogue.validateTarotSpreads(catalogue.mystagogusSpreads), true);
 
   var tarotCatalogue = catalogue.getSpreadsForDeck("tarot");
   assert.equal(tarotCatalogue.length, total);
   assert.equal(tarotCatalogue[0].id, catalogue.tarotSpreads[0].id);
   assert.ok(tarotCatalogue.some(function (s) { return s.id === "mystagogus-layout"; }));
+  assert.ok(tarotCatalogue.some(function (s) { return s.id === "lxxxi-four-directions"; }));
+
+  var lxxxiCatalogue = catalogue.getSpreadsForDeck("lxxxi");
+  assert.equal(lxxxiCatalogue.length, total);
+  assert.equal(lxxxiCatalogue[0].id, "lxxxi-occult-map");
+  assert.ok(lxxxiCatalogue.some(function (s) { return s.id === "tree-of-life"; }));
 
   assert.equal(catalogue.getSpreadById("mystagogus", "mystagogus-layout").id, "mystagogus-layout");
   assert.equal(catalogue.getSpreadById("mystagogus", "yes-no").id, "yes-no");
   assert.equal(catalogue.getSpreadById("tarot", "mystagogus-layout").id, "mystagogus-layout");
   assert.equal(catalogue.getSpreadById("tarot", "yes-no").id, "yes-no");
+  assert.equal(catalogue.getSpreadById("tarot", "lxxxi-tree-of-life-simple").id, "lxxxi-tree-of-life-simple");
+  assert.equal(catalogue.getSpreadById("lxxxi", "lxxxi-occult-map").id, "lxxxi-occult-map");
 
   assert.equal(catalogue.getSpreadOriginLabel(catalogue.mystagogusSpreads[0]), "出自 M 牌");
   assert.equal(catalogue.getSpreadOriginLabel(catalogue.tarotSpreads[0]), "出自塔罗牌");
+  assert.equal(catalogue.getSpreadOriginLabel(catalogue.lxxxiSpreads[0]), "出自 LXXXI 牌");
   assert.equal(catalogue.getSpreadOriginLabel(null), "出自塔罗牌");
 });
 
@@ -137,4 +150,65 @@ test("Mystagogus layout coordinates follow the zigzag diagram", function () {
     spread.positions.map(function (position) { return position.column + "," + position.row; }),
     expected
   );
+});
+
+test("LXXXI catalogue validates and matches expected counts and coordinates", function () {
+  assert.equal(catalogue.validateTarotSpreads(catalogue.lxxxiSpreads), true);
+  assert.deepEqual(
+    catalogue.lxxxiSpreads.map(function (spread) { return spread.id; }).sort(),
+    [
+      "lxxxi-four-directions",
+      "lxxxi-occult-map",
+      "lxxxi-tree-of-life-occult",
+      "lxxxi-tree-of-life-simple"
+    ]
+  );
+
+  var expectedCounts = {
+    "lxxxi-occult-map": 16,
+    "lxxxi-tree-of-life-occult": 10,
+    "lxxxi-tree-of-life-simple": 10,
+    "lxxxi-four-directions": 6
+  };
+  var expectedCoordinates = {
+    "lxxxi-occult-map": [
+      "3,4", "3,4", "3,1", "3,7", "1,4", "2,2", "4,2", "5,6",
+      "1,6", "2,3", "3,3", "4,3", "4,5", "3,5", "2,5", "5,4"
+    ],
+    "lxxxi-tree-of-life-occult": [
+      "2,1", "3,2", "1,2", "3,3", "1,3", "2,4", "3,5", "1,5", "2,6", "2,7"
+    ],
+    "lxxxi-tree-of-life-simple": [
+      "2,1", "3,2", "1,2", "3,3", "1,3", "2,4", "3,5", "1,5", "2,6", "2,7"
+    ],
+    "lxxxi-four-directions": ["2,2", "3,2", "2,3", "1,2", "2,1", "2,2"]
+  };
+
+  catalogue.lxxxiSpreads.forEach(function (spread) {
+    assert.equal(spread.deck, "lxxxi");
+    assert.equal(spread.positions.length, expectedCounts[spread.id], spread.id);
+    assert.deepEqual(
+      spread.positions.map(function (position) { return position.column + "," + position.row; }),
+      expectedCoordinates[spread.id],
+      spread.id
+    );
+  });
+
+  // Crossing cards: occult map 1+2, four directions 1+6
+  [
+    ["lxxxi-occult-map", 1, 2],
+    ["lxxxi-four-directions", 1, 6]
+  ].forEach(function (example) {
+    var spread = catalogue.getLxxxiSpread(example[0]);
+    var base = spread.positions[example[1] - 1];
+    var crossing = spread.positions[example[2] - 1];
+    assert.equal(base.column, crossing.column, example[0] + " cross col");
+    assert.equal(base.row, crossing.row, example[0] + " cross row");
+    assert.ok(crossing.offsetX || crossing.offsetY, example[0] + " crossing offset");
+  });
+
+  // 景色牌阵与塔罗景观布局重复，不应单独收录
+  assert.ok(!catalogue.lxxxiSpreads.some(function (s) {
+    return /景色/.test(s.name) || s.id === "lxxxi-landscape";
+  }));
 });
