@@ -83,7 +83,7 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 
 ## 贡献者 ✨
 
-感谢以下伙伴对项目做出的贡献（展示形式参考 [All Contributors](https://allcontributors.org/) 规范）：
+感谢以下伙伴对项目做出的贡献
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <table>
