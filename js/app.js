@@ -69,6 +69,7 @@
   function activeDeckCards() {
     if (deckType === "mystagogus") return mystagogusDeckFull.slice();
     if (deckType === "lxxxi") return lxxxiDeckFull.slice();
+    if (currentPositionDrawRule()) return tarotDeckFull.slice();
     if (isOverviewStacking()) {
       return getDeckByArcanaFilter(currentPhase === "major" ? "major-only" : "minor-only", currentPhase);
     }
@@ -79,6 +80,8 @@
     pile = shuffle(activeDeckCards());
     if (isOverviewStacking()) {
       pile = getAvailableOverviewStackingCards(pile, spread, currentPhase);
+    } else if (currentPositionDrawRule()) {
+      pile = getAvailableCardsForDrawRule(pile, spread, currentPositionDrawRule());
     }
   }
 
@@ -86,6 +89,19 @@
 
   function isOverviewStacking() {
     return isOverviewStackingMode(deckType, selectedSpreadId, overviewMethod);
+  }
+
+  function hasPositionDrawRules() {
+    return deckType === "tarot" && selectedSpread().positions.some(function (position) {
+      return Boolean(position.drawRule);
+    });
+  }
+
+  function currentPositionDrawRule() {
+    if (deckType !== "tarot") return null;
+    var slotIndex = nextOpenSlotIndex();
+    if (slotIndex === -1) return null;
+    return selectedSpread().positions[slotIndex].drawRule || null;
   }
 
   function overviewStackingPhase() {
@@ -108,6 +124,14 @@
     return "three-card-horizontal";
   }
 
+  function updateDeckSpreadAriaLabel(drawRule) {
+    var label = "塔罗牌堆，左右滑动浏览，轻点抽牌";
+    if (deckType === "mystagogus") label = "Mystagogus 牌堆，左右滑动浏览，轻点抽牌";
+    else if (deckType === "lxxxi") label = "LXXXI 魔法牌堆，左右滑动浏览，轻点抽牌";
+    else if (drawRule) label += "；当前" + drawRule.label;
+    el.deckSpread.setAttribute("aria-label", label);
+  }
+
   function applyDeckUi() {
     var nonTarot = isNonTarotDeck();
     var stackingAvailable = deckType === "tarot" && selectedSpreadId === "overview";
@@ -115,7 +139,8 @@
       el.overviewMethodGroup.style.display = stackingAvailable ? "" : "none";
     }
     if (el.arcanaFilterGroup) {
-      el.arcanaFilterGroup.style.display = nonTarot || isOverviewStacking() ? "none" : "";
+      el.arcanaFilterGroup.style.display =
+        nonTarot || isOverviewStacking() || hasPositionDrawRules() ? "none" : "";
     }
     if (el.overviewMethodSummary) {
       el.overviewMethodSummary.textContent = isOverviewStacking()
@@ -132,10 +157,7 @@
         el.modeSelect.value = "upright-only";
       }
     }
-    var label = "塔罗牌堆，左右滑动浏览，轻点抽牌";
-    if (deckType === "mystagogus") label = "Mystagogus 牌堆，左右滑动浏览，轻点抽牌";
-    else if (deckType === "lxxxi") label = "LXXXI 魔法牌堆，左右滑动浏览，轻点抽牌";
-    el.deckSpread.setAttribute("aria-label", label);
+    updateDeckSpreadAriaLabel(currentPositionDrawRule());
   }
 
   function orderedSpreadEntries() {
@@ -228,6 +250,8 @@
     var prevScroll = el.deckSpread.scrollLeft;
     el.deckSpread.innerHTML = "";
     var stacking = isOverviewStacking();
+    var drawRule = currentPositionDrawRule();
+    updateDeckSpreadAriaLabel(drawRule);
     var spreadIsFull = stacking
       ? overviewStackingPhase() === "complete"
       : nextOpenSlotIndex() === -1;
@@ -249,13 +273,14 @@
           (deckType === "lxxxi" ? " deck-card-lxxxi" : "") +
           (spreadIsFull ? " disabled" : "");
         var nextPosition = spreadIsFull ? null : selectedSpread().positions[nextOpenSlotIndex()];
-        var layerLabel = stacking
+        var selectionLabel = stacking
           ? (currentPhase === "major" ? "大阿卡那底牌" : "小阿卡那叠牌")
-          : "";
+          : drawRule ? "，" + drawRule.label : "";
         cardEl.setAttribute("aria-label", spreadIsFull
           ? "牌阵已完成"
           : "第 " + (index + 1) + " 张，轻点抽到" +
-            formatPositionName(nextPosition, "slash") + (layerLabel ? "的" + layerLabel : ""));
+            formatPositionName(nextPosition, "slash") +
+            (stacking ? "的" + selectionLabel : selectionLabel));
         if (isNonTarotDeck()) {
           cardEl.appendChild(createBackArtImage("deck-card-back-img"));
         }
@@ -273,7 +298,7 @@
 
     el.deckRemaining.textContent = (stacking
       ? (currentPhase === "major" ? "大阿卡那 · " : "小阿卡那 · ")
-      : "") + "剩 " + pile.length + " 张";
+      : drawRule ? drawRule.label + " · " : "") + "剩 " + pile.length + " 张";
 
     if (spreadIsFull) {
       el.deckCta.classList.add("complete");
@@ -297,13 +322,17 @@
         el.deckCta.textContent = "下一张：位置 " + nextPosition.number + " · " +
           formatPositionName(nextPosition, "slash") + " · " + layerInstruction +
           "（轻点任意一张牌抽出）";
+      } else if (drawRule) {
+        el.deckCta.textContent = "下一张：位置 " + nextPosition.number + " · " +
+          formatPositionName(nextPosition, "slash") + " · " + drawRule.label +
+          "（从当前合法牌池中任选一张）";
       } else {
         el.deckCta.textContent = "下一张：位置 " + nextPosition.number + " · " +
           formatPositionName(nextPosition, "slash") + "（轻点任意一张牌抽出）";
       }
     }
 
-    if (deckType === "tarot" && isPhaseFilter(arcanaFilter) && !stacking) {
+    if (deckType === "tarot" && isPhaseFilter(arcanaFilter) && !stacking && !hasPositionDrawRules()) {
       el.switchArcanaBtn.style.display = "inline-block";
       el.switchArcanaBtn.textContent = getOtherPhaseLabel(arcanaFilter, currentPhase);
     } else {
@@ -358,6 +387,12 @@
     posNum.className = "pos-num";
     posNum.textContent = position.number;
     back.appendChild(posNum);
+    if (position.drawRule) {
+      var drawRuleBadge = document.createElement("span");
+      drawRuleBadge.className = "draw-rule-badge";
+      drawRuleBadge.textContent = position.drawRule.label;
+      back.appendChild(drawRuleBadge);
+    }
     if (stacking) {
       var layerBadge = document.createElement("span");
       layerBadge.className = "stack-layer-badge";
@@ -455,6 +490,12 @@
         slot.appendChild(slotLayer);
       }
       appendPositionLabels(slot, position, "slot-name");
+      if (position.drawRule) {
+        var slotDrawRule = document.createElement("span");
+        slotDrawRule.className = "slot-draw-rule";
+        slotDrawRule.textContent = position.drawRule.label;
+        slot.appendChild(slotDrawRule);
+      }
       el.spreadGrid.appendChild(slot);
     });
     orderedSpreadEntries().forEach(function (entry) {
@@ -517,6 +558,10 @@
     };
     spread.push(entry);
     syncOverviewStackingPhase();
+    if (hasPositionDrawRules()) {
+      if (nextOpenSlotIndex() === -1) pile = [];
+      else buildPile();
+    }
 
     renderSpreadCards();
     requestAnimationFrame(function () {
@@ -572,6 +617,8 @@
       currentPhase = state.activeLayer;
       if (state.complete) pile = [];
       else buildPile();
+    } else if (hasPositionDrawRules()) {
+      buildPile();
     } else {
       // Return the card to a random spot in the pile so it can be redrawn.
       var pos = Math.floor(Math.random() * (pile.length + 1));
@@ -622,6 +669,12 @@
         : currentPhase === "major"
           ? "分牌叠放 · 第 1 层：大牌（因）"
           : "分牌叠放 · 第 2 层：小牌（果）";
+    } else if (hasPositionDrawRules()) {
+      el.phaseLabel.style.display = "inline-block";
+      var nextRule = currentPositionDrawRule();
+      el.phaseLabel.textContent = nextRule
+        ? "当前牌位：" + nextRule.label
+        : "四季牌阵 · 五个限定牌位已完成";
     } else if (deckType === "tarot" && isPhaseFilter(arcanaFilter)) {
       el.phaseLabel.style.display = "inline-block";
       el.phaseLabel.textContent = "当前：" + getPhaseArcanaLabel(arcanaFilter, currentPhase);
@@ -635,7 +688,9 @@
     el.spreadHint.style.display = allRevealed ? "none" : "block";
     el.spreadHint.textContent = stacking
       ? "同一牌位的大牌与小牌需一起解读：大牌是背后的原因与力量，小牌是这种力量的具体表现。"
-      : "轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开。";
+      : hasPositionDrawRules()
+        ? "每个牌位只会展示符合限制的牌背供你选择；轻点牌可单独翻开，或按「开牌解读」全部翻开。"
+        : "轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开。";
   }
 
   function buildResultCard(entry, position, layer) {
@@ -794,7 +849,7 @@
 
   // ---------- Settings / phase ----------
   function switchArcanaPhase() {
-    if (deckType !== "tarot" || isOverviewStacking()) return;
+    if (deckType !== "tarot" || isOverviewStacking() || hasPositionDrawRules()) return;
     currentPhase = currentPhase === "major" ? "minor" : "major";
     buildPile();
     renderDeckSpread();
@@ -936,7 +991,8 @@
       var title = document.createElement("strong");
       title.textContent = position.number + ". " + formatPositionName(position, "slash");
       var meaning = document.createElement("span");
-      meaning.textContent = position.meaning;
+      meaning.textContent = position.meaning +
+        (position.drawRule ? "（" + position.drawRule.label + "）" : "");
       item.appendChild(title);
       item.appendChild(meaning);
       el.positionGuideList.appendChild(item);

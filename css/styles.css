@@ -768,6 +768,18 @@ body::after {
   opacity: 0.85;
   letter-spacing: 0.01em;
 }
+.slot-draw-rule {
+  max-width: calc(100% - 8px);
+  padding: 2px 5px;
+  border: 1px solid rgba(123, 171, 219, 0.38);
+  border-radius: 999px;
+  color: #bad8f3;
+  background: rgba(13, 32, 65, 0.58);
+  font-size: 0.42rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
 .spread-card.is-new { animation: dealIn 0.45s cubic-bezier(0.3, 1.25, 0.42, 1) both; }
 @keyframes dealIn {
   from { opacity: 0; transform: translate(var(--position-offset-x, 0), calc(var(--position-offset-y, 0%) - 14px)) scale(0.9); }
@@ -887,6 +899,20 @@ body::after {
   font-size: 0.48rem;
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+.draw-rule-badge {
+  position: relative;
+  z-index: 1;
+  max-width: calc(100% - 8px);
+  padding: 2px 6px;
+  border: 1px solid rgba(123, 171, 219, 0.46);
+  border-radius: 999px;
+  color: #c8e2f8;
+  background: rgba(8, 25, 55, 0.72);
+  font-size: 0.46rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
 }
 .spread-card-back-m .pos-num {
   color: #f3e6c4;

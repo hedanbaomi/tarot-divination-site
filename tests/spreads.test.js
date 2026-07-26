@@ -6,6 +6,7 @@ var catalogue = require("../js/spreads.js");
 
 var expectedCounts = {
   "three-card-horizontal": 3,
+  "four-seasons": 5,
   "yes-no": 6,
   "tree-of-life": 10,
   overview: 13,
@@ -24,6 +25,7 @@ var expectedCounts = {
 
 var expectedCoordinates = {
   "three-card-horizontal": ["1,1", "2,1", "3,1"],
+  "four-seasons": ["1,2", "2,3", "3,2", "2,1", "2,2"],
   "yes-no": ["2,2", "1,1", "1,3", "3,3", "3,1", "2,2"],
   "tree-of-life": ["2,1", "3,2", "1,2", "3,3", "1,3", "2,4", "3,5", "1,5", "2,6", "2,7"],
   overview: ["1,1", "2,1", "3,1", "4,1", "5,1", "6,1", "1,2", "2,2", "3,2", "4,2", "5,2", "6,2", "7,1"],
@@ -76,6 +78,49 @@ test("formatPositionName joins Chinese and English labels", function () {
     catalogue.formatPositionName({ name: "现在", nameEn: "Present" }, "dot"),
     "现在 · Present"
   );
+});
+
+test("four seasons spread fixes each position to its pictured tarot pool", function () {
+  var seasonal = catalogue.getTarotSpread("four-seasons");
+
+  assert.equal(seasonal.requiresDeck, "tarot");
+  assert.equal(seasonal.positions.length, 5);
+  assert.deepEqual(
+    seasonal.positions.map(function (position) { return position.drawRule; }),
+    [
+      { suit: "权杖", label: "仅限权杖牌" },
+      { suit: "圣杯", label: "仅限圣杯牌" },
+      { suit: "宝剑", label: "仅限宝剑牌" },
+      { suit: "星币", label: "仅限星币牌" },
+      { arcana: "major", label: "仅限大阿卡那" }
+    ]
+  );
+  assert.match(seasonal.description, /春分、夏至、秋分或冬至/);
+});
+
+test("position draw rules expose only eligible undrawn cards", function () {
+  var cards = [
+    { id: "wands-ace", arcana: "minor", suit: "权杖" },
+    { id: "wands-two", arcana: "minor", suit: "权杖" },
+    { id: "cups-ace", arcana: "minor", suit: "圣杯" },
+    { id: "major-00", arcana: "major" }
+  ];
+  var entries = [{ card: { id: "wands-ace" } }];
+
+  assert.deepEqual(
+    catalogue.getAvailableCardsForDrawRule(
+      cards,
+      entries,
+      { suit: "权杖", label: "仅限权杖牌" }
+    ).map(function (card) { return card.id; }),
+    ["wands-two"]
+  );
+  assert.deepEqual(
+    catalogue.getAvailableCardsForDrawRule(cards, entries, { arcana: "major" })
+      .map(function (card) { return card.id; }),
+    ["major-00"]
+  );
+  assert.equal(catalogue.cardMatchesDrawRule(cards[2], { suit: "权杖" }), false);
 });
 
 test("overview stacking is available only for the tarot overview spread", function () {
@@ -183,34 +228,41 @@ test("all position coordinates match the Chapter 6 diagrams", function () {
   });
 });
 
-test("all decks can use each other's spreads with origin labels", function () {
+test("all decks can use compatible spreads with origin labels", function () {
   var total =
     catalogue.mystagogusSpreads.length +
     catalogue.tarotSpreads.length +
     catalogue.lxxxiSpreads.length;
+  var tarotOnlyCount = catalogue.tarotSpreads.filter(function (spread) {
+    return spread.requiresDeck === "tarot";
+  }).length;
 
   var mSpreads = catalogue.getSpreadsForDeck("mystagogus");
-  assert.equal(mSpreads.length, total);
+  assert.equal(mSpreads.length, total - tarotOnlyCount);
   assert.equal(mSpreads[0].id, "mystagogus-layout");
   assert.ok(mSpreads.some(function (s) { return s.id === "three-card-horizontal"; }));
+  assert.ok(!mSpreads.some(function (s) { return s.id === "four-seasons"; }));
   assert.ok(mSpreads.some(function (s) { return s.id === "lxxxi-occult-map"; }));
   assert.equal(catalogue.validateTarotSpreads(catalogue.mystagogusSpreads), true);
 
   var tarotCatalogue = catalogue.getSpreadsForDeck("tarot");
   assert.equal(tarotCatalogue.length, total);
   assert.equal(tarotCatalogue[0].id, catalogue.tarotSpreads[0].id);
+  assert.ok(tarotCatalogue.some(function (s) { return s.id === "four-seasons"; }));
   assert.ok(tarotCatalogue.some(function (s) { return s.id === "mystagogus-layout"; }));
   assert.ok(tarotCatalogue.some(function (s) { return s.id === "lxxxi-four-directions"; }));
 
   var lxxxiCatalogue = catalogue.getSpreadsForDeck("lxxxi");
-  assert.equal(lxxxiCatalogue.length, total);
+  assert.equal(lxxxiCatalogue.length, total - tarotOnlyCount);
   assert.equal(lxxxiCatalogue[0].id, "lxxxi-occult-map");
   assert.ok(lxxxiCatalogue.some(function (s) { return s.id === "tree-of-life"; }));
+  assert.ok(!lxxxiCatalogue.some(function (s) { return s.id === "four-seasons"; }));
 
   assert.equal(catalogue.getSpreadById("mystagogus", "mystagogus-layout").id, "mystagogus-layout");
   assert.equal(catalogue.getSpreadById("mystagogus", "yes-no").id, "yes-no");
   assert.equal(catalogue.getSpreadById("tarot", "mystagogus-layout").id, "mystagogus-layout");
   assert.equal(catalogue.getSpreadById("tarot", "yes-no").id, "yes-no");
+  assert.equal(catalogue.getSpreadById("mystagogus", "four-seasons").id, "mystagogus-layout");
   assert.equal(catalogue.getSpreadById("tarot", "lxxxi-tree-of-life-simple").id, "lxxxi-tree-of-life-simple");
   assert.equal(catalogue.getSpreadById("lxxxi", "lxxxi-occult-map").id, "lxxxi-occult-map");
 

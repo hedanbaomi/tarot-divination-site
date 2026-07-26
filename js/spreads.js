@@ -105,6 +105,23 @@ function getAvailableOverviewStackingCards(cards, entries, layer) {
   return (cards || []).filter(function (card) { return !usedIds[card.id]; });
 }
 
+function cardMatchesDrawRule(card, rule) {
+  if (!rule) return true;
+  if (rule.arcana && card.arcana !== rule.arcana) return false;
+  if (rule.suit && card.suit !== rule.suit) return false;
+  return true;
+}
+
+function getAvailableCardsForDrawRule(cards, entries, rule) {
+  var usedIds = {};
+  (entries || []).forEach(function (entry) {
+    if (entry.card) usedIds[entry.card.id] = true;
+  });
+  return (cards || []).filter(function (card) {
+    return !usedIds[card.id] && cardMatchesDrawRule(card, rule);
+  });
+}
+
 var tarotSpreads = [
   {
     id: "three-card-horizontal",
@@ -118,6 +135,33 @@ var tarotSpreads = [
       spreadPosition(1, "过去", "Past", "影响当前问题的过去。", 1, 1),
       spreadPosition(2, "现在", "Present", "问题目前的状态与核心。", 2, 1),
       spreadPosition(3, "未来", "Future", "沿当前趋势最可能出现的未来。", 3, 1)
+    ]
+  },
+  {
+    id: "four-seasons",
+    name: "四季牌阵",
+    category: "季节牌阵",
+    description: "用于春分、夏至、秋分或冬至，观察接下来一个季度的运势与需要注意之处；五个牌位分别限定为权杖、圣杯、宝剑、星币与大阿卡那。",
+    source: "用户提供的四季牌阵参考图",
+    requiresDeck: "tarot",
+    columns: 3,
+    rows: 3,
+    positions: [
+      spreadPosition(1, "行动／欲望／能量", "Action / Desire / Energy", "行动、欲望以及能量如何运用。", 1, 2, {
+        drawRule: { suit: "权杖", label: "仅限权杖牌" }
+      }),
+      spreadPosition(2, "情感状态", "Emotional State", "这个季度的情感状态。", 2, 3, {
+        drawRule: { suit: "圣杯", label: "仅限圣杯牌" }
+      }),
+      spreadPosition(3, "思维／理性／人际", "Mind / Reason / Relationships", "思维状态、理性判断与人际关系。", 3, 2, {
+        drawRule: { suit: "宝剑", label: "仅限宝剑牌" }
+      }),
+      spreadPosition(4, "工作／物质／生活／健康", "Work / Material / Life / Health", "工作、物质条件、日常生活与健康。", 2, 1, {
+        drawRule: { suit: "星币", label: "仅限星币牌" }
+      }),
+      spreadPosition(5, "季度关键点", "Seasonal Key", "整个季度的能量与灵性成长关键，以及需要学习和关注的地方。", 2, 2, {
+        drawRule: { arcana: "major", label: "仅限大阿卡那" }
+      })
     ]
   },
   {
@@ -573,14 +617,17 @@ function getSpreadOriginLabel(spread) {
 }
 
 function getSpreadsForDeck(deckType) {
+  var compatibleTarotSpreads = tarotSpreads.filter(function (spread) {
+    return !spread.requiresDeck || spread.requiresDeck === deckType;
+  });
   // 各牌组均可使用对方牌阵；当前牌组的本族牌阵排在前面。
   if (deckType === "mystagogus") {
-    return mystagogusSpreads.concat(tarotSpreads, lxxxiSpreads);
+    return mystagogusSpreads.concat(compatibleTarotSpreads, lxxxiSpreads);
   }
   if (deckType === "lxxxi") {
-    return lxxxiSpreads.concat(tarotSpreads, mystagogusSpreads);
+    return lxxxiSpreads.concat(compatibleTarotSpreads, mystagogusSpreads);
   }
-  return tarotSpreads.concat(mystagogusSpreads, lxxxiSpreads);
+  return compatibleTarotSpreads.concat(mystagogusSpreads, lxxxiSpreads);
 }
 
 function getSpreadById(deckType, id) {
@@ -589,7 +636,7 @@ function getSpreadById(deckType, id) {
   var mSpread = mystagogusSpreads.filter(function (spread) { return spread.id === id; })[0];
   if (mSpread) return mSpread;
   var tSpread = tarotSpreads.filter(function (spread) { return spread.id === id; })[0];
-  if (tSpread) return tSpread;
+  if (tSpread && (!tSpread.requiresDeck || tSpread.requiresDeck === deckType)) return tSpread;
   if (deckType === "mystagogus") return mystagogusSpreads[0];
   if (deckType === "lxxxi") return lxxxiSpreads[0];
   return tarotSpreads[0];
@@ -612,6 +659,9 @@ function validateTarotSpreads(spreads) {
       }
       if (position.column < 1 || position.column > spread.columns || position.row < 1 || position.row > spread.rows) {
         throw new Error(spread.id + " 的第 " + position.number + " 个牌位超出布局网格");
+      }
+      if (position.drawRule && !position.drawRule.arcana && !position.drawRule.suit) {
+        throw new Error(spread.id + " 的第 " + position.number + " 个牌位抽牌限制无效");
       }
     });
   });
@@ -639,6 +689,8 @@ if (typeof module !== "undefined" && module.exports) {
     getOverviewStackingPhase: getOverviewStackingPhase,
     getOverviewStackingState: getOverviewStackingState,
     getAvailableOverviewStackingCards: getAvailableOverviewStackingCards,
+    cardMatchesDrawRule: cardMatchesDrawRule,
+    getAvailableCardsForDrawRule: getAvailableCardsForDrawRule,
     validateTarotSpreads: validateTarotSpreads
   };
 }
