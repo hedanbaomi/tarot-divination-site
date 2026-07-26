@@ -14,6 +14,7 @@
   var uidCounter = 0;
 
   var el = {};
+  var historyUiController = null;
 
   function cacheElements() {
     el.settings = document.getElementById("settings");
@@ -84,6 +85,34 @@
   }
 
   function selectedSpread() { return getSpreadById(deckType, selectedSpreadId); }
+
+  function isReadingComplete() {
+    return spread.length === spreadTargetCount() && nextOpenSlotIndex() === -1;
+  }
+
+  function createCurrentHistoryRecord() {
+    if (!isReadingComplete()) throw new Error("Reading is not complete");
+    var activeSpread = selectedSpread();
+    var deckNames = {
+      tarot: "RWS 塔罗",
+      mystagogus: "Mystagogus",
+      lxxxi: "LXXXI"
+    };
+    return globalThis.DivinationHistoryRecords.buildReadingRecord({
+      deckType: deckType,
+      deckMode: deckType,
+      deckName: deckNames[deckType],
+      spreadId: activeSpread.id,
+      spreadName: activeSpread.name,
+      orientationMode: deckType === "tarot" ? mode : "upright-only",
+      filterMode: deckType === "tarot" ? arcanaFilter : "not-applicable",
+      overviewMethod: deckType === "tarot" && activeSpread.id === "overview"
+        ? overviewMethod
+        : "not-applicable",
+      positions: activeSpread.positions,
+      entries: orderedSpreadEntries()
+    });
+  }
 
   function isOverviewStacking() {
     return isOverviewStackingMode(deckType, selectedSpreadId, overviewMethod);
@@ -640,6 +669,7 @@
   function renderSpreadMeta() {
     if (spread.length === 0) {
       el.spreadArea.style.display = "none";
+      if (historyUiController) historyUiController.updateSaveAvailability(false);
       return;
     }
     el.spreadArea.style.display = "block";
@@ -689,6 +719,7 @@
       : hasPositionDrawRules()
         ? "每个牌位只会展示符合限制的牌背供你选择；轻点牌可单独翻开，或按「开牌解读」全部翻开。"
         : "轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开。";
+    if (historyUiController) historyUiController.updateSaveAvailability(isReadingComplete());
   }
 
   function buildResultCard(entry, position, layer) {
@@ -1031,6 +1062,17 @@
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);
     el.clearBtn.addEventListener("click", handleShuffle);
+    if (globalThis.DivinationHistoryUi &&
+        globalThis.DivinationHistoryStore &&
+        globalThis.DivinationHistoryRecords) {
+      historyUiController = globalThis.DivinationHistoryUi.init({
+        store: globalThis.DivinationHistoryStore.createStore({
+          recordsApi: globalThis.DivinationHistoryRecords
+        }),
+        recordsApi: globalThis.DivinationHistoryRecords,
+        createSnapshot: createCurrentHistoryRecord
+      });
+    }
     resetDeck();
   }
 

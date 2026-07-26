@@ -14,6 +14,10 @@
     <header class="header">
       <h1>Quareia 占卜</h1>
       <p class="subtitle">QUAREIA DIVINATION · 塔罗 / Mystagogus</p>
+      <div class="header-actions">
+        <button class="btn-mini history-open-btn" id="historyOpenBtn" type="button"
+          aria-haspopup="dialog" aria-controls="historyDialog">占卜历史</button>
+      </div>
     </header>
 
     <!-- 设置：可折叠，默认展开 -->
@@ -88,8 +92,10 @@
       </div>
       <div class="spread-actions">
         <button class="btn btn-accent" id="revealBtn">开牌解读</button>
+        <button class="btn btn-secondary" id="saveHistoryBtn" type="button" hidden>保存到历史</button>
         <button class="btn btn-secondary" id="clearBtn">重新洗牌</button>
       </div>
+      <p class="history-save-status" id="historySaveStatus" role="status" aria-live="polite" aria-atomic="true"></p>
       <p class="spread-hint" id="spreadHint">轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开。</p>
       <details class="position-guide" id="positionGuide">
         <summary>查看牌位说明</summary>
@@ -103,6 +109,65 @@
       <div class="results-list" id="resultsList"></div>
     </section>
 
+    <dialog class="history-dialog" id="historyDialog" aria-labelledby="historyDialogTitle"
+      aria-describedby="historyPrivacy">
+      <div class="history-dialog-shell">
+        <header class="history-dialog-header">
+          <div>
+            <p class="history-dialog-kicker">LOCAL HISTORY</p>
+            <h2 id="historyDialogTitle">占卜历史</h2>
+          </div>
+          <button class="history-icon-btn" id="historyCloseBtn" type="button" aria-label="关闭占卜历史">×</button>
+        </header>
+
+        <p class="history-privacy" id="historyPrivacy">
+          数据仅保存在当前浏览器。清除网站数据、使用无痕模式、换设备或换浏览器都可能导致记录丢失；可导出 JSON 自行备份。本站不会上传历史，也不做遥测或追踪。
+        </p>
+
+        <div class="history-toolbar" data-view="list">
+          <div class="history-filter">
+            <label for="historyDeckFilter">按牌组筛选</label>
+            <select id="historyDeckFilter">
+              <option value="all">全部牌组</option>
+              <option value="tarot">塔罗牌</option>
+              <option value="mystagogus">Mystagogus</option>
+              <option value="lxxxi">LXXXI 魔法牌</option>
+            </select>
+          </div>
+          <div class="history-file-actions" role="group" aria-label="历史备份">
+            <button class="btn btn-secondary" id="historyExportBtn" type="button">导出 JSON</button>
+            <input class="visually-hidden" id="historyImportInput" type="file"
+              accept=".json,application/json" tabindex="-1" aria-hidden="true">
+            <label class="btn btn-secondary history-import-label" id="historyImportLabel"
+              for="historyImportInput" role="button" tabindex="0">导入 JSON</label>
+          </div>
+        </div>
+
+        <p class="history-action-status" id="historyActionStatus" role="status"
+          aria-live="polite" aria-atomic="true"></p>
+
+        <section class="history-list-view" data-view="list" aria-label="占卜历史记录">
+          <p class="history-empty" id="historyEmpty">暂无保存的占卜记录。</p>
+          <ol class="history-list" id="historyList"></ol>
+          <div class="history-clear-row">
+            <button class="btn history-danger-btn" id="historyClearBtn" type="button">清空全部记录</button>
+          </div>
+        </section>
+
+        <section class="history-detail" id="historyDetail" data-view="detail" hidden
+          aria-labelledby="historyDetailTitle">
+          <div class="history-detail-nav">
+            <button class="btn btn-secondary" id="historyBackBtn" type="button">返回历史列表</button>
+          </div>
+          <h3 id="historyDetailTitle">占卜记录详情</h3>
+          <div class="history-detail-body" id="historyDetailBody"></div>
+          <div class="history-delete-row">
+            <button class="btn history-danger-btn" id="historyDeleteBtn" type="button">删除这条记录</button>
+          </div>
+        </section>
+      </div>
+    </dialog>
+
     <footer class="footer">
       <p>塔罗牌意参考《21世纪的塔罗技能》与 Quareia 语境；M 牌关键词译自 Josephine McCarthy《Mystagogus》· 仅供娱乐，请理性看待占卜结果</p>
     </footer>
@@ -112,6 +177,9 @@
   <script src="js/mystagogus-data.js"></script>
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js"></script>
+  <script src="js/history-records.js"></script>
+  <script src="js/history-store.js"></script>
+  <script src="js/history-ui.js"></script>
   <script src="js/app.js"></script>
   <script src="js/celestial-sky.js" defer></script>
 </body>
