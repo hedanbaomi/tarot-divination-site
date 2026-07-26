@@ -1,6 +1,8 @@
 # Quareia 占卜站点
 
-一个纯前端 Quareia 占卜网站：支持**塔罗牌**、**Mystagogus（M 牌）** 与 **LXXXI 魔法牌（奎瑞亚）** 三套牌组。左右滑动牌堆、轻点任意一张牌抽出，翻牌解读；塔罗支持正位/逆位模式、大小阿卡那筛选与第六章牌阵，M 牌与 LXXXI 魔法牌固定全正位（说明书未提供逆位含义）。为手机端优化，单手轻点即可完成占卜。
+一个非官方、非商业的纯前端占卜网站：支持**塔罗牌**、**Mystagogus（M 牌）** 与 **LXXXI 魔法牌（奎瑞亚）** 三套牌组。左右滑动牌堆、轻点任意一张牌抽出，翻牌解读；塔罗支持正位/逆位模式、大小阿卡那筛选与第六章牌阵，M 牌与 LXXXI 魔法牌固定全正位（说明书未提供逆位含义）。为手机端优化，单手轻点即可完成占卜。
+
+本项目与 Quareia、Josephine McCarthy、相关艺术家和出版方不存在隶属、赞助或背书关系。
 
 ## 为什么会有这个项目
 
@@ -63,25 +65,26 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 │   ├── mystagogus-data.js
 │   └── lxxxi-data.js
 └── assets/
-    ├── cards/          # 塔罗牌面
+    ├── cards/          # 塔罗牌面与第三方素材来源说明
     │   ├── m/          # Mystagogus 牌面 m-01…m-78 与 m-back
-    │   └── lxxxi/      # LXXXI 魔法牌牌面 lxxxi-01…lxxxi-81 与 lxxxi-back
-    ├── support/        # 支持作者收款码
+    │   └── LXXXI_SOURCE.md
     └── icons/
 ```
 
 ## 说明
 
 - **塔罗**牌意文本为面向本网站的整理与改写，参考《21世纪的塔罗技能》和 Quareia 训练语境。
-- **M 牌**关键词与牌阵译自 Josephine McCarthy《Mystagogus》关键词索引与 Layout PDF；牌面图像版权归原作者所有，仅供本站本地使用。
-- **LXXXI 魔法牌**牌意译自《LXXXI 奎瑞亚魔法牌·牌意说明书》（繁体中文版）并转写为简体中文；牌阵译自说明书第十章；牌面图像版权归原作者所有，仅供本站本地使用。
+- **M 牌**关键词与牌阵译自 Josephine McCarthy《Mystagogus》关键词索引与 Layout PDF；牌面图像和由第三方出版物整理或翻译的内容不在 MIT 许可范围内。
+- **LXXXI 魔法牌**牌意译自《LXXXI 奎瑞亚魔法牌·牌意说明书》（繁体中文版）并转写为简体中文；牌阵译自说明书第十章。牌面由独立素材域名提供低分辨率 WebP 展示版，不随公开源码仓库分发；这不表示项目已取得授权，也不向访问者授予复制、再分发或其他开源权利。
 - 健康布局仅用于记录牌阵结构与个人反思，不能替代医生诊断、治疗或其他专业医疗建议。
 
 ## Card Image Source
 
 - Tarot: 78 Rider–Waite–Smith faces are local 420px derivatives from Wikimedia Commons' public-domain "Roses & Lilies" set. See `assets/cards/SOURCE.md`.
-- Mystagogus: high-res local JPEGs for offline UI (`assets/cards/m/`), plus shared card back `m-back.jpeg`. © Josephine McCarthy. See `assets/cards/m/SOURCE.md`.
-- LXXXI Magician's Deck: 81 local JPEGs for offline UI (`assets/cards/lxxxi/`), plus shared card back `lxxxi-back.jpeg`. © Josephine McCarthy, Stuart Littlejohn, Cassandra Beanland. See `assets/cards/lxxxi/SOURCE.md`.
+- Mystagogus: local JPEG display derivatives (`assets/cards/m/`) and shared card back `m-back.jpeg`. Source materials © Josephine McCarthy. See `assets/cards/m/SOURCE.md`.
+- LXXXI Magician's Deck: 81 low-resolution WebP display derivatives and one card back are served from the versioned base `https://assets.luotianyi.fun/tarot-divination-site/lxxxi/v1`; they are not distributed in this source repository. Source art is attributed to Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland. See `assets/cards/LXXXI_SOURCE.md`.
+
+完整的权利边界与来源说明见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 
 ## 贡献者 ✨
 
@@ -105,16 +108,4 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 
 ## License
 
-MIT
-
-## 支持作者
-
-如果这个小站对你有用，欢迎随意打赏，感谢支持。
-
-### 微信支付
-
-![微信支付收款码](assets/support/pay-wechat.jpg)
-
-### 支付宝
-
-![支付宝收款码](assets/support/pay-alipay.jpg)
+MIT 仅适用于本项目作者原创的程序代码，以及明确标注为项目原创的内容。第三方牌面图像、Mystagogus 与 LXXXI 材料，以及基于第三方出版物整理、改写或翻译的文本与数据均不在 MIT 许可范围内。详见 [`LICENSE`](LICENSE) 与 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。

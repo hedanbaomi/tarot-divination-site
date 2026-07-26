@@ -1,12 +1,20 @@
 # Mystagogus (M 牌) Card Faces
 
-High-resolution local JPEG derivatives (max width 600px) prepared for offline use
-in this site.
+Local JPEG display derivatives (max width 600px) prepared for use in this site.
 
 - Deck: Mystagogus (Quareia Magical Training)
 - Files: `m-01.jpeg` … `m-78.jpeg` (card numbers 1–78)
 - Card back: `m-back.jpeg` (shared by all face-down M cards in the UI)
 
-Source art and materials © Josephine McCarthy. Do not redistribute original
-master files or claim the art as original work. See Quareia / Josephine McCarthy
-materials for licensing and purchase options.
+Josephine McCarthy is identified by Quareia as the author, designer, and painter
+of Mystagogus. Keywords, layout information, and related Chinese text in this
+project were compiled or translated from the official book and quick-reference
+materials:
+
+- https://www.quareia.com/texts
+- https://www.quareia.com/how-to
+
+The card art, Mystagogus materials, and publication-derived text are excluded
+from this project's MIT license. No permission to copy or redistribute them is
+granted here. Their inclusion does not imply authorization, affiliation,
+sponsorship, or endorsement by Josephine McCarthy or Quareia.
