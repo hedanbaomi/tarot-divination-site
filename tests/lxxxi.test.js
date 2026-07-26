@@ -2,8 +2,6 @@
 
 var assert = require("node:assert/strict");
 var test = require("node:test");
-var fs = require("node:fs");
-var path = require("node:path");
 var deck = require("../js/lxxxi-data.js");
 
 test("LXXXI deck has 81 unique numbered cards", function () {
@@ -24,13 +22,22 @@ test("LXXXI deck has 81 unique numbered cards", function () {
   });
 });
 
-test("every LXXXI card image file exists", function () {
-  var root = path.join(__dirname, "..");
+test("every LXXXI card uses the versioned external WebP base", function () {
+  assert.equal(
+    deck.LXXXI_ASSET_BASE_URL,
+    "https://assets.luotianyi.fun/tarot-divination-site/lxxxi/v1"
+  );
   deck.lxxxiDeckFull.forEach(function (card) {
-    var file = path.join(root, card.image);
-    assert.ok(fs.existsSync(file), card.image);
+    assert.equal(
+      card.image,
+      deck.LXXXI_ASSET_BASE_URL + "/cards/lxxxi-" +
+        String(card.number).padStart(2, "0") + ".webp"
+    );
   });
-  assert.ok(fs.existsSync(path.join(root, "assets/cards/lxxxi/lxxxi-back.jpeg")), "lxxxi-back");
+  assert.equal(
+    deck.LXXXI_ASSET_BASE_URL + "/backs/lxxxi-back.webp",
+    "https://assets.luotianyi.fun/tarot-divination-site/lxxxi/v1/backs/lxxxi-back.webp"
+  );
 });
 
 test("LXXXI card names use simplified Chinese", function () {

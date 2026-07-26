@@ -31,6 +31,4 @@ test("every Mystagogus card image file exists", function () {
     assert.ok(fs.existsSync(file), card.image);
   });
   assert.ok(fs.existsSync(path.join(root, "assets/cards/m/m-back.jpeg")), "m-back");
-  assert.ok(fs.existsSync(path.join(root, "assets/support/pay-wechat.jpg")), "pay-wechat");
-  assert.ok(fs.existsSync(path.join(root, "assets/support/pay-alipay.jpg")), "pay-alipay");
 });

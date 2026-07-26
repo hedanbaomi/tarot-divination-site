@@ -3,10 +3,11 @@
  * Deck concept & card art © Josephine McCarthy, Stuart Littlejohn, Cassandra Beanland.
  */
 const lxxxiSource = "参考《LXXXI 奎瑞亚魔法牌·牌意说明书》（繁体中文版）整理翻译";
+const LXXXI_ASSET_BASE_URL = "https://assets.luotianyi.fun/tarot-divination-site/lxxxi/v1";
 
 function getLxxxiImagePath(num) {
   var n = num < 10 ? "0" + num : String(num);
-  return "assets/cards/lxxxi/lxxxi-" + n + ".jpeg";
+  return LXXXI_ASSET_BASE_URL + "/cards/lxxxi-" + n + ".webp";
 }
 
 const lxxxiDeck = [
@@ -594,6 +595,7 @@ if (typeof module !== "undefined" && module.exports) {
     lxxxiDeck: lxxxiDeck,
     lxxxiDeckFull: lxxxiDeckFull,
     lxxxiSource: lxxxiSource,
+    LXXXI_ASSET_BASE_URL: LXXXI_ASSET_BASE_URL,
     getLxxxiImagePath: getLxxxiImagePath
   };
 }

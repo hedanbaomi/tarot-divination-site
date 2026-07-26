@@ -45,8 +45,6 @@
     el.positionGuideList = document.getElementById("positionGuideList");
     el.resultsSection = document.getElementById("resultsSection");
     el.resultsList = document.getElementById("resultsList");
-    el.supportBtn = document.getElementById("supportBtn");
-    el.supportModal = document.getElementById("supportModal");
   }
 
   // ---------- Deck helpers ----------
@@ -195,7 +193,7 @@
   function getOrientationLabel(o) { return o === "upright" ? "正位" : "逆位"; }
 
   var MYSTAGOGUS_BACK = "assets/cards/m/m-back.jpeg";
-  var LXXXI_BACK = "assets/cards/lxxxi/lxxxi-back.jpeg";
+  var LXXXI_BACK = LXXXI_ASSET_BASE_URL + "/backs/lxxxi-back.webp";
 
   // Non-tarot decks (Mystagogus, LXXXI) use a fixed deck back and no arcana filter.
   function isNonTarotDeck() {
@@ -1010,34 +1008,6 @@
     el.settingsToggle.setAttribute("aria-expanded", String(!collapsed));
   }
 
-  function openSupportModal() {
-    if (!el.supportModal) return;
-    el.supportModal.hidden = false;
-    document.body.style.overflow = "hidden";
-    var closeBtn = el.supportModal.querySelector(".support-modal-close");
-    if (closeBtn) closeBtn.focus();
-  }
-
-  function closeSupportModal() {
-    if (!el.supportModal || el.supportModal.hidden) return;
-    el.supportModal.hidden = true;
-    document.body.style.overflow = "";
-    if (el.supportBtn) el.supportBtn.focus();
-  }
-
-  function bindSupportModal() {
-    if (!el.supportBtn || !el.supportModal) return;
-    el.supportBtn.addEventListener("click", openSupportModal);
-    el.supportModal.addEventListener("click", function (ev) {
-      if (ev.target && ev.target.hasAttribute && ev.target.hasAttribute("data-close-support")) {
-        closeSupportModal();
-      }
-    });
-    document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape") closeSupportModal();
-    });
-  }
-
   // ---------- Init ----------
   function init() {
     cacheElements();
@@ -1061,8 +1031,6 @@
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);
     el.clearBtn.addEventListener("click", handleShuffle);
-    bindSupportModal();
-
     resetDeck();
   }
 
