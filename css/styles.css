@@ -675,6 +675,10 @@ body::after {
   width: max-content;
   margin: 0 auto;
 }
+.spread-grid.overview-stacking {
+  grid-template-rows: repeat(var(--spread-rows, 1), 164px);
+  gap: 16px 14px;
+}
 
 /* Flip card */
 .spread-card {
@@ -687,6 +691,12 @@ body::after {
 }
 .spread-card.revealed,
 .spread-card.revealed .spread-card-flip { cursor: default; }
+.overview-stack-card.stack-layer-major {
+  filter: saturate(0.9) brightness(0.92);
+}
+.overview-stack-card.stack-layer-minor .spread-card-face {
+  box-shadow: var(--shadow), 0 0 0 1px rgba(216, 179, 106, 0.28);
+}
 .spread-card-flip {
   position: absolute;
   inset: 0;
@@ -715,6 +725,19 @@ body::after {
   pointer-events: none;
   transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0));
   animation: slotBreathe 4.5s ease-in-out infinite;
+}
+.overview-stack-slot {
+  border-style: solid;
+  background: rgba(216, 179, 106, 0.035);
+}
+.overview-stack-slot.stack-layer-minor {
+  border-color: rgba(216, 179, 106, 0.55);
+}
+.stack-slot-layer {
+  color: var(--accent-light);
+  font-size: 0.46rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 @keyframes slotBreathe {
   0%, 100% { opacity: 0.36; }
@@ -853,6 +876,18 @@ body::after {
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
 }
+.stack-layer-badge {
+  position: relative;
+  z-index: 1;
+  color: var(--accent-light);
+  background: rgba(6, 9, 24, 0.7);
+  border: 1px solid rgba(216, 179, 106, 0.42);
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-size: 0.48rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
 .spread-card-back-m .pos-num {
   color: #f3e6c4;
   background: rgba(0, 0, 0, 0.55);
@@ -931,6 +966,14 @@ body::after {
   color: #f6efdd;
   letter-spacing: 0.5px;
   line-height: 1.2;
+}
+.stack-layer-caption {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--accent-light);
+  font-size: 0.48rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 .spread-card-caption .ori {
   display: inline-block;
@@ -1052,6 +1095,53 @@ body::after {
   grid-template-columns: 60px 1fr;
   column-gap: 12px;
   animation: riseIn 0.45s ease both;
+}
+.result-pair-card {
+  padding: 14px;
+  border: 1px solid rgba(216, 179, 106, 0.24);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(24, 31, 68, 0.62), rgba(15, 20, 46, 0.58));
+  box-shadow: var(--shadow);
+}
+.result-pair-card h3 {
+  margin: 0 0 4px;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 0.96rem;
+}
+.result-pair-hint {
+  margin: 0 0 11px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+.result-pair-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.result-pair-grid .result-card {
+  min-width: 0;
+  margin: 0;
+}
+.result-pair-grid .stack-layer-major {
+  border-left-color: rgba(216, 179, 106, 0.82);
+}
+.result-pair-grid .stack-layer-minor {
+  border-left-color: rgba(123, 171, 219, 0.82);
+  background: linear-gradient(180deg, rgba(21, 37, 73, 0.78), rgba(14, 24, 52, 0.76));
+}
+.result-pair-pending {
+  min-height: 116px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border: 1px dashed rgba(216, 179, 106, 0.28);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-align: center;
 }
 .results-list .result-card:nth-child(2) { animation-delay: 0.07s; }
 .results-list .result-card:nth-child(3) { animation-delay: 0.14s; }
@@ -1297,11 +1387,16 @@ body::after {
     grid-template-rows: repeat(var(--spread-rows, 1), 112px);
     gap: 9px;
   }
+  .spread-grid.overview-stacking {
+    grid-template-rows: repeat(var(--spread-rows, 1), 144px);
+    gap: 12px 10px;
+  }
   .spread-card { width: 72px; }
   .spread-slot { width: 72px; }
   .position-guide ol { grid-template-columns: 1fr; }
   .result-card { grid-template-columns: 52px 1fr; column-gap: 10px; }
   .result-card-image { width: 52px; }
+  .result-pair-grid { grid-template-columns: 1fr; }
 }
 
 /* Larger screens: allow hover affordance without breaking touch */

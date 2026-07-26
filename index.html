@@ -71,6 +71,16 @@
             <option value="minor-then-major">先小后大</option>
           </select>
         </div>
+        <div class="setting-group" id="overviewMethodGroup" style="display:none;">
+          <label for="overviewMethod">概览抽法</label>
+          <select id="overviewMethod" aria-describedby="overviewMethodSummary">
+            <option value="single">单牌法（13 张）</option>
+            <option value="stacked">分牌叠放／叠牌法（26 张）</option>
+          </select>
+          <p class="setting-summary" id="overviewMethodSummary">
+            先铺 13 张大阿卡那，再将 13 张小阿卡那叠在对应牌位。
+          </p>
+        </div>
         <div class="setting-group setting-group-spread">
           <label for="spreadSelect">预设牌阵</label>
           <select id="spreadSelect" aria-describedby="spreadSettingSummary"></select>
@@ -85,7 +95,7 @@
         <h2>牌堆 · <span class="deck-remaining" id="deckRemaining">剩 78 张</span></h2>
         <button class="btn-mini" id="shuffleBtn" type="button">🔀 洗牌</button>
       </div>
-      <p class="deck-cta" id="deckCta">左右滑动浏览牌堆，轻点任意一张牌抽出</p>
+      <p class="deck-cta" id="deckCta" role="status" aria-live="polite" aria-atomic="true">左右滑动浏览牌堆，轻点任意一张牌抽出</p>
       <div class="deck-spread" id="deckSpread" role="group" aria-label="牌堆，左右滑动浏览，轻点抽牌"></div>
       <button class="btn btn-switch-arcana" id="switchArcanaBtn" style="display:none;">切换牌组</button>
     </section>
@@ -94,7 +104,7 @@
     <section class="spread-area" id="spreadArea" style="display:none;">
       <div class="spread-head">
         <h2><span id="spreadTitle">你的牌阵</span> · <span class="card-count" id="spreadCount">0 / 3</span></h2>
-        <span class="phase-label" id="phaseLabel"></span>
+        <span class="phase-label" id="phaseLabel" role="status" aria-live="polite" aria-atomic="true"></span>
       </div>
       <div class="spread-board-scroll" id="spreadBoardScroll">
         <div class="spread-grid" id="spreadGrid" role="list" aria-label="抽取的牌按所选牌阵自动排列"></div>

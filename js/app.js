@@ -7,9 +7,10 @@
   var arcanaFilter = "mixed";      // mixed | major-only | minor-only | major-then-minor | minor-then-major
   var currentPhase = "major";      // used by phase filters (tarot only)
   var selectedSpreadId = "three-card-horizontal";
+  var overviewMethod = "single";   // single | stacked
 
   var pile = [];       // remaining face-down cards (shuffled)
-  var spread = [];      // drawn cards: { uid, card, orientation, revealed }
+  var spread = [];      // drawn cards: { uid, card, orientation, revealed, slotIndex, layer? }
   var uidCounter = 0;
 
   var el = {};
@@ -21,6 +22,9 @@
     el.modeSelect = document.getElementById("modeSelect");
     el.arcanaFilter = document.getElementById("arcanaFilter");
     el.arcanaFilterGroup = document.getElementById("arcanaFilterGroup");
+    el.overviewMethod = document.getElementById("overviewMethod");
+    el.overviewMethodGroup = document.getElementById("overviewMethodGroup");
+    el.overviewMethodSummary = document.getElementById("overviewMethodSummary");
     el.spreadSelect = document.getElementById("spreadSelect");
     el.spreadSettingSummary = document.getElementById("spreadSettingSummary");
     el.shuffleBtn = document.getElementById("shuffleBtn");
@@ -65,14 +69,38 @@
   function activeDeckCards() {
     if (deckType === "mystagogus") return mystagogusDeckFull.slice();
     if (deckType === "lxxxi") return lxxxiDeckFull.slice();
+    if (isOverviewStacking()) {
+      return getDeckByArcanaFilter(currentPhase === "major" ? "major-only" : "minor-only", currentPhase);
+    }
     return getDeckByArcanaFilter(arcanaFilter, currentPhase);
   }
 
   function buildPile() {
     pile = shuffle(activeDeckCards());
+    if (isOverviewStacking()) {
+      pile = getAvailableOverviewStackingCards(pile, spread, currentPhase);
+    }
   }
 
   function selectedSpread() { return getSpreadById(deckType, selectedSpreadId); }
+
+  function isOverviewStacking() {
+    return isOverviewStackingMode(deckType, selectedSpreadId, overviewMethod);
+  }
+
+  function overviewStackingPhase() {
+    return overviewStackingState().status;
+  }
+
+  function overviewStackingState() {
+    return getOverviewStackingState(spread, selectedSpread().positions.length);
+  }
+
+  function spreadTargetCount() {
+    return isOverviewStacking()
+      ? overviewStackingState().targetCount
+      : selectedSpread().positions.length;
+  }
 
   function defaultSpreadIdForDeck(type) {
     if (type === "mystagogus") return mystagogusSpreads[0].id;
@@ -82,8 +110,17 @@
 
   function applyDeckUi() {
     var nonTarot = isNonTarotDeck();
+    var stackingAvailable = deckType === "tarot" && selectedSpreadId === "overview";
+    if (el.overviewMethodGroup) {
+      el.overviewMethodGroup.style.display = stackingAvailable ? "" : "none";
+    }
     if (el.arcanaFilterGroup) {
-      el.arcanaFilterGroup.style.display = nonTarot ? "none" : "";
+      el.arcanaFilterGroup.style.display = nonTarot || isOverviewStacking() ? "none" : "";
+    }
+    if (el.overviewMethodSummary) {
+      el.overviewMethodSummary.textContent = isOverviewStacking()
+        ? "先铺 13 张大阿卡那作为原因与力量，再将 13 张小阿卡那叠在对应牌位作为具体表现。"
+        : "单牌法在十三个牌位各抽一张；需要更多信息时可切换为分牌叠放。";
     }
     // M 牌与 LXXXI 魔法牌固定全正位（说明书未提供逆位含义）：
     // 禁用「正逆位混合」选项，并把已选中的 mixed 回退为全正位。
@@ -102,10 +139,18 @@
   }
 
   function orderedSpreadEntries() {
-    return spread.slice().sort(function (a, b) { return a.slotIndex - b.slotIndex; });
+    return spread.slice().sort(function (a, b) {
+      if (a.slotIndex !== b.slotIndex) return a.slotIndex - b.slotIndex;
+      if (a.layer === b.layer) return 0;
+      return a.layer === "major" ? -1 : 1;
+    });
   }
 
   function nextOpenSlotIndex() {
+    if (isOverviewStacking()) {
+      if (overviewStackingPhase() === "complete") return -1;
+      return getNextOverviewStackingSlot(spread, selectedSpread().positions.length, currentPhase);
+    }
     var used = {};
     spread.forEach(function (entry) { used[entry.slotIndex] = true; });
     for (var i = 0; i < selectedSpread().positions.length; i++) {
@@ -117,8 +162,8 @@
   // Full reset: rebuild pile and clear the spread.
   function resetDeck() {
     currentPhase = "major";
-    buildPile();
     spread = [];
+    buildPile();
     renderSpreadCards();
     renderDeckSpread();
     renderSpreadMeta();
@@ -182,11 +227,14 @@
   function renderDeckSpread() {
     var prevScroll = el.deckSpread.scrollLeft;
     el.deckSpread.innerHTML = "";
-    var spreadIsFull = nextOpenSlotIndex() === -1;
+    var stacking = isOverviewStacking();
+    var spreadIsFull = stacking
+      ? overviewStackingPhase() === "complete"
+      : nextOpenSlotIndex() === -1;
 
     if (pile.length === 0) {
       el.deckSpread.classList.add("empty");
-      el.deckSpread.textContent = isPhaseFilter(arcanaFilter)
+      el.deckSpread.textContent = stacking || isPhaseFilter(arcanaFilter)
         ? "这组牌已抽完，可切换牌组或重新洗牌"
         : "牌已抽完，按「洗牌」重新开始";
     } else {
@@ -194,34 +242,46 @@
       pile.forEach(function (card, index) {
         var cardEl = document.createElement("button");
         cardEl.type = "button";
+        cardEl.setAttribute("data-pile-index", String(index));
         var isM = deckType === "mystagogus";
         cardEl.className = "deck-card" +
           (isM ? " deck-card-m" : "") +
           (deckType === "lxxxi" ? " deck-card-lxxxi" : "") +
           (spreadIsFull ? " disabled" : "");
+        var nextPosition = spreadIsFull ? null : selectedSpread().positions[nextOpenSlotIndex()];
+        var layerLabel = stacking
+          ? (currentPhase === "major" ? "大阿卡那底牌" : "小阿卡那叠牌")
+          : "";
         cardEl.setAttribute("aria-label", spreadIsFull
           ? "牌阵已完成"
-          : "第 " + (index + 1) + " 张，轻点抽到" + formatPositionName(selectedSpread().positions[nextOpenSlotIndex()], "slash"));
+          : "第 " + (index + 1) + " 张，轻点抽到" +
+            formatPositionName(nextPosition, "slash") + (layerLabel ? "的" + layerLabel : ""));
         if (isNonTarotDeck()) {
           cardEl.appendChild(createBackArtImage("deck-card-back-img"));
         }
         if (spreadIsFull) {
           cardEl.disabled = true;
         } else {
-          cardEl.addEventListener("click", function () { drawAt(index); });
+          cardEl.addEventListener("click", function (event) {
+            drawAt(index, event.detail === 0);
+          });
         }
         el.deckSpread.appendChild(cardEl);
       });
       el.deckSpread.scrollLeft = prevScroll;
     }
 
-    el.deckRemaining.textContent = "剩 " + pile.length + " 张";
+    el.deckRemaining.textContent = (stacking
+      ? (currentPhase === "major" ? "大阿卡那 · " : "小阿卡那 · ")
+      : "") + "剩 " + pile.length + " 张";
 
     if (spreadIsFull) {
       el.deckCta.classList.add("complete");
       el.deckCta.classList.remove("empty");
-      el.deckCta.textContent = selectedSpread().name + " · " +
-        getSpreadOriginLabel(selectedSpread()) + " 已完成，可以开牌解读";
+      el.deckCta.textContent = stacking
+        ? "概览布局 · 分牌叠放已完成（13 组 / 26 张），可以逐组开牌解读"
+        : selectedSpread().name + " · " +
+          getSpreadOriginLabel(selectedSpread()) + " 已完成，可以开牌解读";
     } else if (pile.length === 0) {
       el.deckCta.classList.add("empty");
       el.deckCta.classList.remove("complete");
@@ -230,11 +290,20 @@
       el.deckCta.classList.remove("empty");
       el.deckCta.classList.remove("complete");
       var nextPosition = selectedSpread().positions[nextOpenSlotIndex()];
-      el.deckCta.textContent = "下一张：位置 " + nextPosition.number + " · " +
-        formatPositionName(nextPosition, "slash") + "（轻点任意一张牌抽出）";
+      if (stacking) {
+        var layerInstruction = currentPhase === "major"
+          ? "大阿卡那底牌 · 原因与力量"
+          : "小阿卡那叠牌 · 具体表现";
+        el.deckCta.textContent = "下一张：位置 " + nextPosition.number + " · " +
+          formatPositionName(nextPosition, "slash") + " · " + layerInstruction +
+          "（轻点任意一张牌抽出）";
+      } else {
+        el.deckCta.textContent = "下一张：位置 " + nextPosition.number + " · " +
+          formatPositionName(nextPosition, "slash") + "（轻点任意一张牌抽出）";
+      }
     }
 
-    if (deckType === "tarot" && isPhaseFilter(arcanaFilter)) {
+    if (deckType === "tarot" && isPhaseFilter(arcanaFilter) && !stacking) {
       el.switchArcanaBtn.style.display = "inline-block";
       el.switchArcanaBtn.textContent = getOtherPhaseLabel(arcanaFilter, currentPhase);
     } else {
@@ -246,23 +315,33 @@
   function buildSpreadCardEl(entry) {
     var card = entry.card;
     var position = selectedSpread().positions[entry.slotIndex];
+    var stacking = isOverviewStacking() && Boolean(entry.layer);
+    var layerName = entry.layer === "major"
+      ? "大阿卡那底牌"
+      : "小阿卡那叠牌";
 
     var cardEl = document.createElement("div");
-    cardEl.className = "spread-card" + (entry.isNew ? " is-new" : "");
+    cardEl.className = "spread-card" +
+      (entry.isNew ? " is-new" : "") +
+      (stacking ? " overview-stack-card stack-layer-" + entry.layer : "");
     cardEl.setAttribute("data-uid", entry.uid);
+    if (stacking) cardEl.setAttribute("data-layer", entry.layer);
     cardEl.setAttribute("role", "listitem");
     cardEl.style.gridColumn = position.column + " / span " + (position.columnSpan || 1);
     cardEl.style.gridRow = position.row + " / span " + (position.rowSpan || 1);
-    cardEl.style.setProperty("--position-offset-x", (position.offsetX || 0) + "%");
-    cardEl.style.setProperty("--position-offset-y", (position.offsetY || 0) + "%");
-    cardEl.style.zIndex = String(position.number);
+    cardEl.style.setProperty("--position-offset-x",
+      (stacking ? (entry.layer === "major" ? -8 : 8) : (position.offsetX || 0)) + "%");
+    cardEl.style.setProperty("--position-offset-y",
+      (stacking ? (entry.layer === "major" ? -10 : 12) : (position.offsetY || 0)) + "%");
+    cardEl.style.zIndex = String(position.number + (stacking && entry.layer === "minor" ? 100 : 0));
 
     var flipButton = document.createElement("button");
     flipButton.className = "spread-card-flip";
     flipButton.type = "button";
     flipButton.setAttribute(
       "aria-label",
-      "位置 " + position.number + "，" + formatPositionName(position, "slash") + "，轻点翻开这张牌"
+      "位置 " + position.number + "，" + formatPositionName(position, "slash") +
+        (stacking ? "，" + layerName : "") + "，轻点翻开这张牌"
     );
 
     var inner = document.createElement("div");
@@ -279,6 +358,12 @@
     posNum.className = "pos-num";
     posNum.textContent = position.number;
     back.appendChild(posNum);
+    if (stacking) {
+      var layerBadge = document.createElement("span");
+      layerBadge.className = "stack-layer-badge";
+      layerBadge.textContent = entry.layer === "major" ? "大牌 · 因" : "小牌 · 果";
+      back.appendChild(layerBadge);
+    }
     appendPositionLabels(back, position, "pos-name");
 
     // Front face is built up-front but hidden by backface-visibility until flipped,
@@ -292,6 +377,12 @@
     front.appendChild(faceImg);
     var caption = document.createElement("div");
     caption.className = "spread-card-caption";
+    if (stacking) {
+      var captionLayer = document.createElement("span");
+      captionLayer.className = "stack-layer-caption";
+      captionLayer.textContent = entry.layer === "major" ? "大牌底牌 · 因" : "小牌叠牌 · 果";
+      caption.appendChild(captionLayer);
+    }
     var nameEl = document.createElement("span");
     nameEl.className = "name";
     nameEl.textContent = card.name;
@@ -311,10 +402,11 @@
     removeBtn.className = "remove-btn";
     removeBtn.type = "button";
     removeBtn.textContent = "×";
-    removeBtn.setAttribute("aria-label", "移除这张牌");
+    removeBtn.setAttribute("aria-label", "移除位置 " + position.number +
+      (stacking ? "的" + layerName : "的这张牌"));
     removeBtn.addEventListener("click", function (ev) {
       ev.stopPropagation();
-      removeEntry(entry);
+      removeEntry(entry, ev.detail === 0);
     });
     cardEl.appendChild(removeBtn);
 
@@ -326,26 +418,42 @@
 
   function renderSpreadCards() {
     var spreadDefinition = selectedSpread();
+    var stacking = isOverviewStacking();
     var hadRenderedCards = Boolean(el.spreadGrid.querySelector(".spread-card"));
     var previousScrollLeft = el.spreadBoardScroll.scrollLeft;
     el.spreadGrid.innerHTML = "";
+    el.spreadGrid.classList.toggle("overview-stacking", stacking);
     el.spreadGrid.style.setProperty("--spread-columns", spreadDefinition.columns);
     el.spreadGrid.style.setProperty("--spread-rows", spreadDefinition.rows);
     el.spreadGrid.style.setProperty("--spread-min-width", Math.max(280, spreadDefinition.columns * 76) + "px");
     var usedSlots = {};
-    spread.forEach(function (entry) { usedSlots[entry.slotIndex] = true; });
+    spread.forEach(function (entry) {
+      if (!stacking || entry.layer === currentPhase) usedSlots[entry.slotIndex] = true;
+    });
     spreadDefinition.positions.forEach(function (position, index) {
       if (usedSlots[index]) return;
       var slot = document.createElement("div");
-      slot.className = "spread-slot";
+      slot.className = "spread-slot" +
+        (stacking ? " overview-stack-slot stack-layer-" + currentPhase : "");
       slot.setAttribute("aria-hidden", "true");
       slot.style.gridColumn = position.column + " / span " + (position.columnSpan || 1);
       slot.style.gridRow = position.row + " / span " + (position.rowSpan || 1);
-      slot.style.setProperty("--position-offset-x", (position.offsetX || 0) + "%");
-      slot.style.setProperty("--position-offset-y", (position.offsetY || 0) + "%");
+      slot.style.setProperty("--position-offset-x",
+        (stacking ? (currentPhase === "major" ? -8 : 8) : (position.offsetX || 0)) + "%");
+      slot.style.setProperty("--position-offset-y",
+        (stacking ? (currentPhase === "major" ? -10 : 12) : (position.offsetY || 0)) + "%");
+      if (stacking) {
+        slot.style.zIndex = String(position.number + (currentPhase === "minor" ? 100 : 0));
+      }
       var slotNumber = document.createElement("span");
       slotNumber.textContent = position.number;
       slot.appendChild(slotNumber);
+      if (stacking) {
+        var slotLayer = document.createElement("span");
+        slotLayer.className = "stack-slot-layer";
+        slotLayer.textContent = currentPhase === "major" ? "大牌底牌" : "小牌叠牌";
+        slot.appendChild(slotLayer);
+      }
       appendPositionLabels(slot, position, "slot-name");
       el.spreadGrid.appendChild(slot);
     });
@@ -363,13 +471,52 @@
     return el.spreadGrid.querySelector('.spread-card[data-uid="' + entry.uid + '"]');
   }
 
-  function drawAt(index) {
+  function syncOverviewStackingPhase() {
+    if (!isOverviewStacking()) return;
+    var state = overviewStackingState();
+    var phaseChanged = currentPhase !== state.activeLayer;
+    currentPhase = state.activeLayer;
+    if (state.complete) {
+      pile = [];
+    } else if (phaseChanged) {
+      buildPile();
+    }
+  }
+
+  function restoreDeckFocus(preferredIndex, shouldMoveFocus) {
+    if (!shouldMoveFocus) return;
+    requestAnimationFrame(function () {
+      if (nextOpenSlotIndex() === -1) {
+        el.revealBtn.focus({ preventScroll: true });
+        el.revealBtn.scrollIntoView({ block: "nearest", inline: "nearest" });
+        return;
+      }
+      if (pile.length === 0) return;
+      var safeIndex = Math.min(Math.max(preferredIndex || 0, 0), pile.length - 1);
+      var nextCard = el.deckSpread.querySelector('[data-pile-index="' + safeIndex + '"]');
+      if (nextCard) {
+        nextCard.focus({ preventScroll: true });
+        nextCard.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+    });
+  }
+
+  function drawAt(index, keyboardTriggered) {
     if (index < 0 || index >= pile.length) return;
     var slotIndex = nextOpenSlotIndex();
     if (slotIndex === -1) return;
     var card = pile.splice(index, 1)[0];
-    var entry = { uid: ++uidCounter, card: card, orientation: orientationFor(), revealed: false, slotIndex: slotIndex, isNew: true };
+    var entry = {
+      uid: ++uidCounter,
+      card: card,
+      orientation: orientationFor(),
+      revealed: false,
+      slotIndex: slotIndex,
+      isNew: true,
+      layer: isOverviewStacking() ? currentPhase : null
+    };
     spread.push(entry);
+    syncOverviewStackingPhase();
 
     renderSpreadCards();
     requestAnimationFrame(function () {
@@ -381,8 +528,9 @@
     });
     renderDeckSpread();
     renderSpreadMeta();
+    restoreDeckFocus(index, keyboardTriggered);
 
-    if (spread.length === 1) {
+    if (spread.length === 1 && !keyboardTriggered) {
       requestAnimationFrame(function () {
         el.spreadArea.scrollIntoView({ behavior: "smooth", block: "nearest" });
       });
@@ -404,6 +552,9 @@
         flipButton.setAttribute(
           "aria-label",
           "位置 " + position.number + " · " + formatPositionName(position, "slash") +
+            (isOverviewStacking()
+              ? " · " + (entry.layer === "major" ? "大阿卡那底牌" : "小阿卡那叠牌")
+              : "") +
             " · " + entry.card.name + " · " + getOrientationLabel(entry.orientation)
         );
       }
@@ -412,18 +563,26 @@
     renderResults();
   }
 
-  function removeEntry(entry) {
+  function removeEntry(entry, keyboardTriggered) {
     var idx = spread.indexOf(entry);
     if (idx === -1) return;
     spread.splice(idx, 1);
-    // Return the card to a random spot in the pile so it can be redrawn.
-    var pos = Math.floor(Math.random() * (pile.length + 1));
-    pile.splice(pos, 0, entry.card);
+    if (isOverviewStacking()) {
+      var state = overviewStackingState();
+      currentPhase = state.activeLayer;
+      if (state.complete) pile = [];
+      else buildPile();
+    } else {
+      // Return the card to a random spot in the pile so it can be redrawn.
+      var pos = Math.floor(Math.random() * (pile.length + 1));
+      pile.splice(pos, 0, entry.card);
+    }
 
     renderSpreadCards();
     renderDeckSpread();
     renderSpreadMeta();
     renderResults();
+    restoreDeckFocus(0, keyboardTriggered);
   }
 
   function revealAll() {
@@ -451,10 +610,19 @@
     });
 
     var activeSpread = selectedSpread();
+    var stacking = isOverviewStacking();
     el.spreadTitle.textContent = activeSpread.name + " · " + getSpreadOriginLabel(activeSpread);
-    el.spreadCount.textContent = spread.length + " / " + activeSpread.positions.length;
+    el.spreadCount.textContent = spread.length + " / " + spreadTargetCount();
 
-    if (deckType === "tarot" && isPhaseFilter(arcanaFilter)) {
+    if (stacking) {
+      el.phaseLabel.style.display = "inline-block";
+      var stackingPhase = overviewStackingPhase();
+      el.phaseLabel.textContent = stackingPhase === "complete"
+        ? "分牌叠放 · 13 组已完成"
+        : currentPhase === "major"
+          ? "分牌叠放 · 第 1 层：大牌（因）"
+          : "分牌叠放 · 第 2 层：小牌（果）";
+    } else if (deckType === "tarot" && isPhaseFilter(arcanaFilter)) {
       el.phaseLabel.style.display = "inline-block";
       el.phaseLabel.textContent = "当前：" + getPhaseArcanaLabel(arcanaFilter, currentPhase);
     } else {
@@ -465,6 +633,141 @@
     el.revealBtn.textContent = allRevealed ? "已全部翻开" : "开牌解读";
     el.revealBtn.disabled = allRevealed;
     el.spreadHint.style.display = allRevealed ? "none" : "block";
+    el.spreadHint.textContent = stacking
+      ? "同一牌位的大牌与小牌需一起解读：大牌是背后的原因与力量，小牌是这种力量的具体表现。"
+      : "轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开。";
+  }
+
+  function buildResultCard(entry, position, layer) {
+    var card = entry.card;
+    var isUpright = entry.orientation === "upright";
+    var showReversed = mode === "mixed" && !isUpright;
+    var keywords = showReversed ? card.reversedKeywords : card.uprightKeywords;
+    var meaning = showReversed ? card.reversedMeaning : card.uprightMeaning;
+    var resultCard = document.createElement("div");
+    resultCard.className = "result-card" + (layer ? " stack-layer-" + layer : "");
+
+    if (card.image) {
+      var resultImg = createCardImage(card, "result-card-image", entry.orientation);
+      if (card.deck === "mystagogus") resultImg.classList.add("result-card-image-m");
+      if (card.deck === "lxxxi") resultImg.classList.add("result-card-image-lxxxi");
+      resultCard.appendChild(resultImg);
+    }
+
+    var header = document.createElement("div");
+    header.className = "result-header";
+
+    var posEl = document.createElement("span");
+    posEl.className = "result-pos";
+    posEl.textContent = layer
+      ? layer === "major" ? "大牌底牌（因）" : "小牌叠牌（果）"
+      : "位置 " + position.number + " · " + formatPositionName(position, "slash");
+
+    var nameEl = document.createElement("span");
+    nameEl.className = "result-name";
+    nameEl.textContent = card.name;
+
+    var orientEl = document.createElement("span");
+    orientEl.className = "result-orientation " + entry.orientation;
+    orientEl.textContent = getOrientationLabel(entry.orientation);
+
+    header.appendChild(posEl);
+    header.appendChild(nameEl);
+    header.appendChild(orientEl);
+
+    if (card.suit) {
+      var suitEl = document.createElement("span");
+      suitEl.className = "result-suit";
+      suitEl.textContent = card.suit + " · " + card.element + (card.direction ? " · " + card.direction : "");
+      header.appendChild(suitEl);
+    } else if (card.deck === "mystagogus" && card.nameEn) {
+      var enEl = document.createElement("span");
+      enEl.className = "result-suit";
+      enEl.textContent = "M" + card.number + " · " + card.nameEn;
+      header.appendChild(enEl);
+    } else if (card.deck === "lxxxi" && card.nameEn) {
+      var lxxxiEnEl = document.createElement("span");
+      lxxxiEnEl.className = "result-suit";
+      lxxxiEnEl.textContent = card.number + "/81 · " + card.nameEn;
+      header.appendChild(lxxxiEnEl);
+    }
+
+    var keywordsEl = document.createElement("div");
+    keywordsEl.className = "result-keywords";
+    keywords.forEach(function (kw) {
+      var tag = document.createElement("span");
+      tag.className = "keyword-tag";
+      tag.textContent = kw;
+      keywordsEl.appendChild(tag);
+    });
+
+    var meaningEl = document.createElement("div");
+    meaningEl.className = "result-meaning";
+    meaningEl.textContent = meaning;
+
+    var sourceEl = document.createElement("div");
+    sourceEl.className = "result-source";
+    sourceEl.textContent = card.source || quareiaSource;
+
+    resultCard.appendChild(header);
+    if (!layer) {
+      var positionMeaningEl = document.createElement("div");
+      positionMeaningEl.className = "result-position-meaning";
+      positionMeaningEl.textContent = "牌位：" + position.meaning;
+      resultCard.appendChild(positionMeaningEl);
+    }
+    resultCard.appendChild(keywordsEl);
+    resultCard.appendChild(meaningEl);
+    resultCard.appendChild(sourceEl);
+    return resultCard;
+  }
+
+  function renderOverviewStackingResults() {
+    var positions = selectedSpread().positions;
+    positions.forEach(function (position, slotIndex) {
+      var pair = {};
+      spread.forEach(function (entry) {
+        if (entry.slotIndex === slotIndex && entry.revealed) pair[entry.layer] = entry;
+      });
+      if (!pair.major && !pair.minor) return;
+
+      var group = document.createElement("section");
+      group.className = "result-pair-card";
+      group.setAttribute("aria-labelledby", "result-pair-title-" + slotIndex);
+
+      var title = document.createElement("h3");
+      title.id = "result-pair-title-" + slotIndex;
+      title.textContent = "位置 " + position.number + " · " + formatPositionName(position, "slash");
+
+      var positionMeaning = document.createElement("p");
+      positionMeaning.className = "result-position-meaning";
+      positionMeaning.textContent = "牌位：" + position.meaning;
+
+      var pairHint = document.createElement("p");
+      pairHint.className = "result-pair-hint";
+      pairHint.textContent = "大牌揭示背后的原因与力量，小牌说明这种力量将如何具体表现；请将两张牌作为一组解读。";
+
+      var pairGrid = document.createElement("div");
+      pairGrid.className = "result-pair-grid";
+      ["major", "minor"].forEach(function (layer) {
+        if (pair[layer]) {
+          pairGrid.appendChild(buildResultCard(pair[layer], position, layer));
+          return;
+        }
+        var pending = document.createElement("div");
+        pending.className = "result-pair-pending stack-layer-" + layer;
+        pending.textContent = layer === "major"
+          ? "大牌底牌（因）尚未翻开"
+          : "小牌叠牌（果）尚未翻开";
+        pairGrid.appendChild(pending);
+      });
+
+      group.appendChild(title);
+      group.appendChild(positionMeaning);
+      group.appendChild(pairHint);
+      group.appendChild(pairGrid);
+      el.resultsList.appendChild(group);
+    });
   }
 
   function renderResults() {
@@ -476,94 +779,22 @@
     el.resultsSection.style.display = "block";
     el.resultsList.innerHTML = "";
 
+    if (isOverviewStacking()) {
+      renderOverviewStackingResults();
+      return;
+    }
+
     orderedSpreadEntries().forEach(function (entry) {
       if (!entry.revealed) return;
-      var card = entry.card;
-      var position = selectedSpread().positions[entry.slotIndex];
-      var isUpright = entry.orientation === "upright";
-      var showReversed = mode === "mixed" && !isUpright;
-      var keywords = showReversed ? card.reversedKeywords : card.uprightKeywords;
-      var meaning = showReversed ? card.reversedMeaning : card.uprightMeaning;
-
-      var resultCard = document.createElement("div");
-      resultCard.className = "result-card";
-
-      if (card.image) {
-        var resultImg = createCardImage(card, "result-card-image", entry.orientation);
-        if (card.deck === "mystagogus") resultImg.classList.add("result-card-image-m");
-        if (card.deck === "lxxxi") resultImg.classList.add("result-card-image-lxxxi");
-        resultCard.appendChild(resultImg);
-      }
-
-      var header = document.createElement("div");
-      header.className = "result-header";
-
-      var posEl = document.createElement("span");
-      posEl.className = "result-pos";
-      posEl.textContent = "位置 " + position.number + " · " + formatPositionName(position, "slash");
-
-      var nameEl = document.createElement("span");
-      nameEl.className = "result-name";
-      nameEl.textContent = card.name;
-
-      var orientEl = document.createElement("span");
-      orientEl.className = "result-orientation " + entry.orientation;
-      orientEl.textContent = getOrientationLabel(entry.orientation);
-
-      header.appendChild(posEl);
-      header.appendChild(nameEl);
-      header.appendChild(orientEl);
-
-      if (card.suit) {
-        var suitEl = document.createElement("span");
-        suitEl.className = "result-suit";
-        suitEl.textContent = card.suit + " · " + card.element + (card.direction ? " · " + card.direction : "");
-        header.appendChild(suitEl);
-      } else if (card.deck === "mystagogus" && card.nameEn) {
-        var enEl = document.createElement("span");
-        enEl.className = "result-suit";
-        enEl.textContent = "M" + card.number + " · " + card.nameEn;
-        header.appendChild(enEl);
-      } else if (card.deck === "lxxxi" && card.nameEn) {
-        var enEl = document.createElement("span");
-        enEl.className = "result-suit";
-        enEl.textContent = card.number + "/81 · " + card.nameEn;
-        header.appendChild(enEl);
-      }
-
-      var keywordsEl = document.createElement("div");
-      keywordsEl.className = "result-keywords";
-      keywords.forEach(function (kw) {
-        var tag = document.createElement("span");
-        tag.className = "keyword-tag";
-        tag.textContent = kw;
-        keywordsEl.appendChild(tag);
-      });
-
-      var meaningEl = document.createElement("div");
-      meaningEl.className = "result-meaning";
-      meaningEl.textContent = meaning;
-
-      var positionMeaningEl = document.createElement("div");
-      positionMeaningEl.className = "result-position-meaning";
-      positionMeaningEl.textContent = "牌位：" + position.meaning;
-
-      var sourceEl = document.createElement("div");
-      sourceEl.className = "result-source";
-      sourceEl.textContent = card.source || quareiaSource;
-
-      resultCard.appendChild(header);
-      resultCard.appendChild(positionMeaningEl);
-      resultCard.appendChild(keywordsEl);
-      resultCard.appendChild(meaningEl);
-      resultCard.appendChild(sourceEl);
-      el.resultsList.appendChild(resultCard);
+      el.resultsList.appendChild(
+        buildResultCard(entry, selectedSpread().positions[entry.slotIndex], null)
+      );
     });
   }
 
   // ---------- Settings / phase ----------
   function switchArcanaPhase() {
-    if (deckType !== "tarot") return;
+    if (deckType !== "tarot" || isOverviewStacking()) return;
     currentPhase = currentPhase === "major" ? "minor" : "major";
     buildPile();
     renderDeckSpread();
@@ -603,6 +834,19 @@
     resetDeck();
   }
 
+  function handleOverviewMethodChange() {
+    var newMethod = el.overviewMethod.value;
+    if (newMethod === overviewMethod) return;
+    if (!confirmIfSpread("切换概览抽法会清空当前牌阵并重新洗牌，是否继续？")) {
+      el.overviewMethod.value = overviewMethod;
+      return;
+    }
+    overviewMethod = newMethod;
+    applyDeckUi();
+    renderSpreadDefinition();
+    resetDeck();
+  }
+
   function handleSpreadChange() {
     var newSpreadId = el.spreadSelect.value;
     if (newSpreadId === selectedSpreadId) return;
@@ -611,6 +855,7 @@
       return;
     }
     selectedSpreadId = newSpreadId;
+    applyDeckUi();
     renderSpreadDefinition();
     resetDeck();
   }
@@ -627,8 +872,11 @@
     catalogue.forEach(function (spreadDefinition) {
       var option = document.createElement("option");
       option.value = spreadDefinition.id;
+      var cardCountLabel = deckType === "tarot" && spreadDefinition.id === "overview"
+        ? spreadDefinition.positions.length + " 张（可叠放 26 张）"
+        : spreadDefinition.positions.length + " 张";
       option.textContent = spreadDefinition.name + " · " + getSpreadOriginLabel(spreadDefinition) +
-        " · " + spreadDefinition.positions.length + " 张";
+        " · " + cardCountLabel;
       if (spreadDefinition.deck === "mystagogus") mGroup.appendChild(option);
       else if (spreadDefinition.deck === "lxxxi") lGroup.appendChild(option);
       else tGroup.appendChild(option);
@@ -674,8 +922,14 @@
 
   function renderSpreadDefinition() {
     var spreadDefinition = selectedSpread();
+    var countLabel = isOverviewStacking()
+      ? "26 张（13 组） · 分牌叠放"
+      : spreadDefinition.positions.length + " 张";
     el.spreadSettingSummary.textContent = getSpreadOriginLabel(spreadDefinition) + " · " +
-      spreadDefinition.positions.length + " 张 · " + spreadDefinition.description;
+      countLabel + " · " + spreadDefinition.description +
+      (isOverviewStacking()
+        ? " 每组大牌表示原因与力量，小牌表示这种力量如何表现。"
+        : "");
     el.positionGuideList.innerHTML = "";
     spreadDefinition.positions.forEach(function (position) {
       var item = document.createElement("li");
@@ -735,6 +989,7 @@
     deckType = el.deckSelect.value || "tarot";
     mode = el.modeSelect.value;
     arcanaFilter = el.arcanaFilter.value;
+    overviewMethod = el.overviewMethod.value || "single";
     applyDeckUi();
     populateSpreadSelect();
     selectedSpreadId = el.spreadSelect.value;
@@ -744,6 +999,7 @@
     el.deckSelect.addEventListener("change", handleDeckChange);
     el.modeSelect.addEventListener("change", handleModeChange);
     el.arcanaFilter.addEventListener("change", handleArcanaChange);
+    el.overviewMethod.addEventListener("change", handleOverviewMethodChange);
     el.spreadSelect.addEventListener("change", handleSpreadChange);
     el.shuffleBtn.addEventListener("click", handleShuffle);
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);

@@ -66,6 +66,45 @@ function formatPositionName(position, style) {
   return zh + " · " + en;
 }
 
+function isOverviewStackingMode(deckType, spreadId, method) {
+  return deckType === "tarot" && spreadId === "overview" && method === "stacked";
+}
+
+function getNextOverviewStackingSlot(entries, positionCount, layer) {
+  var used = {};
+  (entries || []).forEach(function (entry) {
+    if (entry.layer === layer) used[entry.slotIndex] = true;
+  });
+  for (var i = 0; i < positionCount; i++) {
+    if (!used[i]) return i;
+  }
+  return -1;
+}
+
+function getOverviewStackingPhase(entries, positionCount) {
+  if (getNextOverviewStackingSlot(entries, positionCount, "major") !== -1) return "major";
+  if (getNextOverviewStackingSlot(entries, positionCount, "minor") !== -1) return "minor";
+  return "complete";
+}
+
+function getOverviewStackingState(entries, positionCount) {
+  var status = getOverviewStackingPhase(entries, positionCount);
+  return {
+    status: status,
+    activeLayer: status === "major" ? "major" : "minor",
+    complete: status === "complete",
+    targetCount: positionCount * 2
+  };
+}
+
+function getAvailableOverviewStackingCards(cards, entries, layer) {
+  var usedIds = {};
+  (entries || []).forEach(function (entry) {
+    if (entry.layer === layer && entry.card) usedIds[entry.card.id] = true;
+  });
+  return (cards || []).filter(function (card) { return !usedIds[card.id]; });
+}
+
 var tarotSpreads = [
   {
     id: "three-card-horizontal",
@@ -123,8 +162,9 @@ var tarotSpreads = [
     id: "overview",
     name: "概览布局",
     category: "世俗布局",
-    description: "在设定时间段内，从十三个生活面向取得总体概览。",
-    source: "第六章，图 6.4",
+    description: "在设定时间段内，从十三个生活面向取得总体概览；可用单牌法，或先铺大阿卡那、再叠放小阿卡那的分牌法。",
+    source: "第六章，图 6.3-6.4",
+    supportsStacking: true,
     columns: 7,
     rows: 2,
     positions: [
@@ -594,6 +634,11 @@ if (typeof module !== "undefined" && module.exports) {
     getSpreadsForDeck: getSpreadsForDeck,
     getSpreadById: getSpreadById,
     formatPositionName: formatPositionName,
+    isOverviewStackingMode: isOverviewStackingMode,
+    getNextOverviewStackingSlot: getNextOverviewStackingSlot,
+    getOverviewStackingPhase: getOverviewStackingPhase,
+    getOverviewStackingState: getOverviewStackingState,
+    getAvailableOverviewStackingCards: getAvailableOverviewStackingCards,
     validateTarotSpreads: validateTarotSpreads
   };
 }

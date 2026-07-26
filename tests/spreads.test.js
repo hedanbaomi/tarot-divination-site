@@ -78,6 +78,86 @@ test("formatPositionName joins Chinese and English labels", function () {
   );
 });
 
+test("overview stacking is available only for the tarot overview spread", function () {
+  var overview = catalogue.getTarotSpread("overview");
+
+  assert.equal(overview.supportsStacking, true);
+  assert.equal(overview.source, "第六章，图 6.3-6.4");
+  assert.match(overview.description, /先铺大阿卡那、再叠放小阿卡那/);
+  assert.equal(catalogue.isOverviewStackingMode("tarot", "overview", "stacked"), true);
+  assert.equal(catalogue.isOverviewStackingMode("tarot", "overview", "single"), false);
+  assert.equal(catalogue.isOverviewStackingMode("mystagogus", "overview", "stacked"), false);
+  assert.equal(catalogue.isOverviewStackingMode("tarot", "event", "stacked"), false);
+});
+
+test("overview stacking fills every major layer slot before the minor layer", function () {
+  var majors = Array.from({ length: 13 }, function (_, slotIndex) {
+    return { slotIndex: slotIndex, layer: "major" };
+  });
+  var fiveMinors = Array.from({ length: 5 }, function (_, slotIndex) {
+    return { slotIndex: slotIndex, layer: "minor" };
+  });
+
+  assert.equal(catalogue.getOverviewStackingPhase([], 13), "major");
+  assert.equal(catalogue.getNextOverviewStackingSlot([], 13, "major"), 0);
+  assert.equal(catalogue.getOverviewStackingPhase(majors, 13), "minor");
+  assert.equal(catalogue.getNextOverviewStackingSlot(majors.concat(fiveMinors), 13, "minor"), 5);
+  assert.equal(
+    catalogue.getOverviewStackingPhase(
+      majors.concat(Array.from({ length: 13 }, function (_, slotIndex) {
+        return { slotIndex: slotIndex, layer: "minor" };
+      })),
+      13
+    ),
+    "complete"
+  );
+});
+
+test("overview stacking returns to a missing lower-layer slot before continuing", function () {
+  var complete = ["major", "minor"].flatMap(function (layer) {
+    return Array.from({ length: 13 }, function (_, slotIndex) {
+      return { slotIndex: slotIndex, layer: layer };
+    });
+  });
+  var withoutMajorPositionSix = complete.filter(function (entry) {
+    return !(entry.layer === "major" && entry.slotIndex === 5);
+  });
+
+  assert.equal(catalogue.getOverviewStackingPhase(withoutMajorPositionSix, 13), "major");
+  assert.equal(catalogue.getNextOverviewStackingSlot(withoutMajorPositionSix, 13, "major"), 5);
+  assert.deepEqual(catalogue.getOverviewStackingState(withoutMajorPositionSix, 13), {
+    status: "major",
+    activeLayer: "major",
+    complete: false,
+    targetCount: 26
+  });
+  assert.deepEqual(catalogue.getOverviewStackingState(complete, 13), {
+    status: "complete",
+    activeLayer: "minor",
+    complete: true,
+    targetCount: 26
+  });
+});
+
+test("overview stacking rebuilds a layer without offering cards already on the table", function () {
+  var cards = [
+    { id: "major-1" },
+    { id: "major-2" },
+    { id: "major-3" }
+  ];
+  var entries = [
+    { layer: "major", card: { id: "major-1" } },
+    { layer: "minor", card: { id: "minor-1" } }
+  ];
+
+  assert.deepEqual(
+    catalogue.getAvailableOverviewStackingCards(cards, entries, "major").map(function (card) {
+      return card.id;
+    }),
+    ["major-2", "major-3"]
+  );
+});
+
 test("overlapping cross cards preserve the chapter diagrams", function () {
   [
     ["yes-no", 1, 6],
