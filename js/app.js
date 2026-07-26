@@ -664,6 +664,9 @@
     pending.forEach(function (entry, i) {
       setTimeout(function () { revealEntry(entry); }, i * 80);
     });
+    if (historyUiController && isReadingComplete()) {
+      historyUiController.saveCompletedReading();
+    }
   }
 
   function renderSpreadMeta() {

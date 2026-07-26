@@ -47,6 +47,15 @@
     return row;
   }
 
+  function createSerialTaskQueue() {
+    var tail = Promise.resolve();
+    return function enqueue(task) {
+      var run = tail.then(task, task);
+      tail = run.catch(function () {});
+      return run;
+    };
+  }
+
   function init(options) {
     options = options || {};
     var store = options.store;
@@ -54,12 +63,13 @@
     var createSnapshot = options.createSnapshot;
     var available = false;
     var readingComplete = false;
+    var storeReady = null;
+    var enqueueSave = createSerialTaskQueue();
     var selectedRecordId = null;
     var restoreFocusTo = null;
 
     var elements = {
       open: byId("historyOpenBtn"),
-      save: byId("saveHistoryBtn"),
       saveStatus: byId("historySaveStatus"),
       dialog: byId("historyDialog"),
       close: byId("historyCloseBtn"),
@@ -86,10 +96,6 @@
 
     function setUnavailable() {
       available = false;
-      if (elements.save) {
-        elements.save.disabled = true;
-        elements.save.title = "当前浏览器无法使用本地历史";
-      }
       if (elements.importLabel) {
         elements.importLabel.setAttribute("aria-disabled", "true");
         elements.importLabel.classList.add("is-disabled");
@@ -217,22 +223,34 @@
       }
     }
 
-    async function saveCurrentReading() {
-      if (!available || !readingComplete) return;
-      elements.save.disabled = true;
+    function saveCurrentReading() {
+      if (!readingComplete) return;
+      var record;
       try {
-        var record = createSnapshot();
-        var result = await store.saveRecord(record);
-        if (result.duplicate) {
-          setStatus(elements.saveStatus, "这次完整占卜刚刚已经保存，无需重复保存。", false);
-        } else {
-          setStatus(elements.saveStatus, "已保存到当前浏览器的占卜历史。", false);
-        }
+        record = createSnapshot();
       } catch (_error) {
-        setStatus(elements.saveStatus, "保存失败；占卜结果仍保留在当前页面。", true);
-      } finally {
-        elements.save.disabled = !available || !readingComplete;
+        setStatus(elements.saveStatus, "自动保存失败；占卜结果仍保留在当前页面。", true);
+        return;
       }
+      setStatus(elements.saveStatus, "正在自动保存占卜历史…", false);
+      return enqueueSave(async function () {
+        setStatus(elements.saveStatus, "正在自动保存占卜历史…", false);
+        var ready = available || await storeReady;
+        if (!ready) {
+          setStatus(elements.saveStatus, "自动保存失败；当前浏览器无法使用本地历史。", true);
+          return;
+        }
+        try {
+          var result = await store.saveRecord(record);
+          if (result.duplicate) {
+            setStatus(elements.saveStatus, "这次完整占卜刚刚已经自动保存，无需重复保存。", false);
+          } else {
+            setStatus(elements.saveStatus, "开牌完成，已自动保存到当前浏览器的占卜历史。", false);
+          }
+        } catch (_error) {
+          setStatus(elements.saveStatus, "自动保存失败；占卜结果仍保留在当前页面。", true);
+        }
+      });
     }
 
     async function deleteSelected() {
@@ -299,8 +317,6 @@
 
     function updateSaveAvailability(complete) {
       readingComplete = Boolean(complete);
-      elements.save.hidden = !readingComplete;
-      elements.save.disabled = !readingComplete || !available;
       if (!readingComplete) setStatus(elements.saveStatus, "", false);
       else if (!available) setStatus(elements.saveStatus, "当前浏览器无法保存历史；占卜仍可正常使用。", true);
     }
@@ -332,7 +348,6 @@
       if (restoreFocusTo && typeof restoreFocusTo.focus === "function") restoreFocusTo.focus();
     });
     elements.filter.addEventListener("change", refreshList);
-    elements.save.addEventListener("click", saveCurrentReading);
     elements.back.addEventListener("click", function () {
       refreshList().then(function () { elements.filter.focus(); });
     });
@@ -347,22 +362,28 @@
     });
 
     updateSaveAvailability(false);
-    Promise.resolve()
+    storeReady = Promise.resolve()
       .then(function () { return store.open(); })
       .then(function () {
         available = true;
-        elements.save.disabled = !readingComplete;
-        elements.save.removeAttribute("title");
         elements.importLabel.removeAttribute("aria-disabled");
         elements.importLabel.classList.remove("is-disabled");
+        return true;
       })
-      .catch(setUnavailable);
+      .catch(function () {
+        setUnavailable();
+        return false;
+      });
 
     return {
       updateSaveAvailability: updateSaveAvailability,
+      saveCompletedReading: saveCurrentReading,
       refresh: refreshList
     };
   }
 
-  return { init: init };
+  return {
+    init: init,
+    createSerialTaskQueue: createSerialTaskQueue
+  };
 });

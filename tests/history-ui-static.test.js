@@ -8,6 +8,8 @@ var test = require("node:test");
 var root = path.join(__dirname, "..");
 var html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 var historyUi = fs.readFileSync(path.join(root, "js", "history-ui.js"), "utf8");
+var app = fs.readFileSync(path.join(root, "js", "app.js"), "utf8");
+var historyUiApi = require("../js/history-ui.js");
 
 test("history UI never renders imported data through innerHTML", function () {
   assert.equal(/\binnerHTML\b/.test(historyUi), false);
@@ -33,4 +35,33 @@ test("history modules load before the application module", function () {
   assert.ok(recordsIndex < storeIndex);
   assert.ok(storeIndex < uiIndex);
   assert.ok(uiIndex < appIndex);
+});
+
+test("opening a completed reading saves automatically without a manual save control", function () {
+  assert.equal(/id="saveHistoryBtn"/.test(html), false);
+  assert.equal(/getElementById\("saveHistoryBtn"\)/.test(historyUi), false);
+  assert.match(app, /historyUiController\.saveCompletedReading\(\)/);
+  assert.match(historyUi, /saveCompletedReading:\s*saveCurrentReading/);
+});
+
+test("automatic saves are queued without dropping a different reading", async function () {
+  var enqueue = historyUiApi.createSerialTaskQueue();
+  var events = [];
+  var releaseFirst;
+  var firstGate = new Promise(function (resolve) { releaseFirst = resolve; });
+  var first = enqueue(async function () {
+    events.push("first:start");
+    await firstGate;
+    events.push("first:end");
+  });
+  var second = enqueue(async function () {
+    events.push("second:start");
+    events.push("second:end");
+  });
+
+  await Promise.resolve();
+  assert.deepEqual(events, ["first:start"]);
+  releaseFirst();
+  await Promise.all([first, second]);
+  assert.deepEqual(events, ["first:start", "first:end", "second:start", "second:end"]);
 });
