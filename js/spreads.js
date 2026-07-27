@@ -531,7 +531,7 @@ function getMystagogusSpread(id) {
 var lxxxiSpreads = [
   {
     id: "lxxxi-occult-map",
-    name: "基础／神秘学地图牌阵(LXXXI牌)",
+    name: "基础／神秘学地图牌阵",
     deck: "lxxxi",
     category: "LXXXI 牌阵",
     description: "大规模神秘学地图：观察一生中创造与毁灭的深层力量、命运模式、先祖与内在联系。不宜频繁用于世俗问题。",
@@ -559,7 +559,7 @@ var lxxxiSpreads = [
   },
   {
     id: "lxxxi-tree-of-life-occult",
-    name: "生命之树牌阵(LXXXI牌,神秘学方法)",
+    name: "生命之树牌阵（神秘学方法）",
     deck: "lxxxi",
     category: "LXXXI 牌阵",
     description: "依生命之树深层力量解读：概念如何经时间、限制与平衡而显化为结果。适于魔法与神秘学占卜，而非简单是／否。",
@@ -581,7 +581,7 @@ var lxxxiSpreads = [
   },
   {
     id: "lxxxi-tree-of-life-simple",
-    name: "生命之树牌阵(LXXXI牌,简易方法)",
+    name: "生命之树牌阵（简易方法）",
     deck: "lxxxi",
     category: "LXXXI 牌阵",
     description: "通俗解读：看主题得失、命运所给与所失，以及答案如何形成。第十位为结果／答案，适合一般占卜与是／否问题。",
@@ -603,7 +603,7 @@ var lxxxiSpreads = [
   },
   {
     id: "lxxxi-four-directions",
-    name: "四方位牌阵(LXXXI牌)",
+    name: "四方位牌阵",
     deck: "lxxxi",
     category: "LXXXI 牌阵",
     description: "六张牌检视从各方位流入并影响主题的力量，以及与主题的最大互动。可用于人、情况、地点或时间点。",
@@ -623,17 +623,6 @@ var lxxxiSpreads = [
 
 function getLxxxiSpread(id) {
   return lxxxiSpreads.filter(function (spread) { return spread.id === id; })[0] || lxxxiSpreads[0];
-}
-
-/** Label spread origin for UI: 出自 M 牌 / 出自 LXXXI 牌 / 出自塔罗牌 */
-function getSpreadOriginLabel(spread) {
-  if (spread && spread.deck === "mystagogus") {
-    return localizedMessage("spread.origin.mystagogus", "出自 M 牌");
-  }
-  if (spread && spread.deck === "lxxxi") {
-    return localizedMessage("spread.origin.lxxxi", "出自 LXXXI 牌");
-  }
-  return localizedMessage("spread.origin.tarot", "出自塔罗牌");
 }
 
 function getSpreadsForDeck(deckType) {
@@ -700,7 +689,6 @@ if (typeof module !== "undefined" && module.exports) {
     getTarotSpread: getTarotSpread,
     getMystagogusSpread: getMystagogusSpread,
     getLxxxiSpread: getLxxxiSpread,
-    getSpreadOriginLabel: getSpreadOriginLabel,
     getSpreadsForDeck: getSpreadsForDeck,
     getSpreadById: getSpreadById,
     formatPositionName: formatPositionName,

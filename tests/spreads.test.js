@@ -228,7 +228,7 @@ test("all position coordinates match the Chapter 6 diagrams", function () {
   });
 });
 
-test("all decks can use compatible spreads with origin labels", function () {
+test("all decks can use compatible spreads grouped by deck category", function () {
   var total =
     catalogue.mystagogusSpreads.length +
     catalogue.tarotSpreads.length +
@@ -266,10 +266,6 @@ test("all decks can use compatible spreads with origin labels", function () {
   assert.equal(catalogue.getSpreadById("tarot", "lxxxi-tree-of-life-simple").id, "lxxxi-tree-of-life-simple");
   assert.equal(catalogue.getSpreadById("lxxxi", "lxxxi-occult-map").id, "lxxxi-occult-map");
 
-  assert.equal(catalogue.getSpreadOriginLabel(catalogue.mystagogusSpreads[0]), "出自 M 牌");
-  assert.equal(catalogue.getSpreadOriginLabel(catalogue.tarotSpreads[0]), "出自塔罗牌");
-  assert.equal(catalogue.getSpreadOriginLabel(catalogue.lxxxiSpreads[0]), "出自 LXXXI 牌");
-  assert.equal(catalogue.getSpreadOriginLabel(null), "出自塔罗牌");
 });
 
 test("Mystagogus layout coordinates follow the zigzag diagram", function () {
