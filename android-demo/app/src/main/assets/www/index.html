@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#090d1e">
+  <meta name="description" content="Quareia 占卜：支持塔罗、Mystagogus（M 牌）与 LXXXI 魔法牌，轻点牌堆抽牌，翻牌解读，预设牌阵与正逆位模式。">
+  <title>Quareia 占卜 · Quareia Divination</title>
+  <link rel="stylesheet" href="css/styles.css?v=20260727-dialog-meaning">
+</head>
+<body>
+  <div class="sky-moon" aria-hidden="true"></div>
+  <div class="page-wrapper">
+    <header class="header">
+      <h1 data-i18n="site.title">Quareia 占卜</h1>
+      <p class="subtitle" data-i18n="site.subtitle">QUAREIA DIVINATION · 塔罗 / Mystagogus / LXXXI</p>
+      <div class="header-actions">
+        <button class="btn-mini language-toggle" id="languageToggle" type="button"
+          aria-label="Switch to English">EN</button>
+        <button class="btn-mini history-open-btn" id="historyOpenBtn" type="button"
+          aria-haspopup="dialog" aria-controls="historyDialog" data-i18n="history.open">占卜历史</button>
+      </div>
+    </header>
+
+    <!-- 设置：可折叠，默认展开 -->
+    <section class="settings" id="settings">
+      <button class="settings-toggle" id="settingsToggle" aria-expanded="true" aria-controls="settingsBody">
+        <span data-i18n="settings.title">抽牌设置</span>
+        <span class="settings-chevron" aria-hidden="true">▾</span>
+      </button>
+      <div class="settings-body" id="settingsBody">
+        <div class="setting-group">
+          <label for="deckSelect" data-i18n="settings.deck">牌组</label>
+          <select id="deckSelect">
+            <option value="tarot" data-i18n="deck.tarotOption">塔罗牌（Rider–Waite 体系）</option>
+            <option value="mystagogus" data-i18n="deck.mystagogusOption">M 牌（Mystagogus）</option>
+            <option value="lxxxi" data-i18n="deck.lxxxiOption">LXXXI 魔法牌（奎瑞亚）</option>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label for="modeSelect" data-i18n="settings.mode">牌位模式</label>
+          <select id="modeSelect">
+            <option value="upright-only" data-i18n="mode.upright">全正位（推荐）</option>
+            <option value="mixed" data-i18n="mode.mixed">正逆位混合</option>
+          </select>
+        </div>
+        <div class="setting-group" id="arcanaFilterGroup">
+          <label for="arcanaFilter" data-i18n="settings.arcana">牌组筛选</label>
+          <select id="arcanaFilter">
+            <option value="mixed" data-i18n="arcana.mixed">混合抽取</option>
+            <option value="major-only" data-i18n="arcana.majorOnly">仅大阿卡那</option>
+            <option value="minor-only" data-i18n="arcana.minorOnly">仅小阿卡那</option>
+            <option value="major-then-minor" data-i18n="arcana.majorThenMinor">先大后小</option>
+            <option value="minor-then-major" data-i18n="arcana.minorThenMajor">先小后大</option>
+          </select>
+        </div>
+        <div class="setting-group" id="overviewMethodGroup" style="display:none;">
+          <label for="overviewMethod" data-i18n="settings.overviewMethod">概览抽法</label>
+          <select id="overviewMethod" aria-describedby="overviewMethodSummary">
+            <option value="single" data-i18n="overview.single">单牌法（13 张）</option>
+            <option value="stacked" data-i18n="overview.stacked">分牌叠放／叠牌法（26 张）</option>
+          </select>
+          <p class="setting-summary" id="overviewMethodSummary" data-i18n="overview.summary">
+            先铺 13 张大阿卡那，再将 13 张小阿卡那叠在对应牌位。
+          </p>
+        </div>
+        <div class="setting-group setting-group-spread">
+          <label for="spreadSelect" data-i18n="settings.spread">预设牌阵</label>
+          <select id="spreadSelect" aria-describedby="spreadSettingSummary"></select>
+          <p class="setting-summary" id="spreadSettingSummary"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 牌堆：左右滑动浏览，轻点任意一张抽出 -->
+    <section class="deck-area">
+      <div class="deck-head">
+        <h2><span data-i18n="deck.heading">牌堆</span> · <span class="deck-remaining" id="deckRemaining" data-i18n="deck.initialRemaining">剩 78 张</span></h2>
+        <button class="btn-mini" id="shuffleBtn" type="button" data-i18n="deck.shuffle">🔀 洗牌</button>
+      </div>
+      <p class="deck-cta" id="deckCta" role="status" aria-live="polite" aria-atomic="true" data-i18n="deck.initialCta">左右滑动浏览牌堆，轻点任意一张牌抽出</p>
+      <div class="deck-spread" id="deckSpread" role="group" aria-label="牌堆，左右滑动浏览，轻点抽牌" data-i18n-aria-label="deck.initialAria"></div>
+      <button class="btn btn-switch-arcana" id="switchArcanaBtn" style="display:none;" data-i18n="deck.switch">切换牌组</button>
+    </section>
+
+    <!-- 牌阵：抽到的牌自动排列 -->
+    <section class="spread-area" id="spreadArea" style="display:none;">
+      <div class="spread-head">
+        <h2><span id="spreadTitle" data-i18n="spread.initialTitle">你的牌阵</span> · <span class="card-count" id="spreadCount" data-i18n="spread.initialCount">0 / 3</span></h2>
+        <span class="phase-label" id="phaseLabel" role="status" aria-live="polite" aria-atomic="true"></span>
+      </div>
+      <div class="spread-board-scroll" id="spreadBoardScroll">
+        <div class="spread-grid" id="spreadGrid" role="list" aria-label="抽取的牌按所选牌阵自动排列" data-i18n-aria-label="spread.gridAria"></div>
+      </div>
+      <div class="spread-actions">
+        <button class="btn btn-accent" id="revealBtn" data-i18n="spread.reveal">开牌解读</button>
+        <button class="btn btn-secondary" id="clearBtn" data-i18n="spread.clear">重新洗牌</button>
+      </div>
+      <p class="spread-hint" id="spreadHint" data-i18n="spread.hint">轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开；开牌后再次轻点牌面可查看牌意。</p>
+      <details class="position-guide" id="positionGuide">
+        <summary data-i18n="spread.guide">查看牌位说明</summary>
+        <ol id="positionGuideList"></ol>
+      </details>
+    </section>
+    <p class="history-save-status" id="historySaveStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+
+    <!-- 解读结果 -->
+    <section class="results-section" id="resultsSection" style="display:none;">
+      <h2 data-i18n="results.title">解读结果</h2>
+      <div class="results-list" id="resultsList"></div>
+    </section>
+
+    <dialog class="history-dialog" id="historyDialog" aria-labelledby="historyDialogTitle"
+      aria-describedby="historyPrivacy">
+      <div class="history-dialog-shell">
+        <header class="history-dialog-header">
+          <div>
+            <p class="history-dialog-kicker" data-i18n="history.kicker">LOCAL HISTORY</p>
+            <h2 id="historyDialogTitle" data-i18n="history.title">占卜历史</h2>
+          </div>
+          <button class="history-icon-btn" id="historyCloseBtn" type="button" aria-label="关闭占卜历史" data-i18n-aria-label="history.closeLabel">×</button>
+        </header>
+
+        <p class="history-privacy" id="historyPrivacy" data-i18n="history.privacy">
+          数据仅保存在当前浏览器。清除网站数据、使用无痕模式、换设备或换浏览器都可能导致记录丢失；可导出 JSON 自行备份。本站不会上传历史，也不做遥测或追踪。
+        </p>
+
+        <div class="history-toolbar" data-view="list">
+          <div class="history-filter">
+            <label for="historyDeckFilter" data-i18n="history.filterLabel">按牌组筛选</label>
+            <select id="historyDeckFilter">
+              <option value="all" data-i18n="history.filterAll">全部牌组</option>
+              <option value="tarot" data-i18n="history.filterTarot">塔罗牌</option>
+              <option value="mystagogus" data-i18n="history.filterMystagogus">Mystagogus</option>
+              <option value="lxxxi" data-i18n="history.filterLxxxi">LXXXI 魔法牌</option>
+            </select>
+          </div>
+          <div class="history-file-actions" role="group" aria-label="历史备份" data-i18n-aria-label="history.backupAria">
+            <button class="btn btn-secondary" id="historyExportBtn" type="button" data-i18n="history.export">导出 JSON</button>
+            <input class="visually-hidden" id="historyImportInput" type="file"
+              accept=".json,application/json" tabindex="-1" aria-hidden="true">
+            <label class="btn btn-secondary history-import-label" id="historyImportLabel"
+              for="historyImportInput" role="button" tabindex="0" data-i18n="history.import">导入 JSON</label>
+          </div>
+        </div>
+
+        <p class="history-action-status" id="historyActionStatus" role="status"
+          aria-live="polite" aria-atomic="true"></p>
+
+        <section class="history-list-view" data-view="list" aria-label="占卜历史记录" data-i18n-aria-label="history.listAria">
+          <p class="history-empty" id="historyEmpty" data-i18n="history.empty">暂无保存的占卜记录。</p>
+          <ol class="history-list" id="historyList"></ol>
+          <div class="history-clear-row">
+            <button class="btn history-danger-btn" id="historyClearBtn" type="button" data-i18n="history.clear">清空全部记录</button>
+          </div>
+        </section>
+
+        <section class="history-detail" id="historyDetail" data-view="detail" hidden
+          aria-labelledby="historyDetailTitle">
+          <div class="history-detail-nav">
+            <button class="btn btn-secondary" id="historyBackBtn" type="button" data-i18n="history.back">返回历史列表</button>
+          </div>
+          <h3 id="historyDetailTitle" data-i18n="history.detailTitle">占卜记录详情</h3>
+          <div class="history-detail-body" id="historyDetailBody"></div>
+          <div class="history-delete-row">
+            <button class="btn history-danger-btn" id="historyDeleteBtn" type="button" data-i18n="history.delete">删除这条记录</button>
+          </div>
+        </section>
+      </div>
+    </dialog>
+
+    <dialog class="confirm-overlay" id="confirmDialog" role="alertdialog" aria-modal="true"
+      aria-labelledby="confirmDialogTitle" aria-describedby="confirmMessage" aria-hidden="true">
+      <section class="confirm-card">
+        <div class="confirm-symbol" aria-hidden="true">✦</div>
+        <p class="confirm-kicker" data-i18n="confirm.kicker">SPREAD CHANGE</p>
+        <h2 id="confirmDialogTitle" data-i18n="confirm.title">当前牌阵尚未清空</h2>
+        <p id="confirmMessage"></p>
+        <div class="confirm-actions">
+          <button class="btn btn-secondary" id="confirmCancelBtn" type="button"
+            data-i18n="confirm.cancel">保留牌阵</button>
+          <button class="btn confirm-danger-btn" id="confirmProceedBtn" type="button"
+            data-i18n="confirm.proceed">继续并清空</button>
+        </div>
+      </section>
+    </dialog>
+
+    <footer class="footer">
+      <p data-i18n="footer.note">塔罗牌意参考《21世纪的塔罗技能》与 Quareia 语境；M 牌关键词译自 Josephine McCarthy《Mystagogus》；LXXXI 牌意参考其英文说明书 · 仅供娱乐，请理性看待占卜结果</p>
+    </footer>
+  </div>
+
+  <script src="js/tarot-data.js"></script>
+  <script src="js/mystagogus-data.js"></script>
+  <script src="js/lxxxi-data.js"></script>
+  <script src="js/spreads.js"></script>
+  <script src="js/i18n-data-en.js"></script>
+  <script src="js/i18n.js?v=20260727-dialog-meaning"></script>
+  <script src="js/dialogs.js?v=20260727-dialog-meaning"></script>
+  <script src="js/history-records.js"></script>
+  <script src="js/history-store.js"></script>
+  <script src="js/history-ui.js?v=20260727-dialog-meaning"></script>
+  <script src="js/app.js?v=20260727-dialog-meaning"></script>
+  <script src="js/celestial-sky.js" defer></script>
+</body>
+</html>
