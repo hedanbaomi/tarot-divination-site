@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#090d1e">
   <meta name="description" content="Quareia 占卜：支持塔罗、Mystagogus（M 牌）与 LXXXI 魔法牌，轻点牌堆抽牌，翻牌解读，预设牌阵与正逆位模式。">
   <title>Quareia 占卜 · Quareia Divination</title>
-  <link rel="stylesheet" href="css/styles.css?v=20260727-dialog-meaning">
+  <link rel="stylesheet" href="css/styles.css?v=20260727-card-picker">
 </head>
 <body>
   <div class="sky-moon" aria-hidden="true"></div>
@@ -185,6 +185,18 @@
       </section>
     </dialog>
 
+    <dialog class="choice-overlay" id="choiceDialog" aria-modal="true"
+      aria-labelledby="choiceDialogTitle" aria-hidden="true">
+      <section class="choice-card">
+        <div class="choice-symbol" aria-hidden="true">✦</div>
+        <p class="choice-kicker" id="choiceDialogKicker">纸牌选择</p>
+        <h2 id="choiceDialogTitle">请选择</h2>
+        <div class="choice-options" id="choiceOptions" role="listbox"></div>
+        <button class="btn btn-secondary choice-cancel" id="choiceCancelBtn"
+          type="button">取消</button>
+      </section>
+    </dialog>
+
     <footer class="footer">
       <p data-i18n="footer.note">塔罗牌意参考《21世纪的塔罗技能》与 Quareia 语境；M 牌关键词译自 Josephine McCarthy《Mystagogus》；LXXXI 牌意参考其英文说明书 · 仅供娱乐，请理性看待占卜结果</p>
     </footer>
@@ -195,12 +207,13 @@
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js?v=20260727-spread-labels"></script>
   <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js?v=20260727-spread-labels"></script>
-  <script src="js/dialogs.js?v=20260727-dialog-meaning"></script>
+  <script src="js/i18n.js?v=20260727-card-picker"></script>
+  <script src="js/dialogs.js?v=20260727-card-picker"></script>
+  <script src="js/custom-selects.js?v=20260727-card-picker"></script>
   <script src="js/history-records.js"></script>
   <script src="js/history-store.js"></script>
   <script src="js/history-ui.js?v=20260727-dialog-meaning"></script>
-  <script src="js/app.js?v=20260727-spread-labels"></script>
+  <script src="js/app.js?v=20260727-card-picker"></script>
   <script src="js/celestial-sky.js" defer></script>
 </body>
 </html>
