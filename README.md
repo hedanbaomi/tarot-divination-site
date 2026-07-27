@@ -39,6 +39,7 @@ https://hedanbaomi.github.io/tarot-divination-site/
 - 每张牌可随手移除并放回牌堆
 - 移动端优先：大号点击区域、单手可用、适配刘海屏安全区
 - 开牌后展示关键词与解读（M 牌关键词译自英文索引；LXXXI 牌意译自繁体中文版说明书）
+- 点击「开牌解读」后，可直接轻点牌阵中的任意牌，在牌面与牌意之间翻转，无需滚动到下方结果区
 
 ## 本地打开
 
@@ -48,7 +49,7 @@ https://hedanbaomi.github.io/tarot-divination-site/
 
 1. 在「抽牌设置」中选择预设牌阵、牌位模式与牌组筛选。
 2. 按页面提示依次抽牌；每张牌会自动进入图示对应的固定牌位。
-3. 抽满后开牌解读，并可展开「查看牌位说明」对照每个位置的含义。
+3. 抽满后按「开牌解读」，翻开全部牌；轻点牌阵中的牌可直接查看牌意，再次轻点返回牌面，也可以展开「查看牌位说明」对照每个位置的含义。
 
 教材第六章牌阵包括：简单的是/否、生命之树、概览、事件、方向/位置、资源、时机、表现/因果、解决方案、健康、命运模式、天使、景观与自我地图布局。网站另提供横向三张牌阵。
 
@@ -86,7 +87,7 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 
 - **塔罗**牌意文本为面向本网站的整理与改写，参考《21世纪的塔罗技能》和 Quareia 训练语境。
 - **M 牌**关键词与牌阵译自 Josephine McCarthy《Mystagogus》关键词索引与 Layout PDF；牌面图像和由第三方出版物整理或翻译的内容不在 MIT 许可范围内。
-- **LXXXI 魔法牌**牌意译自《LXXXI 奎瑞亚魔法牌·牌意说明书》（繁体中文版）并转写为简体中文；牌阵译自说明书第十章。牌面由独立素材域名提供低分辨率 WebP 展示版，不随公开源码仓库分发；这不表示项目已取得授权，也不向访问者授予复制、再分发或其他开源权利。
+- **LXXXI 魔法牌**牌意译自《LXXXI 奎瑞亚魔法牌·牌意说明书》（繁体中文版）并转写为简体中文；牌阵译自说明书第十章。相关视觉素材仅用于站点运行展示，不随公开源码仓库分发；这不表示项目已取得授权，也不向访问者授予复制、再分发或其他开源权利。
 - **英文支持**以本地 `en/` 中的英文资料为依据，对用于网页展示的牌名、关键词、牌义与牌阵说明进行简明整理和改写；不会在网页中逐页转载整本资料，原始 PDF 也不作为网站运行资源发布。据其整理的文本不属于 MIT 许可。
 - 健康布局仅用于记录牌阵结构与个人反思，不能替代医生诊断、治疗或其他专业医疗建议。
 
@@ -94,7 +95,7 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 
 - Tarot: 78 Rider–Waite–Smith faces are local 420px derivatives from Wikimedia Commons' public-domain "Roses & Lilies" set. See `assets/cards/SOURCE.md`.
 - Mystagogus: local JPEG display derivatives (`assets/cards/m/`) and shared card back `m-back.jpeg`. Source materials © Josephine McCarthy. See `assets/cards/m/SOURCE.md`.
-- LXXXI Magician's Deck: 81 low-resolution WebP display derivatives and one card back are served from the versioned base `https://assets.luotianyi.fun/tarot-divination-site/lxxxi/v1`; they are not distributed in this source repository. Source art is attributed to Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland. See `assets/cards/LXXXI_SOURCE.md`.
+- LXXXI Magician's Deck: visual assets are available only for the site's runtime presentation and are not distributed in this public source repository. Source art is attributed to Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland. See `assets/cards/LXXXI_SOURCE.md`.
 
 完整的权利边界与来源说明见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 

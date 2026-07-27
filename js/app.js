@@ -75,6 +75,20 @@
     return (card && card.source) || quareiaSource;
   }
 
+  function getEntryInterpretation(entry) {
+    var showReversed = mode === "mixed" && entry.orientation !== "upright";
+    return {
+      keywords: localized(
+        entry.card,
+        showReversed ? "reversedKeywords" : "uprightKeywords"
+      ) || [],
+      meaning: localized(
+        entry.card,
+        showReversed ? "reversedMeaning" : "uprightMeaning"
+      ) || ""
+    };
+  }
+
   // ---------- Deck helpers ----------
   function shuffle(deck) {
     var r = deck.slice();
@@ -407,6 +421,28 @@
   }
 
   // ---------- Spread (drawn cards) ----------
+  function updateSpreadCardAria(cardEl, entry, position) {
+    var flipButton = cardEl && cardEl.querySelector(".spread-card-flip");
+    if (!flipButton) return;
+    var layer = isOverviewStacking()
+      ? " · " + (entry.layer === "major" ? t("app.layerMajorBase") : t("app.layerMinorTop"))
+      : "";
+    flipButton.setAttribute(
+      "aria-label",
+      t(cardEl.classList.contains("meaning-visible") ? "app.meaningAria" : "app.revealedAria", {
+        number: position.number,
+        position: formatPositionName(position, "slash"),
+        layer: layer,
+        card: localizedCardName(entry.card),
+        orientation: getOrientationLabel(entry.orientation)
+      })
+    );
+    flipButton.setAttribute(
+      "aria-pressed",
+      String(cardEl.classList.contains("meaning-visible"))
+    );
+  }
+
   function buildSpreadCardEl(entry) {
     var card = entry.card;
     var position = selectedSpread().positions[entry.slotIndex];
@@ -449,18 +485,21 @@
     back.className = "spread-card-face spread-card-back" +
       (deckType === "mystagogus" ? " spread-card-back-m" : "") +
       (deckType === "lxxxi" ? " spread-card-back-lxxxi" : "");
+    var backArt = document.createElement("div");
+    backArt.className = "spread-card-back-art";
+    back.appendChild(backArt);
     if (isNonTarotDeck()) {
-      back.appendChild(createBackArtImage("spread-card-back-img"));
+      backArt.appendChild(createBackArtImage("spread-card-back-img"));
     }
     var posNum = document.createElement("span");
     posNum.className = "pos-num";
     posNum.textContent = position.number;
-    back.appendChild(posNum);
+    backArt.appendChild(posNum);
     if (position.drawRule) {
       var drawRuleBadge = document.createElement("span");
       drawRuleBadge.className = "draw-rule-badge";
       drawRuleBadge.textContent = localizedRuleLabel(position.drawRule);
-      back.appendChild(drawRuleBadge);
+      backArt.appendChild(drawRuleBadge);
     }
     if (stacking) {
       var layerBadge = document.createElement("span");
@@ -468,9 +507,30 @@
       layerBadge.textContent = entry.layer === "major"
         ? t("app.layerMajorCause")
         : t("app.layerMinorEffect");
-      back.appendChild(layerBadge);
+      backArt.appendChild(layerBadge);
     }
-    appendPositionLabels(back, position, "pos-name");
+    appendPositionLabels(backArt, position, "pos-name");
+
+    var interpretation = getEntryInterpretation(entry);
+    var meaningPanel = document.createElement("div");
+    meaningPanel.className = "spread-card-meaning";
+    var meaningKicker = document.createElement("span");
+    meaningKicker.className = "spread-card-meaning-kicker";
+    meaningKicker.textContent = t("app.meaningTitle");
+    var meaningName = document.createElement("strong");
+    meaningName.className = "spread-card-meaning-name";
+    meaningName.textContent = localizedCardName(card);
+    var meaningKeywords = document.createElement("span");
+    meaningKeywords.className = "spread-card-meaning-keywords";
+    meaningKeywords.textContent = interpretation.keywords.join(" · ");
+    var meaningText = document.createElement("span");
+    meaningText.className = "spread-card-meaning-text";
+    meaningText.textContent = interpretation.meaning;
+    meaningPanel.appendChild(meaningKicker);
+    meaningPanel.appendChild(meaningName);
+    if (interpretation.keywords.length) meaningPanel.appendChild(meaningKeywords);
+    meaningPanel.appendChild(meaningText);
+    back.appendChild(meaningPanel);
 
     // Front face is built up-front but hidden by backface-visibility until flipped,
     // so we get an instant, smooth 3D flip without leaking the card face.
@@ -519,9 +579,21 @@
     });
     cardEl.appendChild(removeBtn);
 
-    flipButton.addEventListener("click", function () { revealEntry(entry); });
+    flipButton.addEventListener("click", function () {
+      if (!entry.revealed) {
+        revealEntry(entry);
+        return;
+      }
+      entry.meaningVisible = !entry.meaningVisible;
+      cardEl.classList.toggle("meaning-visible", entry.meaningVisible);
+      updateSpreadCardAria(cardEl, entry, position);
+    });
 
-    if (entry.revealed) cardEl.classList.add("revealed");
+    if (entry.revealed) {
+      cardEl.classList.add("revealed");
+      cardEl.classList.toggle("meaning-visible", Boolean(entry.meaningVisible));
+      updateSpreadCardAria(cardEl, entry, position);
+    }
     return cardEl;
   }
 
@@ -668,21 +740,7 @@
       cardEl.classList.remove("is-new");
       cardEl.classList.add("revealed");
       var position = selectedSpread().positions[entry.slotIndex];
-      var flipButton = cardEl.querySelector(".spread-card-flip");
-      if (flipButton) {
-        flipButton.setAttribute(
-          "aria-label",
-          t("app.revealedAria", {
-            number: position.number,
-            position: formatPositionName(position, "slash"),
-            layer: isOverviewStacking()
-              ? " · " + (entry.layer === "major" ? t("app.layerMajorBase") : t("app.layerMinorTop"))
-              : "",
-            card: localizedCardName(entry.card),
-            orientation: getOrientationLabel(entry.orientation)
-          })
-        );
-      }
+      updateSpreadCardAria(cardEl, entry, position);
     }
     renderSpreadMeta();
     renderResults();
@@ -771,8 +829,10 @@
     var allRevealed = spread.every(function (e) { return e.revealed; });
     el.revealBtn.textContent = allRevealed ? t("app.revealedAll") : t("spread.reveal");
     el.revealBtn.disabled = allRevealed;
-    el.spreadHint.style.display = allRevealed ? "none" : "block";
-    el.spreadHint.textContent = stacking
+    el.spreadHint.style.display = "block";
+    el.spreadHint.textContent = allRevealed
+      ? t("app.meaningHint")
+      : stacking
       ? t("app.stackHint")
       : hasPositionDrawRules()
         ? t("app.ruleHint")
@@ -782,14 +842,9 @@
 
   function buildResultCard(entry, position, layer) {
     var card = entry.card;
-    var isUpright = entry.orientation === "upright";
-    var showReversed = mode === "mixed" && !isUpright;
-    var keywords = showReversed
-      ? localized(card, "reversedKeywords")
-      : localized(card, "uprightKeywords");
-    var meaning = showReversed
-      ? localized(card, "reversedMeaning")
-      : localized(card, "uprightMeaning");
+    var interpretation = getEntryInterpretation(entry);
+    var keywords = interpretation.keywords;
+    var meaning = interpretation.meaning;
     var resultCard = document.createElement("div");
     resultCard.className = "result-card" + (layer ? " stack-layer-" + layer : "");
 
@@ -961,11 +1016,18 @@
   }
 
   function confirmIfSpread(message) {
-    if (spread.length === 0) return true;
-    return confirm(message);
+    if (spread.length === 0) return Promise.resolve(true);
+    if (!globalThis.DivinationDialog) return Promise.resolve(false);
+    return globalThis.DivinationDialog.request({
+      kicker: t("confirm.kicker"),
+      title: t("confirm.title"),
+      message: message,
+      cancelLabel: t("confirm.cancel"),
+      proceedLabel: t("confirm.proceed")
+    });
   }
 
-  function handleModeChange() {
+  async function handleModeChange() {
     var newMode = el.modeSelect.value;
     if (newMode === mode) return;
     // M 牌与 LXXXI 魔法牌不支持逆位，拒绝切换到混合模式。
@@ -973,7 +1035,7 @@
       el.modeSelect.value = mode;
       return;
     }
-    if (!confirmIfSpread(t("confirm.mode"))) {
+    if (!(await confirmIfSpread(t("confirm.mode")))) {
       el.modeSelect.value = mode;
       return;
     }
@@ -981,11 +1043,11 @@
     resetDeck();
   }
 
-  function handleArcanaChange() {
+  async function handleArcanaChange() {
     if (deckType !== "tarot") return;
     var newFilter = el.arcanaFilter.value;
     if (newFilter === arcanaFilter) return;
-    if (!confirmIfSpread(t("confirm.arcana"))) {
+    if (!(await confirmIfSpread(t("confirm.arcana")))) {
       el.arcanaFilter.value = arcanaFilter;
       return;
     }
@@ -993,10 +1055,10 @@
     resetDeck();
   }
 
-  function handleOverviewMethodChange() {
+  async function handleOverviewMethodChange() {
     var newMethod = el.overviewMethod.value;
     if (newMethod === overviewMethod) return;
-    if (!confirmIfSpread(t("confirm.overview"))) {
+    if (!(await confirmIfSpread(t("confirm.overview")))) {
       el.overviewMethod.value = overviewMethod;
       return;
     }
@@ -1006,10 +1068,10 @@
     resetDeck();
   }
 
-  function handleSpreadChange() {
+  async function handleSpreadChange() {
     var newSpreadId = el.spreadSelect.value;
     if (newSpreadId === selectedSpreadId) return;
-    if (!confirmIfSpread(t("confirm.spread"))) {
+    if (!(await confirmIfSpread(t("confirm.spread")))) {
       el.spreadSelect.value = selectedSpreadId;
       return;
     }
@@ -1060,10 +1122,10 @@
     el.spreadSelect.value = selectedSpreadId;
   }
 
-  function handleDeckChange() {
+  async function handleDeckChange() {
     var newDeck = el.deckSelect.value;
     if (newDeck === deckType) return;
-    if (!confirmIfSpread(t("confirm.deck"))) {
+    if (!(await confirmIfSpread(t("confirm.deck")))) {
       el.deckSelect.value = deckType;
       return;
     }
@@ -1104,8 +1166,8 @@
     el.positionGuide.open = false;
   }
 
-  function handleShuffle() {
-    if (!confirmIfSpread(t("confirm.shuffle"))) return;
+  async function handleShuffle() {
+    if (!(await confirmIfSpread(t("confirm.shuffle")))) return;
     resetDeck();
   }
 

@@ -705,9 +705,15 @@ body::after {
   perspective: 900px;
   cursor: pointer;
   transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0));
+  transition: transform 0.28s ease, filter 0.28s ease;
 }
 .spread-card.revealed,
-.spread-card.revealed .spread-card-flip { cursor: default; }
+.spread-card.revealed .spread-card-flip { cursor: pointer; }
+.spread-card.revealed.meaning-visible {
+  z-index: 500 !important;
+  transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0)) scale(1.55);
+  filter: none;
+}
 .overview-stack-card.stack-layer-major {
   filter: saturate(0.9) brightness(0.92);
 }
@@ -809,6 +815,7 @@ body::after {
   transition: transform 0.6s cubic-bezier(0.35, 0.65, 0.25, 1);
 }
 .spread-card.revealed .spread-card-inner { transform: rotateY(180deg); }
+.spread-card.revealed.meaning-visible .spread-card-inner { transform: rotateY(360deg); }
 .spread-card-face {
   position: absolute;
   inset: 0;
@@ -844,6 +851,61 @@ body::after {
   align-items: center;
   justify-content: center;
   gap: 6px;
+}
+.spread-card-back-art {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.spread-card-meaning {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 7px;
+  overflow-y: auto;
+  color: var(--text-secondary);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(216, 179, 106, 0.16), transparent 44%),
+    linear-gradient(165deg, #202957, #0c112b 72%);
+  border: 1.5px solid var(--accent);
+  border-radius: 10px;
+  text-align: left;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(216, 179, 106, 0.5) transparent;
+}
+.spread-card.meaning-visible .spread-card-back-art { display: none; }
+.spread-card.meaning-visible .spread-card-meaning { display: flex; }
+.spread-card.meaning-visible .spread-card-back::before,
+.spread-card.meaning-visible .spread-card-back::after { opacity: 0; }
+.spread-card.meaning-visible .spread-card-flip { touch-action: pan-y; }
+.spread-card-meaning-kicker {
+  color: var(--accent);
+  font-size: 0.46rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.spread-card-meaning-name {
+  color: var(--accent-light);
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  line-height: 1.2;
+}
+.spread-card-meaning-keywords {
+  color: #bfd7ef;
+  font-size: 0.46rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.spread-card-meaning-text {
+  font-size: 0.5rem;
+  line-height: 1.5;
 }
 .spread-card-back::before {
   content: "☾";
@@ -1257,6 +1319,93 @@ body::after {
   color: var(--accent-light);
 }
 .result-meaning { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.65; }
+
+/* ---------- Branded destructive-action confirmation ---------- */
+body.confirm-open { overflow: hidden; }
+.confirm-overlay:not([open]) { display: none; }
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  z-index: 2200;
+  display: grid;
+  place-items: center;
+  padding: max(20px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background: rgba(4, 7, 20, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: confirmFadeIn 0.18s ease both;
+}
+.confirm-overlay::backdrop { background: transparent; }
+.confirm-card {
+  width: min(100%, 390px);
+  padding: 24px 22px 20px;
+  border: 1px solid rgba(216, 179, 106, 0.42);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 50% -15%, rgba(216, 179, 106, 0.19), transparent 45%),
+    linear-gradient(165deg, rgba(27, 35, 78, 0.98), rgba(10, 14, 37, 0.99));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.58), 0 0 40px rgba(216, 179, 106, 0.12);
+  text-align: center;
+  animation: confirmRiseIn 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.confirm-symbol {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(216, 179, 106, 0.5);
+  border-radius: 50%;
+  color: var(--accent-light);
+  background: rgba(216, 179, 106, 0.1);
+  box-shadow: 0 0 24px rgba(216, 179, 106, 0.18);
+  font-size: 1.1rem;
+}
+.confirm-kicker {
+  margin: 0 0 7px;
+  color: var(--accent);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+.confirm-card h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+.confirm-card #confirmMessage {
+  margin: 12px 0 20px;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.7;
+}
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.confirm-actions .btn { margin: 0; }
+.confirm-danger-btn {
+  color: #fff0e8;
+  background: linear-gradient(135deg, rgba(166, 75, 78, 0.95), rgba(114, 46, 60, 0.96));
+  border: 1px solid rgba(243, 159, 151, 0.48);
+}
+@keyframes confirmFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes confirmRiseIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
 .result-position-meaning {
   font-size: 0.72rem;
   color: var(--accent-light);
@@ -1618,7 +1767,9 @@ body::after {
   .btn-accent::after,
   .settings-body,
   .spread-slot,
-  .result-card { animation: none; }
+  .result-card,
+  .confirm-overlay,
+  .confirm-card { animation: none; }
   .spread-card.is-new { animation: none; }
   .spread-card-inner { transition: none; }
 }

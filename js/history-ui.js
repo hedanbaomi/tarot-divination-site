@@ -334,6 +334,7 @@
 
     async function deleteSelected() {
       if (!available || !selectedRecordId) return;
+      if (!(await requestDeletion(t("history.deleteConfirm")))) return;
       try {
         await store.deleteRecord(selectedRecordId);
         setTranslatedStatus(elements.actionStatus, "history.deleted", null, false);
@@ -346,7 +347,7 @@
 
     async function clearAll() {
       if (!available) return;
-      if (!globalThis.confirm(t("history.clearConfirm"))) return;
+      if (!(await requestDeletion(t("history.clearConfirm")))) return;
       try {
         await store.clearRecords();
         setTranslatedStatus(elements.actionStatus, "history.cleared", null, false);
@@ -355,6 +356,17 @@
       } catch (_error) {
         setTranslatedStatus(elements.actionStatus, "history.clearFailed", null, true);
       }
+    }
+
+    function requestDeletion(message) {
+      if (!globalThis.DivinationDialog) return Promise.resolve(false);
+      return globalThis.DivinationDialog.request({
+        kicker: t("history.confirmKicker"),
+        title: t("history.confirmTitle"),
+        message: message,
+        cancelLabel: t("history.confirmCancel"),
+        proceedLabel: t("history.confirmProceed")
+      });
     }
 
     async function exportAll() {

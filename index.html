@@ -96,7 +96,7 @@
         <button class="btn btn-accent" id="revealBtn" data-i18n="spread.reveal">开牌解读</button>
         <button class="btn btn-secondary" id="clearBtn" data-i18n="spread.clear">重新洗牌</button>
       </div>
-      <p class="spread-hint" id="spreadHint" data-i18n="spread.hint">轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开。</p>
+      <p class="spread-hint" id="spreadHint" data-i18n="spread.hint">轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开；开牌后再次轻点牌面可查看牌意。</p>
       <details class="position-guide" id="positionGuide">
         <summary data-i18n="spread.guide">查看牌位说明</summary>
         <ol id="positionGuideList"></ol>
@@ -169,6 +169,22 @@
       </div>
     </dialog>
 
+    <dialog class="confirm-overlay" id="confirmDialog" role="alertdialog" aria-modal="true"
+      aria-labelledby="confirmDialogTitle" aria-describedby="confirmMessage" aria-hidden="true">
+      <section class="confirm-card">
+        <div class="confirm-symbol" aria-hidden="true">✦</div>
+        <p class="confirm-kicker" data-i18n="confirm.kicker">SPREAD CHANGE</p>
+        <h2 id="confirmDialogTitle" data-i18n="confirm.title">当前牌阵尚未清空</h2>
+        <p id="confirmMessage"></p>
+        <div class="confirm-actions">
+          <button class="btn btn-secondary" id="confirmCancelBtn" type="button"
+            data-i18n="confirm.cancel">保留牌阵</button>
+          <button class="btn confirm-danger-btn" id="confirmProceedBtn" type="button"
+            data-i18n="confirm.proceed">继续并清空</button>
+        </div>
+      </section>
+    </dialog>
+
     <footer class="footer">
       <p data-i18n="footer.note">塔罗牌意参考《21世纪的塔罗技能》与 Quareia 语境；M 牌关键词译自 Josephine McCarthy《Mystagogus》；LXXXI 牌意参考其英文说明书 · 仅供娱乐，请理性看待占卜结果</p>
     </footer>
@@ -180,6 +196,7 @@
   <script src="js/spreads.js"></script>
   <script src="js/i18n-data-en.js"></script>
   <script src="js/i18n.js"></script>
+  <script src="js/dialogs.js"></script>
   <script src="js/history-records.js"></script>
   <script src="js/history-store.js"></script>
   <script src="js/history-ui.js"></script>

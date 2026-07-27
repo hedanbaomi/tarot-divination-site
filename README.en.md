@@ -39,6 +39,7 @@ No backend service is required. The website runs in any modern browser.
 - Any drawn card can be removed and returned to the deck.
 - Mobile-first interaction with large touch targets, one-handed controls, and safe-area support for notched screens.
 - Revealed readings show keywords and concise interpretations based on the sources described below.
+- After **Reveal & Interpret**, tap any card in the spread to flip between its artwork and meaning without scrolling to the results section.
 
 ## Run Locally
 
@@ -48,7 +49,7 @@ Open `index.html` directly in a browser. No build step or server is required.
 
 1. In **Reading Setup**, choose a deck, spread, orientation, and any available card-pool filter.
 2. Draw cards in the order shown by the page. Each card enters its fixed position automatically.
-3. When the spread is complete, choose **Reveal & Interpret**. You can also expand **View position guide** to compare each position with its meaning.
+3. When the spread is complete, choose **Reveal & Interpret**. Tap any card in the spread to view its meaning, and tap again to return to the artwork. You can also expand **View position guide** to compare each position with its meaning.
 
 The Chapter 6 Tarot layouts are: Simple Yes / No, Tree of Life, Overview, Event, Direction / Location, Resources, Timing, Manifestation / Cause, Solution, Health, Fate Pattern, Angel, Landscape, and Self Map. The website also provides a horizontal three-card spread.
 
@@ -86,7 +87,7 @@ Mystagogus provides its 18-card signature layout. LXXXI provides four Chapter 10
 
 - **Tarot** interpretations are edited and rewritten for this website with reference to *Tarot Skills for the 21st Century* and the Quareia training context.
 - **Mystagogus** keywords and layout information are based on Josephine McCarthy's *Mystagogus* keyword index and layout PDF. The card artwork and content derived or translated from third-party publications are outside the MIT License.
-- **LXXXI** Simplified Chinese meanings are adapted from the Traditional Chinese *LXXXI Quareia Magician's Deck Guidebook*, while its layouts follow Chapter 10. Low-resolution WebP previews are served from a separate asset domain and are not distributed with the public source repository. This does not imply authorization or grant visitors the right to copy or redistribute the artwork.
+- **LXXXI** Simplified Chinese meanings are adapted from the Traditional Chinese *LXXXI Quareia Magician's Deck Guidebook*, while its layouts follow Chapter 10. Related visual assets are used only for runtime presentation and are not distributed with the public source repository. This does not imply authorization or grant visitors the right to copy or redistribute the artwork.
 - **English support** is based on the English reference material stored locally in `en/`. Card names, keywords, meanings, and spread descriptions used by the website are concise edited summaries rather than page-by-page reproductions. The original PDFs are not runtime website assets. Text derived from those sources is outside the MIT License.
 - The Health Layout is provided only as a record of the spread structure and for personal reflection. It is not a substitute for medical diagnosis, treatment, or other professional advice.
 
@@ -94,7 +95,7 @@ Mystagogus provides its 18-card signature layout. LXXXI provides four Chapter 10
 
 - Tarot: 78 Rider–Waite–Smith faces are local 420px derivatives from Wikimedia Commons' public-domain “Roses & Lilies” set. See [`assets/cards/SOURCE.md`](assets/cards/SOURCE.md).
 - Mystagogus: local JPEG display derivatives in `assets/cards/m/`, plus the shared `m-back.jpeg`. Source materials © Josephine McCarthy. See [`assets/cards/m/SOURCE.md`](assets/cards/m/SOURCE.md).
-- LXXXI — The Magician's Deck: 81 low-resolution WebP display derivatives and one card back are served from the versioned base `https://assets.luotianyi.fun/tarot-divination-site/lxxxi/v1`; they are not distributed in this source repository. Source art is attributed to Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland. See [`assets/cards/LXXXI_SOURCE.md`](assets/cards/LXXXI_SOURCE.md).
+- LXXXI — The Magician's Deck: visual assets are available only for the site's runtime presentation and are not distributed in this public source repository. Source art is attributed to Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland. See [`assets/cards/LXXXI_SOURCE.md`](assets/cards/LXXXI_SOURCE.md).
 
 For the complete rights boundaries and attributions, see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
