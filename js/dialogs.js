@@ -27,6 +27,9 @@
     current.overlay.setAttribute("aria-hidden", "true");
     document.body.classList.remove("confirm-open");
     resolve(Boolean(accepted));
+    root.dispatchEvent(new CustomEvent("quareia:dialogsettled", {
+      detail: { accepted: Boolean(accepted) }
+    }));
     if (previousFocus && typeof previousFocus.focus === "function") {
       previousFocus.focus({ preventScroll: true });
     }
