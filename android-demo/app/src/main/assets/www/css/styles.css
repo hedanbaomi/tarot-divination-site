@@ -406,7 +406,7 @@ body::after {
 .settings.collapsed .settings-chevron { transform: rotate(-90deg); }
 .settings-body {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   padding: 2px 16px 16px;
   animation: settingsIn 0.32s ease;
@@ -416,7 +416,7 @@ body::after {
   to { opacity: 1; transform: none; }
 }
 .settings.collapsed .settings-body { display: none; }
-.setting-group { display: flex; flex-direction: column; gap: 5px; }
+.setting-group { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
 .setting-group label {
   font-size: 0.72rem;
   color: rgba(216, 179, 106, 0.78);
@@ -449,8 +449,10 @@ body::after {
   display: none !important;
 }
 .themed-select-trigger {
+  min-width: 0;
   min-height: var(--tap);
   width: 100%;
+  max-width: 100%;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1856,6 +1858,9 @@ body.choice-open { overflow: hidden; }
   .header h1::after { margin-left: 9px; }
   .header .subtitle { letter-spacing: 1.5px; }
   .header::after { width: 200px; }
+  .settings-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .sky-moon {
     width: 60px;
     height: 60px;
