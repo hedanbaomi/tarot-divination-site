@@ -42,7 +42,9 @@ test("website uses the branded dialog for spread and history confirmations", fun
   assert.match(html, /<dialog class="confirm-overlay" id="confirmDialog"/);
   assert.match(html, /id="confirmCancelBtn"/);
   assert.match(html, /id="confirmProceedBtn"/);
-  assert.match(html, /src="js\/dialogs\.js"/);
+  assert.match(html, /src="js\/dialogs\.js\?v=20260727-dialog-meaning"/);
+  assert.match(html, /src="js\/app\.js\?v=20260727-dialog-meaning"/);
+  assert.match(html, /href="css\/styles\.css\?v=20260727-dialog-meaning"/);
 });
 
 test("revealed cards can flip between artwork and an in-place meaning panel", function () {
