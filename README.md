@@ -1,3 +1,5 @@
+[简体中文](./README.md) | [English](./README.en.md)
+
 # Quareia 占卜站点
 
 一个非官方、非商业的纯前端占卜网站：支持**塔罗牌**、**Mystagogus（M 牌）** 与 **LXXXI 魔法牌（奎瑞亚）** 三套牌组，并提供**简体中文 / English** 一键切换。左右滑动牌堆、轻点任意一张牌抽出，翻牌解读；塔罗支持正位/逆位模式、大小阿卡那筛选与第六章牌阵，M 牌与 LXXXI 魔法牌固定全正位（说明书未提供逆位含义）。为手机端优化，单手轻点即可完成占卜。
@@ -56,6 +58,8 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 
 ```text
 .
+├── README.md
+├── README.en.md
 ├── index.html
 ├── css/
 │   └── styles.css
@@ -64,6 +68,10 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 │   ├── i18n.js
 │   ├── i18n-data-en.js
 │   ├── spreads.js
+│   ├── history-records.js
+│   ├── history-store.js
+│   ├── history-ui.js
+│   ├── celestial-sky.js
 │   ├── tarot-data.js
 │   ├── mystagogus-data.js
 │   └── lxxxi-data.js
