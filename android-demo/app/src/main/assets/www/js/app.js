@@ -380,8 +380,7 @@
       el.deckCta.textContent = stacking
         ? t("app.overviewComplete")
         : t("app.spreadComplete", {
-            spread: localizedSpreadName(selectedSpread()),
-            origin: getSpreadOriginLabel(selectedSpread())
+            spread: localizedSpreadName(selectedSpread())
           });
     } else if (pile.length === 0) {
       el.deckCta.classList.add("empty");
@@ -802,7 +801,7 @@
 
     var activeSpread = selectedSpread();
     var stacking = isOverviewStacking();
-    el.spreadTitle.textContent = localizedSpreadName(activeSpread) + " · " + getSpreadOriginLabel(activeSpread);
+    el.spreadTitle.textContent = localizedSpreadName(activeSpread);
     el.spreadCount.textContent = spread.length + " / " + spreadTargetCount();
 
     if (stacking) {
@@ -1098,8 +1097,7 @@
       var cardCountLabel = deckType === "tarot" && spreadDefinition.id === "overview"
         ? t("app.cardsStackable", { count: spreadDefinition.positions.length })
         : t("app.cards", { count: spreadDefinition.positions.length });
-      option.textContent = localizedSpreadName(spreadDefinition) + " · " + getSpreadOriginLabel(spreadDefinition) +
-        " · " + cardCountLabel;
+      option.textContent = localizedSpreadName(spreadDefinition) + " · " + cardCountLabel;
       if (spreadDefinition.deck === "mystagogus") mGroup.appendChild(option);
       else if (spreadDefinition.deck === "lxxxi") lGroup.appendChild(option);
       else tGroup.appendChild(option);
@@ -1148,8 +1146,8 @@
     var countLabel = isOverviewStacking()
       ? t("app.cardsStacked")
       : t("app.cards", { count: spreadDefinition.positions.length });
-    el.spreadSettingSummary.textContent = getSpreadOriginLabel(spreadDefinition) + " · " +
-      countLabel + " · " + localized(spreadDefinition, "description") +
+    el.spreadSettingSummary.textContent = countLabel + " · " +
+      localized(spreadDefinition, "description") +
       (isOverviewStacking()
         ? t("app.stackedDefinition")
         : "");
