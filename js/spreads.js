@@ -18,10 +18,14 @@ function getDeckByArcanaFilter(filter, phase) {
 
 function getOtherPhaseLabel(filter, currentPhase) {
   if (filter === "major-then-minor") {
-    return currentPhase === "major" ? "切换到小阿卡那" : "切回大阿卡那";
+    return currentPhase === "major"
+      ? localizedMessage("arcana.switchToMinor", "切换到小阿卡那")
+      : localizedMessage("arcana.switchBackMajor", "切回大阿卡那");
   }
   if (filter === "minor-then-major") {
-    return currentPhase === "minor" ? "切换到大阿卡那" : "切回小阿卡那";
+    return currentPhase === "minor"
+      ? localizedMessage("arcana.switchToMajor", "切换到大阿卡那")
+      : localizedMessage("arcana.switchBackMinor", "切回小阿卡那");
   }
   return "";
 }
@@ -32,12 +36,21 @@ function isPhaseFilter(filter) {
 
 function getPhaseArcanaLabel(filter, phase) {
   if (filter === "major-then-minor") {
-    return phase === "major" ? "大阿卡那" : "小阿卡那";
+    return phase === "major"
+      ? localizedMessage("arcana.major", "大阿卡那")
+      : localizedMessage("arcana.minor", "小阿卡那");
   }
   if (filter === "minor-then-major") {
-    return phase === "minor" ? "小阿卡那" : "大阿卡那";
+    return phase === "minor"
+      ? localizedMessage("arcana.minor", "小阿卡那")
+      : localizedMessage("arcana.major", "大阿卡那");
   }
   return "";
+}
+
+function localizedMessage(key, fallback, values) {
+  if (globalThis.DivinationI18n) return globalThis.DivinationI18n.t(key, values);
+  return fallback;
 }
 
 // Chapter 6 spread catalogue. Coordinates use a compact CSS grid so the same
@@ -60,6 +73,9 @@ function formatPositionName(position, style) {
   if (!position) return "";
   var zh = position.name || "";
   var en = position.nameEn || "";
+  if (globalThis.DivinationI18n) {
+    return globalThis.DivinationI18n.isEnglish() ? (en || zh) : (zh || en);
+  }
   if (!en) return zh;
   if (style === "slash") return zh + " / " + en;
   if (style === "paren") return zh + "（" + en + "）";
@@ -611,9 +627,13 @@ function getLxxxiSpread(id) {
 
 /** Label spread origin for UI: 出自 M 牌 / 出自 LXXXI 牌 / 出自塔罗牌 */
 function getSpreadOriginLabel(spread) {
-  if (spread && spread.deck === "mystagogus") return "出自 M 牌";
-  if (spread && spread.deck === "lxxxi") return "出自 LXXXI 牌";
-  return "出自塔罗牌";
+  if (spread && spread.deck === "mystagogus") {
+    return localizedMessage("spread.origin.mystagogus", "出自 M 牌");
+  }
+  if (spread && spread.deck === "lxxxi") {
+    return localizedMessage("spread.origin.lxxxi", "出自 LXXXI 牌");
+  }
+  return localizedMessage("spread.origin.tarot", "出自塔罗牌");
 }
 
 function getSpreadsForDeck(deckType) {

@@ -5,11 +5,62 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  var DECK_LABELS = {
-    tarot: "Tarot",
-    mystagogus: "Mystagogus",
-    lxxxi: "LXXXI"
-  };
+  var fallbackI18n = null;
+  if (typeof require === "function") {
+    fallbackI18n = require("./i18n.js");
+  }
+
+  function i18n() {
+    return globalThis.DivinationI18n || fallbackI18n;
+  }
+
+  function t(key, values) {
+    var api = i18n();
+    return api ? api.t(key, values) : key;
+  }
+
+  function localized(value, field) {
+    if (!value) return "";
+    var api = i18n();
+    return api
+      ? api.field(value, field)
+      : value[field];
+  }
+
+  function currentSpread(record) {
+    if (typeof getSpreadById !== "function") return null;
+    var spread = getSpreadById(record.deckType, record.spreadId);
+    return spread && spread.id === record.spreadId ? spread : null;
+  }
+
+  function currentDeck(record) {
+    if (record.deckType === "tarot" && typeof tarotDeckFull !== "undefined") return tarotDeckFull;
+    if (record.deckType === "mystagogus" && typeof mystagogusDeckFull !== "undefined") return mystagogusDeckFull;
+    if (record.deckType === "lxxxi" && typeof lxxxiDeckFull !== "undefined") return lxxxiDeckFull;
+    return [];
+  }
+
+  function displaySpreadName(record) {
+    var spread = currentSpread(record);
+    return localized(spread, "name") || record.spreadName;
+  }
+
+  function displayPositionName(record, card) {
+    var spread = currentSpread(record);
+    var position = spread && spread.positions && spread.positions[card.slotIndex];
+    return localized(position, "name") || card.positionName;
+  }
+
+  function displayCardName(record, card) {
+    var sourceCard = currentDeck(record).filter(function (item) {
+      return item.id === card.cardId;
+    })[0];
+    return localized(sourceCard, "name") || card.cardName;
+  }
+
+  function displayDeckName(record) {
+    return t("deck.name." + record.deckType) || record.deckName;
+  }
 
   function byId(id) {
     return document.getElementById(id);
@@ -18,13 +69,16 @@
   function formatTime(value) {
     var date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat("zh-CN", {
+    return new Intl.DateTimeFormat(
+      i18n() && i18n().isEnglish() ? "en-US" : "zh-CN",
+      {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit"
-    }).format(date);
+      }
+    ).format(date);
   }
 
   function button(text, className) {
@@ -66,6 +120,7 @@
     var storeReady = null;
     var enqueueSave = createSerialTaskQueue();
     var selectedRecordId = null;
+    var selectedRecord = null;
     var restoreFocusTo = null;
 
     var elements = {
@@ -88,10 +143,23 @@
       clear: byId("historyClearBtn")
     };
 
-    function setStatus(target, message, isError) {
+    function setStatus(target, message, isError, renderMessage) {
       if (!target) return;
       target.textContent = message;
       target.classList.toggle("is-error", Boolean(isError));
+      target._historyStatusRender = typeof renderMessage === "function" ? renderMessage : null;
+    }
+
+    function setTranslatedStatus(target, key, values, isError) {
+      var renderMessage = function () {
+        return t(key, values);
+      };
+      setStatus(target, renderMessage(), isError, renderMessage);
+    }
+
+    function refreshStatus(target) {
+      if (!target || typeof target._historyStatusRender !== "function") return;
+      target.textContent = target._historyStatusRender();
     }
 
     function setUnavailable() {
@@ -103,12 +171,17 @@
       [elements.exportButton, elements.clear, elements.filter].forEach(function (element) {
         if (element) element.disabled = true;
       });
-      setStatus(elements.saveStatus, readingComplete ? "当前浏览器无法保存历史；占卜仍可正常使用。" : "", true);
-      setStatus(elements.actionStatus, "当前浏览器无法访问 IndexedDB，历史不可用；占卜功能不受影响。", true);
+      if (readingComplete) {
+        setTranslatedStatus(elements.saveStatus, "history.unavailableSave", null, true);
+      } else {
+        setStatus(elements.saveStatus, "", true);
+      }
+      setTranslatedStatus(elements.actionStatus, "history.unavailable", null, true);
     }
 
     function showListView() {
       selectedRecordId = null;
+      selectedRecord = null;
       if (elements.list) elements.list.hidden = false;
       if (elements.empty) elements.empty.hidden = true;
       if (elements.detail) elements.detail.hidden = true;
@@ -124,16 +197,19 @@
         var item = document.createElement("li");
         item.className = "history-list-item";
         var openButton = button("", "history-record-open");
-        openButton.setAttribute("aria-label", "查看 " + record.spreadName + "，" + formatTime(record.createdAt));
+        openButton.setAttribute("aria-label", t("history.viewAria", {
+          spread: displaySpreadName(record),
+          time: formatTime(record.createdAt)
+        }));
 
         var heading = document.createElement("span");
         heading.className = "history-record-title";
-        heading.textContent = record.spreadName;
+        heading.textContent = displaySpreadName(record);
         var meta = document.createElement("span");
         meta.className = "history-record-meta";
         meta.textContent = formatTime(record.createdAt) + " · " +
-          (DECK_LABELS[record.deckType] || record.deckName) + " · " +
-          record.cards.length + " 张";
+          displayDeckName(record) + " · " +
+          t("history.cards", { count: record.cards.length });
         openButton.appendChild(heading);
         openButton.appendChild(meta);
         openButton.addEventListener("click", function () {
@@ -148,12 +224,14 @@
       var item = document.createElement("li");
       item.className = "history-detail-card";
       var name = document.createElement("h4");
-      name.textContent = card.positionNumber + ". " + card.positionName;
+      name.textContent = card.positionNumber + ". " + displayPositionName(record, card);
       var cardName = document.createElement("p");
-      var orientation = card.orientation === "reversed" ? "逆位" : "正位";
-      var layer = card.layer === "major" ? " · 大牌层（因）" :
-        card.layer === "minor" ? " · 小牌层（果）" : "";
-      cardName.textContent = card.cardName + "（" + card.cardNumber + "） · " + orientation + layer;
+      var orientation = card.orientation === "reversed"
+        ? t("history.orientation.reversed")
+        : t("history.orientation.upright");
+      var layer = card.layer === "major" ? t("history.layer.major") :
+        card.layer === "minor" ? t("history.layer.minor") : "";
+      cardName.textContent = displayCardName(record, card) + " (" + card.cardNumber + ") · " + orientation + layer;
       item.appendChild(name);
       item.appendChild(cardName);
       return item;
@@ -161,23 +239,24 @@
 
     function showDetail(record) {
       selectedRecordId = record.id;
+      selectedRecord = record;
       elements.list.hidden = true;
       elements.empty.hidden = true;
       elements.detail.hidden = false;
       elements.back.hidden = false;
       elements.deleteButton.hidden = false;
-      elements.detailTitle.textContent = record.spreadName;
+      elements.detailTitle.textContent = displaySpreadName(record);
       elements.detailBody.replaceChildren();
 
       var definitions = document.createElement("dl");
       definitions.className = "history-definitions";
-      definitions.appendChild(createDefinition("时间", formatTime(record.createdAt)));
-      definitions.appendChild(createDefinition("牌组", record.deckName));
-      definitions.appendChild(createDefinition("牌数", String(record.cards.length)));
+      definitions.appendChild(createDefinition(t("history.field.time"), formatTime(record.createdAt)));
+      definitions.appendChild(createDefinition(t("history.field.deck"), displayDeckName(record)));
+      definitions.appendChild(createDefinition(t("history.field.cards"), String(record.cards.length)));
       elements.detailBody.appendChild(definitions);
 
       var cardsHeading = document.createElement("h3");
-      cardsHeading.textContent = "完整牌位";
+      cardsHeading.textContent = t("history.completePositions");
       var cards = document.createElement("ol");
       cards.className = "history-detail-cards";
       record.cards.forEach(function (card) {
@@ -229,26 +308,26 @@
       try {
         record = createSnapshot();
       } catch (_error) {
-        setStatus(elements.saveStatus, "自动保存失败；占卜结果仍保留在当前页面。", true);
+        setTranslatedStatus(elements.saveStatus, "history.saveSnapshotError", null, true);
         return;
       }
-      setStatus(elements.saveStatus, "正在自动保存占卜历史…", false);
+      setTranslatedStatus(elements.saveStatus, "history.saving", null, false);
       return enqueueSave(async function () {
-        setStatus(elements.saveStatus, "正在自动保存占卜历史…", false);
+        setTranslatedStatus(elements.saveStatus, "history.saving", null, false);
         var ready = available || await storeReady;
         if (!ready) {
-          setStatus(elements.saveStatus, "自动保存失败；当前浏览器无法使用本地历史。", true);
+          setTranslatedStatus(elements.saveStatus, "history.saveUnavailable", null, true);
           return;
         }
         try {
           var result = await store.saveRecord(record);
           if (result.duplicate) {
-            setStatus(elements.saveStatus, "这次完整占卜刚刚已经自动保存，无需重复保存。", false);
+            setTranslatedStatus(elements.saveStatus, "history.duplicate", null, false);
           } else {
-            setStatus(elements.saveStatus, "开牌完成，已自动保存到当前浏览器的占卜历史。", false);
+            setTranslatedStatus(elements.saveStatus, "history.saved", null, false);
           }
         } catch (_error) {
-          setStatus(elements.saveStatus, "自动保存失败；占卜结果仍保留在当前页面。", true);
+          setTranslatedStatus(elements.saveStatus, "history.saveSnapshotError", null, true);
         }
       });
     }
@@ -257,24 +336,24 @@
       if (!available || !selectedRecordId) return;
       try {
         await store.deleteRecord(selectedRecordId);
-        setStatus(elements.actionStatus, "已删除这条历史记录。", false);
+        setTranslatedStatus(elements.actionStatus, "history.deleted", null, false);
         await refreshList();
         elements.filter.focus();
       } catch (_error) {
-        setStatus(elements.actionStatus, "删除失败，请稍后再试。", true);
+        setTranslatedStatus(elements.actionStatus, "history.deleteFailed", null, true);
       }
     }
 
     async function clearAll() {
       if (!available) return;
-      if (!globalThis.confirm("确定清空当前浏览器中的全部占卜历史吗？此操作无法撤销。")) return;
+      if (!globalThis.confirm(t("history.clearConfirm"))) return;
       try {
         await store.clearRecords();
-        setStatus(elements.actionStatus, "全部历史记录已清空。", false);
+        setTranslatedStatus(elements.actionStatus, "history.cleared", null, false);
         await refreshList();
         elements.clear.focus();
       } catch (_error) {
-        setStatus(elements.actionStatus, "清空失败，请稍后再试。", true);
+        setTranslatedStatus(elements.actionStatus, "history.clearFailed", null, true);
       }
     }
 
@@ -292,9 +371,9 @@
         link.click();
         link.remove();
         setTimeout(function () { URL.revokeObjectURL(url); }, 0);
-        setStatus(elements.actionStatus, "历史已导出为 JSON 备份。", false);
+        setTranslatedStatus(elements.actionStatus, "history.exported", null, false);
       } catch (_error) {
-        setStatus(elements.actionStatus, "导出失败，请稍后再试。", true);
+        setTranslatedStatus(elements.actionStatus, "history.exportFailed", null, true);
       }
     }
 
@@ -306,19 +385,32 @@
         if (file.size > recordsApi.MAX_IMPORT_BYTES) throw new Error("too large");
         var envelope = recordsApi.parseImportJson(await file.text());
         var result = await store.importRecords(envelope.records);
-        var message = "已导入 " + result.importedCount + " 条历史记录。";
-        if (result.remappedCount) message += " " + result.remappedCount + " 条重复 ID 已安全重编号。";
-        setStatus(elements.actionStatus, message, false);
+        var renderMessage = function () {
+          var message = t("history.imported", { count: result.importedCount });
+          if (result.remappedCount) message += t("history.remapped", { count: result.remappedCount });
+          return message;
+        };
+        setStatus(elements.actionStatus, renderMessage(), false, renderMessage);
         await refreshList();
       } catch (_error) {
-        setStatus(elements.actionStatus, "导入失败：文件格式不正确或内容已损坏。", true);
+        setTranslatedStatus(elements.actionStatus, "history.importFailed", null, true);
       }
     }
 
     function updateSaveAvailability(complete) {
       readingComplete = Boolean(complete);
       if (!readingComplete) setStatus(elements.saveStatus, "", false);
-      else if (!available) setStatus(elements.saveStatus, "当前浏览器无法保存历史；占卜仍可正常使用。", true);
+      else if (!available) setTranslatedStatus(elements.saveStatus, "history.unavailableSave", null, true);
+    }
+
+    function refreshLanguage() {
+      refreshStatus(elements.saveStatus);
+      refreshStatus(elements.actionStatus);
+      if (selectedRecord) {
+        showDetail(selectedRecord);
+        return Promise.resolve();
+      }
+      return refreshList();
     }
 
     elements.open.addEventListener("click", openDialog);
@@ -378,7 +470,8 @@
     return {
       updateSaveAvailability: updateSaveAvailability,
       saveCompletedReading: saveCurrentReading,
-      refresh: refreshList
+      refresh: refreshList,
+      refreshLanguage: refreshLanguage
     };
   }
 

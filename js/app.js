@@ -48,6 +48,33 @@
     el.resultsList = document.getElementById("resultsList");
   }
 
+  function t(key, values) {
+    return globalThis.DivinationI18n
+      ? globalThis.DivinationI18n.t(key, values)
+      : key;
+  }
+
+  function localized(value, field) {
+    if (!value) return "";
+    return globalThis.DivinationI18n
+      ? globalThis.DivinationI18n.field(value, field)
+      : value[field];
+  }
+
+  function localizedCardName(card) { return localized(card, "name"); }
+  function localizedSpreadName(spreadDefinition) { return localized(spreadDefinition, "name"); }
+  function localizedPositionMeaning(position) { return localized(position, "meaning"); }
+  function localizedRuleLabel(rule) { return localized(rule, "label"); }
+  function localizedCardSource(card) {
+    if (globalThis.DivinationI18n && globalThis.DivinationI18n.isEnglish()) {
+      if (card && card.sourceEn) return card.sourceEn;
+      if (card && card.deck === "mystagogus") return t("source.mystagogus");
+      if (card && card.deck === "lxxxi") return t("source.lxxxi");
+      return t("source.tarot");
+    }
+    return (card && card.source) || quareiaSource;
+  }
+
   // ---------- Deck helpers ----------
   function shuffle(deck) {
     var r = deck.slice();
@@ -152,10 +179,12 @@
   }
 
   function updateDeckSpreadAriaLabel(drawRule) {
-    var label = "塔罗牌堆，左右滑动浏览，轻点抽牌";
-    if (deckType === "mystagogus") label = "Mystagogus 牌堆，左右滑动浏览，轻点抽牌";
-    else if (deckType === "lxxxi") label = "LXXXI 魔法牌堆，左右滑动浏览，轻点抽牌";
-    else if (drawRule) label += "；当前" + drawRule.label;
+    var label = t("app.deckAria.tarot");
+    if (deckType === "mystagogus") label = t("app.deckAria.mystagogus");
+    else if (deckType === "lxxxi") label = t("app.deckAria.lxxxi");
+    else if (drawRule) {
+      label = t("app.deckAriaRule", { label: label, rule: localizedRuleLabel(drawRule) });
+    }
     el.deckSpread.setAttribute("aria-label", label);
   }
 
@@ -171,8 +200,8 @@
     }
     if (el.overviewMethodSummary) {
       el.overviewMethodSummary.textContent = isOverviewStacking()
-        ? "先铺 13 张大阿卡那作为原因与力量，再将 13 张小阿卡那叠在对应牌位作为具体表现。"
-        : "单牌法在十三个牌位各抽一张；需要更多信息时可切换为分牌叠放。";
+        ? t("app.overviewStackedSummary")
+        : t("app.overviewSingleSummary");
     }
     // M 牌与 LXXXI 魔法牌固定全正位（说明书未提供逆位含义）：
     // 禁用「正逆位混合」选项，并把已选中的 mixed 回退为全正位。
@@ -219,7 +248,9 @@
     renderResults();
   }
 
-  function getOrientationLabel(o) { return o === "upright" ? "正位" : "逆位"; }
+  function getOrientationLabel(o) {
+    return o === "upright" ? t("orientation.upright") : t("orientation.reversed");
+  }
 
   var MYSTAGOGUS_BACK = "assets/cards/m/m-back.jpeg";
   var LXXXI_BACK = LXXXI_ASSET_BASE_URL + "/backs/lxxxi-back.webp";
@@ -238,7 +269,7 @@
     var img = document.createElement("img");
     img.className = className + (orientation === "reversed" ? " reversed" : "");
     img.src = card.image;
-    img.alt = card.name;
+    img.alt = localizedCardName(card);
     img.loading = "lazy";
     img.decoding = "async";
     return img;
@@ -258,16 +289,11 @@
   function appendPositionLabels(parent, position, baseClass) {
     var wrap = document.createElement("span");
     wrap.className = baseClass;
-    var zh = document.createElement("span");
-    zh.className = baseClass + "-zh";
-    zh.textContent = position.name;
-    wrap.appendChild(zh);
-    if (position.nameEn) {
-      var en = document.createElement("span");
-      en.className = baseClass + "-en";
-      en.textContent = position.nameEn;
-      wrap.appendChild(en);
-    }
+    var label = document.createElement("span");
+    label.className = baseClass + "-" +
+      (globalThis.DivinationI18n && globalThis.DivinationI18n.isEnglish() ? "en" : "zh");
+    label.textContent = formatPositionName(position);
+    wrap.appendChild(label);
     parent.appendChild(wrap);
     return wrap;
   }
@@ -286,8 +312,8 @@
     if (pile.length === 0) {
       el.deckSpread.classList.add("empty");
       el.deckSpread.textContent = stacking || isPhaseFilter(arcanaFilter)
-        ? "这组牌已抽完，可切换牌组或重新洗牌"
-        : "牌已抽完，按「洗牌」重新开始";
+        ? t("app.deckEmptyPhase")
+        : t("app.deckEmpty");
     } else {
       el.deckSpread.classList.remove("empty");
       pile.forEach(function (card, index) {
@@ -301,13 +327,15 @@
           (spreadIsFull ? " disabled" : "");
         var nextPosition = spreadIsFull ? null : selectedSpread().positions[nextOpenSlotIndex()];
         var selectionLabel = stacking
-          ? (currentPhase === "major" ? "大阿卡那底牌" : "小阿卡那叠牌")
-          : drawRule ? "，" + drawRule.label : "";
+          ? (currentPhase === "major" ? t("app.layerMajorBase") : t("app.layerMinorTop"))
+          : drawRule ? " · " + localizedRuleLabel(drawRule) : "";
         cardEl.setAttribute("aria-label", spreadIsFull
-          ? "牌阵已完成"
-          : "第 " + (index + 1) + " 张，轻点抽到" +
-            formatPositionName(nextPosition, "slash") +
-            (stacking ? "的" + selectionLabel : selectionLabel));
+          ? t("app.deckComplete")
+          : t("app.drawAria", {
+              index: index + 1,
+              position: formatPositionName(nextPosition, "slash"),
+              selection: stacking ? " · " + selectionLabel : selectionLabel
+            }));
         if (isNonTarotDeck()) {
           cardEl.appendChild(createBackArtImage("deck-card-back-img"));
         }
@@ -323,39 +351,50 @@
       el.deckSpread.scrollLeft = prevScroll;
     }
 
-    el.deckRemaining.textContent = (stacking
-      ? (currentPhase === "major" ? "大阿卡那 · " : "小阿卡那 · ")
-      : drawRule ? drawRule.label + " · " : "") + "剩 " + pile.length + " 张";
+    var remainingPrefix = stacking
+      ? (currentPhase === "major" ? t("arcana.major") : t("arcana.minor"))
+      : drawRule ? localizedRuleLabel(drawRule) : "";
+    el.deckRemaining.textContent = remainingPrefix
+      ? t("app.remainingWithPrefix", { prefix: remainingPrefix, count: pile.length })
+      : t("app.remaining", { count: pile.length });
 
     if (spreadIsFull) {
       el.deckCta.classList.add("complete");
       el.deckCta.classList.remove("empty");
       el.deckCta.textContent = stacking
-        ? "概览布局 · 分牌叠放已完成（13 组 / 26 张），可以逐组开牌解读"
-        : selectedSpread().name + " · " +
-          getSpreadOriginLabel(selectedSpread()) + " 已完成，可以开牌解读";
+        ? t("app.overviewComplete")
+        : t("app.spreadComplete", {
+            spread: localizedSpreadName(selectedSpread()),
+            origin: getSpreadOriginLabel(selectedSpread())
+          });
     } else if (pile.length === 0) {
       el.deckCta.classList.add("empty");
       el.deckCta.classList.remove("complete");
-      el.deckCta.textContent = "牌堆已空，翻开你的牌，或重新洗牌再来一次";
+      el.deckCta.textContent = t("app.pileEmptyCta");
     } else {
       el.deckCta.classList.remove("empty");
       el.deckCta.classList.remove("complete");
       var nextPosition = selectedSpread().positions[nextOpenSlotIndex()];
       if (stacking) {
         var layerInstruction = currentPhase === "major"
-          ? "大阿卡那底牌 · 原因与力量"
-          : "小阿卡那叠牌 · 具体表现";
-        el.deckCta.textContent = "下一张：位置 " + nextPosition.number + " · " +
-          formatPositionName(nextPosition, "slash") + " · " + layerInstruction +
-          "（轻点任意一张牌抽出）";
+          ? t("app.majorInstruction")
+          : t("app.minorInstruction");
+        el.deckCta.textContent = t("app.nextStacking", {
+          number: nextPosition.number,
+          position: formatPositionName(nextPosition, "slash"),
+          instruction: layerInstruction
+        });
       } else if (drawRule) {
-        el.deckCta.textContent = "下一张：位置 " + nextPosition.number + " · " +
-          formatPositionName(nextPosition, "slash") + " · " + drawRule.label +
-          "（从当前合法牌池中任选一张）";
+        el.deckCta.textContent = t("app.nextRule", {
+          number: nextPosition.number,
+          position: formatPositionName(nextPosition, "slash"),
+          rule: localizedRuleLabel(drawRule)
+        });
       } else {
-        el.deckCta.textContent = "下一张：位置 " + nextPosition.number + " · " +
-          formatPositionName(nextPosition, "slash") + "（轻点任意一张牌抽出）";
+        el.deckCta.textContent = t("app.nextCard", {
+          number: nextPosition.number,
+          position: formatPositionName(nextPosition, "slash")
+        });
       }
     }
 
@@ -373,8 +412,8 @@
     var position = selectedSpread().positions[entry.slotIndex];
     var stacking = isOverviewStacking() && Boolean(entry.layer);
     var layerName = entry.layer === "major"
-      ? "大阿卡那底牌"
-      : "小阿卡那叠牌";
+      ? t("app.layerMajorBase")
+      : t("app.layerMinorTop");
 
     var cardEl = document.createElement("div");
     cardEl.className = "spread-card" +
@@ -396,8 +435,11 @@
     flipButton.type = "button";
     flipButton.setAttribute(
       "aria-label",
-      "位置 " + position.number + "，" + formatPositionName(position, "slash") +
-        (stacking ? "，" + layerName : "") + "，轻点翻开这张牌"
+      t("app.flipAria", {
+        number: position.number,
+        position: formatPositionName(position, "slash"),
+        layer: stacking ? " · " + layerName : ""
+      })
     );
 
     var inner = document.createElement("div");
@@ -417,13 +459,15 @@
     if (position.drawRule) {
       var drawRuleBadge = document.createElement("span");
       drawRuleBadge.className = "draw-rule-badge";
-      drawRuleBadge.textContent = position.drawRule.label;
+      drawRuleBadge.textContent = localizedRuleLabel(position.drawRule);
       back.appendChild(drawRuleBadge);
     }
     if (stacking) {
       var layerBadge = document.createElement("span");
       layerBadge.className = "stack-layer-badge";
-      layerBadge.textContent = entry.layer === "major" ? "大牌 · 因" : "小牌 · 果";
+      layerBadge.textContent = entry.layer === "major"
+        ? t("app.layerMajorCause")
+        : t("app.layerMinorEffect");
       back.appendChild(layerBadge);
     }
     appendPositionLabels(back, position, "pos-name");
@@ -442,12 +486,14 @@
     if (stacking) {
       var captionLayer = document.createElement("span");
       captionLayer.className = "stack-layer-caption";
-      captionLayer.textContent = entry.layer === "major" ? "大牌底牌 · 因" : "小牌叠牌 · 果";
+      captionLayer.textContent = entry.layer === "major"
+        ? t("app.layerMajorCaption")
+        : t("app.layerMinorCaption");
       caption.appendChild(captionLayer);
     }
     var nameEl = document.createElement("span");
     nameEl.className = "name";
-    nameEl.textContent = card.name;
+    nameEl.textContent = localizedCardName(card);
     var oriEl = document.createElement("span");
     oriEl.className = "ori " + entry.orientation;
     oriEl.textContent = getOrientationLabel(entry.orientation);
@@ -464,8 +510,9 @@
     removeBtn.className = "remove-btn";
     removeBtn.type = "button";
     removeBtn.textContent = "×";
-    removeBtn.setAttribute("aria-label", "移除位置 " + position.number +
-      (stacking ? "的" + layerName : "的这张牌"));
+    removeBtn.setAttribute("aria-label", stacking
+      ? t("app.removeLayerAria", { number: position.number, layer: layerName })
+      : t("app.removeCardAria", { number: position.number }));
     removeBtn.addEventListener("click", function (ev) {
       ev.stopPropagation();
       removeEntry(entry, ev.detail === 0);
@@ -513,14 +560,16 @@
       if (stacking) {
         var slotLayer = document.createElement("span");
         slotLayer.className = "stack-slot-layer";
-        slotLayer.textContent = currentPhase === "major" ? "大牌底牌" : "小牌叠牌";
+        slotLayer.textContent = currentPhase === "major"
+          ? t("app.stackSlotMajor")
+          : t("app.stackSlotMinor");
         slot.appendChild(slotLayer);
       }
       appendPositionLabels(slot, position, "slot-name");
       if (position.drawRule) {
         var slotDrawRule = document.createElement("span");
         slotDrawRule.className = "slot-draw-rule";
-        slotDrawRule.textContent = position.drawRule.label;
+        slotDrawRule.textContent = localizedRuleLabel(position.drawRule);
         slot.appendChild(slotDrawRule);
       }
       el.spreadGrid.appendChild(slot);
@@ -623,11 +672,15 @@
       if (flipButton) {
         flipButton.setAttribute(
           "aria-label",
-          "位置 " + position.number + " · " + formatPositionName(position, "slash") +
-            (isOverviewStacking()
-              ? " · " + (entry.layer === "major" ? "大阿卡那底牌" : "小阿卡那叠牌")
-              : "") +
-            " · " + entry.card.name + " · " + getOrientationLabel(entry.orientation)
+          t("app.revealedAria", {
+            number: position.number,
+            position: formatPositionName(position, "slash"),
+            layer: isOverviewStacking()
+              ? " · " + (entry.layer === "major" ? t("app.layerMajorBase") : t("app.layerMinorTop"))
+              : "",
+            card: localizedCardName(entry.card),
+            orientation: getOrientationLabel(entry.orientation)
+          })
         );
       }
     }
@@ -689,39 +742,41 @@
 
     var activeSpread = selectedSpread();
     var stacking = isOverviewStacking();
-    el.spreadTitle.textContent = activeSpread.name + " · " + getSpreadOriginLabel(activeSpread);
+    el.spreadTitle.textContent = localizedSpreadName(activeSpread) + " · " + getSpreadOriginLabel(activeSpread);
     el.spreadCount.textContent = spread.length + " / " + spreadTargetCount();
 
     if (stacking) {
       el.phaseLabel.style.display = "inline-block";
       var stackingPhase = overviewStackingPhase();
       el.phaseLabel.textContent = stackingPhase === "complete"
-        ? "分牌叠放 · 13 组已完成"
+        ? t("app.stackPhaseComplete")
         : currentPhase === "major"
-          ? "分牌叠放 · 第 1 层：大牌（因）"
-          : "分牌叠放 · 第 2 层：小牌（果）";
+          ? t("app.stackPhaseMajor")
+          : t("app.stackPhaseMinor");
     } else if (hasPositionDrawRules()) {
       el.phaseLabel.style.display = "inline-block";
       var nextRule = currentPositionDrawRule();
       el.phaseLabel.textContent = nextRule
-        ? "当前牌位：" + nextRule.label
-        : "四季牌阵 · 五个限定牌位已完成";
+        ? t("app.currentRule", { rule: localizedRuleLabel(nextRule) })
+        : t("app.fourSeasonsComplete");
     } else if (deckType === "tarot" && isPhaseFilter(arcanaFilter)) {
       el.phaseLabel.style.display = "inline-block";
-      el.phaseLabel.textContent = "当前：" + getPhaseArcanaLabel(arcanaFilter, currentPhase);
+      el.phaseLabel.textContent = t("app.current", {
+        value: getPhaseArcanaLabel(arcanaFilter, currentPhase)
+      });
     } else {
       el.phaseLabel.style.display = "none";
     }
 
     var allRevealed = spread.every(function (e) { return e.revealed; });
-    el.revealBtn.textContent = allRevealed ? "已全部翻开" : "开牌解读";
+    el.revealBtn.textContent = allRevealed ? t("app.revealedAll") : t("spread.reveal");
     el.revealBtn.disabled = allRevealed;
     el.spreadHint.style.display = allRevealed ? "none" : "block";
     el.spreadHint.textContent = stacking
-      ? "同一牌位的大牌与小牌需一起解读：大牌是背后的原因与力量，小牌是这种力量的具体表现。"
+      ? t("app.stackHint")
       : hasPositionDrawRules()
-        ? "每个牌位只会展示符合限制的牌背供你选择；轻点牌可单独翻开，或按「开牌解读」全部翻开。"
-        : "轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开。";
+        ? t("app.ruleHint")
+        : t("app.defaultHint");
     if (historyUiController) historyUiController.updateSaveAvailability(isReadingComplete());
   }
 
@@ -729,8 +784,12 @@
     var card = entry.card;
     var isUpright = entry.orientation === "upright";
     var showReversed = mode === "mixed" && !isUpright;
-    var keywords = showReversed ? card.reversedKeywords : card.uprightKeywords;
-    var meaning = showReversed ? card.reversedMeaning : card.uprightMeaning;
+    var keywords = showReversed
+      ? localized(card, "reversedKeywords")
+      : localized(card, "uprightKeywords");
+    var meaning = showReversed
+      ? localized(card, "reversedMeaning")
+      : localized(card, "uprightMeaning");
     var resultCard = document.createElement("div");
     resultCard.className = "result-card" + (layer ? " stack-layer-" + layer : "");
 
@@ -747,12 +806,15 @@
     var posEl = document.createElement("span");
     posEl.className = "result-pos";
     posEl.textContent = layer
-      ? layer === "major" ? "大牌底牌（因）" : "小牌叠牌（果）"
-      : "位置 " + position.number + " · " + formatPositionName(position, "slash");
+      ? layer === "major" ? t("app.resultMajor") : t("app.resultMinor")
+      : t("app.position", {
+          number: position.number,
+          position: formatPositionName(position, "slash")
+        });
 
     var nameEl = document.createElement("span");
     nameEl.className = "result-name";
-    nameEl.textContent = card.name;
+    nameEl.textContent = localizedCardName(card);
 
     var orientEl = document.createElement("span");
     orientEl.className = "result-orientation " + entry.orientation;
@@ -765,7 +827,10 @@
     if (card.suit) {
       var suitEl = document.createElement("span");
       suitEl.className = "result-suit";
-      suitEl.textContent = card.suit + " · " + card.element + (card.direction ? " · " + card.direction : "");
+      var suit = localized(card, "suit");
+      var element = localized(card, "element");
+      var direction = localized(card, "direction");
+      suitEl.textContent = suit + " · " + element + (direction ? " · " + direction : "");
       header.appendChild(suitEl);
     } else if (card.deck === "mystagogus" && card.nameEn) {
       var enEl = document.createElement("span");
@@ -794,13 +859,15 @@
 
     var sourceEl = document.createElement("div");
     sourceEl.className = "result-source";
-    sourceEl.textContent = card.source || quareiaSource;
+    sourceEl.textContent = localizedCardSource(card);
 
     resultCard.appendChild(header);
     if (!layer) {
       var positionMeaningEl = document.createElement("div");
       positionMeaningEl.className = "result-position-meaning";
-      positionMeaningEl.textContent = "牌位：" + position.meaning;
+      positionMeaningEl.textContent = t("app.positionMeaning", {
+        meaning: localizedPositionMeaning(position)
+      });
       resultCard.appendChild(positionMeaningEl);
     }
     resultCard.appendChild(keywordsEl);
@@ -824,15 +891,20 @@
 
       var title = document.createElement("h3");
       title.id = "result-pair-title-" + slotIndex;
-      title.textContent = "位置 " + position.number + " · " + formatPositionName(position, "slash");
+      title.textContent = t("app.position", {
+        number: position.number,
+        position: formatPositionName(position, "slash")
+      });
 
       var positionMeaning = document.createElement("p");
       positionMeaning.className = "result-position-meaning";
-      positionMeaning.textContent = "牌位：" + position.meaning;
+      positionMeaning.textContent = t("app.positionMeaning", {
+        meaning: localizedPositionMeaning(position)
+      });
 
       var pairHint = document.createElement("p");
       pairHint.className = "result-pair-hint";
-      pairHint.textContent = "大牌揭示背后的原因与力量，小牌说明这种力量将如何具体表现；请将两张牌作为一组解读。";
+      pairHint.textContent = t("app.pairHint");
 
       var pairGrid = document.createElement("div");
       pairGrid.className = "result-pair-grid";
@@ -844,8 +916,8 @@
         var pending = document.createElement("div");
         pending.className = "result-pair-pending stack-layer-" + layer;
         pending.textContent = layer === "major"
-          ? "大牌底牌（因）尚未翻开"
-          : "小牌叠牌（果）尚未翻开";
+          ? t("app.majorPending")
+          : t("app.minorPending");
         pairGrid.appendChild(pending);
       });
 
@@ -901,7 +973,7 @@
       el.modeSelect.value = mode;
       return;
     }
-    if (!confirmIfSpread("切换模式会清空当前牌阵并重新洗牌，是否继续？")) {
+    if (!confirmIfSpread(t("confirm.mode"))) {
       el.modeSelect.value = mode;
       return;
     }
@@ -913,7 +985,7 @@
     if (deckType !== "tarot") return;
     var newFilter = el.arcanaFilter.value;
     if (newFilter === arcanaFilter) return;
-    if (!confirmIfSpread("切换筛选会清空当前牌阵并重新洗牌，是否继续？")) {
+    if (!confirmIfSpread(t("confirm.arcana"))) {
       el.arcanaFilter.value = arcanaFilter;
       return;
     }
@@ -924,7 +996,7 @@
   function handleOverviewMethodChange() {
     var newMethod = el.overviewMethod.value;
     if (newMethod === overviewMethod) return;
-    if (!confirmIfSpread("切换概览抽法会清空当前牌阵并重新洗牌，是否继续？")) {
+    if (!confirmIfSpread(t("confirm.overview"))) {
       el.overviewMethod.value = overviewMethod;
       return;
     }
@@ -937,7 +1009,7 @@
   function handleSpreadChange() {
     var newSpreadId = el.spreadSelect.value;
     if (newSpreadId === selectedSpreadId) return;
-    if (!confirmIfSpread("切换牌阵会清空当前抽牌并重新洗牌，是否继续？")) {
+    if (!confirmIfSpread(t("confirm.spread"))) {
       el.spreadSelect.value = selectedSpreadId;
       return;
     }
@@ -951,18 +1023,18 @@
     el.spreadSelect.innerHTML = "";
     var catalogue = getSpreadsForDeck(deckType);
     var mGroup = document.createElement("optgroup");
-    mGroup.label = "M 牌牌阵";
+    mGroup.label = t("deck.group.mystagogus");
     var tGroup = document.createElement("optgroup");
-    tGroup.label = "塔罗牌阵";
+    tGroup.label = t("deck.group.tarot");
     var lGroup = document.createElement("optgroup");
-    lGroup.label = "LXXXI 牌阵";
+    lGroup.label = t("deck.group.lxxxi");
     catalogue.forEach(function (spreadDefinition) {
       var option = document.createElement("option");
       option.value = spreadDefinition.id;
       var cardCountLabel = deckType === "tarot" && spreadDefinition.id === "overview"
-        ? spreadDefinition.positions.length + " 张（可叠放 26 张）"
-        : spreadDefinition.positions.length + " 张";
-      option.textContent = spreadDefinition.name + " · " + getSpreadOriginLabel(spreadDefinition) +
+        ? t("app.cardsStackable", { count: spreadDefinition.positions.length })
+        : t("app.cards", { count: spreadDefinition.positions.length });
+      option.textContent = localizedSpreadName(spreadDefinition) + " · " + getSpreadOriginLabel(spreadDefinition) +
         " · " + cardCountLabel;
       if (spreadDefinition.deck === "mystagogus") mGroup.appendChild(option);
       else if (spreadDefinition.deck === "lxxxi") lGroup.appendChild(option);
@@ -991,7 +1063,7 @@
   function handleDeckChange() {
     var newDeck = el.deckSelect.value;
     if (newDeck === deckType) return;
-    if (!confirmIfSpread("切换牌组会清空当前牌阵并重新洗牌，是否继续？")) {
+    if (!confirmIfSpread(t("confirm.deck"))) {
       el.deckSelect.value = deckType;
       return;
     }
@@ -1010,12 +1082,12 @@
   function renderSpreadDefinition() {
     var spreadDefinition = selectedSpread();
     var countLabel = isOverviewStacking()
-      ? "26 张（13 组） · 分牌叠放"
-      : spreadDefinition.positions.length + " 张";
+      ? t("app.cardsStacked")
+      : t("app.cards", { count: spreadDefinition.positions.length });
     el.spreadSettingSummary.textContent = getSpreadOriginLabel(spreadDefinition) + " · " +
-      countLabel + " · " + spreadDefinition.description +
+      countLabel + " · " + localized(spreadDefinition, "description") +
       (isOverviewStacking()
-        ? " 每组大牌表示原因与力量，小牌表示这种力量如何表现。"
+        ? t("app.stackedDefinition")
         : "");
     el.positionGuideList.innerHTML = "";
     spreadDefinition.positions.forEach(function (position) {
@@ -1023,8 +1095,8 @@
       var title = document.createElement("strong");
       title.textContent = position.number + ". " + formatPositionName(position, "slash");
       var meaning = document.createElement("span");
-      meaning.textContent = position.meaning +
-        (position.drawRule ? "（" + position.drawRule.label + "）" : "");
+      meaning.textContent = localizedPositionMeaning(position) +
+        (position.drawRule ? " (" + localizedRuleLabel(position.drawRule) + ")" : "");
       item.appendChild(title);
       item.appendChild(meaning);
       el.positionGuideList.appendChild(item);
@@ -1033,13 +1105,26 @@
   }
 
   function handleShuffle() {
-    if (!confirmIfSpread("确定要重新洗牌吗？这会清空当前牌阵。")) return;
+    if (!confirmIfSpread(t("confirm.shuffle"))) return;
     resetDeck();
   }
 
   function toggleSettings() {
     var collapsed = el.settings.classList.toggle("collapsed");
     el.settingsToggle.setAttribute("aria-expanded", String(!collapsed));
+  }
+
+  function handleLanguageChange() {
+    applyDeckUi();
+    populateSpreadSelect();
+    renderSpreadDefinition();
+    renderSpreadCards();
+    renderDeckSpread();
+    renderSpreadMeta();
+    renderResults();
+    if (historyUiController && historyUiController.refreshLanguage) {
+      historyUiController.refreshLanguage();
+    }
   }
 
   // ---------- Init ----------
@@ -1065,6 +1150,7 @@
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);
     el.clearBtn.addEventListener("click", handleShuffle);
+    globalThis.addEventListener("quareia:languagechange", handleLanguageChange);
     if (globalThis.DivinationHistoryUi &&
         globalThis.DivinationHistoryStore &&
         globalThis.DivinationHistoryRecords) {

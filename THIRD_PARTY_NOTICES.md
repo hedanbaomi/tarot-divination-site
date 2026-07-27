@@ -66,3 +66,16 @@ Some tarot interpretations and spread descriptions were compiled, adapted, or
 translated from third-party publications, including Quareia training material
 and 《21世纪的塔罗技能》. Those publication-derived portions are excluded from
 the MIT license unless a specific file states otherwise.
+
+## English reference material
+
+The English card and spread text was prepared from user-supplied reference
+copies of *Tarot Skills for the 21st Century*, the Mystagogus keyword and
+layout references, and *LXXXI - The Magician's Deck: A Guide to the Card
+Meanings*. The source PDFs are not required at runtime and are not included in
+the website build. Copyright remains with the authors, artists, and publishers
+identified in those documents.
+
+The publication-derived English summaries are excluded from the MIT license.
+This project grants no permission to copy, redistribute, extract, or reuse the
+source publications.

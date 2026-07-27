@@ -288,9 +288,19 @@ body::after {
 .header-actions {
   display: flex;
   justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 10px;
 }
-.history-open-btn {
+.header-actions .language-toggle {
+  min-width: 48px;
+  min-height: var(--tap);
+  padding-inline: 14px;
+  border-color: rgba(143, 214, 174, 0.42);
+  color: #c9f0da;
+}
+.header-actions .history-open-btn {
   min-height: var(--tap);
   padding-inline: 18px;
 }
