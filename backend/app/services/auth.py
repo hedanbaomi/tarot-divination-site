@@ -220,11 +220,19 @@ class AuthService:
         """
         email = normalize_email(email)
         now = utcnow()
-        # DB columns are naive UTC on SQLite (timezone info not preserved), so
-        # build a naive counterpart for direct column comparisons in UPDATE
-        # WHERE clauses. On PostgreSQL (tz-aware columns) this stays the same
-        # instant and compares correctly.
-        now_naive = now.replace(tzinfo=None)
+        # Cross-database time comparison: PostgreSQL stores ``expires_at`` as
+        # ``TIMESTAMP WITH TIME ZONE`` and returns aware datetimes, while SQLite
+        # stores naive values. Comparing a bound Python datetime against the
+        # column therefore needs the *right* shape per dialect, or psycopg raises
+        # "can't compare offset-naive and offset-aware datetimes" (verified on
+        # PostgreSQL 18.4). We sidestep the bind entirely by comparing against
+        # the database's own current time via ``func.now()`` (CURRENT_TIMESTAMP),
+        # which is tz-aware on PostgreSQL and a naive UTC string on SQLite under
+        # our UTC convention — correct on both, with no Python-side bind to
+        # mismatch.
+        from sqlalchemy import func
+
+        db_now = func.now()
         max_attempts = self._settings.email_code_max_attempts
 
         # Read the latest challenge for this email (for digest check + error
@@ -284,7 +292,7 @@ class AuthService:
                     EmailChallenge.id == challenge.id,
                     EmailChallenge.consumed_at.is_(None),
                     EmailChallenge.delivered.is_(True),
-                    EmailChallenge.expires_at > now_naive,
+                    EmailChallenge.expires_at > db_now,
                     EmailChallenge.attempts < max_attempts,
                 )
                 .values(consumed_at=now)

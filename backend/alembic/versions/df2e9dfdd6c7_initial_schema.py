@@ -78,8 +78,10 @@ def upgrade() -> None:
     sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('version', sa.BigInteger(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('id', name='uq_notes_id')
+    sa.PrimaryKeyConstraint('id')
+    # No separate UniqueConstraint('id'): the primary key already guarantees
+    # global uniqueness of the client UUID, and on PostgreSQL a redundant UQ
+    # clashes with the PK (detected by `alembic check`).
     )
     with op.batch_alter_table('notes', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_notes_deleted_at'), ['deleted_at'], unique=False)

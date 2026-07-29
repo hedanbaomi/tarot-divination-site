@@ -242,7 +242,9 @@ class Note(Base):
     user: Mapped["User"] = relationship(back_populates="notes")
 
     __table_args__ = (
-        # Client-supplied UUID must be globally unique across users (offline sync).
-        UniqueConstraint("id", name="uq_notes_id"),
+        # ``id`` is the primary key, which already guarantees global uniqueness
+        # of the client-supplied UUID across users (offline sync idempotency).
+        # We deliberately do NOT add a redundant UniqueConstraint('id'): on
+        # PostgreSQL that would clash with the PK (alembic check flagged it).
         Index("ix_notes_user_updated", "user_id", "updated_at"),
     )

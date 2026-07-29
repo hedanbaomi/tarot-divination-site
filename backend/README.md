@@ -35,7 +35,7 @@ backend/
 │   ├── services/            # auth + notes business logic
 │   └── routers/             # auth, me, notes endpoints
 ├── alembic/                 # migrations (env.py + versions/)
-├── tests/                   # pytest suite (60 tests)
+├── tests/                   # pytest suite (95 tests; 82 always run on SQLite + 13 PostgreSQL-gated)
 ├── alembic.ini
 ├── requirements.txt
 ├── requirements-dev.txt
@@ -85,10 +85,18 @@ set MAIL_PROVIDER=devtest
 pytest -v
 ```
 
-All 60 tests pass and cover the full auth + notes flow, security invariants,
-session persistence across simulated restarts, code supersession/concurrency,
-device-session contract, installation account-switching, and cross-user
-isolation.
+The suite is **95 tests**: 82 run unconditionally on SQLite, and 13 more run
+only when `DATABASE_URL_PG` points at a live PostgreSQL instance (they verify
+cross-DB timezone correctness and 8-way concurrency on real PostgreSQL). They
+cover the full auth + notes flow, security invariants, session persistence
+across simulated restarts, code supersession/concurrency, the device-session
+contract, installation account-switching, cross-user isolation, and
+PostgreSQL-specific behaviour. To run the PostgreSQL tests:
+
+```bash
+set DATABASE_URL_PG=postgresql+psycopg://test:testpw@127.0.0.1:55432/quareia_test
+pytest tests/test_postgres_integration.py -v
+```
 
 ## Configuration
 
