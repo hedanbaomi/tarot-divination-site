@@ -18,6 +18,8 @@ env/
 dev.db
 .env
 .env.*
+# Keep the example template under version control (it has no real secrets).
+!.env.example
 
 # Test / coverage artifacts
 .pytest_cache/

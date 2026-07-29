@@ -24,7 +24,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Optional
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, update
 from sqlalchemy.orm import Session
 
 from ..config import Settings
@@ -191,6 +191,19 @@ class AuthService:
 
     # ------------------------------------------------------------------ #
     # Verify code -> mint device token
+    #
+    # Concurrency design (P0): the read-then-write race that previously allowed
+    # double-spend is closed by a single atomic conditional UPDATE. The UPDATE
+    # only flips ``consumed_at`` if ALL of these hold at once:
+    #   id matches; consumed_at IS NULL; delivered = true; not expired;
+    #   attempts < max.
+    # Exactly one concurrent request gets rowcount == 1 and may proceed to mint
+    # a token; every other request gets rowcount == 0 and is rejected with a
+    # generic "invalid/used" error. This uses a plain conditional UPDATE which
+    # is atomic on both SQLite (serialised write transaction) and PostgreSQL
+    # (row-level); it does NOT rely on SELECT ... FOR UPDATE (unsupported on
+    # SQLite). Wrong-code attempts are also bumped via an atomic UPDATE to avoid
+    # lost-update under concurrent wrong guesses.
     # ------------------------------------------------------------------ #
     def verify_code(
         self,
@@ -206,12 +219,17 @@ class AuthService:
         Raises ``CodeVerifyError`` for any invalid/expired/used/over-attempt code.
         """
         email = normalize_email(email)
-
-        # Only the LATEST challenge for this email is verifiable. Earlier ones
-        # are already marked consumed at send time, so this query naturally
-        # returns at most one usable row; we enforce "latest" explicitly so a
-        # race cannot resurrect a superseded code.
         now = utcnow()
+        # DB columns are naive UTC on SQLite (timezone info not preserved), so
+        # build a naive counterpart for direct column comparisons in UPDATE
+        # WHERE clauses. On PostgreSQL (tz-aware columns) this stays the same
+        # instant and compares correctly.
+        now_naive = now.replace(tzinfo=None)
+        max_attempts = self._settings.email_code_max_attempts
+
+        # Read the latest challenge for this email (for digest check + error
+        # messages). This read is advisory; the authoritative "did we win?"
+        # decision is the conditional UPDATE below.
         challenge = (
             db.query(EmailChallenge)
             .filter(EmailChallenge.email == email)
@@ -222,26 +240,95 @@ class AuthService:
         if challenge is None:
             raise CodeVerifyError("invalid or expired code", 400)
 
-        # Enforce attempts BEFORE checking the code, to bound brute force.
+        # Surface clear (non-leaky) errors for already-consumed/expired/locked
+        # states BEFORE the digest check, so we don't even touch the digest.
         if challenge.consumed_at is not None:
             raise CodeVerifyError("code already used; request a new one", 400)
         if as_utc(challenge.expires_at) <= now:
             raise CodeVerifyError("code expired; request a new one", 400)
-        if challenge.attempts >= self._settings.email_code_max_attempts:
+        if challenge.attempts >= max_attempts:
             raise CodeVerifyError("too many incorrect attempts; request a new code", 429)
 
         from ..security import verify_code_digest
 
+        # Verify the HMAC digest. A wrong code does NOT consume the challenge;
+        # it atomically increments attempts (no lost update under concurrency).
         if not verify_code_digest(code, challenge.code_digest, self._settings):
-            challenge.attempts += 1
+            bumped = (
+                db.execute(
+                    update(EmailChallenge)
+                    .where(
+                        EmailChallenge.id == challenge.id,
+                        EmailChallenge.consumed_at.is_(None),
+                        EmailChallenge.attempts < max_attempts,
+                    )
+                    .values(attempts=EmailChallenge.attempts + 1)
+                )
+                .rowcount
+            )
             db.commit()
+            if bumped == 0:
+                # Another thread either consumed it or hit the attempt cap
+                # between our read and this UPDATE. Generic failure.
+                raise CodeVerifyError("invalid or expired code", 429)
             raise CodeVerifyError("invalid code", 400)
 
-        # Success: consume the code (single use).
-        challenge.consumed_at = now
-        db.flush()
+        # ---- Authoritative single-point-of-truth: atomic claim of the code.
+        # Only the request whose UPDATE matches 1 row is allowed to mint. All
+        # conditions re-checked inside the UPDATE so a concurrent winner (or an
+        # expiry that lapses mid-flight) cannot let a second request through.
+        claimed = (
+            db.execute(
+                update(EmailChallenge)
+                .where(
+                    EmailChallenge.id == challenge.id,
+                    EmailChallenge.consumed_at.is_(None),
+                    EmailChallenge.delivered.is_(True),
+                    EmailChallenge.expires_at > now_naive,
+                    EmailChallenge.attempts < max_attempts,
+                )
+                .values(consumed_at=now)
+            )
+            .rowcount
+        )
+        if claimed != 1:
+            # Lost the race (or the code expired/was locked concurrently).
+            # Roll back any pending state and refuse — never mint a token.
+            db.rollback()
+            raise CodeVerifyError("invalid or expired code", 400)
 
-        # Auto-register if needed.
+        # From here on we OWN the code. Everything below runs in one transaction
+        # so a failure cannot leave "code consumed but no session" (we rollback
+        # the consumption too on any error).
+        try:
+            device, session, raw_token, is_new_user = self._provision_session(
+                db, email, installation_id, device_name, platform, now
+            )
+        except Exception:
+            # Roll back the WHOLE transaction including the consumed_at write,
+            # so the code is not left half-used.
+            db.rollback()
+            raise
+        db.commit()
+        db.refresh(device)
+        db.refresh(session)
+        return device, session, raw_token, is_new_user
+
+    def _provision_session(
+        self,
+        db: Session,
+        email: str,
+        installation_id: str,
+        device_name: Optional[str],
+        platform: Optional[str],
+        now,
+    ) -> tuple[Device, DeviceSession, str, bool]:
+        """Create/find user + device and mint a device token.
+
+        Assumes the caller has already atomically claimed the challenge. Any
+        exception propagates so the caller rolls back the whole transaction
+        (including the claim).
+        """
         is_new_user = False
         user = db.query(User).filter(User.email == email).one_or_none()
         if user is None:
@@ -290,9 +377,7 @@ class AuthService:
             last_used_at=now,
         )
         db.add(session)
-        db.commit()
-        db.refresh(device)
-        db.refresh(session)
+        db.flush()
         return device, session, raw_token, is_new_user
 
     # ------------------------------------------------------------------ #

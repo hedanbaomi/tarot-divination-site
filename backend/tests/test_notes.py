@@ -221,3 +221,62 @@ def test_cross_user_isolation(client, auth_flow):
     assert client.delete(f"/api/v1/notes/{note['id']}", headers=_hdr(b)).status_code == 404
     # And A still sees it intact.
     assert client.get(f"/api/v1/notes/{note['id']}", headers=_hdr(a)).status_code == 200
+
+
+# --------------------------------------------------------------------------- #
+# Concurrent idempotent create (same note id)
+# --------------------------------------------------------------------------- #
+def test_concurrent_create_same_id_is_deterministic(tmp_path, auth_flow):
+    """Two simultaneous creates of the same client UUID: exactly one 201, the
+    other a deterministic 200, never a 500, exactly one note afterwards.
+
+    Uses a FILE-backed SQLite (not the in-memory StaticPool, which serialises
+    on one connection and hides the race) so the two sessions genuinely contend
+    on the unique constraint."""
+    import os
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.config import Settings
+    from app.db import Base, build_engine
+    from app.deps import configure_state, get_app_state
+    from app.mail import reset_captured_mails
+    from app.main import create_app
+    from app.ratelimit import reset_limiter
+
+    db_path = str(tmp_path / "note_race.db")
+    os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
+    os.environ["CREATE_TABLES_ON_STARTUP"] = "true"
+    os.environ["MAIL_PROVIDER"] = "devtest"
+    os.environ["SECRET_KEY"] = "note-race-secret"
+    reset_captured_mails()
+    reset_limiter()
+    app = create_app(Settings())
+    from fastapi.testclient import TestClient
+
+    with TestClient(app) as client:
+        token = auth_flow("noterace@example.com")
+        headers = _hdr(token)
+        nid = str(uuid.uuid4())
+        body = {"id": nid, "title": "race", "content": "c", "tags": []}
+
+        barrier = threading.Barrier(2)
+        results = []
+
+        def hit():
+            barrier.wait()
+            tc = TestClient(client.app)
+            r = tc.post("/api/v1/notes", json=body, headers=headers)
+            results.append(r.status_code)
+
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            futs = [ex.submit(hit) for _ in range(2)]
+            [f.result() for f in futs]
+
+        # Deterministic: one 201 (creator), one 200 (idempotent re-create).
+        assert 500 not in results, f"server error on race: {results}"
+        assert sorted(results) == [200, 201], f"unexpected statuses: {results}"
+        items = client.get("/api/v1/notes", headers=headers).json()["items"]
+        assert sum(1 for i in items if i["id"] == nid) == 1
+        assert items[0]["version"] == 1
+    get_app_state().engine.dispose()

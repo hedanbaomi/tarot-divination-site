@@ -60,9 +60,11 @@ def _to_response(note: Note) -> NoteResponse:
     response_model=NoteResponse,
     status_code=status.HTTP_201_CREATED,
     responses={
-        201: {"description": "Created"},
         200: {"description": "Idempotent re-create returned existing note"},
-        403: {"description": "Notes feature not enabled"},
+        401: {"description": "Missing/invalid/revoked device token"},
+        403: {"description": "Notes feature not enabled (entitlement denied)"},
+        409: {"description": "Client UUID collides with another user's note"},
+        422: {"description": "Validation error (oversized payload, too many tags)"},
     },
 )
 def create_note(
@@ -102,7 +104,14 @@ def create_note(
     return _to_response(note)
 
 
-@router.get("", response_model=NoteListResponse)
+@router.get(
+    "",
+    response_model=NoteListResponse,
+    responses={
+        401: {"description": "Missing/invalid/revoked device token"},
+        403: {"description": "Notes feature not enabled (entitlement denied)"},
+    },
+)
 def list_notes(
     user_session=Depends(require_user),
     db: Session = Depends(get_db),
@@ -140,7 +149,15 @@ def list_notes(
     )
 
 
-@router.get("/{note_id}", response_model=NoteResponse)
+@router.get(
+    "/{note_id}",
+    response_model=NoteResponse,
+    responses={
+        401: {"description": "Missing/invalid/revoked device token"},
+        403: {"description": "Notes feature not enabled (entitlement denied)"},
+        404: {"description": "Note not found / not owned by you / soft-deleted"},
+    },
+)
 def get_note(
     note_id: UUID,
     user_session=Depends(require_user),
@@ -156,7 +173,17 @@ def get_note(
     return _to_response(note)
 
 
-@router.patch("/{note_id}", response_model=NoteResponse)
+@router.patch(
+    "/{note_id}",
+    response_model=NoteResponse,
+    responses={
+        401: {"description": "Missing/invalid/revoked device token"},
+        403: {"description": "Notes feature not enabled (entitlement denied)"},
+        404: {"description": "Note not found / not owned by you / soft-deleted"},
+        409: {"description": "Version conflict (stale expected_version)"},
+        422: {"description": "Validation error"},
+    },
+)
 def update_note(
     note_id: UUID,
     payload: NoteUpdate,
@@ -196,7 +223,15 @@ def update_note(
     return _to_response(note)
 
 
-@router.delete("/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{note_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"description": "Missing/invalid/revoked device token"},
+        403: {"description": "Notes feature not enabled (entitlement denied)"},
+        404: {"description": "Note not found / not owned by you"},
+    },
+)
 def delete_note(
     note_id: UUID,
     user_session=Depends(require_user),

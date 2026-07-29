@@ -71,7 +71,9 @@ class Settings:
         default_factory=lambda: _int(os.getenv("EMAIL_CODE_TTL_SECONDS"), 600)
     )
     email_code_length: int = 6
-    email_code_max_attempts: int = 5
+    email_code_max_attempts: int = field(
+        default_factory=lambda: _int(os.getenv("EMAIL_CODE_MAX_ATTEMPTS"), 5)
+    )
     # Min seconds between two send-code calls for the same email.
     email_resend_min_interval_seconds: int = field(
         default_factory=lambda: _int(os.getenv("EMAIL_RESEND_MIN_INTERVAL_SECONDS"), 60)
@@ -162,8 +164,6 @@ class Settings:
         problems: List[str] = []
         if not self.secret_key or self.secret_key.startswith("dev-insecure"):
             problems.append("SECRET_KEY must be set to a strong, stable value")
-        if self.secret_key == self.token_hash_pepper and not self.secret_key:
-            problems.append("SECRET_KEY must not be empty")
         if self.mail_provider == "devtest":
             problems.append(
                 "MAIL_PROVIDER=devtest is not allowed in production "

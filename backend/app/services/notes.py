@@ -135,7 +135,10 @@ class NotesService:
 
         Returns ``(note, created)``. Re-posting the same id is a no-op: the
         existing note is returned unchanged (no version bump), which makes the
-        create endpoint safe to retry.
+        create endpoint safe to retry. Under a concurrent create with the same
+        id, exactly one caller wins the INSERT; the loser catches the unique
+        constraint violation and returns the now-existing row (created=False),
+        so the endpoint is deterministic and never 500s on a race.
         """
         self._check_access(db, user)
         self._validate_payload(title, content, tags)
@@ -149,6 +152,8 @@ class NotesService:
                 # here; instead raise so the router returns 403/409 consistently.
                 raise NoteConflictError(existing.version)
             return existing, False
+
+        from sqlalchemy.exc import IntegrityError
 
         now = utcnow()
         note = Note(
@@ -164,7 +169,17 @@ class NotesService:
             version=1,
         )
         db.add(note)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # Lost the race to another concurrent create with the same id.
+            # Roll back and return the winner's row unchanged (idempotent).
+            db.rollback()
+            winner = db.get(Note, note_id)
+            if winner is not None and winner.user_id == user.id:
+                return winner, False
+            # Different user owns the colliding id -> surface as conflict.
+            raise NoteConflictError(winner.version if winner else 1)
         db.refresh(note)
         return note, True
 

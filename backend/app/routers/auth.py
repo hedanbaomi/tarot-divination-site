@@ -74,6 +74,7 @@ def send_code(
     response_model=VerifyCodeResponse,
     responses={
         400: {"description": "Invalid / expired / used code"},
+        403: {"description": "Account unavailable (banned)"},
         429: {"description": "Too many attempts"},
     },
 )
@@ -107,7 +108,11 @@ def verify_code(
     )
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={401: {"description": "Missing/invalid/revoked device token"}},
+)
 def logout(
     _: LogoutRequest = None,
     session: DeviceSession = Depends(require_device),
@@ -120,7 +125,11 @@ def logout(
     return None
 
 
-@router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/logout-all",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={401: {"description": "Missing/invalid/revoked device token"}},
+)
 def logout_all(
     user_session=Depends(require_user),
     db: Session = Depends(get_db),

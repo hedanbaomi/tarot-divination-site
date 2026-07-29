@@ -22,14 +22,22 @@ def _service(settings: Settings, mail: MailProvider) -> AuthService:
     return AuthService(settings=settings, mail_provider=mail, limiter=get_limiter())
 
 
-@router.get("", response_model=MeResponse)
+@router.get(
+    "",
+    response_model=MeResponse,
+    responses={401: {"description": "Missing/invalid/revoked device token"}},
+)
 def me(user_session=Depends(require_user)):
     """Return the authenticated user's profile (id, email, status)."""
     user, _ = user_session
     return user
 
 
-@router.get("/devices", response_model=DevicesListResponse)
+@router.get(
+    "/devices",
+    response_model=DevicesListResponse,
+    responses={401: {"description": "Missing/invalid/revoked device token"}},
+)
 def list_devices(
     user_session=Depends(require_user),
     db: Session = Depends(get_db),
@@ -64,7 +72,14 @@ def list_devices(
     return DevicesListResponse(devices=out)
 
 
-@router.delete("/devices/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/devices/{device_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"description": "Missing/invalid/revoked device token"},
+        404: {"description": "Device not found / not owned by you"},
+    },
+)
 def revoke_device(
     device_id: UUID,
     user_session=Depends(require_user),

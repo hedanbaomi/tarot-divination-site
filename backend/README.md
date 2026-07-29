@@ -65,11 +65,15 @@ uvicorn app.main:app --reload
 # OpenAPI docs: http://localhost:8000/docs
 ```
 
-With `MAIL_PROVIDER=devtest`, verification codes are printed to the console and
-captured in memory (no real email is sent). Look for a line like:
+With `MAIL_PROVIDER=devtest`, verification codes are **only captured in memory**
+(no real email is sent, and the code is **never** written to stdout, stderr, or
+logs). To read the code during local development, use the in-memory capture from
+a Python shell or test:
 
-```
-[devtest-mail] to=alice@example.com subject=Your Quareia Companion sign-in code
+```python
+from app.mail import get_captured_mails
+print(get_captured_mails()[-1].to)   # recipient
+# The body contains the code; inspect it only in a trusted dev shell.
 ```
 
 ## Running tests
@@ -104,7 +108,9 @@ See [`.env.example`](.env.example) for every variable. Highlights:
 ## Mail provider configuration
 
 ### devtest (default, local only)
-Captures mail in memory and prints a line to stdout. Never sends anything.
+Captures mail **in memory only** and never sends anything. It does **not** write
+the code (or any message body) to stdout, stderr, or logs — tests read the
+captured message via `get_captured_mails()`. Refused when `ENVIRONMENT=production`.
 
 ### Resend
 ```env
