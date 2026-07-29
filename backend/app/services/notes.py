@@ -54,23 +54,62 @@ class NoteLimitError(Exception):
     """Raised when a payload exceeds configured limits."""
 
 
-class EntitlementService:
-    """Future seam for paid-feature gating.
+class EntitlementDeniedError(Exception):
+    """Raised when the per-user entitlement check denies notes access (=> 403)."""
 
-    The real implementation will consult a payments/subscription source. For now
-    it defers to ``NOTES_ENABLED_FOR_ALL`` so the API is usable in dev/tests
-    without wiring payments. Business code must call this and never assume
-    "paid users always have access".
+
+class EntitlementService:
+    """Replaceable per-user entitlement interface for the (future-paid) notes
+    feature.
+
+    This is the seam business code depends on. It is intentionally an interface
+    (``is_notes_allowed(user, db)``) rather than a hard-coded flag, so that a
+    real implementation can consult a subscription/entitlement store per user
+    WITHOUT touching the notes service. Payments are out of scope this round.
+
+    The default implementation honours a test/dev global toggle
+    (``NOTES_ENABLED_FOR_ALL``); production sets that to ``false`` and injects a
+    real per-user implementation. Business code must never assume "paid =>
+    allowed".
+    """
+
+    def is_notes_allowed(self, user: User, db: Session) -> bool:
+        raise NotImplementedError
+
+
+class AllowAllEntitlementService(EntitlementService):
+    """Test/dev fallback: grants notes to everyone via a global config toggle.
+
+    Used when ``NOTES_ENABLED_FOR_ALL`` is true. Not suitable for production
+    gating — there is no per-user check.
     """
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
     def is_notes_allowed(self, user: User, db: Session) -> bool:
-        # Reserved hook: a future implementation may check a subscription table
-        # keyed by user.id here. We intentionally do not bake in any logic that
-        # equates "paid" with "allowed" beyond this configurable toggle.
         return bool(self._settings.notes_enabled_for_all)
+
+
+class DenyAllEntitlementService(EntitlementService):
+    """Default in production: deny unless a real per-user service is wired.
+
+    This makes it impossible to accidentally ship "everyone has paid notes".
+    """
+
+    def is_notes_allowed(self, user: User, db: Session) -> bool:
+        return False
+
+
+def build_default_entitlement_service(settings: Settings) -> EntitlementService:
+    """Pick the default entitlement service from settings.
+
+    Tests/dev get the allow-all toggle; production (or when the toggle is off)
+    gets deny-all, forcing an explicit real implementation to be injected later.
+    """
+    if settings.notes_enabled_for_all:
+        return AllowAllEntitlementService(settings)
+    return DenyAllEntitlementService()
 
 
 class NotesService:
@@ -286,7 +325,9 @@ class NotesService:
 
     def _check_access(self, db: Session, user: User) -> None:
         if not self._entitlement.is_notes_allowed(user, db):
-            raise NoteLimitError("notes feature is not enabled for this account")
+            raise EntitlementDeniedError(
+                "notes feature is not enabled for this account"
+            )
 
     def _validate_payload(self, title: str, content: str, tags: List[str]) -> None:
         if title is not None and len(title) > self._settings.note_title_max_length:

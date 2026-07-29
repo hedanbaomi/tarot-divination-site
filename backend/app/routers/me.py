@@ -53,8 +53,8 @@ def list_devices(
                 name=d.name,
                 platform=d.platform,
                 created_at=d.created_at,
-                last_seen_at=max(
-                    (s.last_seen_at for s in d.sessions if s.last_seen_at is not None),
+                last_used_at=max(
+                    (s.last_used_at for s in d.sessions if s.last_used_at is not None),
                     default=None,
                 ),
                 is_current=d.id == current_session.device_id,

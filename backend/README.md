@@ -35,7 +35,7 @@ backend/
 │   ├── services/            # auth + notes business logic
 │   └── routers/             # auth, me, notes endpoints
 ├── alembic/                 # migrations (env.py + versions/)
-├── tests/                   # pytest suite (40 tests)
+├── tests/                   # pytest suite (60 tests)
 ├── alembic.ini
 ├── requirements.txt
 ├── requirements-dev.txt
@@ -81,8 +81,10 @@ set MAIL_PROVIDER=devtest
 pytest -v
 ```
 
-All 40 tests pass and cover the full auth + notes flow, security invariants,
-session persistence across simulated restarts, and cross-user isolation.
+All 60 tests pass and cover the full auth + notes flow, security invariants,
+session persistence across simulated restarts, code supersession/concurrency,
+device-session contract, installation account-switching, and cross-user
+isolation.
 
 ## Configuration
 
@@ -91,12 +93,13 @@ See [`.env.example`](.env.example) for every variable. Highlights:
 | Variable | Default | Purpose |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./dev.db` | DB URL. Use a PG DSN in prod. |
+| `ENVIRONMENT` | `dev` | `production` triggers startup fail-fast checks. |
+| `SECRET_KEY` | dev default | HMAC secret for code/token digests. **Set strong in prod.** |
 | `CREATE_TABLES_ON_STARTUP` | `true` | Dev helper; use Alembic in prod. |
-| `MAIL_PROVIDER` | `devtest` | `devtest` / `resend` / `smtp` |
+| `MAIL_PROVIDER` | `devtest` | `devtest` / `resend` / `smtp` (devtest refused in prod) |
 | `EMAIL_CODE_TTL_SECONDS` | `600` | Code lifetime (10 min). |
 | `EMAIL_RESEND_MIN_INTERVAL_SECONDS` | `60` | Min gap between sends/email. |
-| `NOTES_ENABLED_FOR_ALL` | `true` | Grant notes access in dev/tests. |
-| `TOKEN_HASH_PEPPER` | (empty) | Optional digest pepper. |
+| `NOTES_ENABLED_FOR_ALL` | `true` | Test/dev global entitlement toggle. Prod should inject a real per-user service. |
 
 ## Mail provider configuration
 
@@ -121,15 +124,36 @@ SMTP_PASSWORD=...
 SMTP_USE_TLS=true
 ```
 
-> **Failure handling:** if the provider raises, no usable challenge is persisted
-> — the user simply receives the same generic "code is on its way" response, so
-> a delivery outage never leaves a valid code state and never leaks that fact.
+> **Failure handling:** if the provider fails to deliver, send-code returns a
+> unified **503** (generic message, no provider response body) and **no usable
+> challenge is persisted** — a delivery outage never leaves a valid code state
+> and never leaks whether the email is registered.
+
+## API surface (12 endpoints under `/api/v1`)
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/v1/auth/email/send-code` | Request a 6-digit code |
+| POST | `/api/v1/auth/email/verify-code` | Verify code, get a device token |
+| POST | `/api/v1/auth/logout` | Revoke the current token |
+| POST | `/api/v1/auth/logout-all` | Revoke every session |
+| GET | `/api/v1/me` | Current user profile |
+| GET | `/api/v1/me/devices` | List devices |
+| DELETE | `/api/v1/me/devices/{device_id}` | Revoke a device |
+| POST | `/api/v1/notes` | Create note (idempotent) |
+| GET | `/api/v1/notes` | List / delta-sync / paginate |
+| GET | `/api/v1/notes/{note_id}` | Fetch one note |
+| PATCH | `/api/v1/notes/{note_id}` | Update (optimistic concurrency) |
+| DELETE | `/api/v1/notes/{note_id}` | Soft-delete (tombstone) |
+
+(Plus `/health` and auto-generated `/docs`, `/redoc`, `/openapi.json`.)
 
 ## Database migrations
 
 ```bash
 alembic upgrade head      # apply all migrations
 alembic downgrade base    # roll all back
+alembic check             # verify migrations match the models
 alembic revision --autogenerate -m "describe change"   # new migration
 ```
 
@@ -139,32 +163,51 @@ PostgreSQL the same migration runs unchanged.
 
 ## Deployment notes (not done in this round)
 
+- Set `ENVIRONMENT=production` — the app **fails fast at startup** unless
+  `SECRET_KEY` is strong, `MAIL_PROVIDER` is not `devtest`, and `DATABASE_URL`
+  is PostgreSQL (see `Settings.validate_for_production`).
 - Set `CREATE_TABLES_ON_STARTUP=false` and run `alembic upgrade head` on deploy.
 - Point `DATABASE_URL` at PostgreSQL.
 - Configure `CORS_ALLOW_ORIGINS` to your app/web origins.
-- Provide a stable `TOKEN_HASH_PEPPER` (rotate via env only).
+- Provide a stable, high-entropy `SECRET_KEY` (rotate via env only; rotation
+  invalidates all outstanding codes and device tokens).
 - Put the service behind TLS and a reverse proxy that forwards `X-Forwarded-For`
   so per-IP rate limiting uses the real client address.
-- For multi-instance deployments, replace the in-memory rate limiter with Redis.
+- **Single-instance only by default:** the rate limiter and the devtest mail
+  capture are process-local. For multi-instance production you MUST replace the
+  in-memory limiter with Redis (or another shared store) and use a real mail
+  provider.
 - **Do not** commit `.env`, real API keys, or SMTP passwords.
 
 ## Security model summary
 
 - **Email is the only account identifier.** Login == registration.
 - **6-digit codes:** single-use, 10-minute expiry, ≤5 wrong attempts,
-  ≥60 s resend throttle, per-email and per-IP rate limits. Only the code
-  **digest** is stored.
+  ≥60 s resend throttle, per-email and per-IP rate limits. A newly delivered
+  code **invalidates all earlier challenges**; only the latest is verifiable.
+  Only the code **HMAC digest** (keyed by `SECRET_KEY`) is stored.
 - **Long-lived opaque device tokens** (32 random bytes, URL-safe). The server
-  stores only the digest; the raw token is returned **once** at verification.
-  No short-lived access/refresh tokens, no rotation. Tokens survive restarts
-  and offline periods; they die only on logout, device revoke, data clear, or
-  account ban.
+  stores only the **HMAC digest**; the raw token is returned **once** at
+  verification and never re-issued, listed, or logged. No short-lived
+  access/refresh tokens, no rotation. Re-verifying on the same installation
+  issues a **new** token and leaves previous tokens valid (sessions are
+  additive) until explicitly revoked. Tokens survive restarts and offline
+  periods; they die only on logout, device revoke, data clear, or account ban
+  (banning a user invalidates **all** their tokens immediately). Revocations
+  are transactional (`revoked_at` set AND `token_digest` cleared together).
 - **No hardware identifiers** (IMEI/MAC/Android ID) are used. Devices are keyed
-  by a client-generated `installation_id`.
-- **Logs** never contain tokens, codes, or secrets (a redacting filter strips
-  token-like substrings; SQL parameter logging is off).
+  by a client-generated `installation_id`, scoped per **user**: the same
+  installation id may be reused across different accounts, each getting its own
+  device/token/notes; revoking under one account never affects another.
+- **Logs** never contain tokens, codes, or mail secrets (a redacting filter
+  strips token-like substrings; SQL parameter logging is off; the devtest mail
+  provider never prints the code — it only captures in memory for tests).
 - **Notes** are strictly scoped to the owning user; cross-user access returns
-  404 (no existence leak).
+  404 (no existence leak). Notes access is gated by a **replaceable per-user
+  entitlement service** (default: allow-all in tests/dev, deny-all otherwise);
+  payments are out of scope this round.
+- **devtest mail provider** is refused in production (fail-fast at startup and
+  in the factory); it only captures messages in memory and cannot deliver.
 
 See [docs/android-token-guide.md](docs/android-token-guide.md) for the client
 side, and [docs/api-reference.md](docs/api-reference.md) for endpoint details.

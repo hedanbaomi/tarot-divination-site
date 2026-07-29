@@ -81,15 +81,82 @@ def test_authorization_header_not_logged(client, auth_flow, capsys):
     assert token not in captured.err
 
 
-def test_notes_can_be_disabled_via_entitlement(client, auth_flow, monkeypatch):
-    """When NOTES_ENABLED_FOR_ALL is off, notes endpoints refuse."""
-    import os
+def test_verification_code_not_printed_or_logged(client, capsys):
+    """The devtest provider must NEVER write the plaintext code to stdout,
+    stderr, or any log handler. The code is only reachable via the in-memory
+    capture (which tests use), never a log stream."""
+    import logging
+    import re as _re
 
+    records: list[str] = []
+
+    class _Sink(logging.Handler):
+        def emit(self, record):
+            records.append(record.getMessage())
+
+    sink = _Sink()
+    sink.setLevel(logging.DEBUG)
+    root = logging.getLogger()
+    root.addHandler(sink)
+    try:
+        r = client.post("/api/v1/auth/email/send-code", json={"email": "nocode@example.com"})
+        assert r.status_code == 200
+        captured = capsys.readouterr()
+        # Pull the real code from the in-memory capture only.
+        from app.mail import get_captured_mails
+
+        code = _re.search(r"\b(\d{6})\b", get_captured_mails()[-1].body).group(1)
+        # Not in stdout/stderr...
+        assert code not in captured.out
+        assert code not in captured.err
+        # ...and not in any log record.
+        for msg in records:
+            assert code not in msg
+    finally:
+        root.removeHandler(sink)
+
+
+def test_mail_secrets_not_logged(client, capsys, monkeypatch):
+    """A mail provider secret must never appear in logs. We simulate a Resend
+    key in the environment and assert it never leaks to stdout/stderr/log."""
+    import logging
+
+    secret = "re_SUPERSECRET_LEAK_CHECK_12345"
+    monkeypatch.setenv("RESEND_API_KEY", secret)
+    # The dev app uses devtest provider; the point is the secret is in env but
+    # never logged anywhere by our code.
+    records: list[str] = []
+
+    class _Sink(logging.Handler):
+        def emit(self, record):
+            records.append(record.getMessage())
+
+    sink = _Sink()
+    sink.setLevel(logging.DEBUG)
+    root = logging.getLogger()
+    root.addHandler(sink)
+    try:
+        client.get("/health")
+        captured = capsys.readouterr()
+        assert secret not in captured.out
+        assert secret not in captured.err
+        for msg in records:
+            assert secret not in msg
+    finally:
+        root.removeHandler(sink)
+
+
+def test_notes_can_be_disabled_via_entitlement(client, auth_flow):
+    """When the per-user entitlement denies access, notes endpoints return 403.
+
+    The entitlement is a replaceable service; injecting a deny-all impl proves
+    business code consults it (rather than a hard-coded flag).
+    """
     token = auth_flow("ent@example.com")
-    # Flip the flag off via a fresh Settings and reconfigure the running app.
-    os.environ["NOTES_ENABLED_FOR_ALL"] = "false"
-    state = get_app_state()
-    state.settings = Settings()
+    from app.deps import set_entitlement_service
+    from app.services.notes import DenyAllEntitlementService
+
+    set_entitlement_service(DenyAllEntitlementService())
     try:
         import uuid as _uuid
 
@@ -98,7 +165,54 @@ def test_notes_can_be_disabled_via_entitlement(client, auth_flow, monkeypatch):
             json={"id": str(_uuid.uuid4()), "title": "x"},
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert r.status_code == 400
+        assert r.status_code == 403
+        # Every notes endpoint is gated, not just create.
+        r2 = client.get("/api/v1/notes", headers={"Authorization": f"Bearer {token}"})
+        assert r2.status_code == 403
     finally:
-        os.environ["NOTES_ENABLED_FOR_ALL"] = "true"
-        state.settings = Settings()
+        # Restore the default (allow-all in tests).
+        from app.services.notes import build_default_entitlement_service
+
+        set_entitlement_service(build_default_entitlement_service(get_app_state().settings))
+
+
+def test_entitlement_is_per_user_replaceable(client, auth_flow):
+    """A custom per-user entitlement service can grant access selectively.
+
+    This pins the contract: business code asks the injected service per user,
+    so a future payments integration only needs to implement EntitlementService
+    without touching NotesService. No payments are wired here.
+    """
+    token = auth_flow("vip@example.com")
+    from app.deps import get_app_state, set_entitlement_service
+    from app.models import User
+    from app.services.notes import EntitlementService
+
+    class VipOnly(EntitlementService):
+        def is_notes_allowed(self, user: User, db) -> bool:
+            # Grant only if the user's email is allow-listed.
+            return user.email == "vip@example.com"
+
+    set_entitlement_service(VipOnly())
+    try:
+        import uuid as _uuid
+
+        # VIP can create.
+        r = client.post(
+            "/api/v1/notes",
+            json={"id": str(_uuid.uuid4()), "title": "vip note"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 201
+        # A non-VIP is denied.
+        other = auth_flow("plain@example.com", installation_id="ip2", bypass_resend_throttle=True)
+        r2 = client.post(
+            "/api/v1/notes",
+            json={"id": str(_uuid.uuid4()), "title": "nope"},
+            headers={"Authorization": f"Bearer {other}"},
+        )
+        assert r2.status_code == 403
+    finally:
+        from app.services.notes import build_default_entitlement_service
+
+        set_entitlement_service(build_default_entitlement_service(get_app_state().settings))

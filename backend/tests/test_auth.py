@@ -58,18 +58,22 @@ def test_provider_failure_leaves_no_usable_challenge(client, monkeypatch):
     monkeypatch.setattr(DevTestMailProvider, "send", boom)
 
     r = client.post("/api/v1/auth/email/send-code", json={"email": "fail@example.com"})
-    # Generic success-like response (no leak), but no usable code stored.
-    assert r.status_code == 200
+    # Delivery failure MUST surface as a unified 503 (never faked as success).
+    assert r.status_code == 503
+    # Generic, non-leaky message: must NOT reveal whether the email is
+    # registered, and must NOT echo the provider's response body.
+    detail = r.json().get("detail", "")
+    assert "delivery" in detail.lower() or "unavailable" in detail.lower()
+    assert "simulated outage" not in detail  # provider body never propagated
+    assert "registered" not in detail.lower()
 
     from app.deps import get_app_state
 
     db = get_app_state().session_factory()
     try:
         rows = db.query(EmailChallenge).filter(EmailChallenge.email == "fail@example.com").all()
-        # No delivered challenge means none should be persisted at all.
-        assert all(not row.delivered for row in rows)
-        assert not any(row.delivered for row in rows)
-        # And nothing delivered => verify should fail.
+        # A failed delivery must leave NO usable challenge on disk.
+        assert rows == [], "no challenge should be persisted when delivery fails"
     finally:
         db.close()
 

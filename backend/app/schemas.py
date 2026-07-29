@@ -73,7 +73,7 @@ class DeviceResponse(BaseModel):
     name: Optional[str]
     platform: Optional[str]
     created_at: datetime
-    last_seen_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
     is_current: bool = False
     session_active: bool = False
 

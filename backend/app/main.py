@@ -30,6 +30,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging("INFO")
 
+    # Fail fast on insecure production defaults (weak secret, devtest mail,
+    # sqlite). Never silently serve weak digests or an undeliverable mail setup.
+    if settings.is_production:
+        settings.validate_for_production()
+
     engine, session_factory = build_engine(settings)
     mail_provider = build_mail_provider(settings)
     configure_state(engine, session_factory, settings, mail_provider)
@@ -65,6 +70,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router.router)
     app.include_router(me_router.router)
     app.include_router(notes_router.router)
+
+    # Map the (future-paid) notes entitlement denial to a uniform 403, regardless
+    # of which notes endpoint raised it. Business code never hard-codes "paid =>
+    # allowed"; the injected EntitlementService decides per user.
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+    from starlette.status import HTTP_403_FORBIDDEN
+
+    from .services.notes import EntitlementDeniedError
+
+    @app.exception_handler(EntitlementDeniedError)
+    async def _entitlement_denied(_: Request, exc: EntitlementDeniedError):
+        return JSONResponse(
+            status_code=HTTP_403_FORBIDDEN,
+            content={"detail": str(exc)},
+        )
 
     @app.get("/health", tags=["meta"])
     def health() -> dict:

@@ -199,7 +199,8 @@ class DeviceSession(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow
     )
-    last_seen_at: Mapped[Optional[datetime]] = mapped_column(
+    # Updated on every authenticated request via this token (see require_device).
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     revoked_at: Mapped[Optional[datetime]] = mapped_column(

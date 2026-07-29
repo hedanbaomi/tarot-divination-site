@@ -21,7 +21,7 @@ from ..schemas import (
     VerifyCodeRequest,
     VerifyCodeResponse,
 )
-from ..services.auth import AuthService, CodeVerifyError, SendCodeError
+from ..services.auth import AuthService, CodeVerifyError, MailSendFailedError, SendCodeError
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -35,6 +35,7 @@ def _service(settings: Settings, mail: MailProvider) -> AuthService:
     response_model=SendCodeResponse,
     responses={
         429: {"description": "Rate limited / resend throttle"},
+        503: {"description": "Email delivery temporarily unavailable"},
     },
 )
 def send_code(
@@ -47,7 +48,9 @@ def send_code(
     """Request a 6-digit email verification code.
 
     The response is identical whether or not the email is already registered, so
-    this endpoint cannot be used to enumerate accounts.
+    this endpoint cannot be used to enumerate accounts. If the mail provider
+    fails to deliver, a unified **503** is returned (without the provider's
+    response body) and no usable challenge is stored.
     """
     svc = _service(settings, mail)
     try:
@@ -57,6 +60,12 @@ def send_code(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=exc.detail,
             headers={"Retry-After": str(max(1, int(exc.retry_after)))},
+        ) from exc
+    except MailSendFailedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+            headers={"Retry-After": "60"},
         ) from exc
 
 

@@ -5,14 +5,18 @@ Encapsulates all the rules from the spec:
 * auto-register on first verify (login == registration);
 * 6-digit, single-use, 10-min, ≤5 wrong attempts codes;
 * ≥60s resend throttle + per-email/per-IP rate limiting;
-* only the code digest is persisted, and only if delivery succeeded;
+* only the code **HMAC digest** is persisted, and only if delivery succeeded;
+* a newly delivered code **invalidates all earlier challenges** for that email,
+  so only the latest, unconsumed, unexpired challenge is ever verifiable;
 * on verify: register/find the device by ``installation_id`` and mint a new
   long-lived opaque device token (we store its digest, return the raw token
   exactly once);
-* logout / revoke set ``revoked_at`` and clear the digest so the token dies.
+* logout / revoke set ``revoked_at`` and clear the digest so the token dies,
+  done transactionally.
 
-Security: we never raise an error distinguishing "email exists" from "doesn't"
-on send-code; failures there return the same generic response.
+Security: we never raise an error distinguishing "email exists" from "doesn't".
+Delivery failures raise ``MailSendFailedError`` -> HTTP 503 with a generic
+message (no provider response body), and never persist a usable challenge.
 """
 
 from __future__ import annotations
@@ -48,6 +52,15 @@ class SendCodeError(Exception):
         super().__init__(detail)
         self.detail = detail
         self.retry_after = retry_after
+
+
+class MailSendFailedError(Exception):
+    """Raised when the mail provider fails to deliver.
+
+    Surfaced as HTTP 503 with a generic, non-leaky message. The provider's own
+    response body is intentionally NOT propagated. No usable challenge is left
+    behind on disk.
+    """
 
 
 class CodeVerifyError(Exception):
@@ -125,12 +138,17 @@ class AuthService:
         try:
             self._mail.send(self._build_mail(email, code))
         except MailDeliveryError:
-            # Do not persist anything; surface a generic message to the client.
-            return SendCodeResponse(
-                message="If this email is valid, a verification code is on its way.",
-                resend_in_seconds=self._settings.email_resend_min_interval_seconds,
+            # Do NOT persist anything. Surface a unified 503 with a generic
+            # message; never echo the provider's response body (may contain
+            # account/PII leakage). The client learns mail is unavailable, not
+            # whether the email is registered.
+            raise MailSendFailedError(
+                "email delivery is currently unavailable; please try again later"
             )
 
+        # Delivery succeeded: persist the new challenge and invalidate every
+        # earlier challenge for this email in one transaction, so only the
+        # latest code is ever verifiable.
         challenge = EmailChallenge(
             email=email,
             code_digest=hash_code(code, self._settings),
@@ -140,6 +158,14 @@ class AuthService:
             delivered=True,
         )
         db.add(challenge)
+        db.query(EmailChallenge).filter(
+            EmailChallenge.email == email,
+            EmailChallenge.id != challenge.id,
+            EmailChallenge.consumed_at.is_(None),
+        ).update(
+            {EmailChallenge.consumed_at: utcnow()},
+            synchronize_session=False,
+        )
         db.commit()
 
         # Record sends AFTER success so a failed delivery doesn't consume quota.
@@ -181,27 +207,16 @@ class AuthService:
         """
         email = normalize_email(email)
 
-        # Pick the most recent non-consumed, non-expired challenge for this email.
+        # Only the LATEST challenge for this email is verifiable. Earlier ones
+        # are already marked consumed at send time, so this query naturally
+        # returns at most one usable row; we enforce "latest" explicitly so a
+        # race cannot resurrect a superseded code.
         now = utcnow()
-        challenges = (
+        challenge = (
             db.query(EmailChallenge)
             .filter(EmailChallenge.email == email)
             .order_by(desc(EmailChallenge.created_at))
-            .limit(20)
-            .all()
-        )
-        # Prefer a delivered, unconsumed, unexpired one; fall back to the latest
-        # so we can give the right error (expired / too many attempts).
-        challenge = next(
-            (
-                c
-                for c in challenges
-                if c.delivered
-                and c.consumed_at is None
-                and as_utc(c.expires_at) is not None
-                and as_utc(c.expires_at) > now
-            ),
-            challenges[0] if challenges else None,
+            .first()
         )
 
         if challenge is None:
@@ -261,16 +276,18 @@ class AuthService:
             if platform:
                 device.platform = platform
 
-        # Mint a brand-new long-lived token. Any previous session for this
-        # device is left intact (multi-session allowed); the spec only requires
-        # that revocation/logout invalidates the specific token used.
+        # Mint a brand-new long-lived token for this login. Sessions are
+        # additive: re-verifying on the same installation issues a NEW token and
+        # leaves previously-issued tokens valid until explicitly revoked. The raw
+        # token is returned exactly once (here); it is never re-issued, listed,
+        # or logged afterwards — only its HMAC digest is stored.
         raw_token = generate_device_token(self._settings.device_token_bytes)
         session = DeviceSession(
             device_id=device.id,
             user_id=user.id,
             token_digest=hash_token(raw_token, self._settings),
             created_at=now,
-            last_seen_at=now,
+            last_used_at=now,
         )
         db.add(session)
         db.commit()
@@ -280,15 +297,25 @@ class AuthService:
 
     # ------------------------------------------------------------------ #
     # Logout / revoke
+    #
+    # All revocations are transactional: setting ``revoked_at`` AND clearing
+    # ``token_digest`` happen in one commit, so a token can never be half-
+    # revoked (revoked_at set but digest still usable) if the process dies
+    # mid-write.
     # ------------------------------------------------------------------ #
     def logout(self, db: Session, session: DeviceSession) -> None:
-        """Revoke only the supplied device session."""
+        """Revoke only the supplied device session (transactional)."""
         session.revoked_at = utcnow()
         session.token_digest = None
         db.commit()
 
     def logout_all(self, db: Session, user_id) -> int:
-        """Revoke every active session for a user. Returns the count revoked."""
+        """Revoke every active session for a user. Returns the count revoked.
+
+        Done as a single transaction so either all of the user's tokens die
+        together or none do.
+        """
+        now = utcnow()
         rows = (
             db.query(DeviceSession)
             .filter(
@@ -297,7 +324,6 @@ class AuthService:
             )
             .all()
         )
-        now = utcnow()
         for s in rows:
             s.revoked_at = now
             s.token_digest = None
@@ -305,7 +331,10 @@ class AuthService:
         return len(rows)
 
     def revoke_device(self, db: Session, user_id, device_id) -> int:
-        """Revoke all sessions belonging to ``device_id`` owned by ``user_id``."""
+        """Revoke all sessions belonging to ``device_id`` owned by ``user_id``.
+
+        Transactional: all of the device's sessions are revoked together.
+        """
         device = (
             db.query(Device)
             .filter(Device.id == device_id, Device.user_id == user_id)

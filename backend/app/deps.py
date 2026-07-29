@@ -34,6 +34,10 @@ class AppState:
         self.session_factory = None
         self.settings: Optional[Settings] = None
         self.mail_provider: Optional[MailProvider] = None
+        # Replaceable entitlement service for the (future-paid) notes feature.
+        # Defaults to the config-driven allow-all/deny-all; tests or a real
+        # payments integration can swap this via ``set_entitlement_service``.
+        self.entitlement_service = None
 
 
 _state = AppState()
@@ -44,6 +48,23 @@ def configure_state(engine, session_factory, settings: Settings, mail_provider: 
     _state.session_factory = session_factory
     _state.settings = settings
     _state.mail_provider = mail_provider
+    # Build the default entitlement service from settings on (re)configure.
+    from .services.notes import build_default_entitlement_service
+
+    _state.entitlement_service = build_default_entitlement_service(settings)
+
+
+def set_entitlement_service(service) -> None:
+    """Inject a custom per-user entitlement service (tests / future payments)."""
+    _state.entitlement_service = service
+
+
+def get_entitlement_service():
+    if _state.entitlement_service is None:
+        from .services.notes import build_default_entitlement_service
+
+        _state.entitlement_service = build_default_entitlement_service(get_settings())
+    return _state.entitlement_service
 
 
 def get_app_state() -> AppState:
@@ -127,10 +148,10 @@ def require_device(
             detail="account unavailable",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    # Touch last_seen.
+    # Touch last_used_at so device management can show recent activity.
     from .utc_now import utcnow
 
-    session.last_seen_at = utcnow()
+    session.last_used_at = utcnow()
     db.commit()
     return session
 

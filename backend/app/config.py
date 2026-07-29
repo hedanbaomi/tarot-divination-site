@@ -60,6 +60,10 @@ class Settings:
         default_factory=lambda: tuple(_csv(os.getenv("CORS_ALLOW_ORIGINS")))
     )
 
+    @property
+    def is_production(self) -> bool:
+        return self.environment.lower() in {"prod", "production"}
+
     # --- Auth ---------------------------------------------------------------
     # Bcrypt-style cost is handled by ``passlib``; this only tunes the server.
     # 6-digit code, valid 10 minutes, max 5 wrong attempts.
@@ -125,11 +129,53 @@ class Settings:
     notes_list_default_deleted_filter: str = "exclude"  # exclude|include|only
 
     # --- Security / misc ----------------------------------------------------
-    # Pepper optionally added to token hashes server-side. Must be stable across
-    # restarts (rotate via env). Leave empty to disable.
+    # Server-wide secret used to HMAC-sign verification-code and device-token
+    # digests. MUST be set to a stable, high-entropy value in production (any
+    # change invalidates all outstanding codes and tokens). In dev a fixed
+    # non-secret default keeps the test suite deterministic; production
+    # rejects the dev default via ``validate_for_production()``.
+    secret_key: str = field(
+        default_factory=lambda: os.getenv(
+            "SECRET_KEY", "dev-insecure-secret-key-do-not-use-in-prod"
+        )
+    )
+    # Back-compat alias kept for one release; new code uses ``secret_key``.
     token_hash_pepper: str = field(
         default_factory=lambda: os.getenv("TOKEN_HASH_PEPPER", "")
     )
+
+    def effective_hmac_secret(self) -> str:
+        """Secret actually used to sign digests.
+
+        Prefers ``SECRET_KEY``; falls back to the legacy ``TOKEN_HASH_PEPPER``
+        for backward compatibility. Never empty.
+        """
+        return self.secret_key or self.token_hash_pepper
+
+    def validate_for_production(self) -> None:
+        """Fail fast if a production environment is missing required config.
+
+        Called at app startup when ``ENVIRONMENT`` is prod/production. Raises
+        ``RuntimeError`` with a clear message so a misconfigured instance never
+        silently serves weak digests or unsafe dev defaults.
+        """
+        problems: List[str] = []
+        if not self.secret_key or self.secret_key.startswith("dev-insecure"):
+            problems.append("SECRET_KEY must be set to a strong, stable value")
+        if self.secret_key == self.token_hash_pepper and not self.secret_key:
+            problems.append("SECRET_KEY must not be empty")
+        if self.mail_provider == "devtest":
+            problems.append(
+                "MAIL_PROVIDER=devtest is not allowed in production "
+                "(it captures messages in memory and cannot deliver mail)"
+            )
+        if self.is_sqlite:
+            problems.append("DATABASE_URL must point to PostgreSQL in production")
+        if problems:
+            raise RuntimeError(
+                "Refusing to start in production with insecure config: "
+                + "; ".join(problems)
+            )
 
     @property
     def is_sqlite(self) -> bool:

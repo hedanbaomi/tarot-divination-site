@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from ..config import Settings
-from ..deps import get_db, get_settings, require_user
+from ..deps import get_db, get_entitlement_service, get_settings, require_user
 from ..models import Note, User
 from ..schemas import (
     NoteCreate,
@@ -19,6 +19,7 @@ from ..schemas import (
     NoteUpdate,
 )
 from ..services.notes import (
+    EntitlementDeniedError,
     EntitlementService,
     NoteConflictError,
     NoteLimitError,
@@ -28,8 +29,8 @@ from ..services.notes import (
 router = APIRouter(prefix="/api/v1/notes", tags=["notes"])
 
 
-def _service(settings: Settings) -> NotesService:
-    return NotesService(settings=settings, entitlement=EntitlementService(settings))
+def _service(settings: Settings, entitlement: EntitlementService) -> NotesService:
+    return NotesService(settings=settings, entitlement=entitlement)
 
 
 def _to_response(note: Note) -> NoteResponse:
@@ -70,6 +71,7 @@ def create_note(
     user_session=Depends(require_user),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    entitlement: EntitlementService = Depends(get_entitlement_service),
 ):
     """Create a note (idempotent on ``id``).
 
@@ -77,7 +79,7 @@ def create_note(
     status 200 and does not create a duplicate or bump the version.
     """
     user, _ = user_session
-    svc = _service(settings)
+    svc = _service(settings, entitlement)
     try:
         note, created = svc.create_or_get(
             db,
@@ -105,6 +107,7 @@ def list_notes(
     user_session=Depends(require_user),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    entitlement: EntitlementService = Depends(get_entitlement_service),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: Optional[str] = Query(default=None),
     updated_after: Optional[datetime] = Query(default=None),
@@ -120,7 +123,7 @@ def list_notes(
       ``only`` (only tombstones).
     """
     user, _ = user_session
-    svc = _service(settings)
+    svc = _service(settings, entitlement)
     rows, next_cursor, has_more = svc.list(
         db,
         user,
@@ -143,10 +146,11 @@ def get_note(
     user_session=Depends(require_user),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    entitlement: EntitlementService = Depends(get_entitlement_service),
 ):
     """Fetch a single note. Returns 404 if missing, not yours, or soft-deleted."""
     user, _ = user_session
-    note = _service(settings).get(db, user, note_id)
+    note = _service(settings, entitlement).get(db, user, note_id)
     if note is None or note.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="note not found")
     return _to_response(note)
@@ -159,6 +163,7 @@ def update_note(
     user_session=Depends(require_user),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    entitlement: EntitlementService = Depends(get_entitlement_service),
 ):
     """Partially update a note.
 
@@ -166,7 +171,7 @@ def update_note(
     ``409`` with the current version in the detail.
     """
     user, _ = user_session
-    svc = _service(settings)
+    svc = _service(settings, entitlement)
     try:
         note = svc.update(
             db,
@@ -197,11 +202,12 @@ def delete_note(
     user_session=Depends(require_user),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    entitlement: EntitlementService = Depends(get_entitlement_service),
 ):
     """Soft-delete a note (tombstone). Other devices see the deletion via
     ``GET /notes?deleted=include``."""
     user, _ = user_session
-    note = _service(settings).delete(db, user, note_id)
+    note = _service(settings, entitlement).delete(db, user, note_id)
     if note is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="note not found")
     return None

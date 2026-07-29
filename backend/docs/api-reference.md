@@ -1,7 +1,8 @@
 # API reference
 
-Base path: `/api/v1`. Interactive docs at `/docs` (Swagger) and `/redoc` when
-the server is running. All timestamps are UTC ISO-8601.
+Base path: `/api/v1`. There are **12 endpoints** (7 auth/me + 5 notes).
+Interactive docs at `/docs` (Swagger) and `/redoc` when the server is running.
+All timestamps are UTC ISO-8601.
 
 Common status codes:
 
@@ -12,11 +13,12 @@ Common status codes:
 | 204 | No content |
 | 400 | Bad request (e.g. invalid/expired/used code, payload limit) |
 | 401 | Missing/invalid/revoked device token |
-| 403 | Account unavailable (e.g. banned) |
+| 403 | Account unavailable (banned) OR notes entitlement denied |
 | 404 | Resource not found / not owned by you |
 | 409 | Version conflict (notes) |
 | 422 | Validation error (Pydantic) |
 | 429 | Rate limited / resend throttle (see `Retry-After`) |
+| 503 | Email delivery temporarily unavailable (send-code only) |
 
 ---
 
@@ -26,7 +28,12 @@ Common status codes:
 
 Request a 6-digit verification code. **The response is identical whether or not
 the email is already registered** — this endpoint cannot be used to enumerate
-accounts.
+accounts. A newly delivered code invalidates all earlier challenges for that
+email, so only the latest code is verifiable.
+
+If the mail provider fails to deliver, the endpoint returns a unified **503**
+with a generic message (never the provider's response body, never revealing
+whether the email is registered) and **no usable challenge is stored**.
 
 ```http
 POST /api/v1/auth/email/send-code
@@ -48,6 +55,11 @@ Content-Type: application/json
 }
 ```
 
+```http
+503 Service Unavailable          # mail provider failed to deliver
+{ "detail": "email delivery is currently unavailable; please try again later" }
+```
+
 `429` if you resend within 60 s, or exceed per-email/per-IP limits; includes a
 `Retry-After` header. Rules: 6-digit code, single-use, 10-minute expiry, max 5
 wrong attempts.
@@ -55,7 +67,15 @@ wrong attempts.
 ### POST /api/v1/auth/email/verify-code
 
 Verify the code and receive a **long-lived device token** (returned once). New
-emails are auto-registered.
+emails are auto-registered. Re-verifying on the same `installation_id` issues a
+**new** token and leaves previously-issued tokens valid (sessions are
+additive) until explicitly revoked. The raw token is returned **exactly once**
+here and never re-issued, listed, or logged afterwards.
+
+> `installation_id` is scoped per **user**: the same id may be reused across
+> different accounts (e.g. one device switching accounts), each getting its own
+> device row, token, and notes. Revoking a device under one account never
+> affects another account that shares the id.
 
 ```http
 POST /api/v1/auth/email/verify-code
@@ -142,13 +162,17 @@ Authorization: Bearer <token>
       "name": "Pixel 8",
       "platform": "android",
       "created_at": "2026-07-29T12:00:00Z",
-      "last_seen_at": "2026-07-29T12:05:00Z",
+      "last_used_at": "2026-07-29T12:05:00Z",
       "is_current": true,
       "session_active": true
     }
   ]
 }
 ```
+
+`last_used_at` advances on every authenticated request made with that device's
+token. Revoking a user (banning the account) invalidates **all** their tokens
+immediately.
 
 ### DELETE /api/v1/me/devices/{device_id}
 
@@ -168,10 +192,13 @@ Authorization: Bearer <token>
 
 ## Notes
 
-> Cloud notes are an **optional** feature. In dev/tests `NOTES_ENABLED_FOR_ALL`
-> grants access; production can require a real entitlement (payments are out of
-> scope this round). All endpoints require a valid device token; you only ever
-> see your own notes.
+> Cloud notes are an **optional**, future-paid feature gated by a
+> **replaceable per-user entitlement service**. In dev/tests
+> `NOTES_ENABLED_FOR_ALL=true` grants access to everyone; in production the
+> default denies all until a real `EntitlementService` (e.g. backed by a
+> subscription store) is injected. If access is denied, every notes endpoint
+> returns **403**. Payments are out of scope this round. All endpoints require
+> a valid device token; you only ever see your own notes.
 
 ### POST /api/v1/notes
 
