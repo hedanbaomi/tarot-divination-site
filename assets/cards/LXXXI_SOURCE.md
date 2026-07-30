@@ -23,8 +23,9 @@ Littlejohn, and Cassandra Beanland:
 - https://www.quareia.com/
 - https://www.quareia.com/how-to
 
-The written permission for this project is strictly non-commercial and personal
-to this project. Neither the remote display derivatives nor the meanings,
+Written permission was granted for this project's strictly non-commercial use.
+This repository does not grant downstream users any licence to reuse those
+materials. Neither the remote display derivatives nor the meanings,
 translations, or layouts receive an open-source license from this project.
 Access to the website does not grant permission to copy, redistribute, extract,
 or reuse those materials. No original scan masters are hosted on the public

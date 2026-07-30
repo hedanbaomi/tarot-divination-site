@@ -23,10 +23,11 @@ materials.
 
 ## Third-party materials used with written permission
 
-Josephine McCarthy has granted written permission for this strictly
-non-commercial project to use the materials listed below. That permission is
-personal to this project and does not transfer to anyone else; it is not a
-license under the MIT License or any other open-source license.
+Josephine McCarthy has granted written permission for this project's strictly
+non-commercial use of the materials listed below. This repository does not
+grant downstream users any licence to reuse those third-party materials. That
+permission is not a licence under the MIT License or any other open-source
+licence.
 
 ### LXXXI — The Magician's Deck
 
@@ -34,11 +35,13 @@ The LXXXI Magician's Deck artwork and related text are © Josephine McCarthy,
 Stuart Littlejohn, and Cassandra Beanland. Used with written permission for
 this strictly non-commercial project. Excluded from the MIT License.
 
-The project does not distribute LXXXI card images. The website loads
-low-resolution display derivatives from the versioned resource base
-`https://assets.luotianyi.fun/tarot-divination-site/lxxxi/v1`. Access to the
-website grants no permission to copy, redistribute, extract, or reuse that
-artwork or the card meanings and layouts.
+This public source repository contains no LXXXI card faces or original scan
+masters. The website only loads low-resolution display derivatives from a
+separate resource service at the versioned base
+`https://assets.luotianyi.fun/tarot-divination-site/lxxxi/v1`. That use is
+covered by the written permission granted for this project's strictly
+non-commercial use. Access to the website grants no permission to copy,
+redistribute, extract, or reuse that artwork or the card meanings and layouts.
 
 ### Mystagogus
 

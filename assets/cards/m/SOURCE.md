@@ -19,9 +19,9 @@ materials:
 - https://www.quareia.com/how-to
 
 The card art, Mystagogus materials, and publication-derived text are excluded
-from this project's MIT license. The written permission for this project is
-strictly non-commercial and personal to this project; it does not grant anyone
-the right to copy or redistribute these materials. Access to the website or
+from this project's MIT license. Written permission was granted for this
+project's strictly non-commercial use; this repository does not grant
+downstream users any licence to reuse these materials. Access to the website or
 repository grants no such right either. Their inclusion does not imply
 affiliation, sponsorship, or endorsement by Josephine McCarthy or Quareia.
 

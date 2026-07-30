@@ -10,10 +10,10 @@ The official home of Quareia and its materials is <https://www.quareia.com>.
 The project's MIT license covers only project-authored source code and original
 content expressly identified as such. It does not grant rights in any material
 described in this notice. The Mystagogus and LXXXI materials are used here with
-the written permission of their author for strictly non-commercial use; that
-permission is personal to this project and is not a license for anyone else to
-copy, redistribute, modify, sublicense, or reuse those materials. See
-[`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) for details.
+the written permission of their author for strictly non-commercial use. Written
+permission was granted for this project's strictly non-commercial use; this
+repository does not grant downstream users any licence to reuse those
+third-party materials. See [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) for details.
 
 ## Rider–Waite–Smith tarot
 
@@ -44,9 +44,9 @@ or translated from the official Mystagogus book and quick-reference materials:
 - https://www.quareia.com/how-to
 
 The card art, Mystagogus materials, and publication-derived text are excluded
-from the MIT license. The written permission for this project is strictly
-non-commercial and personal to this project; it grants no one else any right to
-copy, redistribute, modify, sublicense, or reuse those materials, and access to
+from the MIT license. Written permission was granted for this project's
+strictly non-commercial use; this repository does not grant downstream users any
+licence to reuse those materials, and access to
 the website grants no such right either.
 
 ## LXXXI — Quareia The Magician's Deck
@@ -69,12 +69,12 @@ base:
 
 `https://assets.luotianyi.fun/tarot-divination-site/lxxxi/v1`
 
-The written permission for this project is strictly non-commercial and personal
-to this project. The remote display derivatives, card meanings, translations,
-and layouts are not open-source material and are not covered by the MIT
-license. Access to the website grants no permission to copy, redistribute,
-extract, or reuse them. Original scan masters are not hosted on the public
-asset service.
+Written permission was granted for this project's strictly non-commercial use.
+This repository does not grant downstream users any licence to reuse those
+materials. The remote display derivatives, card meanings, translations, and
+layouts are not open-source material and are not covered by the MIT license.
+Access to the website grants no permission to copy, redistribute, extract, or
+reuse them. Original scan masters are not hosted on the public asset service.
 
 ## Other publication-derived content
 
