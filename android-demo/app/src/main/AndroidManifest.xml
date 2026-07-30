@@ -22,6 +22,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!--
+          About / Copyright & Attribution screen. Not exported and started only
+          from the in-app button; it needs no permissions of its own. The
+          Quareia link it offers is handed to the system browser.
+        -->
+        <activity
+            android:name=".AboutActivity"
+            android:exported="false"
+            android:label="@string/about_title"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
     </application>
 
 </manifest>

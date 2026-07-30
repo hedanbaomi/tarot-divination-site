@@ -1,15 +1,16 @@
 *.iml
 .gradle
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
+/.idea/
 /build
+/app/build
 /captures
 .externalNativeBuild
 .cxx
+.kotlin
 local.properties
+
+# Build outputs and screenshots must never be committed
+*.apk
+*.aab
+screenshot-*.png

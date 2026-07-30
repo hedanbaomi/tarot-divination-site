@@ -7,13 +7,18 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.util.Base64
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
 import androidx.webkit.WebViewAssetLoader
@@ -83,7 +88,48 @@ class MainActivity : ComponentActivity() {
             scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
         }
 
-        setContentView(webView)
+        // Root layout: the WebView fills the screen, with a small "About /
+        // Copyright" affordance pinned to the top-right corner so the
+        // attribution notice is always reachable without blocking the
+        // divination flow. (The app uses a NoActionBar theme, so the legal
+        // notice is surfaced via this lightweight button rather than an
+        // overflow menu.)
+        val root = FrameLayout(this).apply {
+            setBackgroundColor(Color.parseColor("#090d1e"))
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        root.addView(
+            webView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        val aboutBtn = TextView(this).apply {
+            text = getString(R.string.menu_about)
+            setTextColor(Color.parseColor("#090d1e"))
+            setBackgroundColor(Color.parseColor("#C9A86A"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            val h = dip(8); val v = dip(5)
+            setPadding(h, v, h, v)
+            setOnClickListener { startActivity(Intent(this@MainActivity, AboutActivity::class.java)) }
+        }
+        root.addView(
+            aboutBtn,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP or Gravity.END
+            ).apply {
+                marginEnd = dip(12)
+                topMargin = dip(12)
+            }
+        )
+
+        setContentView(root)
 
         val home = "https://appassets.androidplatform.net/assets/www/index.html"
         if (savedInstanceState == null) {
@@ -97,6 +143,14 @@ class MainActivity : ComponentActivity() {
         super.onSaveInstanceState(outState)
         webView.saveState(outState)
     }
+
+    /** Converts density-independent pixels to raw pixels for layout sizes. */
+    private fun dip(value: Int): Int =
+        TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            value.toFloat(),
+            resources.displayMetrics
+        ).toInt()
 
     /** Back button navigates WebView history before exiting the activity. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {

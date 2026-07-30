@@ -1,3 +1,18 @@
 <resources>
     <string name="app_name">Quareia 占卜</string>
+
+    <!-- 关于 / 版权与署名页面 -->
+    <string name="menu_about">关于 / 版权</string>
+    <string name="about_title">关于 / 版权与署名</string>
+    <string name="about_status">本项目为非官方、免费、严格非商业工具，与 Quareia、Josephine McCarthy、相关艺术家或出版方不存在隶属、赞助或背书关系。第三方牌面与文本不属于应用代码的开源许可。</string>
+    <string name="about_permission_note">Josephine McCarthy 的书面许可已明确覆盖本免费应用（及对应的免费 GitHub Pages 网站），但仅限严格非商业使用，并排除在一切开源许可之外。</string>
+    <string name="about_mystagogus_label">Mystagogus（M 牌）牌面与相关文本</string>
+    <string name="about_mystagogus_rights">© Josephine McCarthy · 经作者书面许可，仅限本严格非商业项目使用。</string>
+    <string name="about_lxxxi_label">LXXXI 魔法牌牌面与相关文本</string>
+    <string name="about_lxxxi_rights">© Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland · 经作者书面许可，仅限本严格非商业项目使用。</string>
+    <string name="about_oss_boundary">应用代码遵循仓库根目录的 MIT 许可；但第三方牌面、牌意文本及衍生内容不在该许可范围内，也不因开源而获得再分发授权。</string>
+    <string name="about_quareia_label">Quareia 官网</string>
+    <string name="about_quote_label">作者附言</string>
+    <string name="about_quote_zh">中文参考译文：「虽然数字占卜工具在紧急情况下可能会有用，但占卜师用双手亲自接触和洗牌的互动更安全，准确度也更高，且力量强大得多。」原文以英文为准。</string>
+    <string name="about_close">关闭</string>
 </resources>
