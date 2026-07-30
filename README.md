@@ -87,7 +87,7 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 
 - **塔罗**牌意文本为面向本网站的整理与改写，参考《21世纪的塔罗技能》和 Quareia 训练语境。
 - **M 牌**关键词与牌阵译自 Josephine McCarthy《Mystagogus》关键词索引与 Layout PDF；牌面图像和由第三方出版物整理或翻译的内容不在 MIT 许可范围内。
-- **LXXXI 魔法牌**牌意译自《LXXXI 奎瑞亚魔法牌·牌意说明书》（繁体中文版）并转写为简体中文；牌阵译自说明书第十章。相关视觉素材仅用于站点运行展示，不随公开源码仓库分发；这不表示项目已取得授权，也不向访问者授予复制、再分发或其他开源权利。
+- **LXXXI 魔法牌**牌意译自《LXXXI 奎瑞亚魔法牌·牌意说明书》（繁体中文版）并转写为简体中文；牌阵译自说明书第十章。LXXXI 牌面与相关文本为 Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland 的作品，经作者书面许可在本项目严格非商业使用，不在 MIT 许可范围内；相关视觉素材仅用于站点运行展示，不随公开源码仓库分发，也不向访问者授予复制、再分发或其他开源权利。
 - **英文支持**以本地 `en/` 中的英文资料为依据，对用于网页展示的牌名、关键词、牌义与牌阵说明进行简明整理和改写；不会在网页中逐页转载整本资料，原始 PDF 也不作为网站运行资源发布。据其整理的文本不属于 MIT 许可。
 - 健康布局仅用于记录牌阵结构与个人反思，不能替代医生诊断、治疗或其他专业医疗建议。
 
@@ -97,7 +97,7 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 - Mystagogus: local JPEG display derivatives (`assets/cards/m/`) and shared card back `m-back.jpeg`. Source materials © Josephine McCarthy. See `assets/cards/m/SOURCE.md`.
 - LXXXI Magician's Deck: visual assets are available only for the site's runtime presentation and are not distributed in this public source repository. Source art is attributed to Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland. See `assets/cards/LXXXI_SOURCE.md`.
 
-完整的权利边界与来源说明见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+完整的权利边界与来源说明见 [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) 与 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 
 ## 贡献者 ✨
 
@@ -119,6 +119,23 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 
 <sub>📷 LXXXI 魔法牌实体卡扫描</sub>
 
+## 授权与署名
+
+本项目为非官方、免费、严格非商业工具，不暗示 Quareia 或相关作者为项目背书。Mystagogus 与 LXXXI 魔法牌的牌面及相关文本均经作者 Josephine McCarthy 书面许可，在本项目严格非商业使用，第三方牌面与文本不适用 MIT License：
+
+- **Mystagogus**：© Josephine McCarthy。
+- **LXXXI 魔法牌**：© Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland。
+
+Quareia 官网：<https://www.quareia.com>。完整权利边界见 [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) 与 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+
+> “while digital tools for readings can be useful in an emergency, the interaction between the physical hands of the reader touching and shuffling the deck is safer, a lot more accurate and far more powerful” — Josephine McCarthy
+>
+> （中文参考译文：「虽然数字占卜工具在紧急情况下可能会有用，但占卜师用双手亲自接触和洗牌的互动更安全，准确度也更高，且力量强大得多。」原文以英文为准。）
+
+## Android 边界（仅文档说明）
+
+若未来制作免费开源的 Android 版本，仍必须保持严格非商业：不得包含广告、打赏、订阅、付费云服务、付费解锁或其他盈利功能；第三方牌面与文本（Mystagogus、LXXXI 等）不得纳入开源许可。未来若要商业化，必须另行取得正式的商业电子版权许可。当前仓库不含 Android 项目。
+
 ## License
 
-MIT 仅适用于本项目作者原创的程序代码，以及明确标注为项目原创的内容。第三方牌面图像、Mystagogus 与 LXXXI 材料，以及基于第三方出版物整理、改写或翻译的文本与数据均不在 MIT 许可范围内。详见 [`LICENSE`](LICENSE) 与 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+MIT 仅适用于本项目作者原创的程序代码，以及明确标注为项目原创的内容。第三方牌面图像、Mystagogus 与 LXXXI 材料，以及基于第三方出版物整理、改写或翻译的文本与数据均不在 MIT 许可范围内（Mystagogus 与 LXXXI 经作者书面许可仅限本项目严格非商业使用）。详见 [`LICENSE`](LICENSE)、[`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) 与 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。

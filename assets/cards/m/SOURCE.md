@@ -1,5 +1,9 @@
 # Mystagogus (M 牌) Card Faces
 
+Mystagogus artwork and related text are © Josephine McCarthy. Used with written
+permission for this strictly non-commercial project. Excluded from the MIT
+License.
+
 Local JPEG display derivatives (max width 600px) prepared for use in this site.
 
 - Deck: Mystagogus (Quareia Magical Training)
@@ -15,6 +19,12 @@ materials:
 - https://www.quareia.com/how-to
 
 The card art, Mystagogus materials, and publication-derived text are excluded
-from this project's MIT license. No permission to copy or redistribute them is
-granted here. Their inclusion does not imply authorization, affiliation,
-sponsorship, or endorsement by Josephine McCarthy or Quareia.
+from this project's MIT license. The written permission for this project is
+strictly non-commercial and personal to this project; it does not grant anyone
+the right to copy or redistribute these materials. Access to the website or
+repository grants no such right either. Their inclusion does not imply
+affiliation, sponsorship, or endorsement by Josephine McCarthy or Quareia.
+
+See [`../../ATTRIBUTIONS.md`](../../ATTRIBUTIONS.md) and
+[`../../THIRD_PARTY_NOTICES.md`](../../THIRD_PARTY_NOTICES.md) for the full
+rights boundaries.

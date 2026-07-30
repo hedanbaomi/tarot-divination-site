@@ -1851,6 +1851,65 @@ body.choice-open { overflow: hidden; }
   margin-bottom: 8px;
 }
 
+/* ---------- Attribution notice ---------- */
+.attribution {
+  margin: 12px auto 0;
+  max-width: 520px;
+  padding-top: 10px;
+  border-top: 1px solid var(--accent);
+  border-top-color: rgba(216, 190, 130, 0.18);
+  text-align: center;
+  font-size: 0.66rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.attribution-status {
+  margin: 0 0 8px;
+}
+.attribution-list {
+  list-style: none;
+  margin: 0 auto 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.attribution-rights {
+  display: block;
+  color: var(--accent-light);
+}
+.attribution-quareia {
+  margin: 0 0 10px;
+}
+.attribution-quareia a {
+  color: var(--accent-light);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.attribution-quareia a:hover,
+.attribution-quareia a:focus-visible {
+  color: var(--accent);
+}
+.attribution-quote {
+  margin: 0 auto 6px;
+  max-width: 460px;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+.attribution-quote p {
+  margin: 0 0 2px;
+}
+.attribution-quote cite {
+  font-style: normal;
+  color: var(--accent-light);
+}
+.attribution-quote-zh {
+  margin: 0;
+  font-size: 0.62rem;
+  opacity: 0.85;
+}
+
+
 /* ---------- Responsive ---------- */
 @media (max-width: 480px) {
   .header h1 { font-size: 1.35rem; letter-spacing: 4px; }

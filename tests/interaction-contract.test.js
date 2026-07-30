@@ -44,9 +44,33 @@ test("website uses the branded dialog for spread and history confirmations", fun
   assert.match(html, /id="confirmProceedBtn"/);
   assert.match(html, /src="js\/dialogs\.js\?v=20260727-card-picker"/);
   assert.match(html, /src="js\/spreads\.js\?v=20260727-spread-labels"/);
-  assert.match(html, /src="js\/i18n\.js\?v=20260727-card-picker"/);
-  assert.match(html, /src="js\/app\.js\?v=20260727-card-picker"/);
-  assert.match(html, /href="css\/styles\.css\?v=20260727-card-picker"/);
+  assert.match(html, /src="js\/i18n\.js\?v=20260729-attribution"/);
+  assert.match(html, /src="js\/app\.js\?v=20260729-attribution"/);
+  assert.match(html, /href="css\/styles\.css\?v=20260729-attribution"/);
+});
+
+test("footer carries the non-commercial attribution, creators, Quareia link, and Josephine quote", function () {
+  var html = read(surface.html);
+  var i18n = read(surface.i18n);
+  var css = read(surface.css);
+  assert.match(html, /class="attribution"/);
+  assert.match(html, /href="https:\/\/www\.quareia\.com"/);
+  assert.match(
+    html,
+    /safer, a lot more accurate and far more powerful/
+  );
+  ["attribution.status", "attribution.mystagogusRights", "attribution.lxxxiRights",
+    "attribution.quareiaLink", "attribution.quoteCite"].forEach(function (key) {
+    assert.ok(i18n.indexOf('"' + key + '"') !== -1, "missing i18n key " + key);
+  });
+  ["zh-CN", "en"].forEach(function (locale) {
+    var block = i18n.match(new RegExp('"' + locale + '": \\{[\\s\\S]*?\\n    \\}'))[0];
+    assert.ok(block.indexOf('"attribution.status"') !== -1, locale + " missing attribution.status");
+    assert.ok(block.indexOf('"attribution.mystagogusRights"') !== -1, locale + " missing mystagogus rights");
+    assert.ok(block.indexOf('"attribution.lxxxiRights"') !== -1, locale + " missing lxxxi rights");
+  });
+  assert.match(css, /\.attribution\b/);
+  assert.match(css, /\.attribution-quote\b/);
 });
 
 test("revealed cards can flip between artwork and an in-place meaning panel", function () {

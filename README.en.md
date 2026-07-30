@@ -87,7 +87,7 @@ Mystagogus provides its 18-card signature layout. LXXXI provides four Chapter 10
 
 - **Tarot** interpretations are edited and rewritten for this website with reference to *Tarot Skills for the 21st Century* and the Quareia training context.
 - **Mystagogus** keywords and layout information are based on Josephine McCarthy's *Mystagogus* keyword index and layout PDF. The card artwork and content derived or translated from third-party publications are outside the MIT License.
-- **LXXXI** Simplified Chinese meanings are adapted from the Traditional Chinese *LXXXI Quareia Magician's Deck Guidebook*, while its layouts follow Chapter 10. Related visual assets are used only for runtime presentation and are not distributed with the public source repository. This does not imply authorization or grant visitors the right to copy or redistribute the artwork.
+- **LXXXI** Simplified Chinese meanings are adapted from the Traditional Chinese *LXXXI Quareia Magician's Deck Guidebook*, while its layouts follow Chapter 10. The LXXXI artwork and related text are © Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland, used with written permission for this strictly non-commercial project, and are excluded from the MIT License. Related visual assets are used only for runtime presentation and are not distributed with the public source repository, and access does not grant visitors the right to copy or redistribute the artwork.
 - **English support** is based on the English reference material stored locally in `en/`. Card names, keywords, meanings, and spread descriptions used by the website are concise edited summaries rather than page-by-page reproductions. The original PDFs are not runtime website assets. Text derived from those sources is outside the MIT License.
 - The Health Layout is provided only as a record of the spread structure and for personal reflection. It is not a substitute for medical diagnosis, treatment, or other professional advice.
 
@@ -97,7 +97,7 @@ Mystagogus provides its 18-card signature layout. LXXXI provides four Chapter 10
 - Mystagogus: local JPEG display derivatives in `assets/cards/m/`, plus the shared `m-back.jpeg`. Source materials © Josephine McCarthy. See [`assets/cards/m/SOURCE.md`](assets/cards/m/SOURCE.md).
 - LXXXI — The Magician's Deck: visual assets are available only for the site's runtime presentation and are not distributed in this public source repository. Source art is attributed to Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland. See [`assets/cards/LXXXI_SOURCE.md`](assets/cards/LXXXI_SOURCE.md).
 
-For the complete rights boundaries and attributions, see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+For the complete rights boundaries and attributions, see [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 ## Contributors ✨
 
@@ -119,6 +119,21 @@ Thanks to the following contributor:
 
 <sub>📷 Physical LXXXI deck scans</sub>
 
+## Attribution
+
+This is an unofficial, free, strictly non-commercial tool. It does not imply any endorsement by Quareia or by the authors. The Mystagogus and LXXXI artwork and related text are used with the written permission of their author, Josephine McCarthy, for strictly non-commercial use in this project; the third-party cards and text are not covered by the MIT License:
+
+- **Mystagogus**: © Josephine McCarthy.
+- **LXXXI — The Magician's Deck**: © Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland.
+
+The official Quareia website is <https://www.quareia.com>. For the full rights boundaries, see [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+> "while digital tools for readings can be useful in an emergency, the interaction between the physical hands of the reader touching and shuffling the deck is safer, a lot more accurate and far more powerful" — Josephine McCarthy
+
+## Android Boundary (documentation only)
+
+Any future free and open-source Android version must remain strictly non-commercial: no advertising, donations, subscriptions, paid cloud services, paid unlocks, or other revenue-generating features. Third-party cards and text (Mystagogus, LXXXI, etc.) must not be placed under an open-source license. Any future commercialization requires a separate formal commercial electronic-rights license. No Android project exists in this repository today.
+
 ## License
 
-The MIT License applies only to the original program code and content explicitly identified as original to this project. Third-party card artwork, Mystagogus and LXXXI materials, and text or data adapted, rewritten, or translated from third-party publications are not covered by the MIT License. See [`LICENSE`](LICENSE) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+The MIT License applies only to the original program code and content explicitly identified as original to this project. Third-party card artwork, Mystagogus and LXXXI materials, and text or data adapted, rewritten, or translated from third-party publications are not covered by the MIT License (Mystagogus and LXXXI are used with the author's written permission, strictly non-commercial and for this project only). See [`LICENSE`](LICENSE), [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md), and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

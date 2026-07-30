@@ -1,12 +1,19 @@
 # Third-Party Notices
 
-This is an unofficial, non-commercial project. It is not affiliated with,
-sponsored by, or endorsed by Quareia, Josephine McCarthy, the artists,
-publishers, or other rights holders named below.
+This is an unofficial, free, strictly non-commercial project. It is not
+affiliated with, sponsored by, or endorsed by Quareia, Josephine McCarthy, the
+artists, publishers, or other rights holders named below. Nothing here implies
+an endorsement of this project by any of them.
+
+The official home of Quareia and its materials is <https://www.quareia.com>.
 
 The project's MIT license covers only project-authored source code and original
 content expressly identified as such. It does not grant rights in any material
-described in this notice.
+described in this notice. The Mystagogus and LXXXI materials are used here with
+the written permission of their author for strictly non-commercial use; that
+permission is personal to this project and is not a license for anyone else to
+copy, redistribute, modify, sublicense, or reuse those materials. See
+[`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) for details.
 
 ## Rider–Waite–Smith tarot
 
@@ -24,20 +31,29 @@ is not relicensed under this project's MIT license.
 
 ## Mystagogus
 
+Mystagogus artwork and related text are © Josephine McCarthy. Used with written
+permission for this strictly non-commercial project. Excluded from the MIT
+License.
+
 Quareia identifies Josephine McCarthy as the author, designer, and painter of
 Mystagogus. This repository retains local display derivatives of the 78 card
-faces and card back. Keywords, layouts, and related Chinese text were
-compiled or translated from the official Mystagogus book and quick-reference
-materials:
+faces and card back. Keywords, layouts, and related Chinese text were compiled
+or translated from the official Mystagogus book and quick-reference materials:
 
 - https://www.quareia.com/texts
 - https://www.quareia.com/how-to
 
 The card art, Mystagogus materials, and publication-derived text are excluded
-from the MIT license. This project grants no permission to copy or redistribute
-them and does not claim authorization from their rights holders.
+from the MIT license. The written permission for this project is strictly
+non-commercial and personal to this project; it grants no one else any right to
+copy, redistribute, modify, sublicense, or reuse those materials, and access to
+the website grants no such right either.
 
 ## LXXXI — Quareia The Magician's Deck
+
+The LXXXI Magician's Deck artwork and related text are © Josephine McCarthy,
+Stuart Littlejohn, and Cassandra Beanland. Used with written permission for
+this strictly non-commercial project. Excluded from the MIT License.
 
 Quareia identifies LXXXI as a collaboration between Josephine McCarthy, Stuart
 Littlejohn, and Cassandra Beanland. Card meanings and layouts in this project
@@ -53,12 +69,12 @@ base:
 
 `https://assets.luotianyi.fun/tarot-divination-site/lxxxi/v1`
 
-The project does not claim that it has obtained authorization to distribute
-the LXXXI card art. The remote display derivatives, card meanings,
-translations, and layouts are not open-source material and are not covered by
-the MIT license. Access to the website grants no permission to copy,
-redistribute, extract, or reuse them. Original scan masters are not hosted on
-the public asset service.
+The written permission for this project is strictly non-commercial and personal
+to this project. The remote display derivatives, card meanings, translations,
+and layouts are not open-source material and are not covered by the MIT
+license. Access to the website grants no permission to copy, redistribute,
+extract, or reuse them. Original scan masters are not hosted on the public
+asset service.
 
 ## Other publication-derived content
 
