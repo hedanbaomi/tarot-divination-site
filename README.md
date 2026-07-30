@@ -121,7 +121,7 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 
 ## 授权与署名
 
-本项目为非官方、免费、严格非商业工具，不暗示 Quareia 或相关作者为项目背书。Mystagogus 与 LXXXI 魔法牌的牌面及相关文本均经作者 Josephine McCarthy 书面许可，在本项目严格非商业使用，第三方牌面与文本不适用 MIT License：
+本项目为非官方、免费、严格非商业工具，不暗示 Quareia 或相关作者为项目背书。Josephine McCarthy 的书面许可已明确覆盖本免费的 GitHub Pages 网站，以及未来免费、开源的 Android 应用，前提是第三方版权素材始终严格非商业、防止滥用，并排除在一切开源许可之外。第三方牌面与文本不适用 MIT License：
 
 - **Mystagogus**：© Josephine McCarthy。
 - **LXXXI 魔法牌**：© Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland。
@@ -134,7 +134,7 @@ Quareia 官网：<https://www.quareia.com>。完整权利边界见 [`ATTRIBUTION
 
 ## Android 边界（仅文档说明）
 
-若未来制作免费开源的 Android 版本，仍必须保持严格非商业：不得包含广告、打赏、订阅、付费云服务、付费解锁或其他盈利功能；第三方牌面与文本（Mystagogus、LXXXI 等）不得纳入开源许可。未来若要商业化，必须另行取得正式的商业电子版权许可。当前仓库不含 Android 项目。
+Josephine McCarthy 的书面许可已明确覆盖本免费的 GitHub Pages 网站，以及未来免费、开源的 Android 应用，前提是第三方版权素材始终严格非商业、采取合理措施防止滥用，并排除在一切开源许可之外。任何 Android 版本同样不得包含广告、打赏、订阅、付费云服务、付费解锁或其他盈利功能；第三方牌面与文本（Mystagogus、LXXXI 等）不得纳入 MIT 或其他开源许可。未来若要商业化，必须另行取得正式的商业电子版权许可。
 
 ## License
 

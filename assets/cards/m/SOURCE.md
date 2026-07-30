@@ -20,10 +20,13 @@ materials:
 
 The card art, Mystagogus materials, and publication-derived text are excluded
 from this project's MIT license. Written permission was granted for this
-project's strictly non-commercial use; this repository does not grant
-downstream users any licence to reuse these materials. Access to the website or
-repository grants no such right either. Their inclusion does not imply
-affiliation, sponsorship, or endorsement by Josephine McCarthy or Quareia.
+project's strictly non-commercial use; it covers this free GitHub Pages website
+and a future free, open-source Android application, provided that the
+copyrighted materials remain strictly non-commercial, are reasonably protected
+from misuse, and are excluded from all open-source licences. This repository
+does not grant downstream users any licence to reuse these materials. Access to
+the website or repository grants no such right either. Their inclusion does not
+imply affiliation, sponsorship, or endorsement by Josephine McCarthy or Quareia.
 
 See [`../../ATTRIBUTIONS.md`](../../ATTRIBUTIONS.md) and
 [`../../THIRD_PARTY_NOTICES.md`](../../THIRD_PARTY_NOTICES.md) for the full

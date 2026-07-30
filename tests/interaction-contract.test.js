@@ -44,9 +44,9 @@ test("website uses the branded dialog for spread and history confirmations", fun
   assert.match(html, /id="confirmProceedBtn"/);
   assert.match(html, /src="js\/dialogs\.js\?v=20260727-card-picker"/);
   assert.match(html, /src="js\/spreads\.js\?v=20260727-spread-labels"/);
-  assert.match(html, /src="js\/i18n\.js\?v=20260729-attribution"/);
-  assert.match(html, /src="js\/app\.js\?v=20260729-attribution"/);
-  assert.match(html, /href="css\/styles\.css\?v=20260729-attribution"/);
+  assert.match(html, /src="js\/i18n\.js\?v=20260730-android-coverage"/);
+  assert.match(html, /src="js\/app\.js\?v=20260730-android-coverage"/);
+  assert.match(html, /href="css\/styles\.css\?v=20260730-android-coverage"/);
 });
 
 test("footer carries the non-commercial attribution, creators, Quareia link, and Josephine quote", function () {

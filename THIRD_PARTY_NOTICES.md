@@ -11,9 +11,12 @@ The project's MIT license covers only project-authored source code and original
 content expressly identified as such. It does not grant rights in any material
 described in this notice. The Mystagogus and LXXXI materials are used here with
 the written permission of their author for strictly non-commercial use. Written
-permission was granted for this project's strictly non-commercial use; this
-repository does not grant downstream users any licence to reuse those
-third-party materials. See [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) for details.
+permission covers this free GitHub Pages website and a future free, open-source
+Android application, provided that the copyrighted materials remain strictly
+non-commercial, are reasonably protected from misuse, and are excluded from all
+open-source licences. This repository does not grant downstream users any
+licence to reuse those third-party materials. See [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md)
+for details.
 
 ## Rider–Waite–Smith tarot
 

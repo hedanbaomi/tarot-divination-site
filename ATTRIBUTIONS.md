@@ -24,10 +24,13 @@ materials.
 ## Third-party materials used with written permission
 
 Josephine McCarthy has granted written permission for this project's strictly
-non-commercial use of the materials listed below. This repository does not
-grant downstream users any licence to reuse those third-party materials. That
-permission is not a licence under the MIT License or any other open-source
-licence.
+non-commercial use of the materials listed below. Written permission covers
+this free GitHub Pages website and a future free, open-source Android
+application, provided that the copyrighted materials remain strictly
+non-commercial, are reasonably protected from misuse, and are excluded from all
+open-source licences. This repository does not grant downstream users any
+licence to reuse those third-party materials. That permission is not a licence
+under the MIT License or any other open-source licence.
 
 ### LXXXI — The Magician's Deck
 
@@ -59,7 +62,11 @@ keywords, layouts, and translations.
 This project contains no advertising, donations, subscriptions, paid cloud
 services, paywalls, paid unlocks, or any other revenue-generating feature. The
 permission granted for the third-party materials above is strictly
-non-commercial and would be violated by adding any such feature.
+non-commercial and would be violated by adding any such feature. The same
+boundary applies to the free GitHub Pages website and to any future free,
+open-source Android application covered by the written permission: both must
+remain strictly non-commercial and keep the third-party materials excluded
+from every open-source licence.
 
 ## A note from Josephine McCarthy
 

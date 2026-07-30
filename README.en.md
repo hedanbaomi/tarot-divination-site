@@ -121,7 +121,7 @@ Thanks to the following contributor:
 
 ## Attribution
 
-This is an unofficial, free, strictly non-commercial tool. It does not imply any endorsement by Quareia or by the authors. The Mystagogus and LXXXI artwork and related text are used with the written permission of their author, Josephine McCarthy, for strictly non-commercial use in this project; the third-party cards and text are not covered by the MIT License:
+This is an unofficial, free, strictly non-commercial tool. It does not imply any endorsement by Quareia or by the authors. Written permission from Josephine McCarthy covers this free GitHub Pages website and a future free, open-source Android application, provided that the copyrighted materials remain strictly non-commercial, are reasonably protected from misuse, and are excluded from all open-source licences. The third-party cards and text are not covered by the MIT License:
 
 - **Mystagogus**: © Josephine McCarthy.
 - **LXXXI — The Magician's Deck**: © Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland.
@@ -132,7 +132,7 @@ The official Quareia website is <https://www.quareia.com>. For the full rights b
 
 ## Android Boundary (documentation only)
 
-Any future free and open-source Android version must remain strictly non-commercial: no advertising, donations, subscriptions, paid cloud services, paid unlocks, or other revenue-generating features. Third-party cards and text (Mystagogus, LXXXI, etc.) must not be placed under an open-source license. Any future commercialization requires a separate formal commercial electronic-rights license. No Android project exists in this repository today.
+Josephine McCarthy's written permission already covers this free GitHub Pages website and a future free, open-source Android application, provided that the copyrighted materials remain strictly non-commercial, are reasonably protected from misuse, and are excluded from all open-source licences. Any Android version must still remain strictly non-commercial: no advertising, donations, subscriptions, paid cloud services, paid unlocks, or other revenue-generating features. Third-party cards and text (Mystagogus, LXXXI, etc.) must not be placed under an open-source licence. Any future commercialization requires a separate formal commercial electronic-rights licence.
 
 ## License
 
