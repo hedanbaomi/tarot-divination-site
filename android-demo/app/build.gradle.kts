@@ -29,6 +29,9 @@ android {
       buildConfig = false
       shaders = false
     }
+    testOptions {
+      unitTests.isIncludeAndroidResources = true
+    }
 
     packaging {
         resources {
@@ -53,4 +56,5 @@ dependencies {
 
   // Local unit tests
   testImplementation(libs.junit)
+  testImplementation(libs.robolectric)
 }

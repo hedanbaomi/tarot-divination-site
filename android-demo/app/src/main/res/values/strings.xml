@@ -12,16 +12,20 @@
     <string name="about_lxxxi_rights">© Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland · 经作者书面许可，仅限本严格非商业项目使用。</string>
     <string name="about_oss_boundary">应用代码遵循仓库根目录的 MIT 许可；但第三方牌面、牌意文本及衍生内容不在该许可范围内，也不因开源而获得再分发授权。</string>
     <string name="about_quareia_label">Quareia 官网</string>
+    <string name="about_quareia_url">https://www.quareia.com</string>
     <string name="about_quote_label">作者附言</string>
+    <string name="about_quote_en">while digital tools for readings can be useful in an emergency, the interaction between the physical hands of the reader touching and shuffling the deck is safer, a lot more accurate and far more powerful</string>
+    <string name="about_quote_cite">— Josephine McCarthy</string>
+    <string name="about_quote_display">%1$s\n\n%2$s</string>
     <string name="about_quote_zh">中文参考译文：「虽然数字占卜工具在紧急情况下可能会有用，但占卜师用双手亲自接触和洗牌的互动更安全，准确度也更高，且力量强大得多。」原文以英文为准。</string>
 
     <!-- 匿名使用统计 -->
     <string name="telemetry_section_title">匿名使用统计</string>
-    <string name="telemetry_notice">本应用默认启用匿名使用统计，用于了解活跃设备数量和功能使用情况。统计内容包括应用版本、语言、牌组和抽牌数量；不收集邮箱、问题、具体抽牌结果或本地历史。为防止滥用，服务端会临时读取连接的国家信息（仅国家级），不记录原始 IP 地址。可在下方随时关闭；关闭后将停止全部统计并删除本机匿名标识。</string>
+    <string name="telemetry_notice">本应用默认启用匿名使用统计，用于了解活跃设备数量和功能使用情况。统计内容包括应用版本、语言、牌组和抽牌数量；不收集邮箱、问题、具体抽牌结果或本地历史。服务端会临时读取连接 IP，用于限流和防止滥用；不会保存原始 IP 或持久 IP 摘要；统计数据库仅保存国家代码。可在下方随时关闭；关闭后将停止全部统计并删除本机匿名标识。</string>
     <string name="telemetry_switch_on">匿名使用统计（默认启用）</string>
     <string name="telemetry_switch_off">匿名使用统计已关闭</string>
     <string name="telemetry_disabled_toast">已停止使用统计并删除匿名标识</string>
-    <string name="telemetry_first_launch_notice">本应用默认启用匿名使用统计，用于了解活跃设备数量和功能使用情况。统计内容包括应用版本、语言、牌组和抽牌数量；不收集邮箱、问题、具体抽牌结果或本地历史。可随时在关于页面关闭。</string>
+    <string name="telemetry_first_launch_notice">本应用默认启用匿名使用统计，用于了解活跃设备数量和功能使用情况。统计内容包括应用版本、语言、牌组和抽牌数量；不收集邮箱、问题、具体抽牌结果或本地历史。服务端会临时读取连接 IP，用于限流和防止滥用；不会保存原始 IP 或持久 IP 摘要；统计数据库仅保存国家代码。可随时在关于页面关闭。</string>
     <string name="telemetry_notice_dismiss">前往“关于 / 版权”页面管理或关闭</string>
     <string name="about_close">关闭</string>
 </resources>

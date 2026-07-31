@@ -8,8 +8,9 @@
  *  - Events are validated against a strict allow-list. Any unknown or
  *    disallowed field (card ids, names, orientations, positions, questions,
  *    notes, history, raw IP, User-Agent, …) causes a 400.
- *  - The raw client IP is used ONLY for in-memory rate limiting. It is never
- *    written to Analytics Engine, D1, logs, or any response.
+ *  - The raw client IP is used ONLY to derive a process-local rate-limit bucket.
+ *    It is never written to Analytics Engine, D1, logs, or any response, and
+ *    no persistent IP digest is kept.
  *  - Only the connection country (request.cf.country, ISO code) is stored, and
  *    only at country granularity — never city, region, or coordinates.
  *  - Timestamps come from the server clock (Date.now()), never the client.
@@ -19,6 +20,8 @@
  */
 const SCHEMA_VERSION = 1;
 const MAX_BODY_BYTES = 1024;
+const ANDROID_MAJOR_MIN = 1;
+const ANDROID_MAJOR_MAX = 100;
 
 // Allow-listed events and their extra fields. Anything else is rejected.
 const EVENT_DEFS = {
@@ -39,23 +42,21 @@ const BASE_FIELDS = {
   android_major: "int"
 };
 
-// Rate limits (per worker instance / in-memory; reset on redeploy/restart).
-const RATE_LIMIT = {
+// Default rate limits (per worker instance / in-memory; reset on redeploy/restart).
+const DEFAULT_RATE_LIMIT = {
   perInstallPerHour: 60,   // any single install_hash: <= 60 events/hour
   perIpPerMinute: 30       // any single IP digest: <= 30 events/minute
 };
 
-// In-memory rolling rate-limit counters and security-log entries. These live
-// only in the isolate's memory and are lost on redeploy — adequate for abuse
-// defence, not for precise metering.
+// In-memory rolling rate-limit counters. These live only in the isolate's
+// memory and are lost on redeploy — adequate for abuse defence, not for
+// precise metering. IP bucket keys are removed when the next request for that
+// key arrives after its window; no IP digest is persisted elsewhere.
 const installBuckets = new Map();   // installHashDigest -> [{ ts }]
 const ipBuckets = new Map();        // ipDigest -> [{ ts }]
-const securityLog = [];             // { ipDigest, ts } retained <= 7 days
 
 const HOUR_MS = 60 * 60 * 1000;
 const MIN_MS = 60 * 1000;
-const DAY_MS = 24 * HOUR_MS;
-const SECURITY_LOG_TTL_DAYS = 7;
 
 export default {
   async fetch(request, env, ctx) {
@@ -74,14 +75,20 @@ export default {
 };
 
 async function handleEvents(request, env) {
+  // Fail closed when the production binding is absent. A 204 here would make
+  // the Android client permanently mark retryable events as delivered.
+  if (!hasAnalyticsBinding(env)) {
+    return json({ error: "telemetry_unavailable" }, 503);
+  }
+
   // 1. Size guard before reading the body.
   const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength && contentLength > MAX_BODY_BYTES) {
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
     return json({ error: "payload_too_large" }, 413);
   }
 
   const raw = await request.text();
-  if (raw.length > MAX_BODY_BYTES) {
+  if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
     return json({ error: "payload_too_large" }, 413);
   }
 
@@ -101,12 +108,13 @@ async function handleEvents(request, env) {
   const cf = request.cf || {};
   const country = typeof cf.country === "string" ? cf.country.slice(0, 2) : "??";
 
+  const rateLimit = readRateLimits(env);
+
   // IP digest for rate limiting only — never stored beyond the rolling counter.
   const ipDigest = digestString(getClientIp(request) + "|ip-rate");
 
   // Rate limit by IP digest.
-  if (overLimit(ipBuckets, ipDigest, RATE_LIMIT.perIpPerMinute, MIN_MS)) {
-    noteSecurity(ipDigest);
+  if (overLimit(ipBuckets, ipDigest, rateLimit.perIpPerMinute, MIN_MS)) {
     return json({ error: "rate_limited" }, 429);
   }
 
@@ -118,8 +126,7 @@ async function handleEvents(request, env) {
 
     // Rate limit by install hash digest.
     const installDigest = digestString(validated.value.install_hash + "|install-rate");
-    if (overLimit(installBuckets, installDigest, RATE_LIMIT.perInstallPerHour, HOUR_MS)) {
-      noteSecurity(ipDigest);
+    if (overLimit(installBuckets, installDigest, rateLimit.perInstallPerHour, HOUR_MS)) {
       return json({ error: "rate_limited" }, 429);
     }
 
@@ -170,6 +177,14 @@ function validateEvent(event) {
     return { ok: false, error: "event_mismatch" };
   }
 
+  if (value.schema_version !== SCHEMA_VERSION) {
+    return { ok: false, error: "unsupported_schema_version" };
+  }
+
+  if (value.android_major < ANDROID_MAJOR_MIN || value.android_major > ANDROID_MAJOR_MAX) {
+    return { ok: false, error: "invalid_android_major" };
+  }
+
   // install_hash must be a 64-char lowercase hex SHA-256 digest.
   if (!/^[0-9a-f]{64}$/.test(value.install_hash)) {
     return { ok: false, error: "invalid_install_hash" };
@@ -191,7 +206,6 @@ function validateEvent(event) {
     }
   }
 
-  value.schema_version = SCHEMA_VERSION; // server-controlled
   return { ok: true, value };
 }
 
@@ -215,26 +229,24 @@ function validateField(src, dst, field, ftype) {
  * No raw IP, no request body, no card/reading content is ever written.
  */
 function writeDataPoint(env, event, country) {
-  const analytics = env.TELEMETRY;
-  if (!analytics || typeof analytics.writeDataPoint !== "function") {
-    // No binding configured (e.g. local dev): accept silently so the client is
-    // never blocked. In production the binding must be present.
-    return;
+  const analytics = env && env.TELEMETRY;
+  if (!hasAnalyticsBinding(env)) {
+    throw new Error("telemetry_binding_missing");
   }
 
   const blobs = [
     event.event,
     event.install_hash,
     event.deck_type || "",
-    country
-  ];
-  const doubles = [event.card_count ? Number(event.card_count) : 0];
-  const indexes = [
-    event.event,
-    event.deck_type || "",
     country,
-    event.app_version
+    event.app_version,
+    event.locale
   ];
+  const doubles = [
+    event.event === "reading_completed" ? Number(event.card_count) : 0,
+    Number(event.android_major)
+  ];
+  const indexes = [event.install_hash];
 
   try {
     analytics.writeDataPoint({
@@ -248,12 +260,41 @@ function writeDataPoint(env, event, country) {
   }
 }
 
+function hasAnalyticsBinding(env) {
+  return Boolean(
+    env &&
+      env.TELEMETRY &&
+      typeof env.TELEMETRY.writeDataPoint === "function"
+  );
+}
+
+function readRateLimits(env) {
+  return {
+    perInstallPerHour: readPositiveInt(
+      env && env.RATE_LIMIT_PER_INSTALL_PER_HOUR,
+      DEFAULT_RATE_LIMIT.perInstallPerHour
+    ),
+    perIpPerMinute: readPositiveInt(
+      env && env.RATE_LIMIT_PER_IP_PER_MINUTE,
+      DEFAULT_RATE_LIMIT.perIpPerMinute
+    )
+  };
+}
+
+function readPositiveInt(value, fallback) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 100000
+    ? parsed
+    : fallback;
+}
+
 // ---------- Rate limiting helpers ----------
 
 function overLimit(buckets, key, limit, windowMs) {
   const now = Date.now();
   const entries = buckets.get(key) || [];
   const fresh = entries.filter((ts) => now - ts < windowMs);
+  if (fresh.length === 0) buckets.delete(key);
   if (fresh.length >= limit) {
     buckets.set(key, fresh);
     return true;
@@ -263,27 +304,15 @@ function overLimit(buckets, key, limit, windowMs) {
   return false;
 }
 
-// ---------- Security log (IP digest only, <= 7 days) ----------
-
-function noteSecurity(ipDigest) {
-  securityLog.push({ ipDigest, ts: Date.now() });
-  // Trim anything older than the TTL.
-  const cutoff = Date.now() - SECURITY_LOG_TTL_DAYS * DAY_MS;
-  while (securityLog.length && securityLog[0].ts < cutoff) securityLog.shift();
-  // Bound growth defensively.
-  if (securityLog.length > 5000) securityLog.splice(0, securityLog.length - 5000);
-}
-
 function getClientIp(request) {
-  // Cloudflare provides the client IP here. Used for rate-limit digesting only.
-  return request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-forwarded-for") ||
-    "0.0.0.0";
+  // Only Cloudflare's connection header is trusted. X-Forwarded-For is
+  // client-controlled at the edge and is deliberately ignored.
+  return request.headers.get("cf-connecting-ip") || "0.0.0.0";
 }
 
-// Synchronous, non-cryptographic digest for rate-limit bucketing only. It is
-// intentionally NOT crypto-strong and is salted so it cannot be reversed to the
-// original IP; it only needs to map identical inputs to identical buckets.
+// Synchronous, non-cryptographic digest for the process-local rate-limit key.
+// This is not an irreversible privacy mechanism; the resulting key is never
+// written to persistent storage, logs, Analytics Engine, or a response.
 function digestString(input) {
   const s = "quareia-tel|" + input;
   let h1 = 0x811c9dc5 >>> 0;

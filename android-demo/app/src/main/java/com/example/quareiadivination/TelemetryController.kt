@@ -11,6 +11,7 @@ import java.util.Calendar
 import java.util.TimeZone
 import java.util.UUID
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Transparent, anonymous, opt-out usage-statistics controller.
@@ -44,60 +45,120 @@ internal object TelemetryController {
     private const val KEY_INSTALL_SEEN_SENT = "install_seen_sent"
     private const val KEY_LAST_DAU_UTC = "last_dau_utc"
 
-    // Rate caps are advisory server-side defences; the client also guards
-    // daily_active to at most one per UTC day.
     private val executor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "quareia-telemetry").apply { isDaemon = true }
     }
+    private val stateLock = Any()
+    private val generation = AtomicLong(0)
+
+    @Volatile
+    private var activeConnection: HttpURLConnection? = null
+    private var installSeenInFlight = false
+    private var dailyActiveInFlight = false
 
     private lateinit var appContext: Context
 
-    /** Must be called once from Application/Activity startup before any event. */
+    // This seam is only used by local JVM tests; production always uses the
+    // HttpURLConnection path below.
+    private var senderForTests: ((JSONObject) -> Boolean)? = null
+
+    private enum class InFlightSlot {
+        INSTALL_SEEN,
+        DAILY_ACTIVE
+    }
+
+    private data class QueuedEvent(
+        val payload: JSONObject,
+        val token: Long,
+        val slot: InFlightSlot?,
+        val onResult: (Boolean) -> Unit
+    )
+
+    /** Must be called once from [QuareiaApplication] before any event. */
     fun init(context: Context) {
-        appContext = context.applicationContext
+        synchronized(stateLock) {
+            appContext = context.applicationContext
+        }
     }
 
     private val prefs get() = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /** Whether the user has opted in. Defaults to enabled (transparent telemetry). */
-    fun isEnabled(): Boolean = prefs.getBoolean(KEY_ENABLED, true)
+    fun isEnabled(): Boolean = synchronized(stateLock) {
+        prefs.getBoolean(KEY_ENABLED, true)
+    }
 
     /**
-     * Toggles telemetry. Disabling also wipes the local install hash so the
-     * device becomes unlinkable to past events.
+     * Toggles telemetry. Disabling invalidates every queued generation, clears
+     * retry markers and the local install UUID, and best-effort disconnects the
+     * request currently using the network.
      */
     fun setEnabled(enabled: Boolean) {
-        prefs.edit().apply {
-            putBoolean(KEY_ENABLED, enabled)
+        var connectionToDisconnect: HttpURLConnection? = null
+        synchronized(stateLock) {
             if (!enabled) {
-                // Forget the device: remove the UUID and reset the send flags so a
-                // later opt-in starts cleanly with a fresh, unrelated identity.
-                remove(KEY_INSTALL_UUID)
-                remove(KEY_INSTALL_SEEN_SENT)
-                remove(KEY_LAST_DAU_UTC)
+                generation.incrementAndGet()
+                installSeenInFlight = false
+                dailyActiveInFlight = false
+                connectionToDisconnect = activeConnection
             }
-        }.apply()
+            prefs.edit().apply {
+                putBoolean(KEY_ENABLED, enabled)
+                if (!enabled) {
+                    // Forget the device: remove the UUID and reset the send
+                    // flags so a later opt-in starts with a fresh identity.
+                    remove(KEY_INSTALL_UUID)
+                    remove(KEY_INSTALL_SEEN_SENT)
+                    remove(KEY_LAST_DAU_UTC)
+                }
+            }.apply()
+        }
+        connectionToDisconnect?.disconnect()
     }
 
     // ---------- Public event entry points ----------
 
     /** Sent once per install (retried until it succeeds). Safe to call every launch. */
     fun recordInstallSeen() {
-        if (!isEnabled()) return
-        if (prefs.getBoolean(KEY_INSTALL_SEEN_SENT, false)) return
-        enqueue(basePayload("install_seen")) { sent ->
-            if (sent) prefs.edit().putBoolean(KEY_INSTALL_SEEN_SENT, true).apply()
+        val queued: QueuedEvent? = synchronized(stateLock) {
+            if (!isEnabledLocked() || prefs.getBoolean(KEY_INSTALL_SEEN_SENT, false) ||
+                installSeenInFlight
+            ) {
+                return@synchronized null
+            }
+            val token = generation.get()
+            val event = QueuedEvent(
+                payload = basePayload("install_seen"),
+                token = token,
+                slot = InFlightSlot.INSTALL_SEEN,
+                onResult = { sent -> markInstallSeenSent(token, sent) }
+            )
+            installSeenInFlight = true
+            event
         }
+        queued?.let(::enqueue)
     }
 
     /** Sent at most once per UTC day (retried next launch if it fails). */
     fun recordDailyActive() {
-        if (!isEnabled()) return
         val today = utcDateString(System.currentTimeMillis())
-        if (prefs.getString(KEY_LAST_DAU_UTC, null) == today) return
-        enqueue(basePayload("daily_active")) { sent ->
-            if (sent) prefs.edit().putString(KEY_LAST_DAU_UTC, today).apply()
+        val queued: QueuedEvent? = synchronized(stateLock) {
+            if (!isEnabledLocked() || prefs.getString(KEY_LAST_DAU_UTC, null) == today ||
+                dailyActiveInFlight
+            ) {
+                return@synchronized null
+            }
+            val token = generation.get()
+            val event = QueuedEvent(
+                payload = basePayload("daily_active"),
+                token = token,
+                slot = InFlightSlot.DAILY_ACTIVE,
+                onResult = { sent -> markDailyActiveSent(token, today, sent) }
+            )
+            dailyActiveInFlight = true
+            event
         }
+        queued?.let(::enqueue)
     }
 
     /**
@@ -105,19 +166,34 @@ internal object TelemetryController {
      * never retried. [deckType] is one of tarot / mystagogus / lxxxi.
      */
     fun logReadingCompleted(deckType: String, cardCount: Int) {
-        if (!isEnabled()) return
-        if (deckType !in DECK_TYPES) return
-        if (cardCount < 1) return
-        val payload = basePayload("reading_completed").apply {
-            put("deck_type", deckType)
-            put("card_count", cardCount)
+        if (deckType !in DECK_TYPES || cardCount < 1) return
+        val queued: QueuedEvent? = synchronized(stateLock) {
+            if (!isEnabledLocked()) return@synchronized null
+            QueuedEvent(
+                payload = basePayload("reading_completed").apply {
+                    put("deck_type", deckType)
+                    put("card_count", cardCount)
+                },
+                token = generation.get(),
+                slot = null,
+                onResult = {}
+            )
         }
-        enqueue(payload) { /* no retry on failure */ }
+        queued?.let(::enqueue)
     }
 
     // ---------- Internals ----------
 
     private val DECK_TYPES = setOf("tarot", "mystagogus", "lxxxi")
+
+    private fun isEnabledLocked(): Boolean = prefs.getBoolean(KEY_ENABLED, true)
+
+    private fun isCurrent(token: Long): Boolean = synchronized(stateLock) {
+        isCurrentLocked(token)
+    }
+
+    private fun isCurrentLocked(token: Long): Boolean =
+        generation.get() == token && isEnabledLocked()
 
     /** Builds the shared field set; never includes card/reading content. */
     private fun basePayload(event: String): JSONObject {
@@ -153,48 +229,100 @@ internal object TelemetryController {
         }
     }
 
-    private fun localeTag(): String =
-        appContext.resources.configuration.locales[0].toLanguageTag()
-
-    private fun androidReleaseMajor(): Int {
-        val parts = android.os.Build.VERSION.RELEASE.split(".")
-        return parts.firstOrNull()?.toIntOrNull() ?: android.os.Build.VERSION.SDK_INT
+    private fun localeTag(): String {
+        val locales = appContext.resources.configuration.locales
+        return if (!locales.isEmpty) locales[0].toLanguageTag() else "und"
     }
 
-    private fun enqueue(payload: JSONObject, onResult: (Boolean) -> Unit) {
+    private fun androidReleaseMajor(): Int {
+        val major = android.os.Build.VERSION.RELEASE.substringBefore(".").toIntOrNull()
+            ?: android.os.Build.VERSION.SDK_INT
+        return major.coerceIn(1, 100)
+    }
+
+    private fun enqueue(event: QueuedEvent) {
         executor.execute {
-            val ok = try {
-                send(payload)
+            var sent = false
+            try {
+                // A disabled generation never reaches send(). The check is
+                // repeated inside send immediately before opening the request.
+                if (isCurrent(event.token)) {
+                    sent = send(event.payload, event.token)
+                    if (isCurrent(event.token)) event.onResult(sent)
+                }
             } catch (e: Exception) {
-                Log.w(TAG, "event ${payload.optString("event")} failed", e)
-                false
+                Log.w(TAG, "event ${event.payload.optString("event")} failed", e)
+            } finally {
+                releaseInFlight(event.slot)
             }
-            onResult(ok)
+        }
+    }
+
+    private fun releaseInFlight(slot: InFlightSlot?) {
+        if (slot == null) return
+        synchronized(stateLock) {
+            when (slot) {
+                InFlightSlot.INSTALL_SEEN -> installSeenInFlight = false
+                InFlightSlot.DAILY_ACTIVE -> dailyActiveInFlight = false
+            }
+        }
+    }
+
+    private fun markInstallSeenSent(token: Long, sent: Boolean) {
+        if (!sent) return
+        synchronized(stateLock) {
+            if (isCurrentLocked(token)) {
+                prefs.edit().putBoolean(KEY_INSTALL_SEEN_SENT, true).apply()
+            }
+        }
+    }
+
+    private fun markDailyActiveSent(token: Long, today: String, sent: Boolean) {
+        if (!sent) return
+        synchronized(stateLock) {
+            if (isCurrentLocked(token)) {
+                prefs.edit().putString(KEY_LAST_DAU_UTC, today).apply()
+            }
         }
     }
 
     /** Performs a synchronous POST; throws on any non-success. */
-    private fun send(payload: JSONObject): Boolean {
+    private fun send(payload: JSONObject, token: Long): Boolean {
         val body = JSONArray().put(payload).toString().toByteArray(Charsets.UTF_8)
         // Defensive: never send a body larger than the 1KB worker cap.
-        if (body.size > MAX_BODY_BYTES) return false
-        val conn = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = TIMEOUT_MS
-            readTimeout = TIMEOUT_MS
-            doOutput = true
-            // Do not identify the client beyond content type; no User-Agent that
-            // could leak device fingerprints.
-            setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            setRequestProperty("Content-Length", body.size.toString())
-            instanceFollowRedirects = false
+        if (body.size > MAX_BODY_BYTES || !isCurrent(token)) return false
+
+        val testSender = synchronized(stateLock) {
+            if (isCurrentLocked(token)) senderForTests else null
         }
+        if (testSender != null) return testSender.invoke(payload)
+
+        // Opening and registering the connection is one critical section with
+        // the generation check, so close() cannot race before the reference is
+        // visible to setEnabled(false).
+        val conn = synchronized(stateLock) {
+            if (!isCurrentLocked(token)) return@synchronized null
+            (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = TIMEOUT_MS
+                readTimeout = TIMEOUT_MS
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                setRequestProperty("Content-Length", body.size.toString())
+                instanceFollowRedirects = false
+                activeConnection = this
+            }
+        } ?: return false
+
         try {
+            if (!isCurrent(token)) return false
             conn.outputStream.use { it.write(body) }
             val code = conn.responseCode
-            // 2xx (including 204 No Content) is success; anything else is a failure.
             return code in 200..299
         } finally {
+            synchronized(stateLock) {
+                if (activeConnection === conn) activeConnection = null
+            }
             conn.disconnect()
         }
     }
@@ -216,5 +344,32 @@ internal object TelemetryController {
         val sb = StringBuilder(digest.size * 2)
         for (b in digest) sb.append("%02x".format(b))
         return sb.toString()
+    }
+
+    // ---------- Local JVM-test seams ----------
+
+    internal fun setSenderForTesting(sender: ((JSONObject) -> Boolean)?) {
+        synchronized(stateLock) {
+            senderForTests = sender
+        }
+    }
+
+    internal fun awaitIdleForTesting(timeoutMs: Long = 2000): Boolean {
+        val idle = java.util.concurrent.CountDownLatch(1)
+        executor.execute { idle.countDown() }
+        return idle.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+    }
+
+    internal fun resetForTesting() {
+        var connectionToDisconnect: HttpURLConnection? = null
+        synchronized(stateLock) {
+            generation.incrementAndGet()
+            installSeenInFlight = false
+            dailyActiveInFlight = false
+            connectionToDisconnect = activeConnection
+            senderForTests = null
+            prefs.edit().clear().commit()
+        }
+        connectionToDisconnect?.disconnect()
     }
 }

@@ -1,6 +1,5 @@
 package com.example.quareiadivination
 
-import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -32,24 +31,6 @@ import androidx.core.view.setPadding
  */
 class AboutActivity : ComponentActivity() {
 
-    companion object {
-        /** Official Quareia website, opened in the system browser on tap. */
-        private const val QUAREIA_URL = "https://www.quareia.com"
-
-        /**
-         * The author's note, reproduced verbatim as requested. Do not alter
-         * this string — it is the English original that must always be present.
-         */
-        private const val JOSEPHINE_QUOTE_EN =
-            "while digital tools for readings can be useful in an emergency, " +
-                "the interaction between the physical hands of the reader " +
-                "touching and shuffling the deck is safer, a lot more accurate " +
-                "and far more powerful"
-
-        private const val JOSEPHINE_CITE = "— Josephine McCarthy"
-    }
-
-    @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -107,17 +88,19 @@ class AboutActivity : ComponentActivity() {
         // Open-source boundary
         container.addView(bodyText(getString(R.string.about_oss_boundary), muted))
 
-        // Quareia link (opens the system browser; the app has no network permission)
+        // Quareia link (opens the system browser; the app's own network access
+        // is limited to opt-out telemetry and the link is handled externally).
         container.addView(headingText(getString(R.string.about_quareia_label), accent))
+        val quareiaUrl = getString(R.string.about_quareia_url)
         val link = TextView(this).apply {
-            text = QUAREIA_URL
+            text = quareiaUrl
             setTextColor(accent)
             setTextIsSelectable(true)
             paint.isUnderlineText = true
             movementMethod = LinkMovementMethod.getInstance()
             setPadding(0, dip(2), 0, dip(12))
             setOnClickListener {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(QUAREIA_URL))
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(quareiaUrl))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 startActivity(intent)
             }
@@ -164,7 +147,11 @@ class AboutActivity : ComponentActivity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setLineSpacing(dip(2).toFloat(), 1f)
             setPadding(dip(12), dip(10), dip(12), dip(10))
-            text = "\u201C$JOSEPHINE_QUOTE_EN\u201D\n\n$JOSEPHINE_CITE"
+            text = getString(
+                R.string.about_quote_display,
+                getString(R.string.about_quote_en),
+                getString(R.string.about_quote_cite)
+            )
         }
         quote.setBackgroundColor(Color.parseColor("#141633"))
         container.addView(quote)

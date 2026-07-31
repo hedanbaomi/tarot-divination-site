@@ -1,143 +1,174 @@
 # Quareia Telemetry Worker
 
 Anonymous, opt-out usage-statistics ingest for the **Quareia Divination Android
-app**. Stores aggregate signals only — active-device counts, deck usage,
-readings completed — in **Cloudflare Analytics Engine**. Never stores raw IP
-addresses, request bodies, card faces, card names, orientations, spread layouts,
-questions, notes, or local history.
+app**. It stores aggregate signals only: active-device events, deck usage, and
+completed-reading counts. It never stores raw IP addresses, request bodies,
+card faces, card names, orientations, spread layouts, questions, notes, or
+local history.
 
-> **Status: code only — not deployed.** This directory contains the worker code
-> and deployment notes. Deploying it (and binding `telemetry.luotianyi.fun`) must
-> be performed by someone with Cloudflare access. No deployment is performed
-> automatically and nothing here touches the existing site, R2, or VPS.
+> **Status: code only — not deployed.** This directory contains the worker,
+> reproducible tests, and deployment notes. No deployment is performed by this
+> repository, and nothing here touches the existing website, R2, VPS, DNS, or
+> Cloudflare configuration outside the worker's own future binding.
 
 ## Endpoints
 
-| Method | Path           | Behaviour                                                        |
-|--------|----------------|------------------------------------------------------------------|
-| POST   | `/v1/events`   | Accepts one event or a small array. Validates strictly, writes to Analytics Engine, returns **204**. Invalid/oversized → 400/413. Over rate limit → 429. |
-| GET    | `/health`      | Returns `200 {"ok":true}`.                                       |
+| Method | Path | Behaviour |
+|---|---|---|
+| `POST` | `/v1/events` | Accepts one event or a small array, validates the closed schema, writes to Analytics Engine, and returns `204`. Invalid/oversized requests return `400`/`413`; rate-limited requests return `429`; a missing `TELEMETRY` binding returns `503`. |
+| `GET` | `/health` | Returns `200 {"ok":true}`. |
 
 ## Event schema (closed allow-list)
 
-Every event carries these base fields:
+Every event must carry these fields:
 
-| field            | type   | notes                                                |
-|------------------|--------|------------------------------------------------------|
-| `schema_version` | int    | `1` (server-controlled on write)                     |
-| `event`          | string | `install_seen` / `daily_active` / `reading_completed`|
-| `install_hash`   | string | 64-char lowercase hex SHA-256 of a random per-install UUID (raw UUID never sent) |
-| `app_version`    | string | app version name                                     |
-| `locale`         | string | BCP-47 language tag, e.g. `zh-CN`                    |
-| `android_major`  | int    | Android release major version                        |
+| Field | Type | Notes |
+|---|---|---|
+| `schema_version` | int | Must be exactly `1`. |
+| `event` | string | `install_seen`, `daily_active`, or `reading_completed`. |
+| `install_hash` | string | 64-character lowercase hexadecimal SHA-256 of a random per-install UUID; the raw UUID is never sent. |
+| `app_version` | string | Android app version name. |
+| `locale` | string | BCP-47 language tag, such as `zh-CN`. |
+| `android_major` | int | Inclusive range `1..100`. |
 
 `reading_completed` additionally carries:
 
-| field        | type   | notes                                              |
-|--------------|--------|----------------------------------------------------|
-| `deck_type`  | string | `tarot` / `mystagogus` / `lxxxi`                   |
-| `card_count` | int    | number of cards in the finished spread (1–81)      |
+| Field | Type | Notes |
+|---|---|---|
+| `deck_type` | string | `tarot`, `mystagogus`, or `lxxxi`. |
+| `card_count` | int | Number of cards in the finished spread, `1..81`. |
 
-**Any field not listed above is rejected with HTTP 400.** This includes — and
-therefore blocks — card ids, card names, orientations, positions, questions,
-notes, history, raw IP, and User-Agent.
+Any field not listed above is rejected with HTTP `400`. This includes card IDs,
+card names, orientations, positions, questions, notes, history, raw IP, and
+User-Agent.
+
+## Analytics Engine data-point mapping
+
+The worker writes one data point for each accepted event. Arrays are positional:
+
+| Array | Position | Value |
+|---|---:|---|
+| `blobs` | `blob1` | `event` |
+|  | `blob2` | `install_hash` |
+|  | `blob3` | `deck_type`, or `""` for non-reading events |
+|  | `blob4` | Cloudflare connection country code, or `"??"` |
+|  | `blob5` | `app_version` |
+|  | `blob6` | `locale` |
+| `doubles` | `double1` | `card_count`, or `0` for non-reading events |
+|  | `double2` | `android_major` |
+| `indexes` | `index1` | `install_hash` — the only index |
+
+Analytics Engine currently accepts an ordered array with one sampling index;
+passing multiple indexes prevents the data point from being recorded. See the
+[official write and binding documentation](https://developers.cloudflare.com/analytics/analytics-engine/get-started/).
 
 ## Privacy contract (enforced in code)
 
-- Body is capped at **1 KB** (`413` if exceeded).
-- The raw client IP is read **only** for in-memory rate limiting. It is never
-  written to Analytics Engine, D1, logs, or any response.
-- Only the connection **country** (`request.cf.country`, ISO code) is stored, at
-  country granularity — never city, region, or coordinates.
-- Timestamps use the **server** clock; client timestamps are ignored.
-- Rate-limit/security entries retain only an **irreversible digest** of the IP,
-  held in memory for at most **7 days**.
+- The UTF-8 encoded request body is capped at **1 KiB** (`413` if exceeded).
+- The server temporarily reads the connection IP for rate limiting and abuse
+  prevention. It trusts only Cloudflare's `CF-Connecting-IP` header, ignores
+  client-controlled `X-Forwarded-For`, and keeps only a process-local rolling
+  bucket key. It does not save the raw IP or a persistent IP digest in
+  Analytics Engine, D1, logs, or responses.
+- Analytics Engine stores only the connection country code; it does not store a
+  city, region, coordinate, or IP field.
+- Timestamps come from the server clock; client timestamps are not accepted.
+- Rate-limit buckets are in-memory only and are not a metering or analytics
+  dataset.
+
+## Reproducible local checks
+
+No Cloudflare binding is needed for the test suite; the tests use a mock
+Analytics Engine binding and never deploy the worker.
+
+```bash
+npm ci
+npm test
+node --check src/index.js
+```
 
 ## Deploy (manual, requires Cloudflare access)
 
-```bash
-cd telemetry-worker
-npm install
-npx wrangler login                       # authenticate to Cloudflare
-```
+Deployment is intentionally outside this task. If an authorized operator later
+deploys this worker:
 
-1. **Create the Analytics Engine dataset** in the Cloudflare dashboard
-   (Analytics & Logs → Analytics Engine → Create dataset). Note the dataset name.
-2. Edit `wrangler.toml`: uncomment the `[[analytics_engine_datasets]]` block and
-   set `dataset` to the name from step 1.
-3. Deploy:
+1. Run `npm ci` and `npx wrangler login` in this directory.
+2. Keep the `[[analytics_engine_datasets]]` block in `wrangler.toml` and change
+   only the dataset name if a different stable name is required. The dataset is
+   created automatically by Cloudflare on the first write after the binding is
+   configured; do **not** create it manually in the dashboard first.
+3. Run `npx wrangler deploy` only in an explicitly authorized deployment window.
+4. Bind `telemetry.luotianyi.fun` separately through the Cloudflare Workers
+   custom-domain/route UI if that hostname is required.
 
-   ```bash
-   npx wrangler deploy
-   ```
-4. **Bind the custom domain** in the dashboard: Workers & Pages → this worker →
-   Settings → Triggers → Custom Domains → add `telemetry.luotianyi.fun`.
-   (Equivalently, add a Workers Route under the `luotianyi.fun` zone.)
-
-> If you prefer environment-variable-driven limits, set them under
-> `[vars]` in `wrangler.toml` and redeploy.
+The [Cloudflare Analytics Engine getting-started guide](https://developers.cloudflare.com/analytics/analytics-engine/get-started/)
+documents the current binding, automatic dataset creation, and single-index
+rules.
 
 ## Querying Analytics Engine
 
-Analytics Engine is queried with SQL via the Cloudflare API / GraphQL or the
-dashboard SQL API. Examples (column names follow the `blobs`/`indexes` written in
-`src/index.js` — `blob1=event, blob2=install_hash, blob3=deck_type, blob4=country`;
-`index1=event, index2=deck_type, index3=country, index4=app_version`;
-`double1=card_count`):
+Replace `quareia_telemetry` below if the dataset name in `wrangler.toml` is
+changed. Analytics Engine can sample rows. For event counts and numeric sums,
+use `_sample_interval` as the row weight; for averages, weight both the sum and
+the denominator. The [SQL API documentation](https://developers.cloudflare.com/analytics/analytics-engine/sql-api/)
+and [sampling guide](https://developers.cloudflare.com/analytics/analytics-engine/sampling/)
+describe these rules.
 
-**DAU — active devices per UTC day**
+**Daily active-device events (one `daily_active` per install per UTC day)**
+
 ```sql
-SELECT timestamp_ns / 1000000000 / 86400 AS day,
-       COUNT(DISTINCT blob2) AS active_devices
-FROM telemetry
+SELECT
+  intDiv(toUInt32(timestamp), 86400) AS utc_day,
+  SUM(_sample_interval) AS active_devices
+FROM quareia_telemetry
 WHERE blob1 = 'daily_active'
-GROUP BY day
-ORDER BY day DESC;
+GROUP BY utc_day
+ORDER BY utc_day DESC;
 ```
 
-**MAU — distinct installs active in the last 30 days**
+**Install events**
+
 ```sql
-SELECT COUNT(DISTINCT blob2) AS mau
-FROM telemetry
-WHERE blob1 = 'daily_active'
-  AND timestamp_ns >= (:cutoff_30d_ns);
+SELECT SUM(_sample_interval) AS installs
+FROM quareia_telemetry
+WHERE blob1 = 'install_seen';
 ```
 
-**Install count**
-```sql
-SELECT COUNT(*) AS installs FROM telemetry WHERE blob1 = 'install_seen';
-```
+**Completed readings by deck**
 
-**Readings completed (total)**
 ```sql
-SELECT COUNT(*) AS readings FROM telemetry WHERE blob1 = 'reading_completed';
-```
-
-**Deck usage — readings per deck**
-```sql
-SELECT blob3 AS deck_type, COUNT(*) AS readings
-FROM telemetry
+SELECT
+  blob3 AS deck_type,
+  SUM(_sample_interval) AS readings
+FROM quareia_telemetry
 WHERE blob1 = 'reading_completed'
-GROUP BY blob3
+GROUP BY deck_type
 ORDER BY readings DESC;
 ```
 
-**Average cards drawn per deck**
+**Average cards drawn by deck**
+
 ```sql
-SELECT blob3 AS deck_type, AVG(double1) AS avg_card_count
-FROM telemetry
+SELECT
+  blob3 AS deck_type,
+  SUM(_sample_interval * double1) / SUM(_sample_interval) AS avg_card_count
+FROM quareia_telemetry
 WHERE blob1 = 'reading_completed'
-GROUP BY blob3;
+GROUP BY deck_type;
 ```
 
-**Geographic spread (country-level only)**
+**Country-level install events**
+
 ```sql
-SELECT blob4 AS country, COUNT(DISTINCT blob2) AS installs
-FROM telemetry
+SELECT
+  blob4 AS country,
+  SUM(_sample_interval) AS installs
+FROM quareia_telemetry
 WHERE blob1 = 'install_seen'
-GROUP BY blob4
+GROUP BY country
 ORDER BY installs DESC;
 ```
 
-None of these queries can reveal card faces, names, orientations, spread layouts,
-questions, notes, history, or raw IP — none of that data is ever stored.
+These queries cannot reveal card faces, names, orientations, spread layouts,
+questions, notes, history, raw IP, or a persistent IP digest because none of
+those values are written.

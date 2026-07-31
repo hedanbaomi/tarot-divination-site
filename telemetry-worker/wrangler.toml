@@ -4,16 +4,15 @@ compatibility_date = "2025-07-01"
 
 # ---------------------------------------------------------------------------
 # Analytics Engine binding. The worker writes one data point per accepted event.
-# This binding must be created by an operator with Cloudflare access — it is
-# NOT created automatically by `wrangler deploy` for Analytics Engine.
+# The dataset is created automatically by Cloudflare on the first write after
+# this binding is configured; no dashboard dataset-creation step is required.
 #
-# Create the dataset first, then keep the dataset name below in sync.
+# Keep the dataset name stable so SQL queries continue to address the same table.
 # ---------------------------------------------------------------------------
 
-# Uncomment and set after creating the dataset in the Cloudflare dashboard:
-# [[analytics_engine_datasets]]
-# binding = "TELEMETRY"
-# dataset = "quareia_telemetry"
+[[analytics_engine_datasets]]
+binding = "TELEMETRY"
+dataset = "quareia_telemetry"
 
 # ---------------------------------------------------------------------------
 # Custom domain. telemetry.luotianyi.fun must be bound to this worker in the
@@ -27,7 +26,6 @@ compatibility_date = "2025-07-01"
 # ]
 
 [vars]
-# Tuneable limits and retention. Changes here require a redeploy.
+# Tuneable in-memory limits. Changes here require a redeploy.
 RATE_LIMIT_PER_INSTALL_PER_HOUR = "60"
 RATE_LIMIT_PER_IP_PER_MINUTE = "30"
-SECURITY_LOG_TTL_DAYS = "7"

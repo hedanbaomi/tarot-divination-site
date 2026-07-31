@@ -6,6 +6,7 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
+    "test": "node --test test/*.test.js",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev"
   },

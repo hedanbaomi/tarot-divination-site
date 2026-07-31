@@ -41,6 +41,11 @@ import androidx.webkit.WebViewAssetLoader
 class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
+    private var homePageFinished = false
+
+    private companion object {
+        const val HOME_URL = "https://appassets.androidplatform.net/assets/www/index.html"
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -134,14 +139,10 @@ class MainActivity : ComponentActivity() {
 
         setContentView(root)
 
-        // Initialise anonymous usage statistics. Non-blocking: failures never
-        // affect launch, the page, or local history.
-        TelemetryController.init(this)
         showFirstLaunchNoticeIfNeeded(root)
 
-        val home = "https://appassets.androidplatform.net/assets/www/index.html"
         if (savedInstanceState == null) {
-            webView.loadUrl(home)
+            webView.loadUrl(HOME_URL)
         } else {
             webView.restoreState(savedInstanceState)
         }
@@ -251,10 +252,12 @@ class MainActivity : ComponentActivity() {
             return assetLoader.shouldInterceptRequest(url)
         }
 
-        // Once the page is ready, fire the install/daily-active signals. These
-        // are fire-and-forget on a background thread; any failure is retried on
-        // a later launch and never blocks the UI.
+        // Only the first completed load of the internal home page starts the
+        // app-lifetime signals. WebView can call this for subresources and
+        // repeated navigations; the controller also deduplicates in flight.
         override fun onPageFinished(view: WebView?, url: String?) {
+            if (homePageFinished || url != HOME_URL) return
+            homePageFinished = true
             TelemetryController.recordInstallSeen()
             TelemetryController.recordDailyActive()
         }
@@ -284,6 +287,7 @@ class MainActivity : ComponentActivity() {
         // Drop the JS bridge reference held by the WebView before destruction.
         if (this::webView.isInitialized) {
             webView.removeJavascriptInterface("androidCrypto")
+            webView.removeJavascriptInterface("androidTelemetry")
             webView.destroy()
         }
         super.onDestroy()
