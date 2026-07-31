@@ -286,23 +286,194 @@ body::after {
 .header .subtitle::before { content: "✦ "; color: var(--accent); opacity: 0.7; }
 .header .subtitle::after { content: " ✦"; color: var(--accent); opacity: 0.7; }
 .header-actions {
-  display: flex;
-  justify-content: center;
+  position: absolute;
+  top: 4px;
+  right: 0;
+  z-index: 80;
+}
+.menu-toggle {
+  width: var(--tap);
+  height: var(--tap);
+  display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid var(--accent-border);
+  border-radius: 12px;
+  background: rgba(10, 15, 43, 0.74);
+  color: var(--accent-light);
+  box-shadow: 0 8px 22px rgba(2, 4, 14, 0.35);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.18s ease;
 }
-.header-actions .language-toggle {
-  min-width: 48px;
-  min-height: var(--tap);
-  padding-inline: 14px;
-  border-color: rgba(143, 214, 174, 0.42);
-  color: #c9f0da;
+.menu-toggle:active { transform: scale(0.94); }
+.menu-toggle-bar {
+  width: 22px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform 0.24s ease, opacity 0.2s ease;
 }
-.header-actions .history-open-btn {
+.menu-toggle[aria-expanded="true"] .menu-toggle-bar:first-child {
+  transform: translateY(7px) rotate(45deg);
+}
+.menu-toggle[aria-expanded="true"] .menu-toggle-bar:nth-child(2) { opacity: 0; }
+.menu-toggle[aria-expanded="true"] .menu-toggle-bar:last-child {
+  transform: translateY(-7px) rotate(-45deg);
+}
+.header { position: relative; }
+
+/* ---------- Right-side app menu ---------- */
+body.menu-open { overflow: hidden; }
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(2, 4, 14, 0.68);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.menu-backdrop.is-visible { opacity: 1; pointer-events: auto; }
+.app-menu {
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 100;
+  width: min(88vw, 390px);
+  transform: translateX(104%);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.32s cubic-bezier(0.22, 0.8, 0.24, 1), visibility 0s linear 0.32s;
+}
+.app-menu.is-open {
+  transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+.app-menu-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(120% 35% at 100% 0%, rgba(216, 179, 106, 0.18), transparent 70%),
+    linear-gradient(180deg, #171f49 0%, #0b102d 100%);
+  border-left: 1px solid var(--accent-border);
+  box-shadow: -20px 0 70px rgba(0, 0, 0, 0.5), var(--glow-gold);
+}
+.app-menu-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: max(18px, env(safe-area-inset-top)) 18px 16px;
+  border-bottom: 1px solid rgba(216, 179, 106, 0.2);
+}
+.app-menu-kicker {
+  margin-bottom: 2px;
+  color: var(--text-secondary);
+  font-size: 0.64rem;
+  letter-spacing: 0.22em;
+}
+.app-menu-header h2 {
+  color: var(--accent-light);
+  font-family: var(--font-display);
+  font-size: 1.28rem;
+  letter-spacing: 0.12em;
+}
+.menu-close {
+  flex: 0 0 var(--tap);
+  width: var(--tap);
+  height: var(--tap);
+  border: 1px solid var(--accent-border);
+  border-radius: 50%;
+  background: rgba(28, 36, 80, 0.72);
+  color: var(--accent-light);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.app-menu-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 14px calc(20px + env(safe-area-inset-bottom));
+}
+.menu-primary-actions {
+  display: grid;
+  gap: 9px;
+}
+.menu-action {
   min-height: var(--tap);
-  padding-inline: 18px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(216, 179, 106, 0.28);
+  border-radius: 12px;
+  background: rgba(10, 16, 46, 0.44);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-action strong {
+  color: var(--accent-light);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+}
+.menu-action:active { transform: scale(0.98); }
+
+/* ---------- Author note on the homepage ---------- */
+.author-note {
+  width: min(100%, 700px);
+  margin: 10px auto 20px;
+  padding: 15px 17px 14px;
+  border: 1px solid rgba(216, 179, 106, 0.24);
+  border-left: 3px solid var(--accent);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(28, 36, 80, 0.62), rgba(10, 15, 43, 0.45));
+  box-shadow: 0 12px 30px rgba(2, 4, 14, 0.28);
+}
+.author-note-kicker {
+  margin-bottom: 6px;
+  color: var(--accent-light);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+}
+.author-note blockquote {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.65;
+}
+.author-note cite {
+  display: block;
+  margin-top: 6px;
+  color: var(--accent-light);
+  font-size: 0.78rem;
+  font-style: normal;
+}
+.author-note-translation {
+  margin-top: 9px;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.65;
+}
+
+.menu-toggle:focus-visible,
+.menu-close:focus-visible,
+.menu-action:focus-visible {
+  outline: 2px solid var(--accent-light);
+  outline-offset: 3px;
 }
 .header::after {
   content: "✦";
@@ -1366,6 +1537,77 @@ body::after {
 
 /* ---------- Branded destructive-action confirmation ---------- */
 body.confirm-open { overflow: hidden; }
+/* ---------- First-launch privacy note ---------- */
+.telemetry-dialog:not([open]) { display: none; }
+.telemetry-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  padding: max(20px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom));
+  display: grid;
+  place-items: center;
+  background: transparent;
+  z-index: 2100;
+}
+.telemetry-dialog::backdrop {
+  background: rgba(2, 4, 14, 0.76);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+.telemetry-card {
+  width: min(100%, 430px);
+  max-height: min(82vh, 700px);
+  overflow-y: auto;
+  padding: 24px 21px 20px;
+  border: 1px solid rgba(216, 179, 106, 0.46);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(216, 179, 106, 0.15), transparent 34%),
+    linear-gradient(165deg, rgba(27, 35, 78, 0.99), rgba(10, 14, 37, 0.99));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.62), 0 0 40px rgba(216, 179, 106, 0.13);
+  animation: telemetryRiseIn 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes telemetryRiseIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.telemetry-kicker {
+  margin-bottom: 4px;
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+}
+.telemetry-card h2 {
+  color: var(--accent-light);
+  font-family: var(--font-display);
+  font-size: 1.24rem;
+  letter-spacing: 0.1em;
+}
+.telemetry-card #telemetryDialogMessage {
+  margin: 14px 0 22px;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.75;
+}
+.telemetry-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.telemetry-actions .btn {
+  min-width: 0;
+  max-width: 100%;
+  padding-inline: 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
 .confirm-overlay:not([open]) { display: none; }
 .confirm-overlay {
   position: fixed;
@@ -1937,6 +2179,7 @@ body.choice-open { overflow: hidden; }
   .settings-body,
   .spread-slot,
   .result-card,
+  .telemetry-card,
   .confirm-overlay,
   .confirm-card,
   .choice-overlay,

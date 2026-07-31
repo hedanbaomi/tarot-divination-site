@@ -55,3 +55,45 @@ test("Android settings collapse to one bounded column on narrow screens", functi
     /@media\s*\(max-width:\s*480px\)[\s\S]*?\.settings-body\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/
   );
 });
+
+test("homepage uses a localized first-launch dialog instead of a native bottom banner", function () {
+  var html = read("app/src/main/assets/www/index.html");
+  var i18n = read("app/src/main/assets/www/js/i18n.js");
+  var notice = read("app/src/main/assets/www/js/telemetry-notice.js");
+  var mainActivity = read("app/src/main/java/com/example/quareiadivination/MainActivity.kt");
+
+  assert.match(html, /id="telemetryDialog"/);
+  assert.match(html, /id="telemetryNoticeManage"/);
+  assert.match(html, /data-i18n="telemetry\.firstLaunchNotice"/);
+  assert.match(i18n, /"telemetry\.firstLaunchNotice": "本应用默认启用匿名使用统计/);
+  assert.match(i18n, /"telemetry\.firstLaunchNotice": "This app enables anonymous usage statistics/);
+  assert.match(i18n, /function tForLocale\(requestedLocale, key, values\)/);
+  assert.match(i18n, /function detectSystemLocale\(\)/);
+  assert.match(i18n, /return supported\.indexOf\(value\) !== -1 \? value : detectSystemLocale\(\)/);
+  assert.match(notice, /localStorage\.setItem\(STORAGE_KEY, "1"\)/);
+  assert.match(notice, /function systemLocale\(\)/);
+  assert.match(notice, /tForLocale\(systemLocale\(\), key\)/);
+  assert.doesNotMatch(mainActivity, /showFirstLaunchNoticeIfNeeded|Gravity\.BOTTOM|telemetry_first_launch_notice/);
+});
+
+test("homepage menu is a right-side sliding drawer and keeps the author quote on the page", function () {
+  var html = read("app/src/main/assets/www/index.html");
+  var css = read("app/src/main/assets/www/css/styles.css");
+  var menu = read("app/src/main/assets/www/js/menu.js");
+  var mainActivity = read("app/src/main/java/com/example/quareiadivination/MainActivity.kt");
+
+  assert.match(html, /id="menuToggle"/);
+  assert.match(html, /id="appMenu"/);
+  assert.match(html, /id="menuBackdrop"/);
+  assert.match(html, /class="author-note"/);
+  assert.match(html, /data-i18n="home\.quote"/);
+  assert.ok(html.indexOf('class="settings"') < html.indexOf('class="app-menu"'));
+  assert.ok(html.indexOf('class="author-note"') > html.indexOf('id="resultsSection"'));
+  assert.match(css, /\.app-menu\s*\{[\s\S]*transform:\s*translateX\(104%\)/);
+  assert.match(css, /\.app-menu\.is-open\s*\{[\s\S]*transform:\s*translateX\(0\)/);
+  assert.match(css, /\.menu-backdrop\.is-visible/);
+  assert.match(css, /\.telemetry-actions \.btn\s*\{[\s\S]*white-space:\s*normal/);
+  assert.match(menu, /androidAbout\.open/);
+  assert.match(mainActivity, /addJavascriptInterface\(AboutBridge/);
+  assert.match(mainActivity, /removeJavascriptInterface\("androidAbout"\)/);
+});

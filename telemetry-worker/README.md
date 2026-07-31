@@ -6,10 +6,10 @@ completed-reading counts. It never stores raw IP addresses, request bodies,
 card faces, card names, orientations, spread layouts, questions, notes, or
 local history.
 
-> **Status: code only — not deployed.** This directory contains the worker,
-> reproducible tests, and deployment notes. No deployment is performed by this
-> repository, and nothing here touches the existing website, R2, VPS, DNS, or
-> Cloudflare configuration outside the worker's own future binding.
+> **Status: deployed.** The first authorized deployment record is in
+> [`DEPLOYMENT.md`](DEPLOYMENT.md). No deployment is performed automatically by
+> this repository, and nothing here touches the existing website, R2, VPS, or
+> Cloudflare configuration outside this worker's binding.
 
 ## Endpoints
 
@@ -109,10 +109,11 @@ node --check src/index.js
 `npm ci` must be run from a clean checkout or temporary clean directory using
 the committed `package-lock.json`; do not substitute `npm install`.
 
-## Deploy (manual, requires Cloudflare access)
+## Deployment (manual, requires Cloudflare access)
 
-Deployment is intentionally outside this task. If an authorized operator later
-deploys this worker:
+The production endpoint and custom-domain state are recorded in
+[`DEPLOYMENT.md`](DEPLOYMENT.md). If an authorized operator deploys a later
+worker revision:
 
 1. Run `npm ci` and `npx wrangler login` in this directory.
 2. Keep the `[[analytics_engine_datasets]]` block in `wrangler.toml` and change
@@ -120,8 +121,12 @@ deploys this worker:
    created automatically by Cloudflare on the first write after the binding is
    configured; do **not** create it manually in the dashboard first.
 3. Run `npx wrangler deploy` only in an explicitly authorized deployment window.
-4. Bind `telemetry.luotianyi.fun` separately through the Cloudflare Workers
-   custom-domain/route UI if that hostname is required.
+4. Keep the existing `telemetry.luotianyi.fun` Custom Domain attached to this
+   worker; do not add a broad route or change other DNS records.
+
+Run the clean-environment `npm ci` gate before every authorized deployment.
+Do not place API tokens, account identifiers, OAuth credentials, or local
+`.env`/`.dev.vars` files in this repository.
 
 The [Cloudflare Analytics Engine getting-started guide](https://developers.cloudflare.com/analytics/analytics-engine/get-started/)
 documents the current binding, automatic dataset creation, and single-index

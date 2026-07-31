@@ -15,7 +15,23 @@
       "site.subtitle": "QUAREIA DIVINATION · 塔罗 / Mystagogus / LXXXI",
       "language.switch": "EN",
       "language.switchLabel": "Switch to English",
+      "menu.openLabel": "打开菜单",
+      "menu.closeLabel": "关闭菜单",
+      "menu.kicker": "应用菜单",
+      "menu.title": "菜单",
+      "menu.actionsLabel": "应用菜单",
+      "menu.language": "语言",
+      "menu.about": "关于 / 版权",
       "history.open": "占卜历史",
+      "home.quoteKicker": "作者附言",
+      "home.quote": "while digital tools for readings can be useful in an emergency, the interaction between the physical hands of the reader touching and shuffling the deck is safer, a lot more accurate and far more powerful",
+      "home.quoteCite": "— Josephine McCarthy",
+      "home.quoteTranslation": "中文参考译文：「虽然数字占卜工具在紧急情况下可能会有用，但占卜师用双手亲自接触和洗牌的互动更安全，准确度也更高，且力量强大得多。」原文以英文为准。",
+      "telemetry.kicker": "隐私说明",
+      "telemetry.title": "匿名使用统计",
+      "telemetry.firstLaunchNotice": "本应用默认启用匿名使用统计，用于了解活跃设备数量和功能使用情况。统计内容包括应用版本、语言、牌组和抽牌数量；不收集问题、具体抽牌结果或本地历史。服务端会临时读取连接IP，用于限流和防止滥用。对于网络地址和地理位置数据，统计数据库仅保存由 Cloudflare 根据连接IP推断的国家代码、一级行政区代码和名称，不保存原始IP、IP摘要、城市或更精确的位置。这些位置字段可能缺失或存在偏差，不代表用户的真实居住地。可在“关于 / 版权”页面随时关闭。",
+      "telemetry.manage": "打开隐私设置",
+      "telemetry.acknowledge": "知道了",
       "settings.title": "抽牌设置",
       "settings.deck": "牌组",
       "deck.tarotOption": "塔罗牌（Rider–Waite 体系）",
@@ -196,7 +212,23 @@
       "site.subtitle": "TAROT · MYSTAGOGUS · LXXXI",
       "language.switch": "中文",
       "language.switchLabel": "切换至简体中文",
+      "menu.openLabel": "Open menu",
+      "menu.closeLabel": "Close menu",
+      "menu.kicker": "APP MENU",
+      "menu.title": "Menu",
+      "menu.actionsLabel": "App menu",
+      "menu.language": "Language",
+      "menu.about": "About / Copyright",
       "history.open": "Reading History",
+      "home.quoteKicker": "A note from the author",
+      "home.quote": "while digital tools for readings can be useful in an emergency, the interaction between the physical hands of the reader touching and shuffling the deck is safer, a lot more accurate and far more powerful",
+      "home.quoteCite": "— Josephine McCarthy",
+      "home.quoteTranslation": "A Chinese reference translation appears below the English original; the English text is authoritative.",
+      "telemetry.kicker": "PRIVACY NOTE",
+      "telemetry.title": "Anonymous usage statistics",
+      "telemetry.firstLaunchNotice": "This app enables anonymous usage statistics by default to understand active device counts and feature usage. We collect app version, language, deck, and the number of cards drawn; we do not collect questions, specific draw results, or local history. The server temporarily reads the connection IP for rate limiting and abuse prevention. Of network-address and location data, the statistics database stores only the country code and first-level subdivision code and name inferred by Cloudflare from the connection IP; it does not store the raw IP address, an IP digest, a city, or more precise location data. These location fields may be missing or inaccurate and do not represent the user's actual residence. You can turn it off at any time in About / Copyright.",
+      "telemetry.manage": "Open privacy settings",
+      "telemetry.acknowledge": "Got it",
       "settings.title": "Reading Setup",
       "settings.deck": "Deck",
       "deck.tarotOption": "Tarot (Rider-Waite system)",
@@ -372,12 +404,17 @@
     }
   };
 
+  function detectSystemLocale() {
+    var language = (global.navigator && (global.navigator.language || global.navigator.userLanguage)) || "zh-CN";
+    return String(language).toLowerCase().indexOf("zh") === 0 ? "zh-CN" : "en";
+  }
+
   function readStoredLocale() {
     try {
       var value = global.localStorage && global.localStorage.getItem(STORAGE_KEY);
-      return supported.indexOf(value) !== -1 ? value : DEFAULT_LOCALE;
+      return supported.indexOf(value) !== -1 ? value : detectSystemLocale();
     } catch (_error) {
-      return DEFAULT_LOCALE;
+      return detectSystemLocale();
     }
   }
 
@@ -391,6 +428,17 @@
     var catalogue = messages[locale] || messages[DEFAULT_LOCALE];
     var fallback = messages[DEFAULT_LOCALE][key];
     return interpolate(Object.prototype.hasOwnProperty.call(catalogue, key) ? catalogue[key] : (fallback || key), values);
+  }
+
+  function tForLocale(requestedLocale, key, values) {
+    var normalized = String(requestedLocale || "").toLowerCase().indexOf("zh") === 0
+      ? "zh-CN"
+      : "en";
+    var previous = locale;
+    locale = normalized;
+    var result = t(key, values);
+    locale = previous;
+    return result;
   }
 
   function field(value, key) {
@@ -452,6 +500,7 @@
     getLocale: function () { return locale; },
     isEnglish: function () { return locale === "en"; },
     t: t,
+    tForLocale: tForLocale,
     field: field,
     applyDocument: applyDocument,
     setLocale: setLocale,

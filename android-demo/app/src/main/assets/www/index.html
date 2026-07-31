@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#090d1e">
   <meta name="description" content="Quareia 占卜：支持塔罗、Mystagogus（M 牌）与 LXXXI 魔法牌，轻点牌堆抽牌，翻牌解读，预设牌阵与正逆位模式。">
   <title>Quareia 占卜 · Quareia Divination</title>
-  <link rel="stylesheet" href="css/styles.css?v=20260727-card-picker">
+  <link rel="stylesheet" href="css/styles.css?v=20260731-drawer">
 </head>
 <body>
   <div class="sky-moon" aria-hidden="true"></div>
@@ -15,14 +15,16 @@
       <h1 data-i18n="site.title">Quareia 占卜</h1>
       <p class="subtitle" data-i18n="site.subtitle">QUAREIA DIVINATION · 塔罗 / Mystagogus / LXXXI</p>
       <div class="header-actions">
-        <button class="btn-mini language-toggle" id="languageToggle" type="button"
-          aria-label="Switch to English">EN</button>
-        <button class="btn-mini history-open-btn" id="historyOpenBtn" type="button"
-          aria-haspopup="dialog" aria-controls="historyDialog" data-i18n="history.open">占卜历史</button>
+        <button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false"
+          aria-controls="appMenu" aria-label="打开菜单" data-i18n-aria-label="menu.openLabel">
+          <span class="menu-toggle-bar" aria-hidden="true"></span>
+          <span class="menu-toggle-bar" aria-hidden="true"></span>
+          <span class="menu-toggle-bar" aria-hidden="true"></span>
+        </button>
       </div>
     </header>
 
-    <!-- 设置：可折叠，默认展开 -->
+    <!-- 设置：主页核心操作，默认展开 -->
     <section class="settings" id="settings">
       <button class="settings-toggle" id="settingsToggle" aria-expanded="true" aria-controls="settingsBody">
         <span data-i18n="settings.title">抽牌设置</span>
@@ -72,6 +74,32 @@
       </div>
     </section>
 
+    <aside class="app-menu" id="appMenu" aria-labelledby="menuTitle" aria-hidden="true">
+      <div class="app-menu-shell">
+        <header class="app-menu-header">
+          <div>
+            <p class="app-menu-kicker" data-i18n="menu.kicker">MENU</p>
+            <h2 id="menuTitle" data-i18n="menu.title">菜单</h2>
+          </div>
+          <button class="menu-close" id="menuClose" type="button" aria-label="关闭菜单"
+            data-i18n-aria-label="menu.closeLabel">×</button>
+        </header>
+        <div class="app-menu-body">
+          <div class="menu-primary-actions" role="group" aria-label="应用菜单" data-i18n-aria-label="menu.actionsLabel">
+            <button class="menu-action" id="languageToggle" type="button"
+              aria-label="切换至英文" data-i18n-aria-label="language.switchLabel">
+              <span data-i18n="menu.language">语言</span><strong data-i18n="language.switch">EN</strong>
+            </button>
+            <button class="menu-action" id="historyOpenBtn" type="button"
+              aria-haspopup="dialog" aria-controls="historyDialog" data-i18n="history.open">占卜历史</button>
+            <button class="menu-action" id="aboutOpenBtn" type="button" data-i18n="menu.about">关于 / 版权</button>
+          </div>
+
+        </div>
+      </div>
+    </aside>
+    <div class="menu-backdrop" id="menuBackdrop" aria-hidden="true"></div>
+
     <!-- 牌堆：左右滑动浏览，轻点任意一张抽出 -->
     <section class="deck-area">
       <div class="deck-head">
@@ -109,6 +137,27 @@
       <h2 data-i18n="results.title">解读结果</h2>
       <div class="results-list" id="resultsList"></div>
     </section>
+
+    <section class="author-note" aria-labelledby="authorNoteTitle">
+      <p class="author-note-kicker" id="authorNoteTitle" data-i18n="home.quoteKicker">作者附言</p>
+      <blockquote data-i18n="home.quote">while digital tools for readings can be useful in an emergency, the interaction between the physical hands of the reader touching and shuffling the deck is safer, a lot more accurate and far more powerful</blockquote>
+      <cite data-i18n="home.quoteCite">— Josephine McCarthy</cite>
+      <p class="author-note-translation" data-i18n="home.quoteTranslation">中文参考译文：「虽然数字占卜工具在紧急情况下可能会有用，但占卜师用双手亲自接触和洗牌的互动更安全，准确度也更高，且力量强大得多。」原文以英文为准。</p>
+    </section>
+
+    <dialog class="telemetry-dialog" id="telemetryDialog" aria-modal="true"
+      aria-labelledby="telemetryDialogTitle" aria-describedby="telemetryDialogMessage" aria-hidden="true">
+      <section class="telemetry-card">
+        <p class="telemetry-kicker" data-i18n="telemetry.kicker">隐私说明</p>
+        <h2 id="telemetryDialogTitle" data-i18n="telemetry.title">匿名使用统计</h2>
+        <p id="telemetryDialogMessage" data-i18n="telemetry.firstLaunchNotice">
+          本应用默认启用匿名使用统计，用于了解活跃设备数量和功能使用情况。统计内容包括应用版本、语言、牌组和抽牌数量；不收集问题、具体抽牌结果或本地历史。服务端会临时读取连接IP，用于限流和防止滥用。对于网络地址和地理位置数据，统计数据库仅保存由 Cloudflare 根据连接IP推断的国家代码、一级行政区代码和名称，不保存原始IP、IP摘要、城市或更精确的位置。这些位置字段可能缺失或存在偏差，不代表用户的真实居住地。可在“关于 / 版权”页面随时关闭。</p>
+        <div class="telemetry-actions">
+          <button class="btn btn-secondary" id="telemetryNoticeManage" type="button" data-i18n="telemetry.manage">打开隐私设置</button>
+          <button class="btn btn-accent" id="telemetryNoticeClose" type="button" data-i18n="telemetry.acknowledge">知道了</button>
+        </div>
+      </section>
+    </dialog>
 
     <dialog class="history-dialog" id="historyDialog" aria-labelledby="historyDialogTitle"
       aria-describedby="historyPrivacy">
@@ -207,13 +256,15 @@
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js?v=20260727-themed-selects"></script>
   <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js?v=20260727-card-picker"></script>
+  <script src="js/i18n.js?v=20260731-localized"></script>
+  <script src="js/menu.js?v=20260731-drawer"></script>
+  <script src="js/telemetry-notice.js?v=20260731-system-locale"></script>
   <script src="js/dialogs.js?v=20260727-dialog-meaning"></script>
   <script src="js/custom-selects.js?v=20260727-card-picker"></script>
   <script src="js/history-records.js"></script>
   <script src="js/history-store.js"></script>
   <script src="js/history-ui.js?v=20260727-dialog-meaning"></script>
-  <script src="js/app.js?v=20260727-card-picker"></script>
+  <script src="js/app.js?v=20260731-drawer"></script>
   <script src="js/celestial-sky.js" defer></script>
 </body>
 </html>

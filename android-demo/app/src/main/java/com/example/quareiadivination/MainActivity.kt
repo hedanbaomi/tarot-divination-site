@@ -7,8 +7,6 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.util.Base64
-import android.util.TypedValue
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -18,7 +16,6 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
-import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
 import androidx.webkit.WebViewAssetLoader
@@ -90,18 +87,19 @@ class MainActivity : ComponentActivity() {
             // Expose the anonymous, opt-out usage-statistics bridge. The page
             // calls it from completion hooks; it never reads card content.
             addJavascriptInterface(TelemetryBridge(), "androidTelemetry")
+            // The web menu opens the native attribution and privacy screen
+            // through this narrowly scoped bridge. Native chrome does not sit
+            // over the homepage anymore.
+            addJavascriptInterface(AboutBridge(this@MainActivity), "androidAbout")
 
             webViewClient = QuareiaWebViewClient(assetLoader)
             webChromeClient = WebChromeClient()
             scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
         }
 
-        // Root layout: the WebView fills the screen, with a small "About /
-        // Copyright" affordance pinned to the top-right corner so the
-        // attribution notice is always reachable without blocking the
-        // divination flow. (The app uses a NoActionBar theme, so the legal
-        // notice is surfaced via this lightweight button rather than an
-        // overflow menu.)
+        // Root layout: the WebView owns the homepage and its animated menu.
+        // Keeping native chrome out of the page prevents a second, mismatched
+        // navigation layer from covering the web UI.
         val root = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#090d1e"))
             layoutParams = ViewGroup.LayoutParams(
@@ -116,30 +114,7 @@ class MainActivity : ComponentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
-        val aboutBtn = TextView(this).apply {
-            text = getString(R.string.menu_about)
-            setTextColor(Color.parseColor("#090d1e"))
-            setBackgroundColor(Color.parseColor("#C9A86A"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            val h = dip(8); val v = dip(5)
-            setPadding(h, v, h, v)
-            setOnClickListener { startActivity(Intent(this@MainActivity, AboutActivity::class.java)) }
-        }
-        root.addView(
-            aboutBtn,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP or Gravity.END
-            ).apply {
-                marginEnd = dip(12)
-                topMargin = dip(12)
-            }
-        )
-
         setContentView(root)
-
-        showFirstLaunchNoticeIfNeeded(root)
 
         if (savedInstanceState == null) {
             webView.loadUrl(HOME_URL)
@@ -148,83 +123,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Shows a one-time, non-blocking banner explaining the anonymous usage
-     * statistics the first time the app runs. It sits at the bottom, does not
-     * block the divination flow, and dismisses on tap or after a short delay.
-     * Wording comes entirely from strings.xml.
-     */
-    private fun showFirstLaunchNoticeIfNeeded(root: FrameLayout) {
-        val prefsKey = "first_launch_notice_shown"
-        val prefs = getSharedPreferences("quareia_telemetry", MODE_PRIVATE)
-        if (prefs.getBoolean(prefsKey, false)) return
-        prefs.edit().putBoolean(prefsKey, true).apply()
-
-        val bg = Color.parseColor("#1c1f3a")
-        val text = Color.parseColor("#E8E6F0")
-        val accent = Color.parseColor("#C9A86A")
-        val noticeText = getString(R.string.telemetry_first_launch_notice)
-        val dismiss = getString(R.string.telemetry_notice_dismiss)
-        val fullText = "$noticeText\n\n$dismiss"
-        // Make the dismiss hint a tappable link to the About screen, where the
-        // toggle lives. The whole banner also dismisses on any tap.
-        val spannable = android.text.SpannableString(fullText)
-        val dismissStart = fullText.lastIndexOf(dismiss)
-        if (dismissStart >= 0) {
-            spannable.setSpan(
-                object : android.text.style.ClickableSpan() {
-                    override fun onClick(widget: android.view.View) {
-                        startActivity(Intent(this@MainActivity, AboutActivity::class.java))
-                    }
-                },
-                dismissStart, dismissStart + dismiss.length,
-                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
-            spannable.setSpan(
-                android.text.style.ForegroundColorSpan(accent),
-                dismissStart, dismissStart + dismiss.length,
-                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
-        }
-        val banner = android.widget.TextView(this).apply {
-            setBackgroundColor(bg)
-            setTextColor(text)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setLineSpacing(dip(2).toFloat(), 1f)
-            setPadding(dip(16), dip(12), dip(16), dip(12))
-            this.text = spannable
-            movementMethod = android.text.method.LinkMovementMethod.getInstance()
-            // Any tap outside the inline link just dismisses the banner.
-            setOnClickListener { (parent as? FrameLayout)?.removeView(this) }
-        }
-        root.addView(
-            banner,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM
-            ).apply {
-                marginStart = dip(8)
-                marginEnd = dip(8)
-                bottomMargin = dip(12)
-            }
-        )
-        // Auto-dismiss after 12 seconds without blocking the user.
-        webView.postDelayed({ (banner.parent as? FrameLayout)?.removeView(banner) }, 12000)
-    }
-
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         webView.saveState(outState)
     }
-
-    /** Converts density-independent pixels to raw pixels for layout sizes. */
-    private fun dip(value: Int): Int =
-        TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP,
-            value.toFloat(),
-            resources.displayMetrics
-        ).toInt()
 
     /** Back button navigates WebView history before exiting the activity. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -288,9 +190,21 @@ class MainActivity : ComponentActivity() {
         if (this::webView.isInitialized) {
             webView.removeJavascriptInterface("androidCrypto")
             webView.removeJavascriptInterface("androidTelemetry")
+            webView.removeJavascriptInterface("androidAbout")
             webView.destroy()
         }
         super.onDestroy()
+    }
+}
+
+/** Opens the native attribution and telemetry settings screen from the web menu. */
+private class AboutBridge(private val activity: ComponentActivity) {
+
+    @android.webkit.JavascriptInterface
+    fun open() {
+        activity.runOnUiThread {
+            activity.startActivity(Intent(activity, AboutActivity::class.java))
+        }
     }
 }
 
