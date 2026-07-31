@@ -2,7 +2,6 @@ package com.example.quareiadivination
 
 import android.content.Context
 import android.util.Log
-import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -53,8 +52,8 @@ internal object TelemetryController {
 
     @Volatile
     private var activeConnection: HttpURLConnection? = null
-    private var installSeenInFlight = false
-    private var dailyActiveInFlight = false
+    private var installSeenInFlightGeneration: Long? = null
+    private var dailyActiveInFlightGeneration: Long? = null
 
     private lateinit var appContext: Context
 
@@ -98,8 +97,8 @@ internal object TelemetryController {
         synchronized(stateLock) {
             if (!enabled) {
                 generation.incrementAndGet()
-                installSeenInFlight = false
-                dailyActiveInFlight = false
+                installSeenInFlightGeneration = null
+                dailyActiveInFlightGeneration = null
                 connectionToDisconnect = activeConnection
             }
             prefs.edit().apply {
@@ -122,7 +121,7 @@ internal object TelemetryController {
     fun recordInstallSeen() {
         val queued: QueuedEvent? = synchronized(stateLock) {
             if (!isEnabledLocked() || prefs.getBoolean(KEY_INSTALL_SEEN_SENT, false) ||
-                installSeenInFlight
+                installSeenInFlightGeneration != null
             ) {
                 return@synchronized null
             }
@@ -133,7 +132,7 @@ internal object TelemetryController {
                 slot = InFlightSlot.INSTALL_SEEN,
                 onResult = { sent -> markInstallSeenSent(token, sent) }
             )
-            installSeenInFlight = true
+            installSeenInFlightGeneration = token
             event
         }
         queued?.let(::enqueue)
@@ -144,7 +143,7 @@ internal object TelemetryController {
         val today = utcDateString(System.currentTimeMillis())
         val queued: QueuedEvent? = synchronized(stateLock) {
             if (!isEnabledLocked() || prefs.getString(KEY_LAST_DAU_UTC, null) == today ||
-                dailyActiveInFlight
+                dailyActiveInFlightGeneration != null
             ) {
                 return@synchronized null
             }
@@ -155,7 +154,7 @@ internal object TelemetryController {
                 slot = InFlightSlot.DAILY_ACTIVE,
                 onResult = { sent -> markDailyActiveSent(token, today, sent) }
             )
-            dailyActiveInFlight = true
+            dailyActiveInFlightGeneration = token
             event
         }
         queued?.let(::enqueue)
@@ -253,17 +252,25 @@ internal object TelemetryController {
             } catch (e: Exception) {
                 Log.w(TAG, "event ${event.payload.optString("event")} failed", e)
             } finally {
-                releaseInFlight(event.slot)
+                releaseInFlight(event.slot, event.token)
             }
         }
     }
 
-    private fun releaseInFlight(slot: InFlightSlot?) {
+    private fun releaseInFlight(slot: InFlightSlot?, token: Long) {
         if (slot == null) return
         synchronized(stateLock) {
             when (slot) {
-                InFlightSlot.INSTALL_SEEN -> installSeenInFlight = false
-                InFlightSlot.DAILY_ACTIVE -> dailyActiveInFlight = false
+                InFlightSlot.INSTALL_SEEN -> {
+                    if (installSeenInFlightGeneration == token) {
+                        installSeenInFlightGeneration = null
+                    }
+                }
+                InFlightSlot.DAILY_ACTIVE -> {
+                    if (dailyActiveInFlightGeneration == token) {
+                        dailyActiveInFlightGeneration = null
+                    }
+                }
             }
         }
     }
@@ -288,7 +295,7 @@ internal object TelemetryController {
 
     /** Performs a synchronous POST; throws on any non-success. */
     private fun send(payload: JSONObject, token: Long): Boolean {
-        val body = JSONArray().put(payload).toString().toByteArray(Charsets.UTF_8)
+        val body = payload.toString().toByteArray(Charsets.UTF_8)
         // Defensive: never send a body larger than the 1KB worker cap.
         if (body.size > MAX_BODY_BYTES || !isCurrent(token)) return false
 
@@ -364,8 +371,8 @@ internal object TelemetryController {
         var connectionToDisconnect: HttpURLConnection? = null
         synchronized(stateLock) {
             generation.incrementAndGet()
-            installSeenInFlight = false
-            dailyActiveInFlight = false
+            installSeenInFlightGeneration = null
+            dailyActiveInFlightGeneration = null
             connectionToDisconnect = activeConnection
             senderForTests = null
             prefs.edit().clear().commit()

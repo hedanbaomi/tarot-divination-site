@@ -84,6 +84,50 @@ class TelemetryControllerTest {
     }
 
     @Test
+    fun staleGenerationReleaseCannotClearNewGenerationInFlightMarker() {
+        val generationZeroStarted = CountDownLatch(1)
+        val generationZeroRelease = CountDownLatch(1)
+        val generationOneStarted = CountDownLatch(1)
+        val generationOneRelease = CountDownLatch(1)
+        val sends = AtomicInteger()
+
+        TelemetryController.setSenderForTesting {
+            when (sends.incrementAndGet()) {
+                1 -> {
+                    generationZeroStarted.countDown()
+                    generationZeroRelease.await(2, TimeUnit.SECONDS)
+                }
+                2 -> {
+                    generationOneStarted.countDown()
+                    generationOneRelease.await(2, TimeUnit.SECONDS)
+                }
+            }
+            true
+        }
+
+        // Generation 0 is blocked inside the sender.
+        TelemetryController.recordInstallSeen()
+        assertTrue(generationZeroStarted.await(2, TimeUnit.SECONDS))
+
+        // Disable invalidates generation 0; re-enable queues generation 1.
+        TelemetryController.setEnabled(false)
+        TelemetryController.setEnabled(true)
+        TelemetryController.recordInstallSeen()
+        TelemetryController.recordInstallSeen()
+
+        generationZeroRelease.countDown()
+        assertTrue(generationOneStarted.await(2, TimeUnit.SECONDS))
+
+        // Generation 0 has now released, but generation 1 is still in flight.
+        // A third call must not create a duplicate generation-1 request.
+        TelemetryController.recordInstallSeen()
+        assertThat(sends.get(), `is`(2))
+
+        generationOneRelease.countDown()
+        assertTrue(TelemetryController.awaitIdleForTesting())
+    }
+
+    @Test
     fun installAndDailyActiveAreDeduplicatedWhileInFlight() {
         val installStarted = CountDownLatch(1)
         val installRelease = CountDownLatch(1)

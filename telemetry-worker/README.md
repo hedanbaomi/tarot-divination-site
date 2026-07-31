@@ -15,8 +15,12 @@ local history.
 
 | Method | Path | Behaviour |
 |---|---|---|
-| `POST` | `/v1/events` | Accepts one event or a small array, validates the closed schema, writes to Analytics Engine, and returns `204`. Invalid/oversized requests return `400`/`413`; rate-limited requests return `429`; a missing `TELEMETRY` binding returns `503`. |
+| `POST` | `/v1/events` | Accepts exactly one JSON event object, validates the closed schema, writes one Analytics Engine data point, and returns `204`. Arrays, invalid requests, and oversized requests return `400`/`413`; rate-limited requests return `429`; a missing binding or synchronous write failure returns `503`. |
 | `GET` | `/health` | Returns `200 {"ok":true}`. |
+
+The POST body is one event object, never an array. Rejecting arrays prevents a
+partially written batch if a later event is invalid or the Analytics Engine
+binding fails during a batch.
 
 ## Event schema (closed allow-list)
 
@@ -51,9 +55,11 @@ The worker writes one data point for each accepted event. Arrays are positional:
 | `blobs` | `blob1` | `event` |
 |  | `blob2` | `install_hash` |
 |  | `blob3` | `deck_type`, or `""` for non-reading events |
-|  | `blob4` | Cloudflare connection country code, or `"??"` |
-|  | `blob5` | `app_version` |
-|  | `blob6` | `locale` |
+|  | `blob4` | Cloudflare connection country code, or `""` |
+|  | `blob5` | `subdivision_code`, `country-regionCode`, or `""` |
+|  | `blob6` | Cloudflare first-level subdivision name, capped at 64 characters, or `""` |
+|  | `blob7` | `app_version` |
+|  | `blob8` | `locale` |
 | `doubles` | `double1` | `card_count`, or `0` for non-reading events |
 |  | `double2` | `android_major` |
 | `indexes` | `index1` | `install_hash` — the only index |
@@ -62,16 +68,28 @@ Analytics Engine currently accepts an ordered array with one sampling index;
 passing multiple indexes prevents the data point from being recorded. See the
 [official write and binding documentation](https://developers.cloudflare.com/analytics/analytics-engine/get-started/).
 
+The Analytics Engine dataset currently retains data for **three months**, so it
+is suitable for rolling trend statistics rather than a historical archive; see
+Cloudflare's [current limits and retention documentation](https://developers.cloudflare.com/analytics/analytics-engine/limits/).
+The worker sends exactly one index and the fixed blob/double order above.
+
 ## Privacy contract (enforced in code)
 
 - The UTF-8 encoded request body is capped at **1 KiB** (`413` if exceeded).
 - The server temporarily reads the connection IP for rate limiting and abuse
   prevention. It trusts only Cloudflare's `CF-Connecting-IP` header, ignores
-  client-controlled `X-Forwarded-For`, and keeps only a process-local rolling
-  bucket key. It does not save the raw IP or a persistent IP digest in
-  Analytics Engine, D1, logs, or responses.
-- Analytics Engine stores only the connection country code; it does not store a
-  city, region, coordinate, or IP field.
+  client-controlled `X-Forwarded-For`, and keeps only process-local rolling
+  buckets. It does not save the raw IP or a persistent IP digest in Analytics
+  Engine, D1, logs, or responses.
+- Cloudflare derives the country and first-level subdivision fields from the
+  connection IP. Analytics Engine stores only the country code, the combined
+  `subdivision_code`, and the capped first-level `region_name`; it does not
+  store city, postal code, latitude, longitude, metro code, or any IP field.
+  `region` and `regionCode` may be missing. VPNs, proxies, and mobile-carrier
+  exits can make the inferred location inaccurate; these fields must not be
+  interpreted as the user's precise residence.
+- No client-supplied country, region, or subdivision field is accepted, and no
+  third-party IP geolocation service is called.
 - Timestamps come from the server clock; client timestamps are not accepted.
 - Rate-limit buckets are in-memory only and are not a metering or analytics
   dataset.
@@ -82,10 +100,14 @@ No Cloudflare binding is needed for the test suite; the tests use a mock
 Analytics Engine binding and never deploy the worker.
 
 ```bash
+# Mandatory clean-environment gate before any authorized deployment:
 npm ci
 npm test
 node --check src/index.js
 ```
+
+`npm ci` must be run from a clean checkout or temporary clean directory using
+the committed `package-lock.json`; do not substitute `npm install`.
 
 ## Deploy (manual, requires Cloudflare access)
 
@@ -169,6 +191,48 @@ GROUP BY country
 ORDER BY installs DESC;
 ```
 
+**First-level subdivision install events**
+
+```sql
+SELECT
+  blob5 AS subdivision_code,
+  SUM(_sample_interval) AS installs
+FROM quareia_telemetry
+WHERE blob1 = 'install_seen' AND blob5 <> ''
+GROUP BY subdivision_code
+ORDER BY installs DESC;
+```
+
+**First-level subdivision active-device events**
+
+`daily_active` is emitted at most once per install hash per UTC day by the
+Android client. The query therefore counts sampled daily-active events by
+subdivision; it is not a deduplicated historical residence count.
+
+```sql
+SELECT
+  blob5 AS subdivision_code,
+  SUM(_sample_interval) AS active_device_events
+FROM quareia_telemetry
+WHERE blob1 = 'daily_active' AND blob5 <> ''
+GROUP BY subdivision_code
+ORDER BY active_device_events DESC;
+```
+
+**Completed readings by first-level subdivision and deck**
+
+```sql
+SELECT
+  blob5 AS subdivision_code,
+  blob3 AS deck_type,
+  SUM(_sample_interval) AS readings
+FROM quareia_telemetry
+WHERE blob1 = 'reading_completed' AND blob5 <> ''
+GROUP BY subdivision_code, deck_type
+ORDER BY readings DESC;
+```
+
 These queries cannot reveal card faces, names, orientations, spread layouts,
 questions, notes, history, raw IP, or a persistent IP digest because none of
-those values are written.
+those values are written. All event counts use `SUM(_sample_interval)` because
+Analytics Engine may sample rows; see the [sampling guide](https://developers.cloudflare.com/analytics/analytics-engine/sampling/).

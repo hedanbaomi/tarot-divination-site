@@ -1,9 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import worker from "../src/index.js";
+import worker, { __test } from "../src/index.js";
 
 let sequence = 0;
+let now = 1_000_000;
+
+test.beforeEach(() => {
+  now = 1_000_000;
+  __test.setClockForTesting(() => now);
+  __test.resetRateLimits();
+});
+
+test.after(() => {
+  __test.resetRateLimits();
+  __test.resetClock();
+});
 
 function nextHash() {
   sequence += 1;
@@ -40,7 +52,17 @@ function makeEvent(event, overrides = {}) {
   };
 }
 
-function makeRequest(body, { ip = "198.51.100.10", country = "TW", forwardedFor } = {}) {
+function makeRequest(
+  body,
+  {
+    ip = "198.51.100.10",
+    country = "TW",
+    regionCode,
+    region,
+    forwardedFor,
+    cfExtra = {}
+  } = {}
+) {
   const headers = {
     "content-type": "application/json",
     "cf-connecting-ip": ip
@@ -51,7 +73,9 @@ function makeRequest(body, { ip = "198.51.100.10", country = "TW", forwardedFor 
     headers,
     body: JSON.stringify(body)
   });
-  Object.defineProperty(request, "cf", { value: { country } });
+  Object.defineProperty(request, "cf", {
+    value: { country, regionCode, region, ...cfExtra }
+  });
   return request;
 }
 
@@ -99,11 +123,18 @@ test("Analytics Engine arrays use the fixed order and one index", async () => {
     android_major: 34
   });
 
-  const response = await post(event, makeEnv(analytics), { country: "GB" });
+  const response = await post(event, makeEnv(analytics), {
+    country: "GB",
+    regionCode: "ENG",
+    region: "England"
+  });
 
   assert.equal(response.status, 204);
   assert.deepEqual(analytics.points, [{
-    blobs: ["reading_completed", "a".repeat(64), "lxxxi", "GB", "2.4.6", "en-US"],
+    blobs: [
+      "reading_completed", "a".repeat(64), "lxxxi", "GB", "GB-ENG", "England",
+      "2.4.6", "en-US"
+    ],
     doubles: [8, 34],
     indexes: ["a".repeat(64)]
   }]);
@@ -116,7 +147,7 @@ test("non-reading events use empty deck and zero card-count slots", async () => 
   await post(event, makeEnv(analytics));
 
   assert.deepEqual(analytics.points[0].blobs, [
-    "install_seen", "b".repeat(64), "", "TW", "1.0", "zh-CN"
+    "install_seen", "b".repeat(64), "", "TW", "", "", "1.0", "zh-CN"
   ]);
   assert.deepEqual(analytics.points[0].doubles, [0, 35]);
   assert.deepEqual(analytics.points[0].indexes, ["b".repeat(64)]);
@@ -175,6 +206,101 @@ test("missing Analytics Engine binding returns 503", async () => {
   assert.match(await response.text(), /telemetry_unavailable/);
 });
 
+test("only a single JSON event object is accepted", async () => {
+  const analytics = mockAnalytics();
+  const response = await post(
+    [makeEvent("install_seen"), makeEvent("daily_active")],
+    makeEnv(analytics)
+  );
+
+  assert.equal(response.status, 400);
+  assert.match(await response.text(), /event_must_be_object/);
+  assert.equal(analytics.points.length, 0);
+});
+
+test("a synchronous Analytics Engine failure returns 503", async () => {
+  const analytics = {
+    writeDataPoint() {
+      throw new Error("mock write failure");
+    }
+  };
+
+  const response = await post(makeEvent("install_seen"), makeEnv(analytics));
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "telemetry_write_failed" });
+});
+
+test("Cloudflare country and first-level subdivision fields are mapped", async () => {
+  const analytics = mockAnalytics();
+  const response = await post(
+    makeEvent("install_seen", { install_hash: "d".repeat(64) }),
+    makeEnv(analytics),
+    { country: "CN", regionCode: "BJ", region: "Beijing" }
+  );
+
+  assert.equal(response.status, 204);
+  assert.deepEqual(analytics.points[0].blobs, [
+    "install_seen", "d".repeat(64), "", "CN", "CN-BJ", "Beijing", "1.0", "zh-CN"
+  ]);
+});
+
+test("missing Cloudflare subdivision fields safely fall back to empty strings", async () => {
+  const analytics = mockAnalytics();
+  const response = await post(
+    makeEvent("daily_active", { install_hash: "e".repeat(64) }),
+    makeEnv(analytics),
+    { country: "CN" }
+  );
+
+  assert.equal(response.status, 204);
+  assert.deepEqual(analytics.points[0].blobs.slice(3, 6), ["CN", "", ""]);
+});
+
+test("region names are capped and forbidden geo fields are never written", async () => {
+  const analytics = mockAnalytics();
+  const region = "R".repeat(100);
+  const response = await post(
+    makeEvent("install_seen", { install_hash: "f".repeat(64) }),
+    makeEnv(analytics),
+    {
+      country: "US",
+      regionCode: "CA",
+      region,
+      cfExtra: {
+        city: "San Francisco",
+        postalCode: "94105",
+        latitude: "37.7",
+        longitude: "-122.4",
+        metroCode: "807"
+      }
+    }
+  );
+
+  assert.equal(response.status, 204);
+  assert.equal(analytics.points[0].blobs.length, 8);
+  assert.equal(analytics.points[0].blobs[5], "R".repeat(64));
+  assert.equal(JSON.stringify(analytics.points[0]), JSON.stringify({
+    blobs: [
+      "install_seen", "f".repeat(64), "", "US", "US-CA", "R".repeat(64), "1.0", "zh-CN"
+    ],
+    doubles: [0, 35],
+    indexes: ["f".repeat(64)]
+  }));
+});
+
+for (const field of ["country", "region", "subdivision_code"]) {
+  test(`client-supplied ${field} is rejected`, async () => {
+    const response = await post(
+      makeEvent("install_seen", { [field]: "client-value" }),
+      makeEnv()
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(await response.text(), new RegExp(`unexpected_field:${field}`));
+  });
+}
+
 test("the trusted CF-Connecting-IP header controls IP rate limiting", async () => {
   const analytics = mockAnalytics();
   const env = makeEnv(analytics, {
@@ -229,6 +355,60 @@ test("repeated requests from one install hash are rate limited", async () => {
   }
 
   assert.deepEqual(statuses, [204, 204, 429]);
+});
+
+test("rate-limit buckets have fixed fields, enforce a window, and reset after expiry", async () => {
+  const env = makeEnv(mockAnalytics(), {
+    RATE_LIMIT_PER_IP_PER_MINUTE: "2",
+    RATE_LIMIT_PER_INSTALL_PER_HOUR: "100"
+  });
+  const options = { ip: "198.51.100.60" };
+
+  assert.equal((await post(makeEvent("daily_active"), env, options)).status, 204);
+  assert.equal((await post(makeEvent("daily_active"), env, options)).status, 204);
+  assert.equal((await post(makeEvent("daily_active"), env, options)).status, 429);
+  assert.deepEqual(__test.snapshotRateLimits().ipBucketFields, [
+    "count", "windowStartedAt", "expiresAt"
+  ]);
+
+  now += 60 * 1000 + 1;
+  assert.equal((await post(makeEvent("daily_active"), env, options)).status, 204);
+});
+
+test("an unrelated request triggers bounded cleanup of an expired IP key", async () => {
+  const env = makeEnv(mockAnalytics(), {
+    RATE_LIMIT_PER_IP_PER_MINUTE: "100",
+    RATE_LIMIT_PER_INSTALL_PER_HOUR: "100"
+  });
+
+  await post(makeEvent("install_seen", { install_hash: "1".repeat(64) }), env, {
+    ip: "198.51.100.70"
+  });
+  assert.equal(__test.snapshotRateLimits().ipBucketCount, 1);
+
+  now += 60 * 1000 + 1;
+  await post(makeEvent("install_seen", { install_hash: "2".repeat(64) }), env, {
+    ip: "198.51.100.71"
+  });
+
+  assert.equal(__test.snapshotRateLimits().ipBucketCount, 1);
+});
+
+test("random keys cannot grow either rate-limit map beyond its capacity", async () => {
+  const env = makeEnv(mockAnalytics(), {
+    RATE_LIMIT_PER_IP_PER_MINUTE: "100",
+    RATE_LIMIT_PER_INSTALL_PER_HOUR: "100"
+  });
+
+  for (let i = 0; i < 4200; i += 1) {
+    await post(makeEvent("install_seen"), env, {
+      ip: `203.0.${Math.floor(i / 256)}.${i % 256}`
+    });
+  }
+
+  const snapshot = __test.snapshotRateLimits();
+  assert.ok(snapshot.ipBucketCount <= 4096);
+  assert.ok(snapshot.installBucketCount <= 4096);
 });
 
 test("health remains available without a telemetry binding", async () => {

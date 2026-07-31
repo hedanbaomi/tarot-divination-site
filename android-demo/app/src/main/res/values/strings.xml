@@ -21,11 +21,11 @@
 
     <!-- 匿名使用统计 -->
     <string name="telemetry_section_title">匿名使用统计</string>
-    <string name="telemetry_notice">本应用默认启用匿名使用统计，用于了解活跃设备数量和功能使用情况。统计内容包括应用版本、语言、牌组和抽牌数量；不收集邮箱、问题、具体抽牌结果或本地历史。服务端会临时读取连接 IP，用于限流和防止滥用；不会保存原始 IP 或持久 IP 摘要；统计数据库仅保存国家代码。可在下方随时关闭；关闭后将停止全部统计并删除本机匿名标识。</string>
+    <string name="telemetry_notice">本应用默认启用匿名使用统计，用于了解活跃设备数量和功能使用情况。统计内容包括应用版本、语言、牌组和抽牌数量；不收集问题、具体抽牌结果或本地历史。服务端会临时读取连接IP，用于限流和防止滥用。对于网络地址和地理位置数据，统计数据库仅保存由 Cloudflare 根据连接IP推断的国家代码、一级行政区代码和名称，不保存原始IP、IP摘要、城市或更精确的位置。这些位置字段可能缺失或存在偏差，不代表用户的真实居住地。可在下方随时关闭；关闭后将停止全部统计并删除本机匿名标识。</string>
     <string name="telemetry_switch_on">匿名使用统计（默认启用）</string>
     <string name="telemetry_switch_off">匿名使用统计已关闭</string>
     <string name="telemetry_disabled_toast">已停止使用统计并删除匿名标识</string>
-    <string name="telemetry_first_launch_notice">本应用默认启用匿名使用统计，用于了解活跃设备数量和功能使用情况。统计内容包括应用版本、语言、牌组和抽牌数量；不收集邮箱、问题、具体抽牌结果或本地历史。服务端会临时读取连接 IP，用于限流和防止滥用；不会保存原始 IP 或持久 IP 摘要；统计数据库仅保存国家代码。可随时在关于页面关闭。</string>
+    <string name="telemetry_first_launch_notice">本应用默认启用匿名使用统计，用于了解活跃设备数量和功能使用情况。统计内容包括应用版本、语言、牌组和抽牌数量；不收集问题、具体抽牌结果或本地历史。服务端会临时读取连接IP，用于限流和防止滥用。对于网络地址和地理位置数据，统计数据库仅保存由 Cloudflare 根据连接IP推断的国家代码、一级行政区代码和名称，不保存原始IP、IP摘要、城市或更精确的位置。这些位置字段可能缺失或存在偏差，不代表用户的真实居住地。可随时在关于页面关闭。</string>
     <string name="telemetry_notice_dismiss">前往“关于 / 版权”页面管理或关闭</string>
     <string name="about_close">关闭</string>
 </resources>
