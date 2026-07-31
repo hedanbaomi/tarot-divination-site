@@ -39,7 +39,7 @@ npx wrangler deploy --dry-run --outdir dist   passed
 ```
 
 Production contract checks used the clearly marked app version
-`e2e-test-20260731`. The five legal event types returned HTTP 204. Invalid
+`e2e-test-20260731`. The five valid test requests returned HTTP 204. Invalid
 arrays, forbidden fields, schema version 2, and an over-1-KiB request returned
 the expected 400/413 responses. The test rows are not individually deleted;
 they are marked by that app version and will expire with the three-month

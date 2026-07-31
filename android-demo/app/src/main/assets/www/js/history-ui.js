@@ -9,6 +9,7 @@
   if (typeof require === "function") {
     fallbackI18n = require("./i18n.js");
   }
+  var activeController = null;
 
   function i18n() {
     return globalThis.DivinationI18n || fallbackI18n;
@@ -302,6 +303,12 @@
       }
     }
 
+    function handleBack() {
+      if (!elements.dialog || !elements.dialog.open) return false;
+      closeDialog();
+      return true;
+    }
+
     function saveCurrentReading() {
       if (!readingComplete) return;
       var record;
@@ -479,16 +486,22 @@
         return false;
       });
 
-    return {
+    var controller = {
       updateSaveAvailability: updateSaveAvailability,
       saveCompletedReading: saveCurrentReading,
       refresh: refreshList,
-      refreshLanguage: refreshLanguage
+      refreshLanguage: refreshLanguage,
+      handleBack: handleBack
     };
+    activeController = controller;
+    return controller;
   }
 
   return {
     init: init,
-    createSerialTaskQueue: createSerialTaskQueue
+    createSerialTaskQueue: createSerialTaskQueue,
+    handleBack: function () {
+      return activeController ? activeController.handleBack() : false;
+    }
   };
 });

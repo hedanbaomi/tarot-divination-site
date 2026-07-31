@@ -73,6 +73,12 @@
     });
   }
 
+  function handleBack() {
+    if (!pendingResolver) return false;
+    settle(false);
+    return true;
+  }
+
   function init() {
     var current = cacheElements();
     if (!current.overlay) return;
@@ -89,5 +95,5 @@
   }
 
   init();
-  root.DivinationDialog = { request: request };
+  root.DivinationDialog = { request: request, handleBack: handleBack };
 })(typeof globalThis !== "undefined" ? globalThis : this);

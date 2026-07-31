@@ -54,6 +54,12 @@
     previousFocus = null;
   }
 
+  function handleBack() {
+    if (!choiceDialog || !choiceDialog.open) return false;
+    closeChoice(true);
+    return true;
+  }
+
   function chooseValue(value) {
     if (!activeControl) return;
     var control = activeControl;
@@ -191,5 +197,5 @@
   }
 
   init();
-  root.DivinationCustomSelects = { sync: syncAll };
+  root.DivinationCustomSelects = { sync: syncAll, handleBack: handleBack };
 })(typeof globalThis !== "undefined" ? globalThis : this);

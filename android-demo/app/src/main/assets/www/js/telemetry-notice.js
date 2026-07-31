@@ -37,6 +37,12 @@
     dialog.setAttribute("aria-hidden", "true");
   }
 
+  function handleBack() {
+    if (!dialog || !dialog.open) return false;
+    close();
+    return true;
+  }
+
   function openAbout() {
     close();
     if (global.androidAbout && typeof global.androidAbout.open === "function") {
@@ -89,6 +95,7 @@
 
   global.DivinationTelemetryNotice = {
     showIfNeeded: showIfNeeded,
-    close: close
+    close: close,
+    handleBack: handleBack
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

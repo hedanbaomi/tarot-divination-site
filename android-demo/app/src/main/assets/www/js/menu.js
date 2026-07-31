@@ -35,6 +35,12 @@
     previousFocus = null;
   }
 
+  function handleBack() {
+    if (!menu || !menu.classList.contains("is-open")) return false;
+    setOpen(false);
+    return true;
+  }
+
   function openAbout() {
     setOpen(false);
     if (global.androidAbout && typeof global.androidAbout.open === "function") {
@@ -78,6 +84,7 @@
     open: function () { setOpen(true); },
     close: function () { setOpen(false); },
     toggle: function () { setOpen(!menu || !menu.classList.contains("is-open")); },
-    isOpen: function () { return Boolean(menu && menu.classList.contains("is-open")); }
+    isOpen: function () { return Boolean(menu && menu.classList.contains("is-open")); },
+    handleBack: handleBack
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

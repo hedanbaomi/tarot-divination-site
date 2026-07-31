@@ -7,7 +7,6 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.util.Base64
-import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
@@ -17,6 +16,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.core.view.WindowCompat
 import androidx.webkit.WebViewAssetLoader
 
@@ -39,9 +39,12 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
     private var homePageFinished = false
+    private var backDispatchPending = false
 
     private companion object {
         const val HOME_URL = "https://appassets.androidplatform.net/assets/www/index.html"
+        const val WEB_BACK_HANDLER =
+            "(function(){return Boolean(window.DivinationUiBack && window.DivinationUiBack.handleBack && window.DivinationUiBack.handleBack());})()"
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -115,6 +118,7 @@ class MainActivity : ComponentActivity() {
             )
         )
         setContentView(root)
+        installBackDispatcher()
 
         if (savedInstanceState == null) {
             webView.loadUrl(HOME_URL)
@@ -128,13 +132,40 @@ class MainActivity : ComponentActivity() {
         webView.saveState(outState)
     }
 
-    /** Back button navigates WebView history before exiting the activity. */
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK && webView.canGoBack()) {
-            webView.goBack()
-            return true
-        }
-        return super.onKeyDown(keyCode, event)
+    /** Let the Web UI close its top overlay before falling back to WebView history. */
+    private fun installBackDispatcher() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (backDispatchPending) return
+                if (!this@MainActivity::webView.isInitialized) {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    return
+                }
+
+                backDispatchPending = true
+                try {
+                    webView.evaluateJavascript(WEB_BACK_HANDLER) { handled ->
+                        backDispatchPending = false
+                        if (handled == "true") return@evaluateJavascript
+                        if (webView.canGoBack()) {
+                            webView.goBack()
+                        } else {
+                            isEnabled = false
+                            onBackPressedDispatcher.onBackPressed()
+                        }
+                    }
+                } catch (_error: Throwable) {
+                    backDispatchPending = false
+                    if (webView.canGoBack()) {
+                        webView.goBack()
+                    } else {
+                        isEnabled = false
+                        onBackPressedDispatcher.onBackPressed()
+                    }
+                }
+            }
+        })
     }
 
     /**

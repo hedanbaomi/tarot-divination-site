@@ -88,7 +88,7 @@
           <div class="menu-primary-actions" role="group" aria-label="应用菜单" data-i18n-aria-label="menu.actionsLabel">
             <button class="menu-action" id="languageToggle" type="button"
               aria-label="切换至英文" data-i18n-aria-label="language.switchLabel">
-              <span data-i18n="menu.language">语言</span><strong data-i18n="language.switch">EN</strong>
+              <span data-i18n="menu.language">语言</span><strong id="languageToggleValue" data-i18n="language.switch">EN</strong>
             </button>
             <button class="menu-action" id="historyOpenBtn" type="button"
               aria-haspopup="dialog" aria-controls="historyDialog" data-i18n="history.open">占卜历史</button>
@@ -171,7 +171,7 @@
         </header>
 
         <p class="history-privacy" id="historyPrivacy" data-i18n="history.privacy">
-          占卜记录仅保存在本应用的本地存储中。卸载应用、清除应用数据或更换设备可能导致记录丢失；可导出 JSON 自行备份。本应用不会上传历史，也不进行遥测或追踪。
+          占卜记录仅保存在本应用的本地存储中。卸载应用、清除应用数据或更换设备可能导致记录丢失；可导出 JSON 自行备份。本应用不会上传、追踪或收集你的占卜历史；匿名使用统计也不包含历史内容。
         </p>
 
         <div class="history-toolbar" data-view="list">
@@ -264,6 +264,7 @@
   <script src="js/history-records.js"></script>
   <script src="js/history-store.js"></script>
   <script src="js/history-ui.js?v=20260727-dialog-meaning"></script>
+  <script src="js/back-handler.js?v=20260731-overlay-back"></script>
   <script src="js/app.js?v=20260731-drawer"></script>
   <script src="js/celestial-sky.js" defer></script>
 </body>

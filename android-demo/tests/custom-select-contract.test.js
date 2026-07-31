@@ -100,3 +100,29 @@ test("homepage menu is a right-side sliding drawer and keeps the author quote on
   assert.match(mainActivity, /fun setLocale\(locale: String\)/);
   assert.match(mainActivity, /removeJavascriptInterface\("androidAbout"\)/);
 });
+
+test("language toggle keeps its label and value nodes for runtime localization", function () {
+  var html = read("app/src/main/assets/www/index.html");
+  var i18n = read("app/src/main/assets/www/js/i18n.js");
+  var backHandler = read("app/src/main/assets/www/js/back-handler.js");
+
+  assert.match(html, /id="languageToggle"[\s\S]*?<span[^>]*data-i18n="menu\.language"[^>]*>语言<\/span>/);
+  assert.match(html, /<strong id="languageToggleValue"[^>]*data-i18n="language\.switch">EN<\/strong>/);
+  assert.match(html, /src="js\/back-handler\.js\?v=20260731-overlay-back"/);
+  assert.match(i18n, /getElementById\("languageToggleValue"\)/);
+  assert.doesNotMatch(i18n, /toggle\.textContent\s*=/);
+  assert.match(backHandler, /DivinationUiBack/);
+});
+
+test("Android activity gives Web UI overlays priority over WebView history", function () {
+  var mainActivity = read("app/src/main/java/com/example/quareiadivination/MainActivity.kt");
+  var backHandler = read("app/src/main/assets/www/js/back-handler.js");
+
+  assert.match(mainActivity, /OnBackPressedCallback/);
+  assert.match(mainActivity, /DivinationUiBack/);
+  assert.match(mainActivity, /webView\.canGoBack\(\)/);
+  assert.match(backHandler, /DivinationDialog/);
+  assert.match(backHandler, /DivinationTelemetryNotice/);
+  assert.match(backHandler, /DivinationHistoryUi/);
+  assert.match(backHandler, /DivinationMenu/);
+});

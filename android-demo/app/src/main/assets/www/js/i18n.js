@@ -68,7 +68,7 @@
       "history.kicker": "APP HISTORY",
       "history.title": "占卜历史",
       "history.closeLabel": "关闭占卜历史",
-      "history.privacy": "占卜记录仅保存在本应用的本地存储中。卸载应用、清除应用数据或更换设备可能导致记录丢失；可导出 JSON 自行备份。本应用不会上传历史，也不进行遥测或追踪。",
+      "history.privacy": "占卜记录仅保存在本应用的本地存储中。卸载应用、清除应用数据或更换设备可能导致记录丢失；可导出 JSON 自行备份。本应用不会上传、追踪或收集你的占卜历史；匿名使用统计也不包含历史内容。",
       "history.filterLabel": "按牌组筛选",
       "history.filterAll": "全部牌组",
       "history.filterTarot": "塔罗牌",
@@ -265,7 +265,7 @@
       "history.kicker": "APP HISTORY",
       "history.title": "Reading History",
       "history.closeLabel": "Close reading history",
-      "history.privacy": "Readings are stored locally by this app on this device. Uninstalling the app, clearing its data, or changing devices may remove them. Export a JSON backup if needed. This app does not upload, track, or collect your reading history.",
+      "history.privacy": "Readings are stored locally by this app on this device. Uninstalling the app, clearing its data, or changing devices may remove them. Export a JSON backup if needed. This app does not upload, track, or collect your reading history. Anonymous usage statistics do not include reading history content.",
       "history.filterLabel": "Filter by deck",
       "history.filterAll": "All decks",
       "history.filterTarot": "Tarot",
@@ -476,9 +476,10 @@
     Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-aria-label]"), function (element) {
       element.setAttribute("aria-label", t(element.getAttribute("data-i18n-aria-label")));
     });
+    var toggleValue = document.getElementById("languageToggleValue");
+    if (toggleValue) toggleValue.textContent = t("language.switch");
     var toggle = document.getElementById("languageToggle");
     if (toggle) {
-      toggle.textContent = t("language.switch");
       toggle.setAttribute("aria-label", t("language.switchLabel"));
       toggle.setAttribute("lang", locale === "en" ? "zh-CN" : "en");
     }
