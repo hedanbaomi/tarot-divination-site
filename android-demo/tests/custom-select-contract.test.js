@@ -70,6 +70,8 @@ test("homepage uses a localized first-launch dialog instead of a native bottom b
   assert.match(i18n, /function tForLocale\(requestedLocale, key, values\)/);
   assert.match(i18n, /function detectSystemLocale\(\)/);
   assert.match(i18n, /return supported\.indexOf\(value\) !== -1 \? value : detectSystemLocale\(\)/);
+  assert.match(i18n, /function syncNativeLocale\(\)/);
+  assert.match(i18n, /androidAbout\.setLocale\(locale\)/);
   assert.match(notice, /localStorage\.setItem\(STORAGE_KEY, "1"\)/);
   assert.match(notice, /function systemLocale\(\)/);
   assert.match(notice, /tForLocale\(systemLocale\(\), key\)/);
@@ -95,5 +97,6 @@ test("homepage menu is a right-side sliding drawer and keeps the author quote on
   assert.match(css, /\.telemetry-actions \.btn\s*\{[\s\S]*white-space:\s*normal/);
   assert.match(menu, /androidAbout\.open/);
   assert.match(mainActivity, /addJavascriptInterface\(AboutBridge/);
+  assert.match(mainActivity, /fun setLocale\(locale: String\)/);
   assert.match(mainActivity, /removeJavascriptInterface\("androidAbout"\)/);
 });

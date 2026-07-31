@@ -206,6 +206,11 @@ private class AboutBridge(private val activity: ComponentActivity) {
             activity.startActivity(Intent(activity, AboutActivity::class.java))
         }
     }
+
+    @android.webkit.JavascriptInterface
+    fun setLocale(locale: String) {
+        AppLocale.set(activity, locale)
+    }
 }
 
 /**

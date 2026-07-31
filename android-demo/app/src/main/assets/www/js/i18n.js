@@ -441,6 +441,22 @@
     return result;
   }
 
+  function hasStoredLocale() {
+    try {
+      var value = global.localStorage && global.localStorage.getItem(STORAGE_KEY);
+      return supported.indexOf(value) !== -1;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function syncNativeLocale() {
+    if (!hasStoredLocale()) return;
+    if (global.androidAbout && typeof global.androidAbout.setLocale === "function") {
+      global.androidAbout.setLocale(locale);
+    }
+  }
+
   function field(value, key) {
     if (!value) return "";
     if (locale === "en") return value[key + "En"] || value[key] || "";
@@ -466,6 +482,7 @@
       toggle.setAttribute("aria-label", t("language.switchLabel"));
       toggle.setAttribute("lang", locale === "en" ? "zh-CN" : "en");
     }
+    syncNativeLocale();
   }
 
   function setLocale(nextLocale) {
