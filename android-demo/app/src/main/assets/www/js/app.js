@@ -12,6 +12,9 @@
   var pile = [];       // remaining face-down cards (shuffled)
   var spread = [];      // drawn cards: { uid, card, orientation, revealed, slotIndex, layer? }
   var uidCounter = 0;
+  // Guards anonymous telemetry: a finished spread reports reading_completed at
+  // most once until the spread is cleared/changed, regardless of repeated flips.
+  var readingReported = false;
 
   var el = {};
   var historyUiController = null;
@@ -255,6 +258,7 @@
   function resetDeck() {
     currentPhase = "major";
     spread = [];
+    readingReported = false;
     buildPile();
     renderSpreadCards();
     renderDeckSpread();
@@ -776,8 +780,26 @@
     pending.forEach(function (entry, i) {
       setTimeout(function () { revealEntry(entry); }, i * 80);
     });
-    if (historyUiController && isReadingComplete()) {
-      historyUiController.saveCompletedReading();
+    if (isReadingComplete()) {
+      if (historyUiController) historyUiController.saveCompletedReading();
+      notifyReadingCompleted();
+    }
+  }
+
+  // Reports one anonymous reading_completed event per finished spread. Only the
+  // deck type and the number of drawn cards are sent — never card ids, names,
+  // orientations, positions, questions, notes, or history. It is a no-op when
+  // the native telemetry bridge is absent (e.g. the plain website build) or
+  // when the user has turned statistics off.
+  function notifyReadingCompleted() {
+    if (readingReported) return;
+    readingReported = true;
+    var bridge = globalThis.androidTelemetry;
+    if (!bridge || typeof bridge.isEnabled !== "function" || !bridge.isEnabled()) return;
+    try {
+      bridge.logReadingCompleted(deckType, spread.length);
+    } catch (_error) {
+      // Telemetry must never affect the reading; swallow any failure.
     }
   }
 

@@ -82,6 +82,9 @@ class MainActivity : ComponentActivity() {
             // way the LXXXI card art leaves the APK; it never writes plaintext
             // anywhere on disk.
             addJavascriptInterface(LxxxiCryptoBridge(this@MainActivity), "androidCrypto")
+            // Expose the anonymous, opt-out usage-statistics bridge. The page
+            // calls it from completion hooks; it never reads card content.
+            addJavascriptInterface(TelemetryBridge(), "androidTelemetry")
 
             webViewClient = QuareiaWebViewClient(assetLoader)
             webChromeClient = WebChromeClient()
@@ -131,12 +134,82 @@ class MainActivity : ComponentActivity() {
 
         setContentView(root)
 
+        // Initialise anonymous usage statistics. Non-blocking: failures never
+        // affect launch, the page, or local history.
+        TelemetryController.init(this)
+        showFirstLaunchNoticeIfNeeded(root)
+
         val home = "https://appassets.androidplatform.net/assets/www/index.html"
         if (savedInstanceState == null) {
             webView.loadUrl(home)
         } else {
             webView.restoreState(savedInstanceState)
         }
+    }
+
+    /**
+     * Shows a one-time, non-blocking banner explaining the anonymous usage
+     * statistics the first time the app runs. It sits at the bottom, does not
+     * block the divination flow, and dismisses on tap or after a short delay.
+     * Wording comes entirely from strings.xml.
+     */
+    private fun showFirstLaunchNoticeIfNeeded(root: FrameLayout) {
+        val prefsKey = "first_launch_notice_shown"
+        val prefs = getSharedPreferences("quareia_telemetry", MODE_PRIVATE)
+        if (prefs.getBoolean(prefsKey, false)) return
+        prefs.edit().putBoolean(prefsKey, true).apply()
+
+        val bg = Color.parseColor("#1c1f3a")
+        val text = Color.parseColor("#E8E6F0")
+        val accent = Color.parseColor("#C9A86A")
+        val noticeText = getString(R.string.telemetry_first_launch_notice)
+        val dismiss = getString(R.string.telemetry_notice_dismiss)
+        val fullText = "$noticeText\n\n$dismiss"
+        // Make the dismiss hint a tappable link to the About screen, where the
+        // toggle lives. The whole banner also dismisses on any tap.
+        val spannable = android.text.SpannableString(fullText)
+        val dismissStart = fullText.lastIndexOf(dismiss)
+        if (dismissStart >= 0) {
+            spannable.setSpan(
+                object : android.text.style.ClickableSpan() {
+                    override fun onClick(widget: android.view.View) {
+                        startActivity(Intent(this@MainActivity, AboutActivity::class.java))
+                    }
+                },
+                dismissStart, dismissStart + dismiss.length,
+                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+            spannable.setSpan(
+                android.text.style.ForegroundColorSpan(accent),
+                dismissStart, dismissStart + dismiss.length,
+                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+        val banner = android.widget.TextView(this).apply {
+            setBackgroundColor(bg)
+            setTextColor(text)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setLineSpacing(dip(2).toFloat(), 1f)
+            setPadding(dip(16), dip(12), dip(16), dip(12))
+            this.text = spannable
+            movementMethod = android.text.method.LinkMovementMethod.getInstance()
+            // Any tap outside the inline link just dismisses the banner.
+            setOnClickListener { (parent as? FrameLayout)?.removeView(this) }
+        }
+        root.addView(
+            banner,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM
+            ).apply {
+                marginStart = dip(8)
+                marginEnd = dip(8)
+                bottomMargin = dip(12)
+            }
+        )
+        // Auto-dismiss after 12 seconds without blocking the user.
+        webView.postDelayed({ (banner.parent as? FrameLayout)?.removeView(banner) }, 12000)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -176,6 +249,14 @@ class MainActivity : ComponentActivity() {
         ): WebResourceResponse? {
             val url = request?.url ?: return null
             return assetLoader.shouldInterceptRequest(url)
+        }
+
+        // Once the page is ready, fire the install/daily-active signals. These
+        // are fire-and-forget on a background thread; any failure is retried on
+        // a later launch and never blocks the UI.
+        override fun onPageFinished(view: WebView?, url: String?) {
+            TelemetryController.recordInstallSeen()
+            TelemetryController.recordDailyActive()
         }
 
         override fun shouldOverrideUrlLoading(

@@ -124,6 +124,39 @@ class AboutActivity : ComponentActivity() {
         }
         container.addView(link)
 
+        // Anonymous usage statistics section with an opt-out toggle. Wording is
+        // entirely from strings.xml; the switch reflects and updates the live
+        // setting. Turning it off deletes the local anonymous identifier.
+        container.addView(headingText(getString(R.string.telemetry_section_title), accent))
+        container.addView(bodyText(getString(R.string.telemetry_notice), muted))
+        val telemetrySwitch = android.widget.Switch(this).apply {
+            isChecked = TelemetryController.isEnabled()
+            text = if (isChecked) {
+                getString(R.string.telemetry_switch_on)
+            } else {
+                getString(R.string.telemetry_switch_off)
+            }
+            setTextColor(primary)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setPadding(0, dip(4), 0, dip(14))
+            setOnCheckedChangeListener { view, checked ->
+                TelemetryController.setEnabled(checked)
+                view.text = if (checked) {
+                    getString(R.string.telemetry_switch_on)
+                } else {
+                    getString(R.string.telemetry_switch_off)
+                }
+                if (!checked) {
+                    android.widget.Toast.makeText(
+                        this@AboutActivity,
+                        R.string.telemetry_disabled_toast,
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+        container.addView(telemetrySwitch)
+
         // Verbatim English note (authoritative) + Chinese reference translation.
         container.addView(headingText(getString(R.string.about_quote_label), accent))
         val quote = TextView(this).apply {
