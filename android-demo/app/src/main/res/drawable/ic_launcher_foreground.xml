@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Crescent moon + sparkle stars — a divination/tarot glyph in warm gold,
+  drawn on a 108×108 adaptive-icon canvas (content sits inside the 72×72 safe
+  area centred at 54,54).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Large crescent moon, centred at (50,54), radius 22 -->
+    <path
+        android:fillColor="#FFE8C97A"
+        android:pathData="M50,32
+            a22,22 0 1,0 0,44
+            a17,17 0 1,1 0,-44 z" />
+
+    <!-- Four-point sparkle, upper-right -->
+    <path
+        android:fillColor="#FFE8C97A"
+        android:pathData="M78,30
+            l2.5,7.5 7.5,2.5 -7.5,2.5 -2.5,7.5 -2.5,-7.5 -7.5,-2.5 7.5,-2.5 z" />
+
+    <!-- Small sparkle, lower-left -->
+    <path
+        android:fillColor="#FFE8C97A"
+        android:pathData="M30,76
+            l1.6,4.8 4.8,1.6 -4.8,1.6 -1.6,4.8 -1.6,-4.8 -4.8,-1.6 4.8,-1.6 z" />
+</vector>

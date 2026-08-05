@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">Quareia Divination</string>
+
+    <!-- About / Copyright & attribution screen -->
+    <string name="menu_about">About / Copyright</string>
+    <string name="about_title">About / Copyright &amp; Attribution</string>
+    <string name="about_status">This is an unofficial, free, strictly non-commercial tool. It is not affiliated with, sponsored by, or endorsed by Quareia, Josephine McCarthy, the associated artists, or any publisher. Third-party card faces and text do not fall under the application code\'s open-source licence.</string>
+    <string name="about_permission_note">Josephine McCarthy\'s written permission covers this free application (and the corresponding free GitHub Pages website), provided that the copyrighted materials remain strictly non-commercial and are excluded from all open-source licences.</string>
+    <string name="about_mystagogus_label">Mystagogus artwork and related text</string>
+    <string name="about_mystagogus_rights">© Josephine McCarthy · Used with written permission for this strictly non-commercial project.</string>
+    <string name="about_lxxxi_label">LXXXI Magician\'s Deck artwork and related text</string>
+    <string name="about_lxxxi_rights">© Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland · Used with written permission for this strictly non-commercial project.</string>
+    <string name="about_oss_boundary">The application code follows the MIT licence in the repository root; however, third-party card faces, card-meaning text, and derived content are not covered by that licence and are not relicensed by opening the source.</string>
+    <string name="about_quareia_label">Official Quareia website</string>
+    <string name="about_quareia_url">https://www.quareia.com</string>
+    <string name="about_quote_label">A note from the author</string>
+    <string name="about_quote_en">while digital tools for readings can be useful in an emergency, the interaction between the physical hands of the reader touching and shuffling the deck is safer, a lot more accurate and far more powerful</string>
+    <string name="about_quote_cite">— Josephine McCarthy</string>
+    <string name="about_quote_display">%1$s\n\n%2$s</string>
+    <string name="about_quote_zh">Chinese reference translation is shown below the English original; the English text is authoritative.</string>
+
+    <!-- Anonymous usage statistics -->
+    <string name="telemetry_section_title">Anonymous usage statistics</string>
+    <string name="telemetry_notice">This app enables anonymous usage statistics by default to understand active device counts and feature usage. We collect app version, language, deck, and the number of cards drawn; we do not collect questions, specific draw results, or local history. The server temporarily reads the connection IP for rate limiting and abuse prevention. Of network-address and location data, the statistics database stores only the country code and the first-level subdivision code and name inferred by Cloudflare from the connection IP; it does not store the raw IP address, an IP digest, a city, or more precise location data. These location fields may be missing or inaccurate and do not represent the user\'s actual residence. You can turn it off below at any time; turning it off stops all statistics and deletes this device\'s anonymous identifier.</string>
+    <string name="telemetry_switch_on">Anonymous usage statistics (enabled by default)</string>
+    <string name="telemetry_switch_off">Anonymous usage statistics are off</string>
+    <string name="telemetry_disabled_toast">Usage statistics stopped and the anonymous identifier was deleted</string>
+    <string name="telemetry_first_launch_notice">This app enables anonymous usage statistics by default to understand active device counts and feature usage. We collect app version, language, deck, and the number of cards drawn; we do not collect questions, specific draw results, or local history. The server temporarily reads the connection IP for rate limiting and abuse prevention. Of network-address and location data, the statistics database stores only the country code and the first-level subdivision code and name inferred by Cloudflare from the connection IP; it does not store the raw IP address, an IP digest, a city, or more precise location data. These location fields may be missing or inaccurate and do not represent the user\'s actual residence. You can turn it off anytime in the About screen.</string>
+    <string name="telemetry_notice_dismiss">Open the About / Copyright screen to manage or turn it off</string>
+    <string name="about_close">Close</string>
+</resources>

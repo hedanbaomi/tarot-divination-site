@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Only INTERNET is requested, solely for the anonymous, opt-out usage
+  statistics. The entire website is bundled in assets/www and runs offline
+  inside the WebView; divination and local history work without any network.
+  Telemetry can be turned off in the About screen, after which no network
+  request is made. No location, device-identifier, contacts, or account
+  permissions are requested.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:name=".QuareiaApplication"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:usesCleartextTraffic="false"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.QuareiaDivination">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!--
+          About / Copyright & Attribution screen. Not exported and started only
+          from the in-app button; it needs no permissions of its own. The
+          Quareia link it offers is handed to the system browser.
+        -->
+        <activity
+            android:name=".AboutActivity"
+            android:exported="false"
+            android:label="@string/about_title"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
+    </application>
+
+</manifest>

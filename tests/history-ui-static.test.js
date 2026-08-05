@@ -9,6 +9,14 @@ var root = path.join(__dirname, "..");
 var html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 var historyUi = fs.readFileSync(path.join(root, "js", "history-ui.js"), "utf8");
 var app = fs.readFileSync(path.join(root, "js", "app.js"), "utf8");
+var androidHistoryUi = fs.readFileSync(
+  path.join(root, "android-demo/app/src/main/assets/www/js/history-ui.js"),
+  "utf8"
+);
+var androidMainActivity = fs.readFileSync(
+  path.join(root, "android-demo/app/src/main/java/com/quareia/divination/MainActivity.kt"),
+  "utf8"
+);
 var historyUiApi = require("../js/history-ui.js");
 
 test("history UI never renders imported data through innerHTML", function () {
@@ -64,4 +72,15 @@ test("automatic saves are queued without dropping a different reading", async fu
   releaseFirst();
   await Promise.all([first, second]);
   assert.deepEqual(events, ["first:start", "first:end", "second:start", "second:end"]);
+});
+
+test("Android history export uses the system save picker and reports completion", function () {
+  assert.match(androidHistoryUi, /androidHistoryExport/);
+  assert.match(androidHistoryUi, /nativeBridge\.save\(json, fileName\)/);
+  assert.match(androidHistoryUi, /__quareiaHistoryExportResult/);
+  assert.match(androidHistoryUi, /history\.exportChoosing/);
+  assert.match(androidHistoryUi, /history\.exportedTo/);
+  assert.match(androidMainActivity, /ActivityResultContracts\.CreateDocument\("application\/json"\)/);
+  assert.match(androidMainActivity, /contentResolver\.openOutputStream\(uri, "w"\)/);
+  assert.match(androidMainActivity, /OpenableColumns\.DISPLAY_NAME/);
 });

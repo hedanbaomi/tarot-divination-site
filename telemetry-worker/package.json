@@ -1,0 +1,16 @@
+{
+  "name": "quareia-telemetry-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Anonymous, opt-out usage-statistics ingest for the Quareia Divination Android app. Stores aggregate signals only in Cloudflare Analytics Engine; never stores raw IP, request bodies, or card/reading content.",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Dark, fullscreen theme that matches the site's night-sky background
+      (#090d1e from index.html <meta name="theme-color">). Using a dark window
+      background prevents a white flash before the WebView paints its content.
+    -->
+    <style name="Theme.QuareiaDivination" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/quareia_background</item>
+        <item name="android:statusBarColor">@color/quareia_background</item>
+        <item name="android:navigationBarColor">@color/quareia_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

@@ -1,0 +1,31 @@
+name = "quareia-telemetry"
+main = "src/index.js"
+compatibility_date = "2025-07-01"
+
+# ---------------------------------------------------------------------------
+# Analytics Engine binding. The worker writes one data point per accepted event.
+# The dataset is created automatically by Cloudflare on the first write after
+# this binding is configured; no dashboard dataset-creation step is required.
+#
+# Keep the dataset name stable so SQL queries continue to address the same table.
+# ---------------------------------------------------------------------------
+
+[[analytics_engine_datasets]]
+binding = "TELEMETRY"
+dataset = "quareia_telemetry"
+
+# ---------------------------------------------------------------------------
+# Custom domain. telemetry.luotianyi.fun must be bound to this worker in the
+# Cloudflare dashboard (Websites -> the luotianyi.fun zone -> Workers Routes,
+# or Workers & Pages -> the worker -> Settings -> Triggers -> Custom Domains).
+# This file does NOT perform that binding automatically.
+# ---------------------------------------------------------------------------
+
+# routes = [
+#   { pattern = "telemetry.luotianyi.fun/*", zone_name = "luotianyi.fun" }
+# ]
+
+[vars]
+# Tuneable in-memory limits. Changes here require a redeploy.
+RATE_LIMIT_PER_INSTALL_PER_HOUR = "60"
+RATE_LIMIT_PER_IP_PER_MINUTE = "30"
