@@ -28,4 +28,20 @@
     <string name="telemetry_first_launch_notice">This app enables anonymous usage statistics by default to understand active device counts and feature usage. We collect app version, language, deck, and the number of cards drawn; we do not collect questions, specific draw results, or local history. The server temporarily reads the connection IP for rate limiting and abuse prevention. Of network-address and location data, the statistics database stores only the country code and the first-level subdivision code and name inferred by Cloudflare from the connection IP; it does not store the raw IP address, an IP digest, a city, or more precise location data. These location fields may be missing or inaccurate and do not represent the user\'s actual residence. You can turn it off anytime in the About screen.</string>
     <string name="telemetry_notice_dismiss">Open the About / Copyright screen to manage or turn it off</string>
     <string name="about_close">Close</string>
+
+    <!-- Check for updates -->
+    <string name="update_section_title">Check for updates</string>
+    <string name="update_version">Current version: %1$s</string>
+    <string name="update_check">Check for updates</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_up_to_date">You are up to date</string>
+    <string name="update_check_failed">Could not check for updates. Check your connection and try again.</string>
+    <string name="update_available_title">Update available</string>
+    <string name="update_available_message">Version %1$s is available. Download and install it now?</string>
+    <string name="update_yes">Update now</string>
+    <string name="update_later">Not now</string>
+    <string name="update_downloading">Downloading update %1$d%%…</string>
+    <string name="update_download_failed">Download failed. Please try again later.</string>
+    <string name="update_install_ready">Update downloaded. Opening the installer…</string>
+    <string name="update_install_permission">Installing apps from unknown sources must be allowed to update. Enable it in system settings and try again.</string>
 </resources>

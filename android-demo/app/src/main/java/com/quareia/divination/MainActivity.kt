@@ -234,6 +234,9 @@ class MainActivity : ComponentActivity() {
             homePageFinished = true
             TelemetryController.recordInstallSeen()
             TelemetryController.recordDailyActive()
+            // Silent startup update check: only a genuinely newer release
+            // prompts anything; errors and up-to-date results stay quiet.
+            UpdateManager.checkAndPrompt(this@MainActivity, manual = false)
         }
 
         override fun shouldOverrideUrlLoading(

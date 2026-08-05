@@ -145,6 +145,35 @@ class AboutActivity : ComponentActivity() {
         }
         container.addView(telemetrySwitch)
 
+        // Check for updates: shows the installed version and lets the user
+        // fetch and install the newest release from GitHub Releases inside
+        // the app. This is the only place the native UI makes an update
+        // request; the startup check in MainActivity stays silent until a
+        // newer version actually exists.
+        container.addView(headingText(localized.getString(R.string.update_section_title), accent))
+        container.addView(
+            bodyText(
+                localized.getString(
+                    R.string.update_version,
+                    runCatching {
+                        packageManager.getPackageInfo(packageName, 0).versionName
+                    }.getOrNull().orEmpty(),
+                ),
+                primary,
+            )
+        )
+        val checkUpdate = TextView(this).apply {
+            text = localized.getString(R.string.update_check)
+            setTextColor(accent)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setPadding(0, dip(4), 0, dip(14))
+            setOnClickListener {
+                UpdateManager.checkAndPrompt(this@AboutActivity, manual = true)
+            }
+        }
+        container.addView(checkUpdate)
+
         // Verbatim English note (authoritative) + Chinese reference translation.
         container.addView(headingText(localized.getString(R.string.about_quote_label), accent))
         val quote = TextView(this).apply {

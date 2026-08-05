@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Only the internal update directory is shared with the system package
+  installer, and only with the temporary read grant the installer receives.
+  Nothing else in app storage is exposed through this provider.
+-->
+<paths>
+    <files-path name="updates" path="updates/" />
+</paths>

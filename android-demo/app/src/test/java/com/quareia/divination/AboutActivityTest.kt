@@ -59,6 +59,33 @@ class AboutActivityTest {
         assertTrue(containsText(activity.window.decorView, AppLocale.contextFor(application).getString(R.string.telemetry_section_title)))
     }
 
+    @Test
+    fun activityShowsTheUpdateSectionInBothLocales() {
+        AppLocale.set(application, "zh-CN")
+        val zh = Robolectric.buildActivity(AboutActivity::class.java).setup().get()
+        assertTrue(containsText(zh.window.decorView, AppLocale.contextFor(application).getString(R.string.update_section_title)))
+        assertTrue(containsText(zh.window.decorView, AppLocale.contextFor(application).getString(R.string.update_check)))
+
+        AppLocale.set(application, "en")
+        val en = Robolectric.buildActivity(AboutActivity::class.java).setup().get()
+        assertTrue(containsText(en.window.decorView, AppLocale.contextFor(application).getString(R.string.update_section_title)))
+        assertTrue(containsText(en.window.decorView, AppLocale.contextFor(application).getString(R.string.update_check)))
+    }
+
+    @Test
+    fun activityShowsTheInstalledVersion() {
+        val versionName = application.packageManager
+            .getPackageInfo(application.packageName, 0).versionName
+        val activity = Robolectric.buildActivity(AboutActivity::class.java).setup().get()
+
+        assertTrue(
+            containsText(
+                activity.window.decorView,
+                AppLocale.contextFor(application).getString(R.string.update_version, versionName)
+            )
+        )
+    }
+
     private fun containsText(view: android.view.View, expected: String): Boolean {
         if (view is android.widget.TextView && view.text.toString() == expected) return true
         if (view is android.view.ViewGroup) {

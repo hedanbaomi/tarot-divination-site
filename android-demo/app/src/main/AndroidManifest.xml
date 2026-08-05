@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Only INTERNET is requested, solely for the anonymous, opt-out usage
-  statistics. The entire website is bundled in assets/www and runs offline
-  inside the WebView; divination and local history work without any network.
-  Telemetry can be turned off in the About screen, after which no network
-  request is made. No location, device-identifier, contacts, or account
-  permissions are requested.
+  INTERNET is used only for the anonymous, opt-out usage statistics, for the
+  startup/manual update check against GitHub Releases, and to download the
+  update APK the user confirms. The entire website is bundled in assets/www
+  and runs offline inside the WebView; divination and local history work
+  without any network. Telemetry can be turned off in the About screen.
+  REQUEST_INSTALL_PACKAGES lets the in-app updater hand a downloaded APK to
+  the system package installer only after the user explicitly confirms the
+  update and grants that capability in system settings. No location,
+  device-identifier, contacts, or account permissions are requested.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="true"
@@ -39,6 +43,20 @@
             android:exported="false"
             android:label="@string/about_title"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
+        <!--
+          Exposes downloaded update APKs to the system package installer over
+          a content:// URI (file:// URIs are rejected since Android 7). The
+          provider only serves files under the app's internal updates dir.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updatefileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_file_paths" />
+        </provider>
     </application>
 
 </manifest>
