@@ -1,4 +1,4 @@
-package com.example.quareiadivination
+package com.quareia.divination
 
 import android.content.Context
 import android.util.Log

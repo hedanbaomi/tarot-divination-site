@@ -60,7 +60,7 @@ test("homepage uses a localized first-launch dialog instead of a native bottom b
   var html = read("app/src/main/assets/www/index.html");
   var i18n = read("app/src/main/assets/www/js/i18n.js");
   var notice = read("app/src/main/assets/www/js/telemetry-notice.js");
-  var mainActivity = read("app/src/main/java/com/example/quareiadivination/MainActivity.kt");
+  var mainActivity = read("app/src/main/java/com/quareia/divination/MainActivity.kt");
 
   assert.match(html, /id="telemetryDialog"/);
   assert.match(html, /id="telemetryNoticeManage"/);
@@ -82,7 +82,7 @@ test("homepage menu is a right-side sliding drawer and keeps the author quote on
   var html = read("app/src/main/assets/www/index.html");
   var css = read("app/src/main/assets/www/css/styles.css");
   var menu = read("app/src/main/assets/www/js/menu.js");
-  var mainActivity = read("app/src/main/java/com/example/quareiadivination/MainActivity.kt");
+  var mainActivity = read("app/src/main/java/com/quareia/divination/MainActivity.kt");
 
   assert.match(html, /id="menuToggle"/);
   assert.match(html, /id="appMenu"/);
@@ -115,7 +115,7 @@ test("language toggle keeps its label and value nodes for runtime localization",
 });
 
 test("Android activity gives Web UI overlays priority over WebView history", function () {
-  var mainActivity = read("app/src/main/java/com/example/quareiadivination/MainActivity.kt");
+  var mainActivity = read("app/src/main/java/com/quareia/divination/MainActivity.kt");
   var backHandler = read("app/src/main/assets/www/js/back-handler.js");
 
   assert.match(mainActivity, /OnBackPressedCallback/);

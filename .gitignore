@@ -9,3 +9,13 @@ m牌/
 LXXXI魔法牌/
 scripts/
 tmp/
+
+# Android demo: LXXXI decryption implementation, key material, and encrypted
+# card records are deliberately NOT open-sourced. These paths may exist
+# locally to rebuild the signed release APK (see android-demo/README.md),
+# but they must never enter the public repository.
+android-demo/app/src/main/java/com/quareia/divination/LxxxiVault.kt
+android-demo/app/src/main/java/com/quareia/divination/VaultMaterial.kt
+android-demo/app/src/test/java/com/quareia/divination/LxxxiVaultTest.kt
+android-demo/tests/lxxxi-hardening-contract.test.js
+android-demo/app/src/main/assets/qv/

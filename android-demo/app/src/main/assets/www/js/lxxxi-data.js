@@ -7,44 +7,31 @@ const lxxxiSource = "参考《LXXXI 奎瑞亚魔法牌·牌意说明书》（繁
 /*
  * OFFLINE / ENCRYPTED BUILD ONLY (Android demo)
  * ----------------------------------------------
- * The website release loads LXXXI card art from a remote CDN. This in-app
- * copy is different: card art ships encrypted inside the APK and is decrypted
- * on demand by the native `androidCrypto` JavaScript bridge injected by
- * MainActivity. `getLxxxiImagePath` therefore returns a logical card key
- * (e.g. "lxxxi-42") rather than a URL; the bridge turns it into a
- * base64 data URL. The definitions below are self-contained so this file can
- * still be loaded standalone (tests, Node) without the bridge present.
+ * Card art is served by the Android host from a per-process opaque HTTPS
+ * route. The route is injected only after the trusted bundled page finishes
+ * loading. This file remains standalone-friendly for website/Node tests.
  */
 const LXXXI_ASSET_BASE_URL = "offline://lxxxi"; // retained for module.exports compat
 
 function getLxxxiImagePath(num) {
   var n = num < 10 ? "0" + num : String(num);
-  return "lxxxi-" + n; // logical key, resolved lazily via resolveLxxxiImage()
-}
-
-// Cache decrypted data URLs so each card is decrypted at most once per session.
-var lxxxiImageCache = {};
-
-function lxxxiBridge() {
-  return (typeof window !== "undefined" && window.androidCrypto) ? window.androidCrypto : null;
+  return "lxxxi-" + n;
 }
 
 /**
- * Resolve a logical card key ("lxxxi-42") to a usable image source.
- * Returns a data URL when the native bridge is present, or the raw key
- * (which will simply fail to load as an <img src>) when running outside the
- * app — e.g. in Node tests where imagery is not expected.
+ * Resolve a logical card key ("lxxxi-42") to a request URL. The native host
+ * injects `window.__qMediaBase` after the local page is trusted; without it,
+ * return the logical key so non-Android tests never attempt a native call.
  */
 function resolveLxxxiImage(key) {
-  if (lxxxiImageCache[key]) return lxxxiImageCache[key];
-  var bridge = lxxxiBridge();
-  if (!bridge) return key;
-  var dataUrl = bridge.decryptLxxxi(key);
-  if (dataUrl) lxxxiImageCache[key] = dataUrl;
-  return dataUrl;
+  var base = (typeof window !== "undefined" && typeof window.__qMediaBase === "string")
+    ? window.__qMediaBase.replace(/\/$/, "")
+    : "";
+  if (!base) return key;
+  return base + "/" + encodeURIComponent(key);
 }
 
-/** Card back for the LXXXI deck, decrypted via the same bridge. */
+/** Card back for the LXXXI deck. */
 function getLxxxiBackImage() {
   return resolveLxxxiImage("lxxxi-back");
 }
@@ -623,8 +610,8 @@ lxxxiDeck.forEach(function (card) {
   card.id = "lxxxi-" + (card.number < 10 ? "0" + card.number : String(card.number));
   card.deck = "lxxxi";
   card.arcana = "lxxxi";
-  // Store the logical key and resolve the decrypted data URL lazily on first
-  // access, so cards that are never drawn are never decrypted.
+  // Store only the logical key. Android resolves it to a short-lived opaque
+  // image request when the card is rendered; JavaScript never caches bytes.
   var key = getLxxxiImagePath(card.number);
   card._imageKey = key;
   Object.defineProperty(card, "image", {

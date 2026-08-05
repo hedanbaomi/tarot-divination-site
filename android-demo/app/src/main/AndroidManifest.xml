@@ -17,6 +17,7 @@
         android:label="@string/app_name"
         android:name=".QuareiaApplication"
         android:roundIcon="@mipmap/ic_launcher_round"
+        android:usesCleartextTraffic="false"
         android:supportsRtl="true"
         android:theme="@style/Theme.QuareiaDivination">
         <activity

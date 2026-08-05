@@ -143,6 +143,20 @@
       clear: byId("historyClearBtn")
     };
 
+    // The Android host opens the system save picker and calls this callback
+    // only after it has written the selected content:// destination.
+    globalThis.__quareiaHistoryExportResult = function (result) {
+      if (result && result.cancelled) {
+        setTranslatedStatus(elements.actionStatus, "history.exportCancelled", null, false);
+      } else if (result && result.ok) {
+        setTranslatedStatus(elements.actionStatus, "history.exportedTo", {
+          fileName: result.fileName || "tarot-history.json"
+        }, false);
+      } else {
+        setTranslatedStatus(elements.actionStatus, "history.exportFailed", null, true);
+      }
+    };
+
     function setStatus(target, message, isError, renderMessage) {
       if (!target) return;
       target.textContent = message;
@@ -374,16 +388,25 @@
       try {
         var records = await store.listRecords("all");
         var json = recordsApi.serializeExport(records);
+        var fileName = "tarot-history-" + new Date().toISOString().slice(0, 10) + ".json";
+        var nativeBridge = globalThis.androidHistoryExport;
+        if (nativeBridge && typeof nativeBridge.save === "function") {
+          nativeBridge.save(json, fileName);
+          setTranslatedStatus(elements.actionStatus, "history.exportChoosing", {
+            fileName: fileName
+          }, false);
+          return;
+        }
         var blob = new Blob([json], { type: "application/json;charset=utf-8" });
         var url = URL.createObjectURL(blob);
         var link = document.createElement("a");
         link.href = url;
-        link.download = "tarot-history-" + new Date().toISOString().slice(0, 10) + ".json";
+        link.download = fileName;
         document.body.appendChild(link);
         link.click();
         link.remove();
         setTimeout(function () { URL.revokeObjectURL(url); }, 0);
-        setTranslatedStatus(elements.actionStatus, "history.exported", null, false);
+        setTranslatedStatus(elements.actionStatus, "history.exported", { fileName: fileName }, false);
       } catch (_error) {
         setTranslatedStatus(elements.actionStatus, "history.exportFailed", null, true);
       }

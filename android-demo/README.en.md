@@ -2,7 +2,7 @@
 
 # Quareia Divination · Android Offline Demo
 
-This is an Android demo of the Quareia divination website. It packages the mobile interface as an offline experience, requires no sign-in, and requests no network permission.
+This is an Android demo of the Quareia divination website. It packages the mobile interface as an offline experience and requires no sign-in; card art and core functions do not depend on the network. The app requests `INTERNET` permission for opt-out anonymous usage statistics and external links.
 
 This is an unofficial, non-commercial demo. It is not affiliated with, sponsored by, or endorsed by Quareia, Josephine McCarthy, any associated artist, or any publisher.
 
@@ -23,7 +23,7 @@ Requirements:
 - JDK 17
 - Android SDK with compileSdk 36; minSdk 24
 
-From Windows PowerShell:
+From Windows PowerShell (development only):
 
 ```powershell
 cd android-demo
@@ -31,11 +31,45 @@ cd android-demo
 android run --apks=app\build\outputs\apk\debug\app-debug.apk
 ```
 
-The debug APK is written to:
+The `debug` variant is debuggable and not R8-hardened. Never distribute or
+upload it. For local acceptance of the hardened offline deck, use:
+
+```powershell
+cd android-demo
+.\gradlew.bat :app:assembleHardened
+android run --apks=app\build\outputs\apk\hardened\app-hardened.apk
+```
+
+`hardened` is a non-debuggable, R8/shrunk local acceptance variant signed with
+the Android debug key. It is not a production signing artifact. Production
+releases must sign the `assembleRelease` output with a controlled release
+keystore and pass `apksigner verify`. Release credentials are not stored in the
+repository; `app-release-unsigned.apk` must not be distributed. Keep the
+mapping file private for crash retracing.
+
+The debug APK is written to (not for distribution):
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
+
+The local hardened acceptance APK is written to:
+
+```text
+app/build/outputs/apk/hardened/app-hardened.apk
+```
+
+## Open-Source Boundary
+
+This repository contains the application's open-source code. The LXXXI card
+decryption implementation, key material, and encrypted card records are
+**not** published here (see the corresponding entries in the repository-level
+`.gitignore`): `LxxxiVault.kt`, `VaultMaterial.kt`, the `qv/` asset directory,
+and their tests exist only in a controlled local environment used to build the
+full signed release APK. In the open-source build, every opaque LXXXI image
+request answers 404 from `MainActivity` (the card meanings remain available);
+full functionality is provided only by the official APK published in GitHub
+Releases.
 
 ## Verified Scenarios
 
@@ -52,4 +86,9 @@ This app is an unofficial, free, strictly non-commercial tool. It contains no ad
 
 An in-app "About / Copyright & Attribution" screen (entered via the button in the top-right corner of the home screen) is bilingual and contains: the non-commercial statement, the Mystagogus and LXXXI credits, the separation of third-party materials from the application's open-source licence, a clickable link to the official Quareia website, and the author's note kept verbatim in English with a Chinese reference translation.
 
-The MIT License covers only original program code and content explicitly identified as original to this project. Third-party card artwork (Mystagogus, LXXXI, etc.), publication content, and adapted, rewritten, or translated material are outside the MIT License, and opening the source grants no permission to copy or redistribute them. LXXXI card faces ship encrypted and are decrypted on demand for display only; no original scan masters are included, and there is no bulk-export or raw-image download feature. See the repository-level [`LICENSE`](../LICENSE) and [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
+The MIT License covers only original program code and content explicitly identified as original to this project. Third-party card artwork (Mystagogus, LXXXI, etc.), publication content, and adapted, rewritten, or translated material are outside the MIT License, and opening the source grants no permission to copy or redistribute them. LXXXI card faces are not distributed with the open-source repository; in the official APK they ship in a protected packaging that includes no original scan masters and offers no bulk-export or raw-image download feature. See the repository-level [`LICENSE`](../LICENSE) and [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
+
+The developer key material required to rebuild the full official APK is kept
+only in controlled local directories. Never commit, package, upload, or share
+it. Contact the maintainers for the material and process if you need to
+rebuild the full-card APK in a controlled environment.

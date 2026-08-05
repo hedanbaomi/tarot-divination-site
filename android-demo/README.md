@@ -2,7 +2,7 @@
 
 # Quareia 占卜 · Android 离线演示版
 
-这是 Quareia 占卜网站的 Android 演示版本。应用将网站界面封装为适合手机使用的离线体验，不需要登录，也不申请网络权限。
+这是 Quareia 占卜网站的 Android 演示版本。应用将网站界面封装为适合手机使用的离线体验，不需要登录；牌面与核心功能不依赖网络。应用会为可关闭的匿名使用统计和外部链接申请 `INTERNET` 权限。
 
 本项目为非官方、非商业演示，与 Quareia、Josephine McCarthy、相关艺术家或出版方不存在隶属、赞助或背书关系。
 
@@ -23,7 +23,7 @@
 - JDK 17
 - Android SDK（compileSdk 36，minSdk 24）
 
-在 Windows PowerShell 中运行：
+在 Windows PowerShell 中运行（仅用于开发调试）：
 
 ```powershell
 cd android-demo
@@ -31,11 +31,56 @@ cd android-demo
 android run --apks=app\build\outputs\apk\debug\app-debug.apk
 ```
 
-调试 APK 输出到：
+`debug` 变体可调试且未启用 R8，严禁分发或上传。需要在本机验证加固后的
+离线牌面时使用：
+
+```powershell
+cd android-demo
+.\gradlew.bat :app:assembleHardened
+android run --apks=app\build\outputs\apk\hardened\app-hardened.apk
+```
+
+`hardened` 是不可调试、启用 R8/shrink 的本地验收变体，使用 Android
+debug 签名，仅用于本机验证，不能作为正式发布签名。正式发布使用
+`assembleRelease` 直接产出已签名 APK，并须通过 `apksigner verify`：
+
+```powershell
+.\gradlew.bat :app:assembleRelease
+& "$env:LOCALAPPDATA\Android\Sdk\build-tools\35.0.0\apksigner.bat" verify --print-certs app\build\outputs\apk\release\app-release.apk
+```
+
+仓库不包含发布凭据。签名配置从仓库外的 `keystore.properties` 读取：通过
+环境变量 `QUAREIA_KEYSTORE_PROPERTIES` 指向该文件，或放在
+`C:\Users\32735\Desktop\证书与密钥\占卜app\keystore.properties` 回退路径；
+找不到时 release 构建会直接失败，不会产出无签名 APK。keystore 与密码必须
+妥善离线备份，丢失后将无法向已安装用户发布更新。mapping 文件必须私下保存。
+
+调试 APK 输出到（不可分发）：
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
+
+本地加固验收 APK 输出到：
+
+```text
+app/build/outputs/apk/hardened/app-hardened.apk
+```
+
+正式发布 APK（release keystore 签名）输出到：
+
+```text
+app/build/outputs/apk/release/app-release.apk
+```
+
+## 开源边界
+
+本仓库是应用的开源代码。LXXXI 牌面的解密实现、密钥材料与加密牌面记录
+**不随开源仓库发布**（见根目录 `.gitignore` 对应条目）：`LxxxiVault.kt`、
+`VaultMaterial.kt`、`qv/` 资产目录以及相关测试仅存在于受控本机环境，用于
+构建带完整牌面的正式发布 APK。开源构建的 `MainActivity` 中，LXXXI 牌面
+图片请求一律返回 404（牌意文本仍可用）；完整功能仅通过 GitHub Releases
+发布的正式 APK 提供。
 
 ## 已验证场景
 
@@ -52,4 +97,7 @@ app/build/outputs/apk/debug/app-debug.apk
 
 应用内提供「关于 / 版权与署名」页面（首页右上角按钮进入），中英文双语，包含：项目非商业声明、Mystagogus 与 LXXXI 的版权署名、第三方素材与应用开源许可的分离说明、可点击的 Quareia 官网链接，以及作者要求逐字保留的英文原文与中文参考译文。
 
-MIT 许可仅适用于本项目原创程序代码及明确标注为原创的内容。第三方牌面（Mystagogus、LXXXI 等）、出版物内容及其整理、改写或翻译不在 MIT 许可范围内，也不因本应用开源而获得复制或再分发授权。LXXXI 牌面以加密形式打包、运行时按需解密展示，不含原始扫描母版，也不提供批量导出或下载原图功能。完整说明见仓库根目录的 [`LICENSE`](../LICENSE) 与 [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md)。
+MIT 许可仅适用于本项目原创程序代码及明确标注为原创的内容。第三方牌面（Mystagogus、LXXXI 等）、出版物内容及其整理、改写或翻译不在 MIT 许可范围内，也不因本应用开源而获得复制或再分发授权。LXXXI 牌面内容不随开源仓库提供；正式 APK 中的牌面经过保护性打包，不含原始扫描母版，也不提供批量导出或下载原图功能。完整说明见仓库根目录的 [`LICENSE`](../LICENSE) 与 [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md)。
+
+正式发布所需的开发者密钥材料仅保存在受控本机目录，禁止提交、打包、上传或
+共享。如需在受控环境重建完整牌面的正式 APK，请联系维护者获取材料与流程说明。

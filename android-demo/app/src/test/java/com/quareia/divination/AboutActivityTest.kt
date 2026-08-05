@@ -1,4 +1,4 @@
-package com.example.quareiadivination
+package com.quareia.divination
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
