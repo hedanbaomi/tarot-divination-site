@@ -18,6 +18,18 @@ https://hedanbaomi.github.io/tarot-divination-site/
 
 No backend service is required. The website runs in any modern browser.
 
+## Android App
+
+This project also provides a free offline Android version (`android-demo/`), wrapping the website into a phone-friendly offline experience:
+
+- The same three decks (Tarot / Mystagogus / LXXXI), Simplified Chinese / English switching, and local reading history as the website
+- Core features are fully offline and require no account; only the anonymous usage statistics (disable it anytime from the About screen) and external links need network access
+- Requires Android 7.0 (API 24) or newer. Download the release-signed APK from GitHub Releases:
+
+**[Download the Android APK](https://github.com/hedanbaomi/tarot-divination-site/releases)**
+
+Build and release instructions live in [`android-demo/README.en.md`](android-demo/README.en.md). The repository contains the full application source code, excluding the LXXXI card decryption implementation and key material (see `.gitignore` and the "Open-Source Boundary" section in android-demo); the complete card functionality is provided only by the official APK.
+
 ## Features
 
 - **Three decks**: 78-card Tarot, 78-card Mystagogus, and 81-card LXXXI, selectable in the reading settings.
@@ -76,11 +88,14 @@ Mystagogus provides its 18-card signature layout. LXXXI provides four Chapter 10
 │   ├── tarot-data.js
 │   ├── mystagogus-data.js
 │   └── lxxxi-data.js
-└── assets/
-    ├── cards/          # Card artwork and third-party source notices
-    │   ├── m/          # Mystagogus faces m-01…m-78 and m-back
-    │   └── LXXXI_SOURCE.md
-    └── icons/
+├── assets/
+│   ├── cards/          # Card artwork and third-party source notices
+│   │   ├── m/          # Mystagogus faces m-01…m-78 and m-back
+│   │   └── LXXXI_SOURCE.md
+│   └── icons/
+├── android-demo/       # Offline Android app (source and build instructions)
+├── backend/            # Optional companion API service for the app (local development)
+└── telemetry-worker/   # Cloudflare Worker for anonymous usage statistics
 ```
 
 ## Content and Source Notes
@@ -121,7 +136,7 @@ Thanks to the following contributor:
 
 ## Attribution
 
-This is an unofficial, free, strictly non-commercial tool. It does not imply any endorsement by Quareia or by the authors. Written permission from Josephine McCarthy covers this free GitHub Pages website and a future free, open-source Android application, provided that the copyrighted materials remain strictly non-commercial, are reasonably protected from misuse, and are excluded from all open-source licences. The third-party cards and text are not covered by the MIT License:
+This is an unofficial, free, strictly non-commercial tool. It does not imply any endorsement by Quareia or by the authors. Written permission from Josephine McCarthy covers this free GitHub Pages website and the free Android application, provided that the copyrighted materials remain strictly non-commercial, are reasonably protected from misuse, and are excluded from all open-source licences. The third-party cards and text are not covered by the MIT License:
 
 - **Mystagogus**: © Josephine McCarthy.
 - **LXXXI — The Magician's Deck**: © Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland.
@@ -132,7 +147,7 @@ The official Quareia website is <https://www.quareia.com>. For the full rights b
 
 ## Android Boundary (documentation only)
 
-Josephine McCarthy's written permission already covers this free GitHub Pages website and a future free, open-source Android application, provided that the copyrighted materials remain strictly non-commercial, are reasonably protected from misuse, and are excluded from all open-source licences. Any Android version must still remain strictly non-commercial: no advertising, donations, subscriptions, paid cloud services, paid unlocks, or other revenue-generating features. Third-party cards and text (Mystagogus, LXXXI, etc.) must not be placed under an open-source licence. Any future commercialization requires a separate formal commercial electronic-rights licence.
+Josephine McCarthy's written permission already covers this free GitHub Pages website and the free Android application (`android-demo/`), provided that the copyrighted materials remain strictly non-commercial, are reasonably protected from misuse, and are excluded from all open-source licences. The Android version must also remain strictly non-commercial: no advertising, donations, subscriptions, paid cloud services, paid unlocks, or other revenue-generating features. Third-party cards and text (Mystagogus, LXXXI, etc.) must not be placed under an open-source licence. The LXXXI card decryption implementation and key material are not published with the open-source repository; the complete card faces are provided only through the official APK. Any future commercialization requires a separate formal commercial electronic-rights licence.
 
 ## License
 

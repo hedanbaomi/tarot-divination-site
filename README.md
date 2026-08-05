@@ -18,6 +18,18 @@ https://hedanbaomi.github.io/tarot-divination-site/
 
 无需后端服务，任何现代浏览器都可以直接打开。
 
+## Android 应用
+
+本项目提供免费的 Android 离线版（`android-demo/`），将网站封装为适合手机使用的离线体验：
+
+- 三套牌组（塔罗 / Mystagogus / LXXXI 魔法牌）、中英文切换、本地占卜历史与网站版一致
+- 主要功能完全离线，不需要登录；仅匿名使用统计（可在「关于 / 版权」页随时关闭）与外部链接需要网络
+- 系统要求：Android 7.0（API 24）及以上，正式签名 APK 从 GitHub Releases 下载：
+
+**[下载 Android 正式版 APK](https://github.com/hedanbaomi/tarot-divination-site/releases)**
+
+构建与发布说明见 [`android-demo/README.md`](android-demo/README.md)。开源仓库包含应用完整源代码（不含 LXXXI 牌面加密实现与密钥材料，详见 `.gitignore` 与 android-demo 的「开源边界」一节）；完整牌面功能仅随正式 APK 提供。
+
 ## 功能
 
 - **三牌组**：塔罗 78 张 / Mystagogus（M 牌）78 张 / LXXXI 魔法牌 81 张，可在设置中切换
@@ -76,11 +88,14 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 │   ├── tarot-data.js
 │   ├── mystagogus-data.js
 │   └── lxxxi-data.js
-└── assets/
-    ├── cards/          # 塔罗牌面与第三方素材来源说明
-    │   ├── m/          # Mystagogus 牌面 m-01…m-78 与 m-back
-    │   └── LXXXI_SOURCE.md
-    └── icons/
+├── assets/
+│   ├── cards/          # 塔罗牌面与第三方素材来源说明
+│   │   ├── m/          # Mystagogus 牌面 m-01…m-78 与 m-back
+│   │   └── LXXXI_SOURCE.md
+│   └── icons/
+├── android-demo/       # Android 离线版（源码与构建说明）
+├── backend/            # Android 应用的可选配套 API 服务（本地开发用）
+└── telemetry-worker/   # 匿名使用统计的 Cloudflare Worker
 ```
 
 ## 说明
@@ -121,7 +136,7 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 
 ## 授权与署名
 
-本项目为非官方、免费、严格非商业工具，不暗示 Quareia 或相关作者为项目背书。Josephine McCarthy 的书面许可已明确覆盖本免费的 GitHub Pages 网站，以及未来免费、开源的 Android 应用，前提是第三方版权素材始终严格非商业、防止滥用，并排除在一切开源许可之外。第三方牌面与文本不适用 MIT License：
+本项目为非官方、免费、严格非商业工具，不暗示 Quareia 或相关作者为项目背书。Josephine McCarthy 的书面许可已明确覆盖本免费的 GitHub Pages 网站，以及免费的 Android 应用，前提是第三方版权素材始终严格非商业、防止滥用，并排除在一切开源许可之外。第三方牌面与文本不适用 MIT License：
 
 - **Mystagogus**：© Josephine McCarthy。
 - **LXXXI 魔法牌**：© Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland。
@@ -134,7 +149,7 @@ Quareia 官网：<https://www.quareia.com>。完整权利边界见 [`ATTRIBUTION
 
 ## Android 边界（仅文档说明）
 
-Josephine McCarthy 的书面许可已明确覆盖本免费的 GitHub Pages 网站，以及未来免费、开源的 Android 应用，前提是第三方版权素材始终严格非商业、采取合理措施防止滥用，并排除在一切开源许可之外。任何 Android 版本同样不得包含广告、打赏、订阅、付费云服务、付费解锁或其他盈利功能；第三方牌面与文本（Mystagogus、LXXXI 等）不得纳入 MIT 或其他开源许可。未来若要商业化，必须另行取得正式的商业电子版权许可。
+Josephine McCarthy 的书面许可已明确覆盖本免费的 GitHub Pages 网站，以及免费的 Android 应用（`android-demo/`），前提是第三方版权素材始终严格非商业、采取合理措施防止滥用，并排除在一切开源许可之外。Android 版本同样不得包含广告、打赏、订阅、付费云服务、付费解锁或其他盈利功能；第三方牌面与文本（Mystagogus、LXXXI 等）不得纳入 MIT 或其他开源许可。LXXXI 牌面加密实现与密钥材料不随开源仓库发布，完整牌面仅通过正式 APK 提供。未来若要商业化，必须另行取得正式的商业电子版权许可。
 
 ## License
 
