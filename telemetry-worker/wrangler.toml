@@ -2,6 +2,12 @@ name = "quareia-telemetry"
 main = "src/index.js"
 compatibility_date = "2025-07-01"
 
+# The existing telemetry.luotianyi.fun Custom Domain is managed in the
+# Cloudflare Dashboard; this worker never publishes to workers.dev and uses
+# no URL routes. workers_dev = false keeps the Dashboard Custom Domain as the
+# only serving trigger.
+workers_dev = false
+
 # ---------------------------------------------------------------------------
 # Analytics Engine binding. The worker writes one data point per accepted event.
 # The dataset is created automatically by Cloudflare on the first write after
