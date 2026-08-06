@@ -65,7 +65,7 @@ crons = ["0 3 * * *"]
 # Ordinary, non-secret Cloudflare account configuration used only by the
 # read-only Analytics Engine SQL API. Leave empty until the authorized
 # operator supplies the real account id.
-ACCOUNT_ID = ""
+ACCOUNT_ID = "32390aaf5231a3636513041bdc2627f1"
 # Tuneable in-memory limits. Changes here require a redeploy.
 RATE_LIMIT_PER_INSTALL_PER_HOUR = "60"
 RATE_LIMIT_PER_IP_PER_MINUTE = "30"
