@@ -19,6 +19,23 @@ const PUBLIC_COLUMNS = `
 
 const SEVERITY_ORDER = { update: 0, important: 1, info: 2 };
 const CACHE_MAX_AGE = 300;
+const PUBLIC_CORS_ORIGINS = new Set([
+  "https://hedanbaomi.github.io",
+  "http://localhost",
+  "http://localhost:3000",
+  "http://localhost:4173",
+  "http://localhost:5173",
+  "http://localhost:5500",
+  "http://localhost:8000",
+  "http://localhost:8080",
+  "http://127.0.0.1",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:4173",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5500",
+  "http://127.0.0.1:8000",
+  "http://127.0.0.1:8080"
+]);
 
 export function hasD1Binding(env) {
   return Boolean(
@@ -29,8 +46,9 @@ export function hasD1Binding(env) {
 }
 
 export async function handleAnnouncements(request, env) {
+  const corsHeaders = publicCorsHeaders(request);
   if (!hasD1Binding(env)) {
-    return json({ error: "announcements_unavailable" }, 503);
+    return json({ error: "announcements_unavailable" }, 503, corsHeaders);
   }
 
   const url = new URL(request.url);
@@ -38,16 +56,16 @@ export async function handleAnnouncements(request, env) {
   const platform = boundedParam(url.searchParams.get("platform"), 16);
   const requestedPlatform = platform === "" || platform === "all" ? null : platform;
   if (requestedPlatform !== null && !["android", "web"].includes(requestedPlatform)) {
-    return json({ error: "invalid_platform" }, 400);
+    return json({ error: "invalid_platform" }, 400, corsHeaders);
   }
 
   const versionRaw = url.searchParams.get("version_code");
   let versionCode = 0;
   if (versionRaw !== null && versionRaw !== "") {
-    if (!/^\d{1,10}$/.test(versionRaw)) return json({ error: "invalid_version_code" }, 400);
+    if (!/^\d{1,10}$/.test(versionRaw)) return json({ error: "invalid_version_code" }, 400, corsHeaders);
     versionCode = Number(versionRaw);
     if (!Number.isSafeInteger(versionCode) || versionCode < 0) {
-      return json({ error: "invalid_version_code" }, 400);
+      return json({ error: "invalid_version_code" }, 400, corsHeaders);
     }
   }
 
@@ -65,7 +83,8 @@ export async function handleAnnouncements(request, env) {
   const etag = await contentEtag(announcements);
   const cacheHeaders = {
     "cache-control": `public, max-age=${CACHE_MAX_AGE}`,
-    "etag": etag
+    "etag": etag,
+    ...corsHeaders
   };
 
   if (request.headers.get("if-none-match") === etag) {
@@ -73,6 +92,19 @@ export async function handleAnnouncements(request, env) {
   }
 
   return json({ announcements, locale }, 200, cacheHeaders);
+}
+
+function publicCorsHeaders(request) {
+  const origin = request.headers.get("origin");
+  // Vary on every response, including same-origin and denied requests, so a
+  // shared cache cannot reuse a no-CORS variant for an allowed web origin.
+  if (!origin || !PUBLIC_CORS_ORIGINS.has(origin)) return { "vary": "Origin" };
+  return {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "GET",
+    "access-control-expose-headers": "ETag",
+    "vary": "Origin"
+  };
 }
 
 function buildSelect(platform) {

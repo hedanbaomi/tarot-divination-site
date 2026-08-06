@@ -60,6 +60,13 @@ async function getAnnouncements(db, query = "", token) {
   return worker.fetch(makeRequest(url, { token }), makeEnv({ db }));
 }
 
+async function getAnnouncementsWithOrigin(db, origin, query = "", etag) {
+  const url = "https://telemetry.test/v1/announcements" + (query ? "?" + query : "");
+  const headers = { Origin: origin };
+  if (etag) headers["if-none-match"] = etag;
+  return worker.fetch(new Request(url, { headers }), makeEnv({ db }));
+}
+
 test("only published announcements are returned", async () => {
   const db = createMockD1();
   insertAnnouncement(db);
@@ -178,6 +185,48 @@ test("ETag is stable for identical content and returns 304 on If-None-Match", as
   assert.equal(second.status, 304);
   assert.equal(second.headers.get("etag"), etag);
   assert.match(second.headers.get("cache-control") || "", /public/);
+});
+
+test("public announcements CORS is strict and also applies to 304", async () => {
+  const db = createMockD1();
+  insertAnnouncement(db);
+
+  const allowed = await getAnnouncementsWithOrigin(db, "https://hedanbaomi.github.io", "platform=web&version_code=1&locale=zh-CN");
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get("access-control-allow-origin"), "https://hedanbaomi.github.io");
+  assert.equal(allowed.headers.get("vary"), "Origin");
+  assert.equal(allowed.headers.get("access-control-allow-methods"), "GET");
+  assert.match(allowed.headers.get("access-control-expose-headers") || "", /etag/i);
+
+  const notModified = await getAnnouncementsWithOrigin(
+    db,
+    "https://hedanbaomi.github.io",
+    "platform=web&version_code=1&locale=zh-CN",
+    allowed.headers.get("etag")
+  );
+  assert.equal(notModified.status, 304);
+  assert.equal(notModified.headers.get("access-control-allow-origin"), "https://hedanbaomi.github.io");
+
+  const local = await getAnnouncementsWithOrigin(db, "http://localhost:8000", "platform=web&version_code=1&locale=en");
+  assert.equal(local.headers.get("access-control-allow-origin"), "http://localhost:8000");
+  const localDefaultPort = await getAnnouncementsWithOrigin(db, "http://localhost", "platform=web&version_code=1&locale=en");
+  assert.equal(localDefaultPort.headers.get("access-control-allow-origin"), "http://localhost");
+
+  const denied = await getAnnouncementsWithOrigin(db, "https://evil.example", "platform=web&version_code=1&locale=en");
+  assert.equal(denied.headers.get("access-control-allow-origin"), null);
+  assert.equal(denied.headers.get("vary"), "Origin");
+
+  const noOrigin = await getAnnouncements(db, "platform=web&version_code=1&locale=en");
+  assert.equal(noOrigin.headers.get("access-control-allow-origin"), null);
+  assert.equal(noOrigin.headers.get("vary"), "Origin");
+});
+
+test("admin responses never receive public announcement CORS", async () => {
+  const db = createMockD1();
+  const response = await worker.fetch(new Request("https://telemetry.test/admin", {
+    headers: { Origin: "https://hedanbaomi.github.io" }
+  }), makeEnv({ db }));
+  assert.equal(response.headers.get("access-control-allow-origin"), null);
 });
 
 test("editing or withdrawing an announcement changes the ETag", async () => {

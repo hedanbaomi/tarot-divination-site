@@ -20,6 +20,8 @@
           aria-label="Switch to English">EN</button>
         <button class="btn-mini history-open-btn" id="historyOpenBtn" type="button"
           aria-haspopup="dialog" aria-controls="historyDialog" data-i18n="history.open">占卜历史</button>
+        <button class="btn-mini announcement-open-btn" id="announcementOpenBtn" type="button"
+          aria-haspopup="dialog" aria-controls="announcementDialog" data-i18n="announcement.open">公告</button>
       </div>
     </header>
 
@@ -170,6 +172,23 @@
       </div>
     </dialog>
 
+    <dialog class="announcement-dialog" id="announcementDialog" aria-labelledby="announcementDialogTitle"
+      aria-describedby="announcementStatus">
+      <div class="announcement-dialog-shell">
+        <header class="announcement-dialog-header">
+          <div>
+            <p class="announcement-dialog-kicker" data-i18n="announcement.kicker">PUBLIC ANNOUNCEMENTS</p>
+            <h2 id="announcementDialogTitle" data-i18n="announcement.title">公告</h2>
+          </div>
+          <button class="history-icon-btn" id="announcementCloseBtn" type="button"
+            aria-label="关闭公告" data-i18n-aria-label="announcement.closeLabel">×</button>
+        </header>
+        <p class="announcement-dialog-status" id="announcementStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+        <ol class="announcement-list" id="announcementList" aria-label="公告列表" data-i18n-aria-label="announcement.listAria"></ol>
+        <p class="announcement-empty" id="announcementEmpty" data-i18n="announcement.empty" hidden>暂无公告。</p>
+      </div>
+    </dialog>
+
     <dialog class="confirm-overlay" id="confirmDialog" role="alertdialog" aria-modal="true"
       aria-labelledby="confirmDialogTitle" aria-describedby="confirmMessage" aria-hidden="true">
       <section class="confirm-card">
@@ -232,6 +251,7 @@
   <script src="js/spreads.js?v=20260727-spread-labels"></script>
   <script src="js/i18n-data-en.js"></script>
   <script src="js/i18n.js?v=20260730-android-coverage"></script>
+  <script src="js/announcements.js?v=1"></script>
   <script src="js/dialogs.js?v=20260727-card-picker"></script>
   <script src="js/custom-selects.js?v=20260727-card-picker"></script>
   <script src="js/history-records.js"></script>
