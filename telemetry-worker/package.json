@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "quareia-telemetry-worker",
   "version": "1.0.0",
   "private": true,
@@ -7,6 +7,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.js",
+    "check:admin": "node tools/check-admin-page.mjs",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev"
   },

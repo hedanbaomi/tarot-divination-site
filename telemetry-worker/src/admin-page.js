@@ -1,4 +1,4 @@
-// Same-origin admin page for the Quareia telemetry worker. Static HTML+CSS+JS
+﻿// Same-origin admin page for the Quareia telemetry worker. Static HTML+CSS+JS
 // served by the worker; the admin token lives only in sessionStorage and is
 // sent exclusively through the Authorization: Bearer header. Announcement
 // content is rendered with textContent/DOM APIs — never innerHTML — and the
@@ -389,9 +389,9 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     box.textContent = "";
     box.style.display = "block";
     var zh = document.createElement("div");
-    zh.textContent = "【zh】" + (body.title_zh || "(无标题)") + "\n" + body.body_zh;
+    zh.textContent = "【zh】" + (body.title_zh || "(无标题)") + "\\n" + body.body_zh;
     var en = document.createElement("div");
-    en.textContent = "【en】" + (body.title_en || "(no title)") + "\n" + body.body_en;
+    en.textContent = "【en】" + (body.title_en || "(no title)") + "\\n" + body.body_en;
     box.appendChild(zh);
     box.appendChild(en);
     if (body.action_url) {
