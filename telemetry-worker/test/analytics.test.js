@@ -249,6 +249,34 @@ test("analytics enforces upstream response body and row limits", async () => {
   const oversizedBody = await worker.fetch(analyticsRequest(), analyticsEnv());
   assert.equal(oversizedBody.status, 503);
 
+  let contentLengthCancellations = 0;
+  const contentLengthSignals = [];
+  globalThis.fetch = async (_url, init) => {
+    contentLengthSignals.push(init.signal);
+    return new Response(new ReadableStream({
+    type: "bytes",
+    pull() {
+      throw new Error("known oversized body must not be read");
+    },
+    cancel() {
+      contentLengthCancellations += 1;
+    }
+    }), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+        "content-length": "300000"
+      }
+    });
+  };
+  const knownOversizedBody = await worker.fetch(
+    analyticsRequest({ ip: "198.51.100.30" }),
+    analyticsEnv()
+  );
+  assert.equal(knownOversizedBody.status, 503);
+  assert.ok(contentLengthCancellations > 0);
+  assert.ok(contentLengthSignals.every((signal) => signal.aborted));
+
   globalThis.fetch = async () => upstreamResponse(
     Array.from({ length: 101 }, (_, index) => ({ event: "install_seen", count: index }))
   );
@@ -257,6 +285,48 @@ test("analytics enforces upstream response body and row limits", async () => {
     analyticsEnv()
   );
   assert.equal(oversizedRows.status, 503);
+});
+
+test("analytics cancels an unbounded upstream stream as soon as the byte limit is exceeded", async () => {
+  let cancelledStreams = 0;
+  const bytesByStream = [];
+  const streamSignals = [];
+  let largestReadRequest = 0;
+  globalThis.fetch = async (_url, init) => {
+    streamSignals.push(init.signal);
+    const streamIndex = bytesByStream.push(0) - 1;
+    return new Response(new ReadableStream({
+      type: "bytes",
+      pull(controller) {
+        const request = controller.byobRequest;
+        assert.ok(request);
+        const view = request.view;
+        largestReadRequest = Math.max(largestReadRequest, view.byteLength);
+        view.fill(120);
+        bytesByStream[streamIndex] += view.byteLength;
+        request.respond(view.byteLength);
+      },
+      cancel() {
+        cancelledStreams += 1;
+      }
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  };
+
+  const response = await worker.fetch(
+    analyticsRequest({ ip: "198.51.100.29" }),
+    analyticsEnv()
+  );
+  assert.equal(response.status, 503);
+  assert.equal(cancelledStreams, bytesByStream.length);
+  assert.ok(streamSignals.every((signal) => signal.aborted));
+  assert.ok(largestReadRequest <= 64 * 1024);
+  assert.ok(
+    bytesByStream.every((bytes) => bytes <= 256 * 1024 + 1),
+    `expected each stream to stop at the one-byte limit probe, received ${bytesByStream.join(",")} bytes`
+  );
 });
 
 test("partial query failure becomes null and is never served from a prior response", async () => {

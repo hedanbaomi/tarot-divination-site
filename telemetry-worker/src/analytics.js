@@ -291,16 +291,17 @@ async function executeQuery(sql, maxRows, env, parentSignal) {
       ? Number(response.headers.get("content-length") || 0)
       : 0;
     if (Number.isFinite(contentLength) && contentLength > ANALYTICS_MAX_RESPONSE_BYTES) {
+      controller.abort();
+      if (response.body && typeof response.body.cancel === "function") {
+        try {
+          await response.body.cancel("response body limit exceeded");
+        } catch (_error) {
+          // Cancellation is best-effort; no response bytes are consumed here.
+        }
+      }
       throw new AnalyticsQueryError("upstream_body_too_large");
     }
-    if (!response || typeof response.text !== "function") {
-      throw new AnalyticsQueryError("upstream_invalid_response");
-    }
-
-    const raw = await response.text();
-    if (new TextEncoder().encode(raw).byteLength > ANALYTICS_MAX_RESPONSE_BYTES) {
-      throw new AnalyticsQueryError("upstream_body_too_large");
-    }
+    const raw = await readBoundedResponseText(response, controller);
 
     let payload;
     try {
@@ -327,6 +328,56 @@ async function executeQuery(sql, maxRows, env, parentSignal) {
     clearTimeout(timer);
     if (parentSignal) parentSignal.removeEventListener("abort", abortFromParent);
   }
+}
+
+async function readBoundedResponseText(response, controller) {
+  if (!response || !response.body || typeof response.body.getReader !== "function") {
+    throw new AnalyticsQueryError("upstream_invalid_response");
+  }
+
+  let reader;
+  try {
+    // Fetch response bodies are byte streams. BYOB bounds every application
+    // read, preventing an unknown-length response from handing us an
+    // arbitrarily large chunk before the cumulative limit can be checked.
+    reader = response.body.getReader({ mode: "byob" });
+  } catch (_error) {
+    throw new AnalyticsQueryError("upstream_invalid_response");
+  }
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const remaining = ANALYTICS_MAX_RESPONSE_BYTES - totalBytes;
+      const readSize = Math.min(64 * 1024, remaining + 1);
+      const { done, value } = await reader.read(new Uint8Array(readSize));
+      if (done) break;
+      if (!(value instanceof Uint8Array)) {
+        throw new AnalyticsQueryError("upstream_invalid_response");
+      }
+      if (value.byteLength > remaining) {
+        controller.abort();
+        try {
+          await reader.cancel("response body limit exceeded");
+        } catch (_error) {
+          // Cancellation is best-effort; the bounded reader has already stopped.
+        }
+        throw new AnalyticsQueryError("upstream_body_too_large");
+      }
+      totalBytes += value.byteLength;
+      chunks.push(value.slice());
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  chunks.forEach((chunk) => {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  });
+  return new TextDecoder().decode(bytes);
 }
 
 async function fetchWithAbort(url, init) {
