@@ -181,6 +181,78 @@ class TelemetryControllerTest {
         assertThat(sends.get(), `is`(2))
     }
 
+    @Test
+    fun appActiveSendsImmediatelyThenDedupesSameVersionForSixHours() {
+        var clock = 1_000_000L
+        TelemetryController.setClockForTesting { clock }
+        TelemetryController.setVersionCodeForTesting { 4 }
+        val payloads = mutableListOf<org.json.JSONObject>()
+        TelemetryController.setSenderForTesting { payload ->
+            payloads.add(payload)
+            true
+        }
+
+        TelemetryController.recordAppActive()
+        assertTrue(TelemetryController.awaitIdleForTesting())
+        assertThat(payloads.size, `is`(1))
+        assertThat(payloads[0].optString("event"), `is`("app_active"))
+        assertThat(payloads[0].optInt("version_code"), `is`(4))
+
+        // Same version, just under 6 hours later: deduplicated.
+        clock += 6L * 60 * 60 * 1000 - 1000
+        TelemetryController.recordAppActive()
+        assertTrue(TelemetryController.awaitIdleForTesting())
+        assertThat(payloads.size, `is`(1))
+
+        // Just past 6 hours: sent again.
+        clock += 2000
+        TelemetryController.recordAppActive()
+        assertTrue(TelemetryController.awaitIdleForTesting())
+        assertThat(payloads.size, `is`(2))
+    }
+
+    @Test
+    fun appActiveVersionChangeSendsImmediatelyEvenInsideTheWindow() {
+        var version = 3
+        TelemetryController.setClockForTesting { 1_000_000L }
+        TelemetryController.setVersionCodeForTesting { version }
+        val payloads = mutableListOf<org.json.JSONObject>()
+        TelemetryController.setSenderForTesting { payload ->
+            payloads.add(payload)
+            true
+        }
+
+        TelemetryController.recordAppActive()
+        assertTrue(TelemetryController.awaitIdleForTesting())
+        assertThat(payloads.size, `is`(1))
+
+        // The app is upgraded; the next foreground must report immediately.
+        version = 4
+        TelemetryController.recordAppActive()
+        assertTrue(TelemetryController.awaitIdleForTesting())
+
+        assertThat(payloads.size, `is`(2))
+        assertThat(payloads[1].optInt("version_code"), `is`(4))
+    }
+
+    @Test
+    fun appActiveIsNeverSentWhenTelemetryIsDisabled() {
+        TelemetryController.setEnabled(false)
+        val sends = AtomicInteger()
+        TelemetryController.setSenderForTesting {
+            sends.incrementAndGet()
+            true
+        }
+
+        TelemetryController.recordAppActive()
+        assertTrue(TelemetryController.awaitIdleForTesting())
+
+        assertThat(sends.get(), `is`(0))
+        // Disabling also removed the app-active send markers.
+        assertFalse(preferences().contains("last_app_active_utc"))
+        assertFalse(preferences().contains("last_app_active_version_code"))
+    }
+
     private fun preferences() =
         application.getSharedPreferences("quareia_telemetry", Context.MODE_PRIVATE)
 }

@@ -118,6 +118,37 @@ update directory.
 v1.1 and earlier do not contain the fixed in-app updater — install v1.1.1
 manually from GitHub Releases; all later versions can use in-app updates.
 
+## Announcements and Active-Version Statistics (since v1.2.0)
+
+On launch and on returning to the foreground the app silently checks for
+announcements (deduplicated to at most one check per 6 hours; network failures
+never affect any feature), with an announcements list and a manual refresh
+behind the About / Copyright screen.
+
+- Announcements are filtered server-side (telemetry-worker D1) by status,
+  platform, version range, and start/end time; content is plain text and the
+  client never renders HTML.
+- Unread `important` / `update` announcements pop up once when the app opens;
+  `info` announcements only appear in the list and never force a popup.
+- Read state is tracked locally by `id + revision`: an admin edit bumps the
+  revision and makes the announcement appear again.
+- An `update` announcement's button reuses the in-app updater (checks and
+  prompts for download); other action URLs open in the system browser only
+  when they are HTTPS.
+- Language follows the app's current language with fallback to the other
+  language.
+
+Anonymous active-version statistics: on first launch, on returning to the
+foreground, and immediately when the installed version changes, the app sends
+an `app_active` event with the current `versionCode` through the telemetry
+channel — at most once per 6 hours for the same version, always immediately on
+a version change. When telemetry is off nothing is sent and the local anonymous
+identifier keeps being deleted. The backend maintains "active installs /
+active devices" statistics (24h / 7d / 30d windows and a distribution grouped
+by each install's most recently reported version); these are anonymous
+estimates, not exact user counts. v1.1's `install_seen` / `daily_active` /
+`reading_completed` events remain compatible.
+
 ## Open-Source Boundary
 
 This repository contains the application's open-source code. The LXXXI card

@@ -174,6 +174,21 @@ class AboutActivity : ComponentActivity() {
         }
         container.addView(checkUpdate)
 
+        // Announcements: info announcements never pop up at launch; they are
+        // read here. The manual refresh forces a network check.
+        container.addView(headingText(localized.getString(R.string.announcements_section_title), accent))
+        val openAnnouncements = TextView(this).apply {
+            text = localized.getString(R.string.announcements_open)
+            setTextColor(accent)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setPadding(0, dip(4), 0, dip(14))
+            setOnClickListener {
+                startActivity(Intent(this@AboutActivity, AnnouncementsActivity::class.java))
+            }
+        }
+        container.addView(openAnnouncements)
+
         // Verbatim English note (authoritative) + Chinese reference translation.
         container.addView(headingText(localized.getString(R.string.about_quote_label), accent))
         val quote = TextView(this).apply {

@@ -153,6 +153,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Foreground signal for the active-version statistics; the controller
+        // deduplicates to once per 6 hours per version and stays silent when
+        // telemetry is off. Announcements are checked on launch and on every
+        // return to the foreground (deduplicated to once per 6 hours; a
+        // failure is silent and never affects the app).
+        TelemetryController.recordAppActive()
+        AnnouncementController.check { announcements ->
+            AnnouncementPrompter(this).onAnnouncements(announcements)
+        }
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString(STATE_LXXXI_ROUTE_TOKEN, lxxxiRouteToken)
@@ -234,6 +247,9 @@ class MainActivity : ComponentActivity() {
             homePageFinished = true
             TelemetryController.recordInstallSeen()
             TelemetryController.recordDailyActive()
+            // First-launch active-version report (idempotent; the same
+            // version is only re-reported after 6 hours).
+            TelemetryController.recordAppActive()
             // Silent startup update check: only a genuinely newer release
             // prompts anything; errors and up-to-date results stay quiet.
             UpdateManager.checkAndPrompt(this@MainActivity, manual = false)

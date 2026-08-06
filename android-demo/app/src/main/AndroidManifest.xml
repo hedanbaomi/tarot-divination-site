@@ -44,6 +44,16 @@
             android:label="@string/about_title"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
         <!--
+          Announcements screen. Not exported; opened from the About screen and
+          lists all fetched announcements with a manual refresh. Content is
+          plain text rendered by the activity, never HTML.
+        -->
+        <activity
+            android:name=".AnnouncementsActivity"
+            android:exported="false"
+            android:label="@string/announcements_title"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
+        <!--
           Exposes downloaded update APKs to the system package installer over
           a content:// URI (file:// URIs are rejected since Android 7). The
           provider only serves files under the app's internal updates dir.

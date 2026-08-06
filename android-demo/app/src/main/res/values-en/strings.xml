@@ -47,4 +47,18 @@
     <string name="update_verification_failed">The update file failed verification and installation was cancelled. Please check for updates again.</string>
     <string name="update_pending_invalid">The pending update file is no longer valid. Please check for updates again.</string>
     <string name="update_permission_denied">Installing from unknown sources is still disabled, so the update is paused. It will continue once enabled.</string>
+
+    <!-- In-app announcements -->
+    <string name="announcements_section_title">Announcements</string>
+    <string name="announcements_title">Announcements</string>
+    <string name="announcements_open">View announcements</string>
+    <string name="announcements_refresh">Refresh</string>
+    <string name="announcements_empty">No announcements</string>
+    <string name="announcements_updated_hint">Last updated: just now</string>
+    <string name="announcement_severity_update">Update</string>
+    <string name="announcement_severity_important">Important</string>
+    <string name="announcement_severity_info">Info</string>
+    <string name="announcement_action_update">Check for updates</string>
+    <string name="announcement_later">Not now</string>
+    <string name="announcement_open">Open</string>
 </resources>

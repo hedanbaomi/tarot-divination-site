@@ -7,5 +7,6 @@ class QuareiaApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         TelemetryController.init(this)
+        AnnouncementController.init(this)
     }
 }

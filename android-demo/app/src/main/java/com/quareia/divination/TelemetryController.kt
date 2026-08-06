@@ -28,6 +28,12 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * The whole subsystem can be turned off from the About screen; turning it off
  * deletes the local install hash immediately and stops all reporting.
+ *
+ * app_active additionally reports the current app version so the worker can
+ * maintain per-install active-version statistics: it is sent on first launch,
+ * on returning to the foreground, and immediately whenever the installed
+ * version changes; for the same version it is sent at most once per 6 hours.
+ * Version changes always send immediately, even inside the 6-hour window.
  */
 internal object TelemetryController {
 
@@ -37,12 +43,15 @@ internal object TelemetryController {
     private const val SCHEMA_VERSION = 1
     private const val TIMEOUT_MS = 10000
     private const val MAX_BODY_BYTES = 1024
+    private const val APP_ACTIVE_MIN_INTERVAL_MS = 6L * 60 * 60 * 1000
 
     // Persistence keys.
     private const val KEY_ENABLED = "telemetry_enabled"
     private const val KEY_INSTALL_UUID = "install_uuid"
     private const val KEY_INSTALL_SEEN_SENT = "install_seen_sent"
     private const val KEY_LAST_DAU_UTC = "last_dau_utc"
+    private const val KEY_LAST_APP_ACTIVE_UTC = "last_app_active_utc"
+    private const val KEY_LAST_APP_ACTIVE_VERSION = "last_app_active_version_code"
 
     private val executor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "quareia-telemetry").apply { isDaemon = true }
@@ -54,6 +63,7 @@ internal object TelemetryController {
     private var activeConnection: HttpURLConnection? = null
     private var installSeenInFlightGeneration: Long? = null
     private var dailyActiveInFlightGeneration: Long? = null
+    private var appActiveInFlightGeneration: Long? = null
 
     private lateinit var appContext: Context
 
@@ -61,9 +71,18 @@ internal object TelemetryController {
     // HttpURLConnection path below.
     private var senderForTests: ((JSONObject) -> Boolean)? = null
 
+    // Test seams for the 6-hour dedupe and the version-change path; the real
+    // implementation uses the system clock and the installed package info.
+    @Volatile
+    private var nowProviderForTests: (() -> Long)? = null
+
+    @Volatile
+    private var versionCodeProviderForTests: (() -> Int)? = null
+
     private enum class InFlightSlot {
         INSTALL_SEEN,
-        DAILY_ACTIVE
+        DAILY_ACTIVE,
+        APP_ACTIVE
     }
 
     private data class QueuedEvent(
@@ -99,6 +118,7 @@ internal object TelemetryController {
                 generation.incrementAndGet()
                 installSeenInFlightGeneration = null
                 dailyActiveInFlightGeneration = null
+                appActiveInFlightGeneration = null
                 connectionToDisconnect = activeConnection
             }
             prefs.edit().apply {
@@ -109,6 +129,8 @@ internal object TelemetryController {
                     remove(KEY_INSTALL_UUID)
                     remove(KEY_INSTALL_SEEN_SENT)
                     remove(KEY_LAST_DAU_UTC)
+                    remove(KEY_LAST_APP_ACTIVE_UTC)
+                    remove(KEY_LAST_APP_ACTIVE_VERSION)
                 }
             }.apply()
         }
@@ -177,6 +199,41 @@ internal object TelemetryController {
                 slot = null,
                 onResult = {}
             )
+        }
+        queued?.let(::enqueue)
+    }
+
+    /**
+     * Reports the current app version as an anonymous app_active event:
+     * at most once per 6 hours for the same versionCode, but immediately on
+     * first launch, on returning to the foreground, and whenever the
+     * installed version changes. Never sends when telemetry is disabled.
+     */
+    fun recordAppActive() {
+        val now = currentTimeMillis()
+        val versionCode = currentVersionCode()
+        val queued: QueuedEvent? = synchronized(stateLock) {
+            if (!isEnabledLocked() || appActiveInFlightGeneration != null) {
+                return@synchronized null
+            }
+            val lastUtc = prefs.getLong(KEY_LAST_APP_ACTIVE_UTC, 0L)
+            val lastVersion = prefs.getInt(KEY_LAST_APP_ACTIVE_VERSION, -1)
+            if (lastVersion == versionCode &&
+                now - lastUtc < APP_ACTIVE_MIN_INTERVAL_MS
+            ) {
+                return@synchronized null
+            }
+            val token = generation.get()
+            val event = QueuedEvent(
+                payload = basePayload("app_active").apply {
+                    put("version_code", versionCode)
+                },
+                token = token,
+                slot = InFlightSlot.APP_ACTIVE,
+                onResult = { sent -> markAppActiveSent(token, now, versionCode, sent) }
+            )
+            appActiveInFlightGeneration = token
+            event
         }
         queued?.let(::enqueue)
     }
@@ -271,6 +328,11 @@ internal object TelemetryController {
                         dailyActiveInFlightGeneration = null
                     }
                 }
+                InFlightSlot.APP_ACTIVE -> {
+                    if (appActiveInFlightGeneration == token) {
+                        appActiveInFlightGeneration = null
+                    }
+                }
             }
         }
     }
@@ -290,6 +352,33 @@ internal object TelemetryController {
             if (isCurrentLocked(token)) {
                 prefs.edit().putString(KEY_LAST_DAU_UTC, today).apply()
             }
+        }
+    }
+
+    private fun markAppActiveSent(token: Long, sentAtMillis: Long, versionCode: Int, sent: Boolean) {
+        if (!sent) return
+        synchronized(stateLock) {
+            if (isCurrentLocked(token)) {
+                prefs.edit()
+                    .putLong(KEY_LAST_APP_ACTIVE_UTC, sentAtMillis)
+                    .putInt(KEY_LAST_APP_ACTIVE_VERSION, versionCode)
+                    .apply()
+            }
+        }
+    }
+
+    private fun currentTimeMillis(): Long =
+        nowProviderForTests?.invoke() ?: System.currentTimeMillis()
+
+    private fun currentVersionCode(): Int {
+        versionCodeProviderForTests?.let { return it() }
+        return try {
+            val pm = appContext.packageManager
+            val info = pm.getPackageInfo(appContext.packageName, 0)
+            @Suppress("DEPRECATION")
+            if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode.toInt() else info.versionCode
+        } catch (e: Exception) {
+            -1
         }
     }
 
@@ -373,10 +462,27 @@ internal object TelemetryController {
             generation.incrementAndGet()
             installSeenInFlightGeneration = null
             dailyActiveInFlightGeneration = null
+            appActiveInFlightGeneration = null
             connectionToDisconnect = activeConnection
             senderForTests = null
+            nowProviderForTests = null
+            versionCodeProviderForTests = null
             prefs.edit().clear().commit()
         }
         connectionToDisconnect?.disconnect()
+    }
+
+    /** Test-only: pins the clock used by the 6-hour app_active dedupe. */
+    internal fun setClockForTesting(provider: () -> Long) {
+        synchronized(stateLock) {
+            nowProviderForTests = provider
+        }
+    }
+
+    /** Test-only: pins the versionCode used by the app_active version check. */
+    internal fun setVersionCodeForTesting(provider: () -> Int) {
+        synchronized(stateLock) {
+            versionCodeProviderForTests = provider
+        }
     }
 }

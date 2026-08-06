@@ -47,4 +47,18 @@
     <string name="update_verification_failed">更新文件校验未通过，已取消安装。请重新检查更新。</string>
     <string name="update_pending_invalid">待安装的更新文件已失效，请重新检查更新。</string>
     <string name="update_permission_denied">仍未开启“允许安装未知来源应用”，更新已暂停，开启后可自动继续。</string>
+
+    <!-- 应用内公告 -->
+    <string name="announcements_section_title">公告</string>
+    <string name="announcements_title">公告</string>
+    <string name="announcements_open">查看公告</string>
+    <string name="announcements_refresh">刷新</string>
+    <string name="announcements_empty">暂无公告</string>
+    <string name="announcements_updated_hint">最近更新：刚刚</string>
+    <string name="announcement_severity_update">更新</string>
+    <string name="announcement_severity_important">重要</string>
+    <string name="announcement_severity_info">信息</string>
+    <string name="announcement_action_update">检查更新</string>
+    <string name="announcement_later">稍后再说</string>
+    <string name="announcement_open">打开</string>
 </resources>
