@@ -62,6 +62,14 @@ crons = ["0 3 * * *"]
 # ]
 
 [vars]
+# Ordinary, non-secret Cloudflare account configuration used only by the
+# read-only Analytics Engine SQL API. Leave empty until the authorized
+# operator supplies the real account id.
+ACCOUNT_ID = ""
 # Tuneable in-memory limits. Changes here require a redeploy.
 RATE_LIMIT_PER_INSTALL_PER_HOUR = "60"
 RATE_LIMIT_PER_IP_PER_MINUTE = "30"
+
+# ANALYTICS_READ_TOKEN is intentionally absent from this file. Set it only as
+# a Worker secret with `wrangler secret put ANALYTICS_READ_TOKEN`; it must
+# never be placed in vars, source, URLs, logs, or responses.

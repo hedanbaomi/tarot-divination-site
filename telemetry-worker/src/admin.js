@@ -13,6 +13,7 @@ import { hasD1Binding } from "./announcements.js";
 import { validateAnnouncementInput } from "./validation.js";
 import { activeWindowCounts, versionDistribution } from "./stats.js";
 import { ADMIN_PAGE_HTML } from "./admin-page.js";
+import { handleAnalytics } from "./analytics.js";
 
 const ADMIN_SECURITY_HEADERS = securityHeaders();
 
@@ -72,11 +73,19 @@ export async function handleAdminApi(request, env, pathname) {
   if (!auth.ok) {
     return adminJson({ error: auth.error }, auth.status);
   }
+
+  const parts = pathname.replace(/^\/admin\/api\//, "").split("/").filter(Boolean);
+
+  // Analytics history is a read-only Cloudflare API module. Keep it ahead of
+  // the D1 gate so an Analytics outage or a missing D1 binding never changes
+  // the existing announcements/stats behaviour, and vice versa.
+  if (parts[0] === "analytics" && parts.length === 1) {
+    return handleAnalytics(request, env);
+  }
+
   if (!hasD1Binding(env)) {
     return adminJson({ error: "announcements_unavailable" }, 503);
   }
-
-  const parts = pathname.replace(/^\/admin\/api\//, "").split("/").filter(Boolean);
 
   if (parts[0] === "stats" && parts.length === 1 && request.method === "GET") {
     return handleStats(env);

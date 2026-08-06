@@ -19,7 +19,7 @@ local history.
 | `GET` | `/v1/announcements` | Public announcements for a platform/version/locale; ETag + `If-None-Match` (`304`) and short `public` caching. Never requires an install_hash and never writes per-device state. |
 | `GET` | `/admin` | Same-origin admin page (announcements CRUD + active-install statistics). HTML only; all API calls use the token from `sessionStorage`. |
 | `POST` | `/admin/verify` | `204`-class token check (`200 {"ok":true}`); `401` on a bad token. |
-| `*` | `/admin/api/*` | Token-authenticated announcements CRUD, publish/withdraw, and statistics. All responses are `Cache-Control: no-store` and default to deny. |
+| `*` | `/admin/api/*` | Token-authenticated announcements CRUD, publish/withdraw, D1 statistics, and the read-only Analytics Engine history endpoint. All responses are `Cache-Control: no-store` and default to deny. |
 | `GET` | `/health` | Returns `200 {"ok":true}`. |
 | cron | `0 3 * * *` | Deletes `install_state` rows inactive for more than 90 days. |
 
@@ -142,6 +142,7 @@ strings, logs, or client storage other than `sessionStorage` in the admin page.
 | `POST` | `/admin/api/announcements/:id/publish` | Set `published`; `revision` bumps. |
 | `POST` | `/admin/api/announcements/:id/withdraw` | Set `withdrawn`; `revision` bumps. |
 | `GET` | `/admin/api/stats` | Active installs in the last 24h/7d/30d windows, a per-window "24小时/7天/30天活跃版本分布" (`version_distribution.active_24h/7d/30d`) counting only installs whose `last_seen_at` falls inside each window, with percentages against that window's active total, plus `known_installs_90d` — the total install records seen in the last 90 days, deliberately not an active-version count. Rows with `version_code 0` are legacy clients without a known version code; they are labelled "未知/旧客户端" and still counted under their `app_version`. |
+| `GET` | `/admin/api/analytics?window=24h\|7d\|30d` | Read-only historical Analytics Engine summary and distributions. The window is a strict allow-list; arbitrary SQL, fields, and table names are never accepted. |
 
 Statistics wording is always "活跃安装数/活跃设备数" (active installs /
 active devices), never exact user counts: the numbers come from 6-hourly
@@ -155,6 +156,42 @@ page is served same-origin at `/admin`, loads no third-party JS or CSS, renders
 announcement content with DOM/text APIs — never `innerHTML` — and never puts
 the token in console output, error strings, or the page source; the token lives
 only in `sessionStorage` and is cleared on logout.
+
+### Historical Analytics API
+
+`GET /admin/api/analytics?window=24h|7d|30d` requires the same
+`Authorization: Bearer <ADMIN_TOKEN>` header as every other admin route. It
+then calls Cloudflare's Analytics Engine SQL API with the ordinary `ACCOUNT_ID`
+configuration and the `ANALYTICS_READ_TOKEN` Worker secret. Both must be
+present; otherwise the endpoint returns HTTP `503` with
+`{"error":"analytics_unavailable"}`. The read token is never logged or
+returned, and upstream response bodies are never echoed.
+
+The endpoint uses the fixed `quareia_telemetry` dataset and fixed SQL templates
+only. The supported windows are exactly `24h`, `7d`, and `30d`; they are
+rolling timestamp windows. Each event total and distribution count uses
+`SUM(_sample_interval)`. The active value is an estimate from a sampled
+`DISTINCT` count covering both `daily_active` and `app_active`; it is labelled
+`active_estimate` and must not be read as an exact audience count. Reading
+metrics also expose a sample-weighted card-count average.
+
+The response includes weighted `install_seen`, `reading_completed`, active and
+event totals; distributions for `deck_type`, `event`, `app_version`, `locale`,
+`country`, and `subdivision`; and a per-day trend. `app_version`, `locale`,
+`country`, and `subdivision` use `install_seen` and are explicitly named
+`first_report_snapshot` — they do not describe current state or location.
+No response field contains the Analytics sampling key or the raw install
+identifier.
+
+The daily trend groups the same rolling window into UTC-day buckets, so the
+first and last UTC days can be partial. Dimension results are limited to the
+top 50 with an explicit `truncated` flag and `limit` metadata. The Worker
+limits each upstream response body to 256 KiB, limits result rows, allows at
+most three concurrent SQL requests, and aborts each request after 8 seconds.
+Any upstream, parsing, or partial-query failure returns the historical module
+as `analytics_unavailable` with affected sections set to `null`; no partial
+failure is cached. These failures do not change the existing D1
+`/admin/api/stats` or announcements routes.
 
 ## Analytics Engine data-point mapping
 
@@ -222,6 +259,8 @@ Engine binding. They never deploy the worker or touch production data.
 npm ci
 npm test
 node --check src/index.js
+node --check src/admin.js
+node --check src/analytics.js
 npx wrangler d1 migrations apply quareia --local
 ```
 
@@ -242,10 +281,13 @@ worker revision:
 3. Create the D1 database with `npx wrangler d1 create quareia`, replace the
    placeholder `database_id` in `wrangler.toml` with the returned id, and apply
    the committed migrations with `npx wrangler d1 migrations apply quareia`.
-4. Set the admin secret with `npx wrangler secret put ADMIN_TOKEN`; the token
-   is never stored in the repository, wrangler.toml, URLs, or logs.
-5. Run `npx wrangler deploy` only in an explicitly authorized deployment window.
-6. Keep the existing `telemetry.luotianyi.fun` Custom Domain attached to this
+4. Set the ordinary `ACCOUNT_ID` in `wrangler.toml` to the target account id.
+5. Set the admin and Analytics read secrets separately with
+   `npx wrangler secret put ADMIN_TOKEN` and
+   `npx wrangler secret put ANALYTICS_READ_TOKEN`. Neither token is stored in
+   the repository, `wrangler.toml`, URLs, or logs.
+6. Run `npx wrangler deploy` only in an explicitly authorized deployment window.
+7. Keep the existing `telemetry.luotianyi.fun` Custom Domain attached to this
    worker; do not add a broad route or change other DNS records.
 
 Run the clean-environment `npm ci` gate before every authorized deployment.
