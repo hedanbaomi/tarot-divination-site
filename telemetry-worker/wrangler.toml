@@ -26,7 +26,7 @@ dataset = "quareia_telemetry"
 [[d1_databases]]
 binding = "DB"
 database_name = "quareia"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "fc0222c6-5593-47f2-a9cd-149bb77c93b4"
 migrations_dir = "migrations"
 
 # ---------------------------------------------------------------------------
