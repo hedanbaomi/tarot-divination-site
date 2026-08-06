@@ -643,15 +643,20 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     return String(Number(number.toFixed(1))) + "%";
   }
 
-  function makeSummaryCard(label, value) {
+  function makeSummaryCard(label, value, unavailableText) {
     var card = document.createElement("div");
     card.className = "card";
     var name = document.createElement("div");
     name.className = "muted";
     name.textContent = label;
     var number = document.createElement("div");
-    number.className = "stat";
-    number.textContent = formatMetric(value);
+    if (unavailableText) {
+      number.className = "muted";
+      number.textContent = unavailableText;
+    } else {
+      number.className = "stat";
+      number.textContent = formatMetric(value);
+    }
     card.appendChild(name);
     card.appendChild(number);
     return card;
@@ -660,13 +665,15 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
   function renderHistorySummary(data) {
     var cards = $("historySummaryCards");
     cards.textContent = "";
+    var failed = Array.isArray(data.failed_sections) ? data.failed_sections : [];
     [
-      ["安装上报", data.install_seen],
-      ["完成阅读", data.reading_completed],
-      ["活跃估算", data.active_estimate],
-      ["完成阅读平均抽牌数", data.reading_completed_average_card_count]
-    ].forEach(function (pair) {
-      cards.appendChild(makeSummaryCard(pair[0], pair[1]));
+      ["安装上报", "event_totals", data.install_seen, "暂不可用"],
+      ["完成阅读", "event_totals", data.reading_completed, "暂不可用"],
+      ["活跃估算", "active_estimate", data.active_estimate, "暂不可用"],
+      ["完成阅读平均抽牌数", "reading_metrics", data.reading_completed_average_card_count, "平均牌数暂不可用"]
+    ].forEach(function (item) {
+      var unavailable = failed.indexOf(item[1]) !== -1 ? item[3] : null;
+      cards.appendChild(makeSummaryCard(item[0], item[2], unavailable));
     });
 
     var meta = data.active_estimate_meta || {};

@@ -59,6 +59,15 @@ test("the admin page stays DOM-only and has no external page resources", () => {
   assert.match(ADMIN_PAGE_HTML, /createElementNS\("http:\/\/www\.w3\.org\/2000\/svg"/);
 });
 
+test("the history UI shows partial data with per-item fallbacks instead of hiding the section", () => {
+  assert.match(ADMIN_PAGE_HTML, /平均牌数暂不可用/);
+  assert.match(ADMIN_PAGE_HTML, /部分历史区段暂不可用/);
+  assert.match(ADMIN_PAGE_HTML, /\$\("historyContent"\)\.style\.display = "block"/);
+  assert.match(ADMIN_PAGE_HTML, /data\.available !== true/);
+  assert.match(ADMIN_PAGE_HTML, /data\.failed_sections/);
+  assert.match(ADMIN_PAGE_HTML, /renderFailedSections\(data\.failed_sections\)/);
+});
+
 test("the inline script parses as valid JavaScript", () => {
   const [code] = extractInlineScripts(ADMIN_PAGE_HTML);
   assert.doesNotThrow(() => new vm.Script(code), "inline script must compile");

@@ -104,12 +104,7 @@ LIMIT 1
 `,
     reading_metrics: `
 SELECT
-  SUM(_sample_interval) AS reading_completed,
-  IF(
-    SUM(_sample_interval) > 0,
-    SUM(_sample_interval * double1) / SUM(_sample_interval),
-    0
-  ) AS avg_card_count
+  SUM(_sample_interval * double1) / SUM(_sample_interval) AS avg_card_count
 FROM ${ANALYTICS_DATASET}
 WHERE ${filter} AND blob1 = 'reading_completed'
 LIMIT 1
@@ -198,11 +193,10 @@ export async function handleAnalytics(request, env) {
   const parsed = parseOutcomes(outcomes, window);
 
   const response = buildAnalyticsResponse(window, parsed);
-  if (parsed.failedSections.length > 0) {
+  if (parsed.failedSections.length >= QUERY_NAMES.length) {
     return analyticsJson({
       ...response,
-      error: "analytics_unavailable",
-      failed_sections: parsed.failedSections
+      error: "analytics_unavailable"
     }, 503);
   }
   return analyticsJson(response, 200);
@@ -506,11 +500,20 @@ function parseReadingMetrics(byName, name, failures) {
     return null;
   }
   const raw = row.avg_card_count;
-  if (raw === null || raw === undefined || raw === "") {
+  if (raw === null || raw === undefined || (typeof raw === "string" && raw.trim() === "")) {
     return { averageCardCount: null };
   }
-  const averageCardCount = nonNegativeNumber(raw);
-  if (averageCardCount === null) {
+  if (typeof raw !== "number" && typeof raw !== "string") {
+    failures.push(name);
+    return null;
+  }
+  const averageCardCount = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(averageCardCount)) {
+    // NaN or a non-finite value (for example 0/0 from an empty reading
+    // window) means "no usable average", not a section failure.
+    return { averageCardCount: null };
+  }
+  if (averageCardCount < 0) {
     failures.push(name);
     return null;
   }
@@ -622,9 +625,15 @@ function buildAnalyticsResponse(window, parsed) {
       : null
   };
 
+  const failedCount = parsed.failedSections.length;
+  const sectionCount = QUERY_NAMES.length;
+  const allFailed = failedCount >= sectionCount;
+
   return {
     module: "analytics",
-    available: parsed.failedSections.length === 0,
+    available: !allFailed,
+    partial: failedCount > 0 && !allFailed,
+    failed_sections: parsed.failedSections,
     window,
     window_seconds: WINDOW_SPECS[window].seconds,
     generated_at: nowSec(),
@@ -670,6 +679,7 @@ function unavailableResponse(window, failedSections, reason) {
   return analyticsJson({
     ...response,
     available: false,
+    partial: false,
     error: "analytics_unavailable",
     failed_sections: failedSections.length > 0 ? failedSections : [reason]
   }, 503);

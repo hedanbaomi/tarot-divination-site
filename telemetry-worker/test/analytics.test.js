@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import worker, { __test as workerTest } from "../src/index.js";
+import { buildAnalyticsQueries } from "../src/analytics.js";
 import { createMockD1, makeEnv, makeRequest } from "./helpers.js";
 
 const ADMIN_TOKEN = "test-admin-token";
@@ -56,6 +57,33 @@ function upstreamResponse(rows, { status = 200, body, headers } = {}) {
   });
 }
 
+// Standard per-query upstream rows for the fixed 24h query set. Tests that need
+// to deviate from the happy path override specific queries before falling back
+// to these rows.
+function upstreamRowsFor(sql) {
+  if (sql.includes("COUNT(DISTINCT index1)")) {
+    return [{ active_estimate: 3 }];
+  }
+  if (sql.includes("utc_day")) {
+    return [{ utc_day: "2026-08-06", count: 4 }];
+  }
+  if (sql.includes("GROUP BY event")) {
+    return [
+      { event: "install_seen", count: 5 },
+      { event: "daily_active", count: 4 },
+      { event: "app_active", count: 2 },
+      { event: "reading_completed", count: 6 }
+    ];
+  }
+  if (sql.includes("avg_card_count")) {
+    return [{ avg_card_count: 3.5 }];
+  }
+  if (sql.includes("blob3 AS value")) {
+    return [{ value: "tarot", count: 2 }];
+  }
+  return [{ value: "1.2.0", count: 4 }];
+}
+
 function installDefaultAnalyticsFetch({ onCall } = {}) {
   const calls = [];
   globalThis.fetch = async (url, init) => {
@@ -68,7 +96,7 @@ function installDefaultAnalyticsFetch({ onCall } = {}) {
       return upstreamResponse([{ active_estimate: 3 }]);
     }
     if (sql.includes("avg_card_count")) {
-      return upstreamResponse([{ reading_completed: 2, avg_card_count: 3.5 }]);
+      return upstreamResponse([{ avg_card_count: 3.5 }]);
     }
     if (sql.includes("utc_day")) {
       return upstreamResponse([{ utc_day: "2026-08-06", count: 4 }]);
@@ -349,10 +377,112 @@ test("partial query failure becomes null and is never served from a prior respon
     analyticsRequest({ ip: "198.51.100.28" }),
     analyticsEnv()
   );
-  assert.equal(second.status, 503);
+  assert.equal(second.status, 200);
   const secondJson = await second.json();
+  assert.equal(secondJson.available, true);
+  assert.equal(secondJson.partial, true);
   assert.equal(secondJson.distributions.deck_type, null);
   assert.deepEqual(secondJson.failed_sections, ["deck_type"]);
+});
+
+test("reading_metrics SQL is a direct weighted average without an outer IF", () => {
+  const queries = buildAnalyticsQueries("24h");
+  assert.ok(queries, "24h query set is exposed for audits");
+  assert.match(
+    queries.reading_metrics,
+    /SUM\(_sample_interval \* double1\) \/ SUM\(_sample_interval\) AS avg_card_count/
+  );
+  assert.doesNotMatch(queries.reading_metrics, /\bIF\s*\(/);
+  assert.doesNotMatch(queries.reading_metrics, /AS reading_completed/);
+});
+
+test("no reading data yields a null average without marking the section failed", async () => {
+  globalThis.fetch = async (_url, init) => {
+    const sql = String(init.body);
+    if (sql.includes("avg_card_count")) return upstreamResponse([]);
+    return upstreamResponse(upstreamRowsFor(sql));
+  };
+  const response = await worker.fetch(analyticsRequest(), analyticsEnv());
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.available, true);
+  assert.equal(result.partial, false);
+  assert.equal(result.reading_completed_average_card_count, null);
+  assert.deepEqual(result.failed_sections, []);
+});
+
+test("a single reading_metrics failure returns 200 partial with other data intact", async () => {
+  globalThis.fetch = async (_url, init) => {
+    const sql = String(init.body);
+    if (sql.includes("avg_card_count")) throw new Error("reading metrics upstream failed");
+    return upstreamResponse(upstreamRowsFor(sql));
+  };
+  const response = await worker.fetch(analyticsRequest(), analyticsEnv());
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.available, true);
+  assert.equal(result.partial, true);
+  assert.deepEqual(result.failed_sections, ["reading_metrics"]);
+  assert.equal(result.reading_completed_average_card_count, null);
+  assert.equal(result.install_seen, 5);
+  assert.equal(result.reading_completed, 6);
+  assert.equal(result.active_estimate, 3);
+  assert.ok(result.distributions.deck_type);
+  assert.ok(result.daily_trend);
+});
+
+test("a few failures keep the successful analytics sections intact", async () => {
+  globalThis.fetch = async (_url, init) => {
+    const sql = String(init.body);
+    if (sql.includes("avg_card_count")) throw new Error("reading metrics failed");
+    if (sql.includes("blob4 AS value")) throw new Error("country failed");
+    return upstreamResponse(upstreamRowsFor(sql));
+  };
+  const response = await worker.fetch(analyticsRequest(), analyticsEnv());
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.available, true);
+  assert.equal(result.partial, true);
+  assert.deepEqual(result.failed_sections, ["reading_metrics", "country"]);
+  assert.equal(result.install_seen, 5);
+  assert.equal(result.reading_completed, 6);
+  assert.equal(result.active_estimate, 3);
+  assert.equal(result.distributions.deck_type.rows[0].value, "tarot");
+  assert.equal(result.distributions.country, null);
+  assert.equal(result.reading_completed_average_card_count, null);
+  assert.ok(result.daily_trend.rows.length >= 1);
+});
+
+test("analytics returns 503 available=false only when every section fails", async () => {
+  globalThis.fetch = async () => {
+    throw new Error("all upstream queries failed");
+  };
+  const response = await worker.fetch(analyticsRequest(), analyticsEnv());
+  assert.equal(response.status, 503);
+  const result = await response.json();
+  assert.equal(result.available, false);
+  assert.equal(result.partial, false);
+  assert.equal(result.error, "analytics_unavailable");
+  assert.equal(result.failed_sections.length, 9);
+  assert.equal(result.install_seen, null);
+  assert.equal(result.reading_completed, null);
+  assert.equal(result.active_estimate, null);
+  assert.equal(result.reading_completed_average_card_count, null);
+  assert.equal(result.daily_trend, null);
+});
+
+test("partial responses never leak secrets, SQL, index1, or install hashes", async () => {
+  globalThis.fetch = async (_url, init) => {
+    const sql = String(init.body);
+    if (sql.includes("avg_card_count")) throw new Error("secret " + READ_TOKEN);
+    return upstreamResponse(upstreamRowsFor(sql));
+  };
+  const response = await worker.fetch(analyticsRequest(), analyticsEnv());
+  assert.equal(response.status, 200);
+  const text = await response.text();
+  assert.doesNotMatch(text, new RegExp(READ_TOKEN));
+  assert.doesNotMatch(text, /quareia_telemetry|SELECT |SUM\(_sample_interval\)|FROM /);
+  assert.doesNotMatch(text, /index1|install_hash|[a-f0-9]{64}/i);
 });
 
 test("analytics does not require D1 and its failure does not change the D1 stats route", async () => {
