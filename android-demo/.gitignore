@@ -14,3 +14,10 @@ local.properties
 *.apk
 *.aab
 screenshot-*.png
+
+# Signing credentials and keystores must never be committed
+keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pfx

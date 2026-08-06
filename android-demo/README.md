@@ -49,11 +49,21 @@ debug 签名，仅用于本机验证，不能作为正式发布签名。正式�
 & "$env:LOCALAPPDATA\Android\Sdk\build-tools\35.0.0\apksigner.bat" verify --print-certs app\build\outputs\apk\release\app-release.apk
 ```
 
-仓库不包含发布凭据。签名配置从仓库外的 `keystore.properties` 读取：通过
-环境变量 `QUAREIA_KEYSTORE_PROPERTIES` 指向该文件，或放在
-`C:\Users\32735\Desktop\证书与密钥\占卜app\keystore.properties` 回退路径；
-找不到时 release 构建会直接失败，不会产出无签名 APK。keystore 与密码必须
-妥善离线备份，丢失后将无法向已安装用户发布更新。mapping 文件必须私下保存。
+仓库不包含发布凭据。release 签名只通过环境变量或 Gradle property 提供：
+
+- 环境变量 `QUAREIA_KEYSTORE_PROPERTIES` 指向仓库外的一个
+  `keystore.properties` 文件（含 `storeFile` / `storePassword` /
+  `keyAlias` / `keyPassword`），或
+- Gradle property：`quareia.keystore.storeFile`、
+  `quareia.keystore.storePassword`、`quareia.keystore.keyAlias`、
+  `quareia.keystore.keyPassword`（写在 `~/.gradle/gradle.properties` 或
+  构建时以 `-P` 传入）。
+
+未配置凭据时，`assembleDebug`、`testDebugUnitTest`、`assembleHardened` 与
+IDE Sync 均可正常工作；只有请求 `assembleRelease` 时构建会以
+“SigningConfig 'release' is missing required property 'storeFile'”清晰失败，
+不会产出未签名 APK。keystore 与密码必须妥善离线备份，丢失后将无法向已
+安装用户发布更新。mapping 文件必须私下保存。
 
 调试 APK 输出到（不可分发）：
 
@@ -72,6 +82,41 @@ app/build/outputs/apk/hardened/app-hardened.apk
 ```text
 app/build/outputs/apk/release/app-release.apk
 ```
+
+## 应用内更新（v1.1.1 起）
+
+应用在启动时静默检查 GitHub Releases，并在「关于 / 版权」页提供手动检查。
+应用内更新只接受正式发布的 Release（非 draft、非 prerelease），且必须恰好
+包含一个名为 `QuareiaDivination-v<版本>.apk` 的 APK 资产，其大小不超过
+100 MiB，并带有 GitHub API 返回的 `sha256:<hex>` digest；资产缺失、重复、
+digest 缺失或格式非法、或下载 URL 不是可信的 GitHub HTTPS 域名时，一律
+fail closed（提示“检查更新失败”或“下载失败”），绝不回退到 tarball/zipball
+或 Release 页面。
+
+下载在后台线程进行，文件先写入应用私有目录 `files/updates/` 下的 `.part`
+临时文件；下载完成后必须全部通过以下校验才会打开系统安装器：
+
+1. 实际文件大小等于 Release 资产 size；
+2. 文件 SHA-256 等于 GitHub API 返回的 `sha256:<hex>` digest；
+3. APK 可被 PackageManager 正常解析；
+4. `packageName` 必须等于 `com.quareia.divination`；
+5. versionCode 高于当前已安装版本；
+6. APK 签名证书的 SHA-256 与当前已安装应用的签名证书（含签名轮换历史）
+   匹配——证书 digest 由系统读取并实时计算，不使用任何硬编码字符串。
+
+任一校验失败都会删除下载文件、不打开安装器，并给出本地化的安全提示；
+权限开启后的续装同样会重新校验。注意区分两个不同的 SHA-256：第 2 条是
+APK 文件的哈希，第 6 条是签名证书的哈希，两者不是一回事。
+
+安装权限流程：用户确认更新且下载校验完成后，若应用已有“允许安装未知来源
+应用”权限，直接打开系统安装器；若没有，则保存待安装 APK 状态并跳转到
+对应系统设置页。用户返回应用后会自动重新检查权限：已开启则重新校验缓存的
+APK 并自动继续安装；未开启或缓存文件已失效（被删除、大小或 digest 不符、
+解析失败等）时给出明确提示，且不会重复下载。Activity 重建或进程重启后，
+待安装状态从本地偏好中安全恢复，路径始终限制在应用私有更新目录内。
+
+v1.1 及更早版本不含修复后的应用内更新，请手动从 GitHub Releases 安装
+v1.1.1；此后各版本即可使用应用内更新。
 
 ## 开源边界
 

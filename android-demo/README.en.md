@@ -44,8 +44,24 @@ android run --apks=app\build\outputs\apk\hardened\app-hardened.apk
 the Android debug key. It is not a production signing artifact. Production
 releases must sign the `assembleRelease` output with a controlled release
 keystore and pass `apksigner verify`. Release credentials are not stored in the
-repository; `app-release-unsigned.apk` must not be distributed. Keep the
-mapping file private for crash retracing.
+repository; keep the mapping file private for crash retracing.
+
+Release signing credentials are only ever supplied through the environment or
+Gradle properties:
+
+- the `QUAREIA_KEYSTORE_PROPERTIES` environment variable pointing at a
+  `keystore.properties` file outside the repository (`storeFile` /
+  `storePassword` / `keyAlias` / `keyPassword`), or
+- the Gradle properties `quareia.keystore.storeFile`,
+  `quareia.keystore.storePassword`, `quareia.keystore.keyAlias`, and
+  `quareia.keystore.keyPassword` (in `~/.gradle/gradle.properties` or passed
+  with `-P`).
+
+Without credentials, `assembleDebug`, `testDebugUnitTest`, `assembleHardened`,
+and IDE sync all keep working; only a real `assembleRelease` fails, with the
+clear error "SigningConfig 'release' is missing required property 'storeFile'",
+and no unsigned APK is emitted. Back up the keystore and passwords offline;
+losing them makes it impossible to ship updates to installed users.
 
 The debug APK is written to (not for distribution):
 
@@ -58,6 +74,49 @@ The local hardened acceptance APK is written to:
 ```text
 app/build/outputs/apk/hardened/app-hardened.apk
 ```
+
+## In-App Updates (since v1.1.1)
+
+The app silently checks GitHub Releases on startup and offers a manual check on
+the About / Copyright screen. Only a published release (non-draft,
+non-prerelease) is accepted, and it must contain exactly one APK asset named
+`QuareiaDivination-v<version>.apk`, at most 100 MiB, carrying a
+`sha256:<hex>` digest from the GitHub API. Missing or duplicated assets,
+missing or malformed digests, and download URLs that are not trusted GitHub
+HTTPS domains all fail closed ("check failed" / "download failed"); there is
+never a fallback to tarball/zipball URLs or the releases page.
+
+Downloads run on a background thread into a `.part` file inside the app-private
+`files/updates/` directory. The system installer opens only after every check
+passes:
+
+1. the actual file size equals the release asset size;
+2. the file's SHA-256 equals the `sha256:<hex>` digest from the GitHub API;
+3. the APK parses through the PackageManager;
+4. its `packageName` is exactly `com.quareia.divination`;
+5. its versionCode is higher than the installed version;
+6. the SHA-256 of the APK's signing certificate matches the installed app's
+   signer certificates (including signing-certificate history) — digests are
+   read from the system and computed at runtime, never hard-coded strings.
+
+Any failed check deletes the downloaded file, does not open the installer, and
+shows a localized security message; the same verification runs again when a
+pending install is resumed after the permission is granted. Note the two
+different SHA-256 values: item 2 is the hash of the APK file, item 6 is the
+hash of the signing certificate — they are not the same thing.
+
+Install-permission flow: once the download is fully verified, the installer
+opens immediately if the app already has "install unknown apps" permission;
+otherwise the pending APK state is saved and the user is taken to the system
+setting. When the app resumes, the permission is re-checked: if granted, the
+cached APK is re-verified and installed automatically; if not, or if the cached
+file is no longer valid (deleted, size/digest mismatch, unparseable, etc.), a
+clear message is shown and nothing is re-downloaded. Pending state survives
+activity recreation and process restart and always lives inside the app-private
+update directory.
+
+v1.1 and earlier do not contain the fixed in-app updater — install v1.1.1
+manually from GitHub Releases; all later versions can use in-app updates.
 
 ## Open-Source Boundary
 

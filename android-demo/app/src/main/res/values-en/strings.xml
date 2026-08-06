@@ -44,4 +44,7 @@
     <string name="update_download_failed">Download failed. Please try again later.</string>
     <string name="update_install_ready">Update downloaded. Opening the installer…</string>
     <string name="update_install_permission">Installing apps from unknown sources must be allowed to update. Enable it in system settings and try again.</string>
+    <string name="update_verification_failed">The update file failed verification and installation was cancelled. Please check for updates again.</string>
+    <string name="update_pending_invalid">The pending update file is no longer valid. Please check for updates again.</string>
+    <string name="update_permission_denied">Installing from unknown sources is still disabled, so the update is paused. It will continue once enabled.</string>
 </resources>
