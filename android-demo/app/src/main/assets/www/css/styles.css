@@ -1826,6 +1826,143 @@ body.choice-open { overflow: hidden; }
 }
 .result-source { font-size: 0.64rem; color: var(--text-secondary); opacity: 0.55; margin-top: 6px; }
 
+/* ---------- Public announcements ---------- */
+.announcement-dialog {
+  width: min(720px, calc(100vw - 24px));
+  max-width: 720px;
+  max-height: min(88vh, 820px);
+  margin: auto;
+  padding: 0;
+  color: var(--text-primary);
+  background: linear-gradient(145deg, rgba(12, 17, 44, 0.98), rgba(16, 15, 39, 0.98));
+  border: 1px solid var(--accent-border);
+  border-radius: 18px;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.7), var(--glow-gold);
+  overflow: hidden;
+}
+
+.announcement-dialog::backdrop {
+  background: rgba(2, 4, 14, 0.78);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.announcement-dialog-shell {
+  max-height: min(88vh, 820px);
+  padding: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.announcement-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.announcement-dialog-kicker,
+.announcement-severity {
+  margin: 0 0 2px;
+  color: var(--text-secondary);
+  font-size: 0.64rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.announcement-dialog-header h2 {
+  margin: 0;
+  color: var(--accent-light);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.announcement-dialog-status {
+  min-height: 1.5em;
+  margin: 12px 0 8px;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.announcement-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.announcement-item {
+  padding: 13px 14px;
+  background: rgba(20, 22, 51, 0.86);
+  border: 1px solid rgba(216, 179, 106, 0.18);
+  border-radius: 12px;
+}
+
+.announcement-item[data-severity="important"] {
+  border-color: rgba(239, 176, 108, 0.52);
+}
+
+.announcement-item[data-severity="update"] {
+  border-color: rgba(143, 214, 174, 0.48);
+}
+
+.announcement-item-title {
+  margin: 0 0 6px;
+  color: var(--text-primary);
+  font-size: 0.98rem;
+  line-height: 1.4;
+}
+
+.announcement-item-body {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.announcement-action {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 7px 12px;
+  color: var(--accent-light);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.announcement-empty {
+  margin: 14px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 480px) {
+  .announcement-dialog {
+    width: 100vw;
+    max-width: none;
+    max-height: calc(100dvh - env(safe-area-inset-top));
+    margin: auto 0 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .announcement-dialog-shell {
+    max-height: calc(100dvh - env(safe-area-inset-top));
+    padding: 16px 14px calc(18px + env(safe-area-inset-bottom));
+  }
+}
+
 /* ---------- Local divination history ---------- */
 .visually-hidden {
   position: absolute !important;
