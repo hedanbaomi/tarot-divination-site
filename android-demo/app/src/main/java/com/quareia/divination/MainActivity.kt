@@ -246,9 +246,11 @@ class MainActivity : ComponentActivity() {
             if (homePageFinished) return
             homePageFinished = true
             TelemetryController.recordInstallSeen()
-            TelemetryController.recordDailyActive()
             // First-launch active-version report (idempotent; the same
-            // version is only re-reported after 6 hours).
+            // version is only re-reported after 6 hours). The v1.2 client
+            // no longer sends the legacy daily_active event: app_active
+            // supersedes it, and the worker still accepts daily_active from
+            // older clients without ever downgrading a recorded version.
             TelemetryController.recordAppActive()
             // Silent startup update check: only a genuinely newer release
             // prompts anything; errors and up-to-date results stay quiet.

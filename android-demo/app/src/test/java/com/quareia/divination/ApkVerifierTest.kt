@@ -67,6 +67,21 @@ class ApkVerifierTest {
     }
 
     @Test
+    fun caseVariantPackageNameIsRejected() {
+        // Package names are case-sensitive: only the exact string matches.
+        val verifier = ApkVerifier(
+            FakeReader(
+                ApkMeta("Com.Quareia.Divination", 99, listOf(SIGNER_A)),
+                InstalledApkMeta(2, listOf(SIGNER_A)),
+            )
+        )
+
+        val result = verifier.verify(apk, InstalledApkMeta(2, listOf(SIGNER_A)), "com.quareia.divination")
+
+        assertEquals(ApkVerifyResult.Failure(ApkVerifyResult.Reason.PACKAGE_MISMATCH), result)
+    }
+
+    @Test
     fun equalVersionCodeIsRejected() {
         val verifier = ApkVerifier(
             FakeReader(

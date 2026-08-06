@@ -33,7 +33,7 @@
  *
  * A future deployment may use telemetry.luotianyi.fun (see wrangler.toml + README).
  */
-import { json } from "./http.js";
+import { json, securityHeaders } from "./http.js";
 import { nowMs, setClockForTesting, resetClock } from "./clock.js";
 import { handleAnnouncements } from "./announcements.js";
 import { recordInstallActivity, cleanupInactiveInstalls } from "./stats.js";
@@ -133,21 +133,21 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/admin") {
       if (rateLimitByIp(request, env, nowMs())) {
-        return json({ error: "rate_limited" }, 429);
+        return json({ error: "rate_limited" }, 429, securityHeaders());
       }
       return handleAdminPage();
     }
 
     if (request.method === "POST" && url.pathname === "/admin/verify") {
       if (rateLimitByIp(request, env, nowMs())) {
-        return json({ error: "rate_limited" }, 429);
+        return json({ error: "rate_limited" }, 429, securityHeaders());
       }
       return handleAdminVerify(request, env);
     }
 
     if (url.pathname.startsWith("/admin/api/")) {
       if (rateLimitByIp(request, env, nowMs())) {
-        return json({ error: "rate_limited" }, 429);
+        return json({ error: "rate_limited" }, 429, securityHeaders());
       }
       return handleAdminApi(request, env, url.pathname);
     }

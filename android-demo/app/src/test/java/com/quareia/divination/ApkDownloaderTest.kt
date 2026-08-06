@@ -161,16 +161,59 @@ class ApkDownloaderTest {
         assertFalse(destination().exists())
     }
 
+    @Test
+    fun nonApkResponseContentTypeFailsClosed() {
+        val downloader = HttpApkDownloader(
+            FakeTransport(ByteArray(10), contentType = "text/html")
+        )
+
+        val result = downloader.download(
+            release(size = 10, digest = "sha256:${Sha256.hex(ByteArray(10))}"),
+            part(),
+            destination(),
+            cancelled = { false },
+            onProgress = {},
+        )
+
+        assertNull(result)
+        assertFalse(part().exists())
+        assertFalse(destination().exists())
+    }
+
+    @Test
+    fun apkAndOctetStreamResponseContentTypesAreAccepted() {
+        for (contentType in listOf(
+            "application/vnd.android.package-archive",
+            "application/octet-stream",
+            null
+        )) {
+            val bytes = ByteArray(10) { 1 }
+            val downloader = HttpApkDownloader(FakeTransport(bytes, contentType = contentType))
+
+            val result = downloader.download(
+                release(size = 10, digest = "sha256:${Sha256.hex(bytes)}"),
+                part(),
+                destination(),
+                cancelled = { false },
+                onProgress = {},
+            )
+
+            assertEquals(destination(), result)
+            destination().delete()
+        }
+    }
+
     private class FakeTransport(
         private val bytes: ByteArray,
         private val code: Int = 200,
         private val contentLength: Long = bytes.size.toLong(),
+        private val contentType: String? = "application/vnd.android.package-archive",
     ) : HttpTransport {
         override fun open(url: String, headers: Map<String, String>): HttpTransport.OpenResult =
             HttpTransport.OpenResult(
                 url = "https://objects.githubusercontent.com/fake",
                 code = code,
-                contentType = "application/vnd.android.package-archive",
+                contentType = contentType,
                 contentLength = contentLength,
                 stream = ByteArrayInputStream(bytes),
             )

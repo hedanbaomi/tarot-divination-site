@@ -150,6 +150,22 @@ class ReleaseJsonParserTest {
     }
 
     @Test
+    fun apkWithNonApkContentTypeIsRejected() {
+        val json = releaseJson(asset = asset(contentType = "application/octet-stream"))
+        assertThrows(ReleaseDataException::class.java) {
+            ReleaseJsonParser.parse(json)
+        }
+    }
+
+    @Test
+    fun apkWithMissingContentTypeIsRejected() {
+        val json = releaseJson(asset = asset(contentType = ""))
+        assertThrows(ReleaseDataException::class.java) {
+            ReleaseJsonParser.parse(json)
+        }
+    }
+
+    @Test
     fun nonHttpsDownloadUrlIsRejected() {
         val json = releaseJson(asset = asset(url = "http://github.com/hedanbaomi/tarot-divination-site/releases/download/v1.1.1/QuareiaDivination-v1.1.1.apk"))
         assertThrows(ReleaseDataException::class.java) {

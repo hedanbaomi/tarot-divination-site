@@ -6,7 +6,7 @@
 // deny. The admin page is self-contained (inline CSS/JS only, no third-party
 // resources) and keeps the token in sessionStorage, cleared on logout.
 
-import { json } from "./http.js";
+import { json, securityHeaders } from "./http.js";
 import { nowSec } from "./clock.js";
 import { constantTimeEqual } from "./security.js";
 import { hasD1Binding } from "./announcements.js";
@@ -14,16 +14,7 @@ import { validateAnnouncementInput } from "./validation.js";
 import { activeWindowCounts, versionDistribution } from "./stats.js";
 import { ADMIN_PAGE_HTML } from "./admin-page.js";
 
-const ADMIN_SECURITY_HEADERS = {
-  "cache-control": "no-store",
-  "content-security-policy":
-    "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; " +
-    "frame-ancestors 'none'; object-src 'none'",
-  "referrer-policy": "no-referrer",
-  "x-content-type-options": "nosniff",
-  "x-frame-options": "DENY"
-};
+const ADMIN_SECURITY_HEADERS = securityHeaders();
 
 function adminJson(obj, status) {
   return json(obj, status, ADMIN_SECURITY_HEADERS);
@@ -273,8 +264,8 @@ async function handleStats(env) {
     {
       generated_at: nowSec(),
       windows,
-      total_installs: distribution.total_installs,
-      by_version: distribution.by_version
+      known_installs_90d: distribution.known_installs_90d,
+      version_distribution: distribution.by_window
     },
     200
   );

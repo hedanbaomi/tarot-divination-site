@@ -215,7 +215,7 @@ test("missing D1 returns 503 for admin API", async () => {
   assert.equal(response.status, 503);
 });
 
-test("stats report 24h/7d/30d active installs and per-version distribution", async () => {
+test("stats report per-window active installs and per-window version distributions", async () => {
   const db = createMockD1();
   const nowSec = Math.floor(now / 1000);
   const hour = 3600;
@@ -225,7 +225,7 @@ test("stats report 24h/7d/30d active installs and per-version distribution", asy
     ["a".repeat(64), 4, nowSec - 1 * hour],            // 24h + 7d + 30d
     ["b".repeat(64), 4, nowSec - 3 * day],              // 7d + 30d
     ["c".repeat(64), 3, nowSec - 10 * day],             // 30d only
-    ["d".repeat(64), 3, nowSec - 60 * day],             // none
+    ["d".repeat(64), 3, nowSec - 60 * day],             // known (90d) only
     ["e".repeat(64), 2, nowSec - 2 * hour]              // 24h + 7d + 30d
   ];
   for (const [hash, version, lastSeen] of seed) {
@@ -245,17 +245,29 @@ test("stats report 24h/7d/30d active installs and per-version distribution", asy
   assert.equal(stats.windows.active_24h.count, 2);
   assert.equal(stats.windows.active_7d.count, 3);
   assert.equal(stats.windows.active_30d.count, 4);
-  assert.equal(stats.total_installs, 5);
+  // The 60-day-inactive install is still a known record, never an active one.
+  assert.equal(stats.known_installs_90d, 5);
   assert.equal(stats.generated_at, nowSec);
 
-  const byVersion = stats.by_version;
-  assert.deepEqual(byVersion.map((r) => r.version_code), [4, 3, 2]);
-  assert.equal(byVersion[0].installs, 2);
-  assert.equal(byVersion[0].percent, 40);
-  assert.equal(byVersion[1].installs, 2);
-  assert.equal(byVersion[1].percent, 40);
-  assert.equal(byVersion[2].installs, 1);
-  assert.equal(byVersion[2].percent, 20);
+  // Per-window distribution: each window counts only its own active installs
+  // and percentages use that window's active total as the denominator.
+  assert.deepEqual(stats.version_distribution.active_24h, [
+    { version_code: 4, app_version: "1.2.0", installs: 1, percent: 50 },
+    { version_code: 2, app_version: "1.2.0", installs: 1, percent: 50 }
+  ]);
+  assert.deepEqual(stats.version_distribution.active_7d, [
+    { version_code: 4, app_version: "1.2.0", installs: 2, percent: 66.7 },
+    { version_code: 2, app_version: "1.2.0", installs: 1, percent: 33.3 }
+  ]);
+  assert.deepEqual(stats.version_distribution.active_30d, [
+    { version_code: 4, app_version: "1.2.0", installs: 2, percent: 50 },
+    { version_code: 3, app_version: "1.2.0", installs: 1, percent: 25 },
+    { version_code: 2, app_version: "1.2.0", installs: 1, percent: 25 }
+  ]);
+  // A device inactive for 60 days never enters the 30-day distribution.
+  const all30d = stats.version_distribution.active_30d
+    .reduce((sum, row) => sum + row.installs, 0);
+  assert.equal(all30d, 4);
 });
 
 test("version distribution reflects the most recently reported version", async () => {
@@ -290,8 +302,8 @@ test("version distribution reflects the most recently reported version", async (
     makeEnv({ db, adminToken: TOKEN })
   );
   const stats = await response.json();
-  assert.equal(stats.total_installs, 2);
-  assert.deepEqual(stats.by_version, [
+  assert.equal(stats.known_installs_90d, 2);
+  assert.deepEqual(stats.version_distribution.active_30d, [
     { version_code: 4, app_version: "1.2.0", installs: 2, percent: 100 }
   ]);
 });
@@ -313,10 +325,10 @@ test("version distribution keeps legacy installs alongside new clients", async (
   assert.equal(response.status, 200);
   const stats = await response.json();
 
-  assert.equal(stats.total_installs, 3);
+  assert.equal(stats.known_installs_90d, 3);
   // Legacy installs (version_code 0) are grouped under their app_version and
   // counted in the percentages; they are never dropped.
-  assert.deepEqual(stats.by_version, [
+  assert.deepEqual(stats.version_distribution.active_30d, [
     { version_code: 4, app_version: "1.2.0", installs: 2, percent: 66.7 },
     { version_code: 0, app_version: "1.1", installs: 1, percent: 33.3 }
   ]);
@@ -362,6 +374,30 @@ test("admin page and admin API carry strict security headers", async () => {
     assert.equal(response.headers.get("referrer-policy"), "no-referrer", path + " referrer");
     assert.equal(response.headers.get("x-content-type-options"), "nosniff", path + " nosniff");
   }
+});
+
+test("rate-limited admin routes still carry the admin security headers", async () => {
+  const db = createMockD1();
+  const env = makeEnv({ db, adminToken: TOKEN, overrides: { RATE_LIMIT_PER_IP_PER_MINUTE: "1" } });
+
+  const first = await worker.fetch(
+    makeRequest("https://telemetry.test/admin/api/announcements", { token: TOKEN }),
+    env
+  );
+  assert.equal(first.status, 200);
+
+  const limited = await worker.fetch(
+    makeRequest("https://telemetry.test/admin/api/announcements", { token: TOKEN }),
+    env
+  );
+  assert.equal(limited.status, 429);
+  assert.match(limited.headers.get("cache-control") || "", /no-store/);
+  assert.match(
+    limited.headers.get("content-security-policy") || "",
+    /frame-ancestors 'none'/
+  );
+  assert.equal(limited.headers.get("referrer-policy"), "no-referrer");
+  assert.equal(limited.headers.get("x-content-type-options"), "nosniff");
 });
 
 test("daily cron deletes installs inactive for more than 90 days", async () => {

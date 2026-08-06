@@ -57,7 +57,9 @@ internal class ApkVerifier(
         val meta = reader.readApk(apk.absolutePath)
             ?: return ApkVerifyResult.Failure(ApkVerifyResult.Reason.NOT_PARSABLE)
 
-        if (!meta.packageName.equals(expectedPackageName, ignoreCase = true)) {
+        // Exact, case-sensitive match: Android package names are
+        // case-sensitive, so "Com.Quareia.Divination" must be rejected.
+        if (meta.packageName != expectedPackageName) {
             return ApkVerifyResult.Failure(ApkVerifyResult.Reason.PACKAGE_MISMATCH)
         }
 

@@ -201,6 +201,68 @@ test("install_seen and reading_completed never write install_state", async () =>
   assert.equal(installRows(db).length, 0);
 });
 
+test("a legacy daily_active never downgrades an install recorded by app_active", async () => {
+  const db = createMockD1();
+  const env = makeEnv({ db, analytics: mockAnalytics() });
+
+  await postEvent(env, makeEvent("app_active", { install_hash: INSTALL_A, version_code: 4 }));
+
+  // Same install reports daily_active without a version_code within 6 hours.
+  const deduped = await postEvent(env, makeEvent("daily_active", { install_hash: INSTALL_A }));
+  assert.equal(deduped.status, 204);
+  let rows = installRows(db);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].version_code, 4);
+  assert.equal(rows[0].app_version, "1.2.0");
+
+  // After 6 hours the legacy daily_active may only refresh time fields.
+  now += SIX_HOURS_MS;
+  await postEvent(env, makeEvent("daily_active", { install_hash: INSTALL_A }));
+  rows = installRows(db);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].version_code, 4);
+  assert.equal(rows[0].app_version, "1.2.0");
+  assert.equal(rows[0].last_seen_at, Math.floor(now / 1000));
+});
+
+test("a legacy 1.0 -> 1.1 upgrade migrates immediately even within six hours", async () => {
+  const db = createMockD1();
+  const env = makeEnv({ db, analytics: mockAnalytics() });
+
+  await postEvent(env, makeEvent("daily_active", { install_hash: INSTALL_A, app_version: "1.0" }));
+
+  now += SIX_HOURS_MS - 1000; // still inside the 6-hour window
+  const migrated = await postEvent(env, makeEvent("daily_active", { install_hash: INSTALL_A, app_version: "1.1" }));
+  assert.equal(migrated.status, 204);
+
+  const rows = installRows(db);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].version_code, 0);
+  assert.equal(rows[0].app_version, "1.1");
+  assert.equal(rows[0].last_seen_at, Math.floor(now / 1000));
+  // first_seen_at preserved across legacy upgrades.
+  assert.equal(rows[0].first_seen_at, Math.floor(now / 1000) - (6 * 60 * 60 - 1));
+});
+
+test("legacy daily_active from an old client still creates and refreshes rows", async () => {
+  const db = createMockD1();
+  const env = makeEnv({ db, analytics: mockAnalytics() });
+
+  const first = await postEvent(env, makeEvent("daily_active", { install_hash: INSTALL_A, app_version: "1.1" }));
+  assert.equal(first.status, 204);
+
+  now += SIX_HOURS_MS;
+  const again = await postEvent(env, makeEvent("daily_active", { install_hash: INSTALL_A, app_version: "1.1" }));
+  assert.equal(again.status, 204);
+
+  const rows = installRows(db);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].app_version, "1.1");
+  assert.equal(rows[0].version_code, 0);
+  assert.equal(rows[0].last_seen_at, Math.floor(now / 1000));
+  assert.equal(rows[0].first_seen_at, Math.floor(now / 1000) - 6 * 60 * 60);
+});
+
 test("app_active without a D1 binding returns a retryable 503", async () => {
   const analytics = mockAnalytics();
   const response = await postActive(makeEnv({ db: undefined, analytics }));

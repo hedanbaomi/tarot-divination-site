@@ -63,15 +63,20 @@ sends it at most once per 6 hours for the same version. `app_active` and the
 legacy `daily_active` are the only events that write to D1: the install is
 upserted into `install_state` (new installs get `first_seen_at`/`last_seen_at`;
 upgrades move the row to the new version group while preserving
-`first_seen_at`). Legacy `daily_active` events from v1.1 clients carry no
-`version_code` and are stored as `0` ("unknown/legacy" in the admin console) —
-they still count towards the active-install windows and the per-`app_version`
-distribution. A later `app_active` from the same install overwrites the row
-with the real `version_code`, so upgraded installs move out of the legacy
-group. A row with the same `version_code` seen less than 6 hours ago is not
-written again, which keeps D1 writes low. `install_seen` and
-`reading_completed` never touch D1 (old clients cannot break and no
-reading/install metadata is retained beyond the approved columns).
+`first_seen_at`).
+
+Version handling is one-way: `app_active` always carries the real
+`version_code` and always wins — it overwrites a legacy row's
+`app_version`/`version_code`, so an upgraded install leaves the legacy group.
+A legacy `daily_active` from an old client (no `version_code`, stored as `0`,
+"未知/旧客户端" in the console) never downgrades a row that already has a real
+`version_code`: it only refreshes `locale`, `android_major` and `last_seen_at`
+respecting the 6-hour rule. Between two legacy rows the 6-hour dedupe also
+compares `app_version`, so a legacy `1.0 -> 1.1` upgrade migrates immediately
+even inside the window. `install_seen` and `reading_completed` never touch D1
+(old clients cannot break and no reading/install metadata is retained beyond
+the approved columns). The v1.2 Android client no longer sends `daily_active`
+at all.
 
 ## D1 schema
 
@@ -136,7 +141,7 @@ strings, logs, or client storage other than `sessionStorage` in the admin page.
 | `PUT` | `/admin/api/announcements/:id` | Update; `revision` and `updated_at` bump. |
 | `POST` | `/admin/api/announcements/:id/publish` | Set `published`; `revision` bumps. |
 | `POST` | `/admin/api/announcements/:id/withdraw` | Set `withdrawn`; `revision` bumps. |
-| `GET` | `/admin/api/stats` | Active installs in the last 24h/7d/30d windows, total installs, and the per-version distribution grouped by each install's most recently reported version with percentages, plus `generated_at` and window sizes. Rows with `version_code 0` are legacy v1.1 clients without a known version code; they are labelled "未知/旧客户端" in the console and still counted under their `app_version`. |
+| `GET` | `/admin/api/stats` | Active installs in the last 24h/7d/30d windows, a per-window "24小时/7天/30天活跃版本分布" (`version_distribution.active_24h/7d/30d`) counting only installs whose `last_seen_at` falls inside each window, with percentages against that window's active total, plus `known_installs_90d` — the total install records seen in the last 90 days, deliberately not an active-version count. Rows with `version_code 0` are legacy clients without a known version code; they are labelled "未知/旧客户端" and still counted under their `app_version`. |
 
 Statistics wording is always "活跃安装数/活跃设备数" (active installs /
 active devices), never exact user counts: the numbers come from 6-hourly

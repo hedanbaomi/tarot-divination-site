@@ -75,7 +75,7 @@ The local hardened acceptance APK is written to:
 app/build/outputs/apk/hardened/app-hardened.apk
 ```
 
-## In-App Updates (since v1.1.1)
+## In-App Updates (since v1.2.0)
 
 The app silently checks GitHub Releases on startup and offers a manual check on
 the About / Copyright screen. Only a published release (non-draft,
@@ -115,8 +115,8 @@ clear message is shown and nothing is re-downloaded. Pending state survives
 activity recreation and process restart and always lives inside the app-private
 update directory.
 
-v1.1 and earlier do not contain the fixed in-app updater — install v1.1.1
-manually from GitHub Releases; all later versions can use in-app updates.
+v1.1 and earlier do not contain the fixed in-app updater — v1.2.0 is the
+last manual install; all later versions can use in-app updates.
 
 ## Announcements and Active-Version Statistics (since v1.2.0)
 

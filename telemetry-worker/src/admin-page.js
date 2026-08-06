@@ -435,34 +435,49 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
 
     var hint = $("statsHint");
     hint.textContent = "数据更新时间 " + new Date(data.generated_at * 1000).toLocaleString() +
-      " · 总计 " + data.total_installs + " 条安装记录（活跃设备数按 6 小时窗口上报估算，非精确用户人数）";
+      " · 已知安装总数（最近 90 天）：" + data.known_installs_90d +
+      "（活跃设备数按 6 小时窗口上报估算，非精确用户人数）";
 
     var list = $("versionList");
     list.textContent = "";
-    data.by_version.forEach(function (row) {
-      var line = document.createElement("div");
-      line.style.marginTop = "10px";
-      var label = document.createElement("div");
-      var versionLabel = row.version_code === 0
-        ? "未知/旧客户端"
-        : "versionCode " + row.version_code;
-      label.textContent = versionLabel + " · " + (row.app_version || "?") +
-        " · " + row.installs + " 个安装 · " + row.percent + "%";
-      var bar = document.createElement("div");
-      bar.className = "bar";
-      var fill = document.createElement("div");
-      fill.style.width = Math.max(1, row.percent) + "%";
-      bar.appendChild(fill);
-      line.appendChild(label);
-      line.appendChild(bar);
-      list.appendChild(line);
+    var windows = [
+      ["active_24h", "24小时活跃版本分布"],
+      ["active_7d", "7天活跃版本分布"],
+      ["active_30d", "30天活跃版本分布"]
+    ];
+    windows.forEach(function (pair) {
+      var block = document.createElement("div");
+      block.className = "card";
+      var title = document.createElement("h3");
+      title.textContent = pair[1];
+      block.appendChild(title);
+      var rows = data.version_distribution[pair[0]] || [];
+      rows.forEach(function (row) {
+        var line = document.createElement("div");
+        line.style.marginTop = "10px";
+        var label = document.createElement("div");
+        var versionLabel = row.version_code === 0
+          ? "未知/旧客户端"
+          : "versionCode " + row.version_code;
+        label.textContent = versionLabel + " · " + (row.app_version || "?") +
+          " · " + row.installs + " 个安装 · " + row.percent + "%";
+        var bar = document.createElement("div");
+        bar.className = "bar";
+        var fill = document.createElement("div");
+        fill.style.width = Math.max(1, row.percent) + "%";
+        bar.appendChild(fill);
+        line.appendChild(label);
+        line.appendChild(bar);
+        block.appendChild(line);
+      });
+      if (rows.length === 0) {
+        var empty = document.createElement("div");
+        empty.className = "muted";
+        empty.textContent = "该窗口暂无数据";
+        block.appendChild(empty);
+      }
+      list.appendChild(block);
     });
-    if (data.by_version.length === 0) {
-      var empty = document.createElement("div");
-      empty.className = "muted";
-      empty.textContent = "暂无数据";
-      list.appendChild(empty);
-    }
   }
 
   $("loginBtn").addEventListener("click", function () {

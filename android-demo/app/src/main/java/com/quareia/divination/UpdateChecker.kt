@@ -256,6 +256,14 @@ internal object ReleaseJsonParser {
             throw ReleaseDataException("APK asset digest is missing or malformed")
         }
 
+        // The GitHub API must declare the asset as an APK; anything else
+        // (octet-stream, html, …) fails closed.
+        if (!asset.optString("content_type").equals(
+                "application/vnd.android.package-archive", ignoreCase = true)
+        ) {
+            throw ReleaseDataException("APK asset content type is not a package archive")
+        }
+
         val downloadUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
             ?: throw ReleaseDataException("APK asset has no download URL")
         if (!DownloadPolicy.isAllowedUrl(downloadUrl)) {
@@ -409,6 +417,16 @@ internal class HttpApkDownloader(
             )
             try {
                 if (response.code !in 200..299) return null
+                // CDN responses may legitimately use the APK MIME type or a
+                // generic octet-stream; anything else fails closed. A missing
+                // content type is tolerated.
+                val contentType = response.contentType.orEmpty().substringBefore(';').trim()
+                if (contentType.isNotEmpty() &&
+                    contentType != "application/vnd.android.package-archive" &&
+                    contentType != "application/octet-stream"
+                ) {
+                    return null
+                }
 
                 var total = 0L
                 response.stream.use { input ->
