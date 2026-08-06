@@ -1,7 +1,7 @@
 ﻿// Same-origin admin page for the Quareia telemetry worker. Static HTML+CSS+JS
 // served by the worker; the admin token lives only in sessionStorage and is
 // sent exclusively through the Authorization: Bearer header. Announcement
-// content is rendered with textContent/DOM APIs — never innerHTML — and the
+// content is rendered with textContent/DOM APIs only, and the
 // token never appears in console output, error strings, or the page source.
 export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -38,6 +38,32 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
   .stat { font-size: 28px; font-weight: 700; color: #c9a86a; }
   .bar { height: 12px; background: #2a2d4a; border-radius: 6px; overflow: hidden; margin-top: 4px; }
   .bar > div { height: 100%; background: #c9a86a; }
+  .section-title { margin: 0 0 4px; font-size: 18px; }
+  .section-intro { margin: 0 0 14px; }
+  .section-nav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .section-nav button { padding: 6px 10px; }
+  .window-choice.active { background: #c9a86a; color: #141633; border-color: #c9a86a; font-weight: 600; }
+  .notice { padding: 10px 12px; border-radius: 8px; margin: 10px 0; }
+  .notice.warning { background: #3a2d12; color: #f0d9a8; }
+  .notice.err { display: block; background: #301212; color: #f0a8a8; }
+  .history-summary { margin-bottom: 14px; }
+  .history-summary .card { margin-bottom: 0; }
+  .history-summary .stat { font-size: 24px; }
+  .distribution-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .distribution { border-top: 1px solid #2a2d4a; padding-top: 10px; }
+  .distribution h4 { margin: 0 0 4px; font-size: 15px; }
+  .distribution table { margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid #2a2d4a; vertical-align: top; }
+  th { color: #c9a86a; font-weight: 600; }
+  td.number, th.number { text-align: right; white-space: nowrap; }
+  .trend-wrap { overflow-x: auto; }
+  .trend-wrap svg { display: block; min-width: 560px; width: 100%; height: auto; }
+  .trend-axis { stroke: #3a3e66; stroke-width: 1; }
+  .trend-line { fill: none; stroke: #c9a86a; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  .trend-point { fill: #c9a86a; stroke: #141633; stroke-width: 2; }
+  .trend-label { fill: #9a97ae; font-size: 11px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
   #status { padding: 10px 14px; border-radius: 8px; margin: 10px 0; display: none; }
   #status.ok { display: block; background: #12301f; color: #a8e0c0; }
   #status.err { display: block; background: #301212; color: #f0a8a8; }
@@ -51,8 +77,11 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
 <header>
   <h1>Quareia 公告与统计后台</h1>
   <nav>
-    <button id="tabAnnouncements">公告</button>
-    <button id="tabStats">统计</button>
+    <div class="section-nav" aria-label="后台分区">
+      <button id="navAnnouncements" type="button">公告管理</button>
+      <button id="navCurrentStats" type="button">当前活跃版本</button>
+      <button id="navHistory" type="button">历史遥测</button>
+    </div>
     <button id="logout" class="danger">退出</button>
   </nav>
 </header>
@@ -67,7 +96,9 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
   </div>
 
   <div id="appView" style="display:none">
-    <section id="announcementsView">
+    <section id="announcementsView" aria-labelledby="announcementsHeading">
+      <h2 id="announcementsHeading" class="section-title">1. 公告管理</h2>
+      <p class="muted section-intro">管理当前客户端可见的公告、版本范围和发布状态。</p>
       <div class="row">
         <button class="primary" id="newAnnouncement">新建公告</button>
         <button id="refreshList">刷新列表</button>
@@ -116,7 +147,9 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
       </div>
     </section>
 
-    <section id="statsView" style="display:none">
+    <section id="currentStatsView" aria-labelledby="currentStatsHeading">
+      <h2 id="currentStatsHeading" class="section-title">2. 当前活跃版本（D1）</h2>
+      <p class="muted section-intro">来自 D1 的当前活跃安装与最近上报版本；与历史遥测独立加载。</p>
       <div class="row">
         <button id="refreshStats">刷新统计</button>
         <span class="muted" id="statsHint"></span>
@@ -127,13 +160,48 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
         <div id="versionList"></div>
       </div>
     </section>
+
+    <section id="historyView" aria-labelledby="historyHeading">
+      <h2 id="historyHeading" class="section-title">3. 历史遥测（Analytics Engine）</h2>
+      <p class="muted section-intro">历史窗口仅供趋势观察；活跃 DISTINCT 与采样加权结果均为估算，不等同于精确用户数。</p>
+      <div class="row" role="group" aria-label="历史遥测窗口">
+        <span class="muted">窗口：</span>
+        <button id="historyWindow24h" class="window-choice active" type="button" data-window="24h" aria-pressed="true">24 小时</button>
+        <button id="historyWindow7d" class="window-choice" type="button" data-window="7d" aria-pressed="false">7 天</button>
+        <button id="historyWindow30d" class="window-choice" type="button" data-window="30d" aria-pressed="false">30 天</button>
+        <button id="refreshHistory" type="button">刷新历史遥测</button>
+      </div>
+      <p id="historyHint" class="muted" role="status" aria-live="polite">正在加载历史遥测……</p>
+      <div id="historyUnavailable" class="notice err" role="alert" style="display:none"></div>
+      <div id="historyContent">
+        <div id="historySummaryCards" class="grid history-summary" aria-label="历史遥测摘要"></div>
+        <p id="historyEstimateNote" class="notice warning">活跃估算使用 DISTINCT 上报并受采样间隔和事件覆盖影响；请勿将其解读为精确用户人数。</p>
+        <div class="card">
+          <h3>历史分布</h3>
+          <p class="muted">计数按所选历史窗口汇总。应用版本、语言、国家和省/州为首次上报快照，不表示当前状态。</p>
+          <div id="historyDistributionTables" class="distribution-grid"></div>
+        </div>
+        <div class="card">
+          <h3>每日趋势</h3>
+          <div id="historyTrendBasis" class="muted"></div>
+          <div id="historyTrend" class="trend-wrap"></div>
+          <div id="historyTrendTable"></div>
+        </div>
+      </div>
+    </section>
   </div>
 </main>
 <script>
 (function () {
   "use strict";
   var tokenKey = "quareia_admin_token";
-  var state = { announcements: [], editingId: null };
+  var state = {
+    announcements: [],
+    editingId: null,
+    historyWindow: "24h",
+    analyticsRequestId: 0
+  };
+  var analyticsWindows = ["24h", "7d", "30d"];
 
   function $(id) { return document.getElementById(id); }
 
@@ -157,9 +225,10 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     return fetch(path, {
       method: options.method || "GET",
       headers: headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body)
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: options.signal
     }).then(function (response) {
-      if (response.status === 401) {
+      if (response.status === 401 && !options.isolated) {
         showLogin();
         var err = new Error("unauthorized");
         err.unauthorized = true;
@@ -179,12 +248,8 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     $("loginView").style.display = "none";
     $("appView").style.display = "block";
     loadAnnouncements();
-  }
-
-  function setTab(name) {
-    $("announcementsView").style.display = name === "announcements" ? "block" : "none";
-    $("statsView").style.display = name === "stats" ? "block" : "none";
-    if (name === "stats") loadStats();
+    loadStats();
+    loadAnalytics();
   }
 
   function makeBadge(text, cls) {
@@ -480,6 +545,376 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     });
   }
 
+  function loadAnalytics() {
+    var requestId = ++state.analyticsRequestId;
+    var selectedWindow = state.historyWindow;
+    updateHistoryWindowControls();
+    $("historyHint").textContent = "正在加载历史遥测（" + historyWindowLabel(selectedWindow) + "）……";
+    $("historyUnavailable").style.display = "none";
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timeoutId = null;
+    if (controller) {
+      timeoutId = setTimeout(function () { controller.abort(); }, 10000);
+    }
+
+    api("/admin/api/analytics?window=" + selectedWindow, {
+      isolated: true,
+      signal: controller ? controller.signal : undefined
+    }).then(function (response) {
+      if (requestId !== state.analyticsRequestId) return null;
+      if (!response.ok) {
+        showHistoryUnavailable(response.status === 401
+          ? "历史遥测不可用：授权缺失或已失效。"
+          : "历史遥测不可用（HTTP " + response.status + "）。");
+        return null;
+      }
+      return response.json().then(function (data) {
+        if (requestId !== state.analyticsRequestId) return;
+        if (!data || data.module !== "analytics" || data.available !== true) {
+          showHistoryUnavailable("历史遥测不可用：Analytics Engine 未返回可用数据。");
+          return;
+        }
+        renderAnalytics(data, selectedWindow);
+      });
+    }).catch(function (error) {
+      if (requestId !== state.analyticsRequestId) return;
+      showHistoryUnavailable(error && error.name === "AbortError"
+        ? "历史遥测不可用：请求超时。"
+        : "历史遥测不可用：网络错误。");
+    }).then(function () {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+    });
+  }
+
+  function showHistoryUnavailable(message) {
+    $("historyContent").style.display = "none";
+    $("historyUnavailable").textContent = message + " 公告管理和当前活跃版本仍可用。";
+    $("historyUnavailable").style.display = "block";
+    $("historyHint").textContent = "历史窗口 " + historyWindowLabel(state.historyWindow) + " · 暂不可用";
+  }
+
+  function historyWindowLabel(value) {
+    if (value === "7d") return "7 天";
+    if (value === "30d") return "30 天";
+    return "24 小时";
+  }
+
+  function updateHistoryWindowControls() {
+    var controls = [
+      ["24h", "historyWindow24h"],
+      ["7d", "historyWindow7d"],
+      ["30d", "historyWindow30d"]
+    ];
+    controls.forEach(function (pair) {
+      var active = pair[0] === state.historyWindow;
+      var button = $(pair[1]);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+      button.className = active ? "window-choice active" : "window-choice";
+    });
+  }
+
+  function selectHistoryWindow(value) {
+    if (analyticsWindows.indexOf(value) === -1 || value === state.historyWindow) return;
+    state.historyWindow = value;
+    loadAnalytics();
+  }
+
+  function renderAnalytics(data, selectedWindow) {
+    $("historyContent").style.display = "block";
+    $("historyUnavailable").style.display = "none";
+    $("historyHint").textContent = "历史窗口 " + historyWindowLabel(selectedWindow) +
+      " · Analytics Engine · 已加载";
+    renderHistorySummary(data);
+    renderHistoryDistributions(data.distributions || {});
+    renderHistoryTrend(data.daily_trend || {});
+    renderFailedSections(data.failed_sections);
+  }
+
+  function formatMetric(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    var number = Number(value);
+    if (!Number.isFinite(number)) return "—";
+    return Number.isInteger(number) ? String(number) : String(Number(number.toFixed(2)));
+  }
+
+  function formatPercent(value) {
+    var number = Number(value);
+    if (!Number.isFinite(number)) return "—";
+    return String(Number(number.toFixed(1))) + "%";
+  }
+
+  function makeSummaryCard(label, value) {
+    var card = document.createElement("div");
+    card.className = "card";
+    var name = document.createElement("div");
+    name.className = "muted";
+    name.textContent = label;
+    var number = document.createElement("div");
+    number.className = "stat";
+    number.textContent = formatMetric(value);
+    card.appendChild(name);
+    card.appendChild(number);
+    return card;
+  }
+
+  function renderHistorySummary(data) {
+    var cards = $("historySummaryCards");
+    cards.textContent = "";
+    [
+      ["安装上报", data.install_seen],
+      ["完成阅读", data.reading_completed],
+      ["活跃估算", data.active_estimate],
+      ["完成阅读平均抽牌数", data.reading_completed_average_card_count]
+    ].forEach(function (pair) {
+      cards.appendChild(makeSummaryCard(pair[0], pair[1]));
+    });
+
+    var meta = data.active_estimate_meta || {};
+    var eventTypes = Array.isArray(meta.event_types) ? meta.event_types.join("、") : "";
+    var note = "活跃 DISTINCT 与采样加权结果均为估算，受采样间隔和事件覆盖影响；不是精确用户数。";
+    if (eventTypes) note += "参与事件：" + eventTypes + "。";
+    $("historyEstimateNote").textContent = note;
+  }
+
+  function renderFailedSections(failedSections) {
+    var previous = $("historyPartialWarning");
+    if (previous && previous.parentNode) previous.parentNode.removeChild(previous);
+    var sections = Array.isArray(failedSections) ? failedSections : [];
+    if (sections.length === 0) return;
+    var notice = document.createElement("div");
+    notice.id = "historyPartialWarning";
+    notice.className = "notice warning";
+    notice.setAttribute("role", "status");
+    notice.textContent = "部分历史区段暂不可用：" + sections.join("、") + "。";
+    $("historyContent").insertBefore(notice, $("historyContent").firstChild);
+  }
+
+  function dimensionValue(row) {
+    if (!row || row.value === null || row.value === undefined || row.value === "") return "未提供";
+    return String(row.value);
+  }
+
+  function makeDistributionTable(title, rows, truncated) {
+    var table = document.createElement("table");
+    var caption = document.createElement("caption");
+    caption.className = "sr-only";
+    caption.textContent = title + "分布表";
+    table.appendChild(caption);
+    var head = document.createElement("thead");
+    var headRow = document.createElement("tr");
+    ["值", "计数", "比例条", "比例"].forEach(function (label, index) {
+      var cell = document.createElement("th");
+      cell.setAttribute("scope", "col");
+      cell.textContent = label;
+      if (index > 0) cell.className = "number";
+      headRow.appendChild(cell);
+    });
+    head.appendChild(headRow);
+    table.appendChild(head);
+
+    var body = document.createElement("tbody");
+    var total = rows.reduce(function (sum, row) {
+      var count = Number(row && row.count);
+      return sum + (Number.isFinite(count) && count > 0 ? count : 0);
+    }, 0);
+    var maximum = rows.reduce(function (value, row) {
+      var count = Number(row && row.count);
+      return Math.max(value, Number.isFinite(count) ? count : 0);
+    }, 0);
+    rows.forEach(function (row) {
+      var count = Number(row && row.count);
+      var safeCount = Number.isFinite(count) ? count : 0;
+      var percent = total > 0 ? safeCount / total * 100 : 0;
+      var line = document.createElement("tr");
+      var valueCell = document.createElement("td");
+      valueCell.textContent = dimensionValue(row);
+      line.appendChild(valueCell);
+      var countCell = document.createElement("td");
+      countCell.className = "number";
+      countCell.textContent = formatMetric(row && row.count);
+      line.appendChild(countCell);
+      var barCell = document.createElement("td");
+      var bar = document.createElement("div");
+      bar.className = "bar";
+      bar.setAttribute("aria-hidden", "true");
+      var fill = document.createElement("div");
+      fill.style.width = (maximum > 0 ? Math.max(1, safeCount / maximum * 100) : 0) + "%";
+      bar.appendChild(fill);
+      barCell.appendChild(bar);
+      line.appendChild(barCell);
+      var percentCell = document.createElement("td");
+      percentCell.className = "number";
+      percentCell.textContent = formatPercent(percent);
+      line.appendChild(percentCell);
+      body.appendChild(line);
+    });
+    table.appendChild(body);
+    return table;
+  }
+
+  function renderHistoryDistributions(distributions) {
+    var container = $("historyDistributionTables");
+    container.textContent = "";
+    [
+      ["deck_type", "牌组"],
+      ["event", "事件"],
+      ["app_version", "应用版本（首次上报快照）"],
+      ["locale", "语言（首次上报快照）"],
+      ["country", "国家（首次上报快照）"],
+      ["subdivision", "省/州（首次上报快照）"]
+    ].forEach(function (pair) {
+      var block = document.createElement("div");
+      block.className = "distribution";
+      var heading = document.createElement("h4");
+      heading.textContent = pair[1];
+      block.appendChild(heading);
+      var section = distributions[pair[0]];
+      var rows = section && Array.isArray(section.rows) ? section.rows : [];
+      if (!section) {
+        var missing = document.createElement("p");
+        missing.className = "muted";
+        missing.textContent = "该维度暂不可用。";
+        block.appendChild(missing);
+      } else if (rows.length === 0) {
+        var empty = document.createElement("p");
+        empty.className = "muted";
+        empty.textContent = "该窗口暂无数据。";
+        block.appendChild(empty);
+      } else {
+        block.appendChild(makeDistributionTable(pair[1], rows, section.truncated === true));
+        if (section.truncated === true) {
+          var truncated = document.createElement("p");
+          truncated.className = "muted";
+          truncated.textContent = "结果已截断，仅显示部分值。";
+          block.appendChild(truncated);
+        }
+      }
+      container.appendChild(block);
+    });
+  }
+
+  function trendDay(row) {
+    return row && (row.utc_day || row.day || row.date) ? String(row.utc_day || row.day || row.date) : "未知日期";
+  }
+
+  function renderHistoryTrend(trend) {
+    var chart = $("historyTrend");
+    chart.textContent = "";
+    var tableContainer = $("historyTrendTable");
+    tableContainer.textContent = "";
+    var rows = trend && Array.isArray(trend.rows) ? trend.rows.slice() : [];
+    rows.sort(function (a, b) { return trendDay(a).localeCompare(trendDay(b)); });
+    $("historyTrendBasis").textContent = "窗口口径：" + (trend.window_basis || "—") +
+      " · 分桶口径：" + (trend.bucket_basis || "—");
+    if (rows.length === 0) {
+      var empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = "该窗口暂无每日趋势数据。";
+      chart.appendChild(empty);
+      return;
+    }
+
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 640 230");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-labelledby", "historyTrendSvgTitle historyTrendSvgDesc");
+    var svgTitle = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    svgTitle.setAttribute("id", "historyTrendSvgTitle");
+    svgTitle.textContent = "每日历史遥测趋势";
+    svg.appendChild(svgTitle);
+    var svgDesc = document.createElementNS("http://www.w3.org/2000/svg", "desc");
+    svgDesc.setAttribute("id", "historyTrendSvgDesc");
+    svgDesc.textContent = "每日事件计数折线图；下方表格提供相同数据。";
+    svg.appendChild(svgDesc);
+    var width = 640;
+    var height = 230;
+    var left = 36;
+    var right = 18;
+    var top = 22;
+    var bottom = 42;
+    var plotWidth = width - left - right;
+    var plotHeight = height - top - bottom;
+    var max = rows.reduce(function (value, row) {
+      var count = Number(row && row.count);
+      return Math.max(value, Number.isFinite(count) ? count : 0);
+    }, 0);
+    var axis = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    axis.setAttribute("class", "trend-axis");
+    axis.setAttribute("x1", String(left));
+    axis.setAttribute("y1", String(height - bottom));
+    axis.setAttribute("x2", String(width - right));
+    axis.setAttribute("y2", String(height - bottom));
+    svg.appendChild(axis);
+    var points = [];
+    rows.forEach(function (row, index) {
+      var count = Number(row && row.count);
+      var safeCount = Number.isFinite(count) ? count : 0;
+      var x = rows.length === 1 ? left + plotWidth / 2 : left + plotWidth * index / (rows.length - 1);
+      var y = max > 0 ? height - bottom - plotHeight * safeCount / max : height - bottom;
+      points.push(x + "," + y);
+      var point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      point.setAttribute("class", "trend-point");
+      point.setAttribute("cx", String(x));
+      point.setAttribute("cy", String(y));
+      point.setAttribute("r", "4");
+      point.setAttribute("aria-label", trendDay(row) + " " + formatMetric(row && row.count));
+      svg.appendChild(point);
+    });
+    var line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    line.setAttribute("class", "trend-line");
+    line.setAttribute("points", points.join(" "));
+    line.setAttribute("aria-hidden", "true");
+    svg.appendChild(line);
+    var firstLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    firstLabel.setAttribute("class", "trend-label");
+    firstLabel.setAttribute("x", String(left));
+    firstLabel.setAttribute("y", String(height - 12));
+    firstLabel.textContent = trendDay(rows[0]);
+    svg.appendChild(firstLabel);
+    var lastLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    lastLabel.setAttribute("class", "trend-label");
+    lastLabel.setAttribute("text-anchor", "end");
+    lastLabel.setAttribute("x", String(width - right));
+    lastLabel.setAttribute("y", String(height - 12));
+    lastLabel.textContent = trendDay(rows[rows.length - 1]);
+    svg.appendChild(lastLabel);
+    chart.appendChild(svg);
+    tableContainer.appendChild(makeTrendTable(rows));
+  }
+
+  function makeTrendTable(rows) {
+    var table = document.createElement("table");
+    var caption = document.createElement("caption");
+    caption.className = "sr-only";
+    caption.textContent = "每日历史遥测趋势数据表";
+    table.appendChild(caption);
+    var head = document.createElement("thead");
+    var headRow = document.createElement("tr");
+    ["日期", "事件计数"].forEach(function (label, index) {
+      var cell = document.createElement("th");
+      cell.setAttribute("scope", "col");
+      cell.textContent = label;
+      if (index === 1) cell.className = "number";
+      headRow.appendChild(cell);
+    });
+    head.appendChild(headRow);
+    table.appendChild(head);
+    var body = document.createElement("tbody");
+    rows.forEach(function (row) {
+      var line = document.createElement("tr");
+      var day = document.createElement("td");
+      day.textContent = trendDay(row);
+      line.appendChild(day);
+      var count = document.createElement("td");
+      count.className = "number";
+      count.textContent = formatMetric(row && row.count);
+      line.appendChild(count);
+      body.appendChild(line);
+    });
+    table.appendChild(body);
+    return table;
+  }
+
   $("loginBtn").addEventListener("click", function () {
     var token = $("tokenInput").value.trim();
     if (!token) { showStatus("请输入 Token", false); return; }
@@ -501,8 +936,15 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     clearStatus();
   });
 
-  $("tabAnnouncements").addEventListener("click", function () { setTab("announcements"); });
-  $("tabStats").addEventListener("click", function () { setTab("stats"); });
+  $("navAnnouncements").addEventListener("click", function () {
+    $("announcementsView").scrollIntoView({ block: "start" });
+  });
+  $("navCurrentStats").addEventListener("click", function () {
+    $("currentStatsView").scrollIntoView({ block: "start" });
+  });
+  $("navHistory").addEventListener("click", function () {
+    $("historyView").scrollIntoView({ block: "start" });
+  });
   $("newAnnouncement").addEventListener("click", function () {
     emptyForm();
     $("announcementForm").style.display = "block";
@@ -510,6 +952,10 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
   });
   $("refreshList").addEventListener("click", loadAnnouncements);
   $("refreshStats").addEventListener("click", loadStats);
+  $("historyWindow24h").addEventListener("click", function () { selectHistoryWindow("24h"); });
+  $("historyWindow7d").addEventListener("click", function () { selectHistoryWindow("7d"); });
+  $("historyWindow30d").addEventListener("click", function () { selectHistoryWindow("30d"); });
+  $("refreshHistory").addEventListener("click", loadAnalytics);
   $("saveAnnouncement").addEventListener("click", saveForm);
   $("previewAnnouncement").addEventListener("click", preview);
   $("cancelForm").addEventListener("click", function () {

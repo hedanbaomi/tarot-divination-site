@@ -28,6 +28,37 @@ test("the admin page contains exactly one inline script", () => {
   assert.equal(scripts.length, 1);
 });
 
+test("the admin page has exactly three named dashboard sections", () => {
+  const sections = [...ADMIN_PAGE_HTML.matchAll(/<section\b[^>]*\bid="([^"]+)"/g)]
+    .map((match) => match[1]);
+  assert.deepEqual(sections, ["announcementsView", "currentStatsView", "historyView"]);
+  assert.match(ADMIN_PAGE_HTML, /1\. 公告管理/);
+  assert.match(ADMIN_PAGE_HTML, /2\. 当前活跃版本（D1）/);
+  assert.match(ADMIN_PAGE_HTML, /3\. 历史遥测（Analytics Engine）/);
+});
+
+test("the history UI uses the authenticated analytics endpoint and fixed windows", () => {
+  assert.match(ADMIN_PAGE_HTML, /\/admin\/api\/analytics\?window=/);
+  assert.match(ADMIN_PAGE_HTML, /\/admin\/api\/stats/);
+  for (const window of ["24h", "7d", "30d"]) {
+    assert.match(ADMIN_PAGE_HTML, new RegExp(`\\\"${window}\\\"`));
+  }
+  assert.match(ADMIN_PAGE_HTML, /active_estimate_meta/);
+  assert.match(ADMIN_PAGE_HTML, /distributions/);
+  assert.match(ADMIN_PAGE_HTML, /daily_trend/);
+  assert.match(ADMIN_PAGE_HTML, /failed_sections/);
+  assert.match(ADMIN_PAGE_HTML, /首次上报快照/);
+  assert.match(ADMIN_PAGE_HTML, /Authorization|authorization/);
+  assert.match(ADMIN_PAGE_HTML, /sessionStorage/);
+});
+
+test("the admin page stays DOM-only and has no external page resources", () => {
+  assert.doesNotMatch(ADMIN_PAGE_HTML, /innerHTML/i);
+  assert.doesNotMatch(ADMIN_PAGE_HTML, /<script\b[^>]*\bsrc\s*=|<link\b[^>]*\bhref\s*=/i);
+  assert.doesNotMatch(ADMIN_PAGE_HTML, /<iframe\b/i);
+  assert.match(ADMIN_PAGE_HTML, /createElementNS\("http:\/\/www\.w3\.org\/2000\/svg"/);
+});
+
 test("the inline script parses as valid JavaScript", () => {
   const [code] = extractInlineScripts(ADMIN_PAGE_HTML);
   assert.doesNotThrow(() => new vm.Script(code), "inline script must compile");
