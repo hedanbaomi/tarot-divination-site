@@ -221,6 +221,26 @@ test("public announcements CORS is strict and also applies to 304", async () => 
   assert.equal(noOrigin.headers.get("vary"), "Origin");
 });
 
+test("rate-limited public announcements retain strict CORS headers", async () => {
+  const db = createMockD1();
+  const env = makeEnv({ db, overrides: { RATE_LIMIT_PER_IP_PER_MINUTE: "1" } });
+  const request = () => new Request(
+    "https://telemetry.test/v1/announcements?platform=web&version_code=1&locale=en",
+    {
+      headers: {
+        Origin: "https://hedanbaomi.github.io",
+        "cf-connecting-ip": "198.51.100.20"
+      }
+    }
+  );
+
+  assert.equal((await worker.fetch(request(), env)).status, 200);
+  const limited = await worker.fetch(request(), env);
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get("access-control-allow-origin"), "https://hedanbaomi.github.io");
+  assert.equal(limited.headers.get("vary"), "Origin");
+});
+
 test("admin responses never receive public announcement CORS", async () => {
   const db = createMockD1();
   const response = await worker.fetch(new Request("https://telemetry.test/admin", {

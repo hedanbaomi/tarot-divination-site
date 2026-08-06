@@ -16,14 +16,14 @@
 
 https://hedanbaomi.github.io/tarot-divination-site/
 
-无需后端服务，任何现代浏览器都可以直接打开。
+核心占卜体验为静态前端，任何现代浏览器都可以直接打开；公告列表会向项目的 Cloudflare Worker 发起不含设备标识的只读请求，网络失败不影响占卜。
 
 ## Android 应用
 
 本项目提供免费的 Android 离线版（`android-demo/`），将网站封装为适合手机使用的离线体验：
 
 - 三套牌组（塔罗 / Mystagogus / LXXXI 魔法牌）、中英文切换、本地占卜历史与网站版一致
-- 主要功能完全离线，不需要登录；仅匿名使用统计（可在「关于 / 版权」页随时关闭）与外部链接需要网络
+- 主要功能完全离线，不需要登录；匿名使用统计（可在「关于 / 版权」页随时关闭）、公告/更新检查与外部链接需要网络
 - 系统要求：Android 7.0（API 24）及以上，正式签名 APK 从 GitHub Releases 下载：
 
 **[下载 Android 正式版 APK](https://github.com/hedanbaomi/tarot-divination-site/releases)**

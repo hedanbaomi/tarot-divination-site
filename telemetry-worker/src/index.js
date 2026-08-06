@@ -35,7 +35,7 @@
  */
 import { json, securityHeaders } from "./http.js";
 import { nowMs, setClockForTesting, resetClock } from "./clock.js";
-import { handleAnnouncements } from "./announcements.js";
+import { handleAnnouncements, publicAnnouncementHeaders } from "./announcements.js";
 import { recordInstallActivity, cleanupInactiveInstalls } from "./stats.js";
 import { handleAdminPage, handleAdminVerify, handleAdminApi } from "./admin.js";
 
@@ -126,7 +126,7 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/v1/announcements") {
       if (rateLimitByIp(request, env, nowMs())) {
-        return json({ error: "rate_limited" }, 429);
+        return json({ error: "rate_limited" }, 429, publicAnnouncementHeaders(request));
       }
       return handleAnnouncements(request, env);
     }

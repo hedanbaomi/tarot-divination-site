@@ -16,14 +16,14 @@ Open:
 
 https://hedanbaomi.github.io/tarot-divination-site/
 
-No backend service is required. The website runs in any modern browser.
+The core reading experience is a static frontend that runs in any modern browser. The announcements list makes an identifier-free, read-only request to the project's Cloudflare Worker; network failure never blocks a reading.
 
 ## Android App
 
 This project also provides a free offline Android version (`android-demo/`), wrapping the website into a phone-friendly offline experience:
 
 - The same three decks (Tarot / Mystagogus / LXXXI), Simplified Chinese / English switching, and local reading history as the website
-- Core features are fully offline and require no account; only the anonymous usage statistics (disable it anytime from the About screen) and external links need network access
+- Core features are fully offline and require no account; anonymous usage statistics (disable them anytime from the About screen), announcement/update checks, and external links need network access
 - Requires Android 7.0 (API 24) or newer. Download the release-signed APK from GitHub Releases:
 
 **[Download the Android APK](https://github.com/hedanbaomi/tarot-divination-site/releases)**

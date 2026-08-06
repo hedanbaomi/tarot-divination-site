@@ -46,7 +46,7 @@ export function hasD1Binding(env) {
 }
 
 export async function handleAnnouncements(request, env) {
-  const corsHeaders = publicCorsHeaders(request);
+  const corsHeaders = publicAnnouncementHeaders(request);
   if (!hasD1Binding(env)) {
     return json({ error: "announcements_unavailable" }, 503, corsHeaders);
   }
@@ -94,7 +94,7 @@ export async function handleAnnouncements(request, env) {
   return json({ announcements, locale }, 200, cacheHeaders);
 }
 
-function publicCorsHeaders(request) {
+export function publicAnnouncementHeaders(request) {
   const origin = request.headers.get("origin");
   // Vary on every response, including same-origin and denied requests, so a
   // shared cache cannot reuse a no-CORS variant for an allowed web origin.
