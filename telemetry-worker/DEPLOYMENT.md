@@ -11,6 +11,14 @@
 - Data retention: three months; the dataset is suitable for rolling trend
   statistics, not a permanent archive.
 
+> **Announcements, D1, and the admin console (v1.2.0 work) are NOT deployed.**
+> As of the v1.2.0 development round the worker source contains the new
+> `/v1/announcements`, `app_active` D1 upserts, the admin API, and the daily
+> cleanup cron, but no Cloudflare D1 database has been created, no migration
+> has been applied remotely, no `ADMIN_TOKEN` secret has been set, and no
+> deploy of this revision has been performed. The deployed worker still runs
+> the previous revision (events + health only).
+
 The endpoint accepts one event JSON object at a time. It does not accept event
 arrays. The fixed Analytics Engine projection remains documented in the main
 README and in the Worker source.

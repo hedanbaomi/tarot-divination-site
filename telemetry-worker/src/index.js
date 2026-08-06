@@ -1,7 +1,16 @@
 /**
  * Quareia Divination — anonymous usage-statistics ingest worker.
  *
- * Accepts POST /v1/events and GET /health only.
+ * Endpoints:
+ *  - POST /v1/events        — one validated event (install_seen, daily_active,
+ *                             reading_completed, app_active); app_active also
+ *                             updates the D1 install_state table.
+ *  - GET  /v1/announcements — public announcements for a platform/version.
+ *  - GET  /admin            — same-origin admin page (announcements + stats).
+ *  - POST /admin/verify     — admin token check.
+ *  - /admin/api/*           — token-authenticated announcements CRUD + stats.
+ *  - GET  /health           — liveness.
+ *  - scheduled cron         — daily cleanup of installs inactive > 90 days.
  *
  * Privacy contract (enforced in code):
  *  - Body is capped at 1 KB; anything larger is rejected (413).
@@ -15,20 +24,33 @@
  *    (request.cf.country, regionCode, region) are stored. City, postal code,
  *    coordinates, metro code, and all client-supplied geo fields are ignored.
  *  - Timestamps come from the server clock, never the client.
+ *  - D1 stores only the anonymous install state (hash, app version, locale,
+ *    android major, first/last seen) and announcements; never an IP,
+ *    User-Agent, device model, city, card, spread, question, note or history.
  *  - On success the worker returns 204 with an empty body.
+ *  - Admin endpoints are deny-by-default: the ADMIN_TOKEN secret is required
+ *    and compared in constant time from the Authorization: Bearer header only.
  *
  * A future deployment may use telemetry.luotianyi.fun (see wrangler.toml + README).
  */
+import { json } from "./http.js";
+import { nowMs, setClockForTesting, resetClock } from "./clock.js";
+import { handleAnnouncements } from "./announcements.js";
+import { recordAppActive, cleanupInactiveInstalls } from "./stats.js";
+import { handleAdminPage, handleAdminVerify, handleAdminApi } from "./admin.js";
+
 const SCHEMA_VERSION = 1;
 const MAX_BODY_BYTES = 1024;
 const ANDROID_MAJOR_MIN = 1;
 const ANDROID_MAJOR_MAX = 100;
+const MAX_VERSION_CODE = 2147483647;
 
 // Allow-listed events and their extra fields. Anything else is rejected.
 const EVENT_DEFS = {
   install_seen: {},
   daily_active: {},
-  reading_completed: { deck_type: "string", card_count: "int" }
+  reading_completed: { deck_type: "string", card_count: "int" },
+  app_active: { version_code: "int" }
 };
 
 const DECK_TYPES = new Set(["tarot", "mystagogus", "lxxxi"]);
@@ -65,7 +87,6 @@ const ipBuckets = new Map(); // ipDigest -> bucket
 const installCleanup = { iterator: null };
 const ipCleanup = { iterator: null };
 let requestsSinceCleanup = 0;
-let clock = () => Date.now();
 
 export const __test = {
   resetRateLimits() {
@@ -76,11 +97,10 @@ export const __test = {
     requestsSinceCleanup = 0;
   },
   setClockForTesting(nextClock) {
-    if (typeof nextClock !== "function") throw new TypeError("clock must be a function");
-    clock = nextClock;
+    setClockForTesting(nextClock);
   },
   resetClock() {
-    clock = () => Date.now();
+    resetClock();
   },
   snapshotRateLimits() {
     return {
@@ -104,7 +124,47 @@ export default {
       return handleEvents(request, env);
     }
 
+    if (request.method === "GET" && url.pathname === "/v1/announcements") {
+      if (rateLimitByIp(request, env, nowMs())) {
+        return json({ error: "rate_limited" }, 429);
+      }
+      return handleAnnouncements(request, env);
+    }
+
+    if (request.method === "GET" && url.pathname === "/admin") {
+      if (rateLimitByIp(request, env, nowMs())) {
+        return json({ error: "rate_limited" }, 429);
+      }
+      return handleAdminPage();
+    }
+
+    if (request.method === "POST" && url.pathname === "/admin/verify") {
+      if (rateLimitByIp(request, env, nowMs())) {
+        return json({ error: "rate_limited" }, 429);
+      }
+      return handleAdminVerify(request, env);
+    }
+
+    if (url.pathname.startsWith("/admin/api/")) {
+      if (rateLimitByIp(request, env, nowMs())) {
+        return json({ error: "rate_limited" }, 429);
+      }
+      return handleAdminApi(request, env, url.pathname);
+    }
+
     return json({ error: "not_found" }, 404);
+  },
+
+  /**
+   * Daily cron: deletes install_state rows inactive for more than 90 days.
+   * Never throws; missing D1 binding is a no-op.
+   */
+  async scheduled(event, env, ctx) {
+    try {
+      await cleanupInactiveInstalls(env);
+    } catch (_e) {
+      // Cleanup must never take the worker down; the next cron retries.
+    }
   }
 };
 
@@ -185,6 +245,17 @@ async function handleEvents(request, env) {
     return json({ error: "telemetry_write_failed" }, 503);
   }
 
+  // app_active additionally moves the anonymous install to its current
+  // version group in D1. A D1 failure returns a retryable error rather than
+  // pretending success; the 6-hour same-version dedupe makes retries cheap.
+  if (validated.value.event === "app_active") {
+    try {
+      await recordAppActive(env, validated.value);
+    } catch (_e) {
+      return json({ error: "d1_write_failed" }, 503);
+    }
+  }
+
   // 204 No Content: success, empty body, no identifiers echoed back.
   return new Response(null, { status: 204 });
 }
@@ -255,6 +326,14 @@ function validateEvent(event) {
     }
     if (!Number.isInteger(value.card_count) || value.card_count < 1 || value.card_count > 81) {
       return { ok: false, error: "invalid_card_count" };
+    }
+  }
+
+  if (type === "app_active") {
+    if (!Number.isInteger(value.version_code) ||
+        value.version_code < 1 ||
+        value.version_code > MAX_VERSION_CODE) {
+      return { ok: false, error: "invalid_version_code" };
     }
   }
 
@@ -341,7 +420,15 @@ function readPositiveInt(value, fallback) {
 // ---------- Rate limiting helpers ----------
 
 function nowMillis() {
-  return clock();
+  return nowMs();
+}
+
+/** Per-IP rate limit shared by the public GET and admin routes. */
+function rateLimitByIp(request, env, now) {
+  const rateLimit = readRateLimits(env);
+  maybeCleanupExpired(now);
+  const ipDigest = digestString(getClientIp(request) + "|ip-rate");
+  return consumeBucket(ipBuckets, ipDigest, rateLimit.perIpPerMinute, MIN_MS, now, MAX_IP_BUCKETS);
 }
 
 function maybeCleanupExpired(now) {
@@ -429,11 +516,4 @@ function digestString(input) {
     h2 = Math.imul(h2 ^ (c + 0x9e3779b1), 0x85ebca77) >>> 0;
   }
   return (h1 >>> 0).toString(16).padStart(8, "0") + (h2 >>> 0).toString(16).padStart(8, "0");
-}
-
-function json(obj, status) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8" }
-  });
 }

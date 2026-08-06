@@ -15,8 +15,13 @@ local history.
 
 | Method | Path | Behaviour |
 |---|---|---|
-| `POST` | `/v1/events` | Accepts exactly one JSON event object, validates the closed schema, writes one Analytics Engine data point, and returns `204`. Arrays, invalid requests, and oversized requests return `400`/`413`; rate-limited requests return `429`; a missing binding or synchronous write failure returns `503`. |
+| `POST` | `/v1/events` | Accepts exactly one JSON event object, validates the closed schema, writes one Analytics Engine data point, returns `204`. `app_active` additionally upserts the anonymous install state in D1. Arrays, invalid requests, and oversized requests return `400`/`413`; rate-limited requests return `429`; a missing binding or synchronous write failure returns `503`. |
+| `GET` | `/v1/announcements` | Public announcements for a platform/version/locale; ETag + `If-None-Match` (`304`) and short `public` caching. Never requires an install_hash and never writes per-device state. |
+| `GET` | `/admin` | Same-origin admin page (announcements CRUD + active-install statistics). HTML only; all API calls use the token from `sessionStorage`. |
+| `POST` | `/admin/verify` | `204`-class token check (`200 {"ok":true}`); `401` on a bad token. |
+| `*` | `/admin/api/*` | Token-authenticated announcements CRUD, publish/withdraw, and statistics. All responses are `Cache-Control: no-store` and default to deny. |
 | `GET` | `/health` | Returns `200 {"ok":true}`. |
+| cron | `0 3 * * *` | Deletes `install_state` rows inactive for more than 90 days. |
 
 The POST body is one event object, never an array. Rejecting arrays prevents a
 partially written batch if a later event is invalid or the Analytics Engine
@@ -29,7 +34,7 @@ Every event must carry these fields:
 | Field | Type | Notes |
 |---|---|---|
 | `schema_version` | int | Must be exactly `1`. |
-| `event` | string | `install_seen`, `daily_active`, or `reading_completed`. |
+| `event` | string | `install_seen`, `daily_active`, `reading_completed`, or `app_active`. |
 | `install_hash` | string | 64-character lowercase hexadecimal SHA-256 of a random per-install UUID; the raw UUID is never sent. |
 | `app_version` | string | Android app version name. |
 | `locale` | string | BCP-47 language tag, such as `zh-CN`. |
@@ -42,9 +47,99 @@ Every event must carry these fields:
 | `deck_type` | string | `tarot`, `mystagogus`, or `lxxxi`. |
 | `card_count` | int | Number of cards in the finished spread, `1..81`. |
 
+`app_active` additionally carries:
+
+| Field | Type | Notes |
+|---|---|---|
+| `version_code` | int | Android `versionCode`, inclusive range `1..2147483647`. |
+
 Any field not listed above is rejected with HTTP `400`. This includes card IDs,
 card names, orientations, positions, questions, notes, history, raw IP, and
 User-Agent.
+
+`app_active` is emitted by the Android app on first launch, on returning to the
+foreground, and immediately when the installed version changes. The client
+sends it at most once per 6 hours for the same version. On the worker it is the
+only event that writes to D1: the install is upserted into `install_state` (new
+installs get `first_seen_at`/`last_seen_at`; upgrades move the row to the new
+version group while preserving `first_seen_at`). A row with the same
+`version_code` seen less than 6 hours ago is not written again, which keeps D1
+writes low. Legacy `install_seen` / `daily_active` / `reading_completed` events
+keep working unchanged and never touch D1, so old clients never break.
+
+## D1 schema
+
+See `migrations/0001_init.sql`. Two tables:
+
+- `announcements` — id, revision (incremented on every edit/publish/withdraw),
+  status (`draft`/`published`/`withdrawn`), severity
+  (`info`/`important`/`update`), zh/en title/body/button, optional HTTPS-only
+  `action_url`, platform (`all`/`android`/`web`), min/max `version_code`,
+  `starts_at`/`ends_at` (epoch seconds, `0` = unlimited), `created_at`,
+  `updated_at`. All content is plain text; the client never renders HTML.
+- `install_state` — `install_hash` (primary key), `app_version`,
+  `version_code`, `locale`, `android_major`, `first_seen_at`, `last_seen_at`.
+  No raw IP, IP digest, User-Agent, device model, city, card, spread, question,
+  note, or history is ever stored. The daily cron deletes rows inactive for
+  more than 90 days.
+
+## Announcements API
+
+```text
+GET /v1/announcements?platform=android&version_code=4&locale=zh-CN
+```
+
+Returns only announcements that are `published`, already started, not expired,
+and matching the platform (`android`/`web`, plus `all`) and version range.
+Results are ordered by severity (`update` > `important` > `info`), then publish
+time, then id. The response is a stable schema:
+
+```json
+{
+  "announcements": [
+    {
+      "id": 1, "revision": 2, "severity": "update",
+      "title": "...", "body": "...", "button": "立即更新",
+      "action_url": "https://example.com/update",
+      "platform": "all", "min_version_code": 0,
+      "max_version_code": 2147483647, "starts_at": 0, "ends_at": 0,
+      "updated_at": 1754300000
+    }
+  ],
+  "locale": "zh-CN"
+}
+```
+
+The `ETag` is a content hash over `(id, revision, updated_at)`, so any edit or
+withdrawal changes it and busts the short `public, max-age=300` cache. The
+client tracks reads locally as `id + revision`, so an edited announcement
+reappears.
+
+## Admin API
+
+All admin endpoints require `Authorization: Bearer <ADMIN_TOKEN>`; the token
+is compared in constant time and the endpoints default to deny (401 on a bad
+token, 503 when the secret is unset). It is never accepted in URLs, query
+strings, logs, or client storage other than `sessionStorage` in the admin page.
+
+| Method | Path | Behaviour |
+|---|---|---|
+| `GET` | `/admin/api/announcements` | List all announcements, newest first. |
+| `POST` | `/admin/api/announcements` | Create (revision 1; closed allow-list, length/range bounds, HTTPS-only `action_url`). |
+| `GET` | `/admin/api/announcements/:id` | Fetch one announcement. |
+| `PUT` | `/admin/api/announcements/:id` | Update; `revision` and `updated_at` bump. |
+| `POST` | `/admin/api/announcements/:id/publish` | Set `published`; `revision` bumps. |
+| `POST` | `/admin/api/announcements/:id/withdraw` | Set `withdrawn`; `revision` bumps. |
+| `GET` | `/admin/api/stats` | Active installs in the last 24h/7d/30d windows, total installs, and the per-version distribution grouped by each install's most recently reported version with percentages, plus `generated_at` and window sizes. |
+
+Statistics wording is always "活跃安装数/活跃设备数" (active installs /
+active devices), never exact user counts: the numbers come from 6-hourly
+anonymous `app_active` reports and are an estimate, not a precise audience.
+
+Every admin response is `Cache-Control: no-store`. The admin page is served
+same-origin at `/admin` and renders announcement content with DOM/text APIs —
+never `innerHTML` — and never puts the token in console output, error strings,
+or the page source.
 
 ## Analytics Engine data-point mapping
 
@@ -93,17 +188,26 @@ The worker sends exactly one index and the fixed blob/double order above.
 - Timestamps come from the server clock; client timestamps are not accepted.
 - Rate-limit buckets are in-memory only and are not a metering or analytics
   dataset.
+- D1 stores only the anonymous per-install state listed under "D1 schema" and
+  the admin-authored announcements; it never receives an IP, User-Agent,
+  device model, city, card, spread, question, note, or history value, and rows
+  older than 90 days are deleted daily.
+- Announcement content is plain text end to end: the admin page writes it with
+  DOM APIs, the worker passes it through verbatim, and the Android client
+  renders it as plain text (never HTML).
 
 ## Reproducible local checks
 
-No Cloudflare binding is needed for the test suite; the tests use a mock
-Analytics Engine binding and never deploy the worker.
+No Cloudflare binding is needed for the test suite; the tests run the real
+migration SQL against an in-memory SQLite database and mock the Analytics
+Engine binding. They never deploy the worker or touch production data.
 
 ```bash
 # Mandatory clean-environment gate before any authorized deployment:
 npm ci
 npm test
 node --check src/index.js
+npx wrangler d1 migrations apply quareia --local
 ```
 
 `npm ci` must be run from a clean checkout or temporary clean directory using
@@ -120,8 +224,13 @@ worker revision:
    only the dataset name if a different stable name is required. The dataset is
    created automatically by Cloudflare on the first write after the binding is
    configured; do **not** create it manually in the dashboard first.
-3. Run `npx wrangler deploy` only in an explicitly authorized deployment window.
-4. Keep the existing `telemetry.luotianyi.fun` Custom Domain attached to this
+3. Create the D1 database with `npx wrangler d1 create quareia`, replace the
+   placeholder `database_id` in `wrangler.toml` with the returned id, and apply
+   the committed migrations with `npx wrangler d1 migrations apply quareia`.
+4. Set the admin secret with `npx wrangler secret put ADMIN_TOKEN`; the token
+   is never stored in the repository, wrangler.toml, URLs, or logs.
+5. Run `npx wrangler deploy` only in an explicitly authorized deployment window.
+6. Keep the existing `telemetry.luotianyi.fun` Custom Domain attached to this
    worker; do not add a broad route or change other DNS records.
 
 Run the clean-environment `npm ci` gate before every authorized deployment.

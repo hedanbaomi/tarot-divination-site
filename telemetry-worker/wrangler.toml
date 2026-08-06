@@ -15,6 +15,36 @@ binding = "TELEMETRY"
 dataset = "quareia_telemetry"
 
 # ---------------------------------------------------------------------------
+# D1 database for announcements and the current per-install active state.
+# The database must be created once with `wrangler d1 create quareia`, then
+# database_id below replaced with the returned identifier. Apply migrations
+# with `wrangler d1 migrations apply quareia` (add --local for local dev).
+# The placeholder below is a non-functional UUID used for local development
+# only; it MUST be replaced before the first production deployment.
+# ---------------------------------------------------------------------------
+
+[[d1_databases]]
+binding = "DB"
+database_name = "quareia"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+# ---------------------------------------------------------------------------
+# Daily cron: removes install_state rows inactive for more than 90 days.
+# The handler itself is a no-op when the D1 binding is missing.
+# ---------------------------------------------------------------------------
+
+[triggers]
+crons = ["0 3 * * *"]
+
+# ---------------------------------------------------------------------------
+# Admin authentication: the ADMIN_TOKEN secret is supplied through
+# `wrangler secret put ADMIN_TOKEN` (production) or `.dev.vars` (local dev).
+# It is never stored in this file or the repository, and it must never be
+# placed in URLs, logs, or client-side storage beyond sessionStorage.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # Custom domain. telemetry.luotianyi.fun must be bound to this worker in the
 # Cloudflare dashboard (Websites -> the luotianyi.fun zone -> Workers Routes,
 # or Workers & Pages -> the worker -> Settings -> Triggers -> Custom Domains).
