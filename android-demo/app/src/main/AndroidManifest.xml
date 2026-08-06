@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  INTERNET is used only for the anonymous, opt-out usage statistics, for the
-  startup/manual update check against GitHub Releases, and to download the
-  update APK the user confirms. The entire website is bundled in assets/www
-  and runs offline inside the WebView; divination and local history work
-  without any network. Telemetry can be turned off in the About screen.
+  INTERNET is used only for: (1) the anonymous, opt-out usage statistics
+  (install_seen / daily_active / app_active / reading_completed — turning
+  telemetry off in the About screen stops all of them and deletes the local
+  anonymous identifier); (2) the silent/manual announcement check and the
+  update check against the worker/GitHub Releases, including downloading the
+  update APK the user confirms — these are not statistics and may still use
+  the network while telemetry is off. The announcement request carries no
+  install_hash and never uploads divination content or local history. The
+  entire website is bundled in assets/www and runs offline inside the
+  WebView; divination and local history work without any network.
   REQUEST_INSTALL_PACKAGES lets the in-app updater hand a downloaded APK to
   the system package installer only after the user explicitly confirms the
   update and grants that capability in system settings. No location,

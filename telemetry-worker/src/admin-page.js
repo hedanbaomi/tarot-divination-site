@@ -443,7 +443,10 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
       var line = document.createElement("div");
       line.style.marginTop = "10px";
       var label = document.createElement("div");
-      label.textContent = "versionCode " + row.version_code + " · " + (row.app_version || "?") +
+      var versionLabel = row.version_code === 0
+        ? "未知/旧客户端"
+        : "versionCode " + row.version_code;
+      label.textContent = versionLabel + " · " + (row.app_version || "?") +
         " · " + row.installs + " 个安装 · " + row.percent + "%";
       var bar = document.createElement("div");
       bar.className = "bar";

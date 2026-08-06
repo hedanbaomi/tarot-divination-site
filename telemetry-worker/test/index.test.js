@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import worker, { __test } from "../src/index.js";
+import { createMockD1 } from "./helpers.js";
 
 let sequence = 0;
 let now = 1_000_000;
@@ -34,6 +35,7 @@ function mockAnalytics() {
 function makeEnv(analytics = mockAnalytics(), overrides = {}) {
   return {
     TELEMETRY: analytics,
+    DB: createMockD1(),
     RATE_LIMIT_PER_INSTALL_PER_HOUR: "60",
     RATE_LIMIT_PER_IP_PER_MINUTE: "30",
     ...overrides

@@ -23,21 +23,30 @@ const UPSERT_STATE = `
 `;
 
 /**
- * Records an app_active event. Returns "written" or "deduped". A row with the
- * same version_code seen less than 6 hours ago is not written again (204 fast
- * path); an upgrade to a new version is always written immediately, moving
- * the install into the new version's group while preserving first_seen_at.
- * Throws when the write fails so the caller can return a retryable 503.
+ * Records an install-activity event (app_active or legacy daily_active) in
+ * install_state. Returns "written" or "deduped".
+ *
+ *  - app_active carries the real version_code; legacy daily_active from v1.1
+ *    clients has no version_code and is stored as 0 ("unknown/legacy").
+ *  - A row with the same version_code seen less than 6 hours ago is not
+ *    written again (204 fast path); upgrades (version_code changes) are
+ *    always written immediately.
+ *  - The upsert preserves first_seen_at and only updates app_version,
+ *    version_code, locale, android_major, and last_seen_at, so a legacy
+ *    install later upgraded and reporting app_active moves to the new
+ *    version group.
+ *  - Throws when the write fails so the caller can return a retryable 503.
  */
-export async function recordAppActive(env, event) {
+export async function recordInstallActivity(env, event) {
   if (!hasD1Binding(env)) throw new Error("d1_binding_missing");
 
   const now = nowSec();
+  const versionCode = Number.isInteger(event.version_code) ? event.version_code : 0;
   const existing = await env.DB.prepare(SELECT_STATE).bind(event.install_hash).first();
 
   if (
     existing &&
-    existing.version_code === event.version_code &&
+    existing.version_code === versionCode &&
     now - existing.last_seen_at < ACTIVE_DEDUPE_SECONDS
   ) {
     return "deduped";
@@ -47,7 +56,7 @@ export async function recordAppActive(env, event) {
     .bind(
       event.install_hash,
       event.app_version,
-      event.version_code,
+      versionCode,
       event.locale,
       event.android_major,
       now,

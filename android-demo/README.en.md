@@ -147,7 +147,21 @@ identifier keeps being deleted. The backend maintains "active installs /
 active devices" statistics (24h / 7d / 30d windows and a distribution grouped
 by each install's most recently reported version); these are anonymous
 estimates, not exact user counts. v1.1's `install_seen` / `daily_active` /
-`reading_completed` events remain compatible.
+`reading_completed` events remain compatible; v1.1 clients' `daily_active`
+counts towards the statistics (labelled "unknown/legacy"), and an `app_active`
+from the upgraded client moves the install into the new version group.
+
+### Privacy and networking semantics
+
+- With telemetry off, `app_active`, `daily_active`, `install_seen` and
+  `reading_completed` are never sent and the local anonymous install
+  identifier is deleted;
+- announcement checks and update checks are not statistics and may still use
+  the network while telemetry is off;
+- the announcement request carries no install_hash and never uploads
+  divination content, spreads, questions, or local history;
+- active-install / active-device counts are estimates from periodic sampling
+  of a random per-install identifier, not exact user numbers.
 
 ## Open-Source Boundary
 

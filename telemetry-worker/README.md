@@ -59,13 +59,19 @@ User-Agent.
 
 `app_active` is emitted by the Android app on first launch, on returning to the
 foreground, and immediately when the installed version changes. The client
-sends it at most once per 6 hours for the same version. On the worker it is the
-only event that writes to D1: the install is upserted into `install_state` (new
-installs get `first_seen_at`/`last_seen_at`; upgrades move the row to the new
-version group while preserving `first_seen_at`). A row with the same
-`version_code` seen less than 6 hours ago is not written again, which keeps D1
-writes low. Legacy `install_seen` / `daily_active` / `reading_completed` events
-keep working unchanged and never touch D1, so old clients never break.
+sends it at most once per 6 hours for the same version. `app_active` and the
+legacy `daily_active` are the only events that write to D1: the install is
+upserted into `install_state` (new installs get `first_seen_at`/`last_seen_at`;
+upgrades move the row to the new version group while preserving
+`first_seen_at`). Legacy `daily_active` events from v1.1 clients carry no
+`version_code` and are stored as `0` ("unknown/legacy" in the admin console) —
+they still count towards the active-install windows and the per-`app_version`
+distribution. A later `app_active` from the same install overwrites the row
+with the real `version_code`, so upgraded installs move out of the legacy
+group. A row with the same `version_code` seen less than 6 hours ago is not
+written again, which keeps D1 writes low. `install_seen` and
+`reading_completed` never touch D1 (old clients cannot break and no
+reading/install metadata is retained beyond the approved columns).
 
 ## D1 schema
 
@@ -130,16 +136,20 @@ strings, logs, or client storage other than `sessionStorage` in the admin page.
 | `PUT` | `/admin/api/announcements/:id` | Update; `revision` and `updated_at` bump. |
 | `POST` | `/admin/api/announcements/:id/publish` | Set `published`; `revision` bumps. |
 | `POST` | `/admin/api/announcements/:id/withdraw` | Set `withdrawn`; `revision` bumps. |
-| `GET` | `/admin/api/stats` | Active installs in the last 24h/7d/30d windows, total installs, and the per-version distribution grouped by each install's most recently reported version with percentages, plus `generated_at` and window sizes. |
+| `GET` | `/admin/api/stats` | Active installs in the last 24h/7d/30d windows, total installs, and the per-version distribution grouped by each install's most recently reported version with percentages, plus `generated_at` and window sizes. Rows with `version_code 0` are legacy v1.1 clients without a known version code; they are labelled "未知/旧客户端" in the console and still counted under their `app_version`. |
 
 Statistics wording is always "活跃安装数/活跃设备数" (active installs /
 active devices), never exact user counts: the numbers come from 6-hourly
-anonymous `app_active` reports and are an estimate, not a precise audience.
+anonymous `app_active` and `daily_active` reports and are an estimate, not a
+precise audience.
 
-Every admin response is `Cache-Control: no-store`. The admin page is served
-same-origin at `/admin` and renders announcement content with DOM/text APIs —
-never `innerHTML` — and never puts the token in console output, error strings,
-or the page source.
+Every admin response is `Cache-Control: no-store` with a strict
+`Content-Security-Policy` (`frame-ancestors 'none'`, no third-party scripts),
+`Referrer-Policy: no-referrer` and `X-Content-Type-Options: nosniff`. The admin
+page is served same-origin at `/admin`, loads no third-party JS or CSS, renders
+announcement content with DOM/text APIs — never `innerHTML` — and never puts
+the token in console output, error strings, or the page source; the token lives
+only in `sessionStorage` and is cleared on logout.
 
 ## Analytics Engine data-point mapping
 

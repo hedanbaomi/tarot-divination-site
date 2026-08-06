@@ -118,6 +118,89 @@ test("two distinct installs stay separate rows", async () => {
   assert.equal(installRows(db).length, 2);
 });
 
+async function postEvent(env, body) {
+  const request = makeRequest("https://telemetry.test/v1/events", {
+    method: "POST",
+    body
+  });
+  return worker.fetch(request, env);
+}
+
+test("a legacy v1.1 daily_active creates install_state with unknown version", async () => {
+  const db = createMockD1();
+  const env = makeEnv({ db, analytics: mockAnalytics() });
+
+  const response = await postEvent(env, makeEvent("daily_active", {
+    install_hash: INSTALL_A,
+    app_version: "1.1"
+  }));
+
+  assert.equal(response.status, 204);
+  const rows = installRows(db);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].install_hash, INSTALL_A);
+  assert.equal(rows[0].version_code, 0);
+  assert.equal(rows[0].app_version, "1.1");
+  assert.equal(rows[0].first_seen_at, Math.floor(now / 1000));
+  assert.equal(rows[0].last_seen_at, Math.floor(now / 1000));
+});
+
+test("repeated legacy daily_active within six hours is not written again", async () => {
+  const db = createMockD1();
+  const env = makeEnv({ db, analytics: mockAnalytics() });
+
+  await postEvent(env, makeEvent("daily_active", { install_hash: INSTALL_A, app_version: "1.1" }));
+  const before = installRows(db)[0];
+
+  now += SIX_HOURS_MS - 1000;
+  const response = await postEvent(env, makeEvent("daily_active", { install_hash: INSTALL_A, app_version: "1.1" }));
+  assert.equal(response.status, 204);
+
+  const rows = installRows(db);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].last_seen_at, before.last_seen_at);
+});
+
+test("a legacy daily_active followed by app_active migrates the install version", async () => {
+  const db = createMockD1();
+  const env = makeEnv({ db, analytics: mockAnalytics() });
+  const firstSeen = Math.floor(now / 1000);
+
+  await postEvent(env, makeEvent("daily_active", { install_hash: INSTALL_A, app_version: "1.1" }));
+
+  now += 1000;
+  const response = await postEvent(env, makeEvent("app_active", {
+    install_hash: INSTALL_A,
+    app_version: "1.2.0",
+    version_code: 4
+  }));
+  assert.equal(response.status, 204);
+
+  const rows = installRows(db);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].version_code, 4);
+  assert.equal(rows[0].app_version, "1.2.0");
+  // first_seen_at is preserved; last_seen_at moved to the app_active time.
+  assert.equal(rows[0].first_seen_at, firstSeen);
+  assert.equal(rows[0].last_seen_at, Math.floor(now / 1000));
+});
+
+test("install_seen and reading_completed never write install_state", async () => {
+  const db = createMockD1();
+  const env = makeEnv({ db, analytics: mockAnalytics() });
+
+  const install = await postEvent(env, makeEvent("install_seen", { install_hash: INSTALL_A }));
+  assert.equal(install.status, 204);
+  const reading = await postEvent(env, makeEvent("reading_completed", {
+    install_hash: INSTALL_A,
+    deck_type: "tarot",
+    card_count: 3
+  }));
+  assert.equal(reading.status, 204);
+
+  assert.equal(installRows(db).length, 0);
+});
+
 test("app_active without a D1 binding returns a retryable 503", async () => {
   const analytics = mockAnalytics();
   const response = await postActive(makeEnv({ db: undefined, analytics }));

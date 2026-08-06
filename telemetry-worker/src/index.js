@@ -36,7 +36,7 @@
 import { json } from "./http.js";
 import { nowMs, setClockForTesting, resetClock } from "./clock.js";
 import { handleAnnouncements } from "./announcements.js";
-import { recordAppActive, cleanupInactiveInstalls } from "./stats.js";
+import { recordInstallActivity, cleanupInactiveInstalls } from "./stats.js";
 import { handleAdminPage, handleAdminVerify, handleAdminApi } from "./admin.js";
 
 const SCHEMA_VERSION = 1;
@@ -245,12 +245,16 @@ async function handleEvents(request, env) {
     return json({ error: "telemetry_write_failed" }, 503);
   }
 
-  // app_active additionally moves the anonymous install to its current
-  // version group in D1. A D1 failure returns a retryable error rather than
-  // pretending success; the 6-hour same-version dedupe makes retries cheap.
-  if (validated.value.event === "app_active") {
+  // app_active and the legacy daily_active both move the anonymous install to
+  // its current version group in D1 (legacy events have no version_code and
+  // are stored as 0 = "unknown/legacy"; a later app_active from the upgraded
+  // client overwrites it). install_seen and reading_completed never touch D1,
+  // so old clients cannot break and no reading/install metadata is retained.
+  // A D1 failure returns a retryable error rather than pretending success;
+  // the 6-hour same-version dedupe makes retries cheap.
+  if (validated.value.event === "app_active" || validated.value.event === "daily_active") {
     try {
-      await recordAppActive(env, validated.value);
+      await recordInstallActivity(env, validated.value);
     } catch (_e) {
       return json({ error: "d1_write_failed" }, 503);
     }

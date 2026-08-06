@@ -296,6 +296,74 @@ test("version distribution reflects the most recently reported version", async (
   ]);
 });
 
+test("version distribution keeps legacy installs alongside new clients", async () => {
+  const db = createMockD1();
+  const nowSec = Math.floor(now / 1000);
+  db.exec(
+    `INSERT INTO install_state (install_hash, app_version, version_code, locale, android_major, first_seen_at, last_seen_at)
+     VALUES ('${"a".repeat(64)}', '1.1', 0, 'zh-CN', 35, ${nowSec}, ${nowSec}),
+            ('${"b".repeat(64)}', '1.2.0', 4, 'zh-CN', 35, ${nowSec}, ${nowSec}),
+            ('${"c".repeat(64)}', '1.2.0', 4, 'zh-CN', 35, ${nowSec}, ${nowSec})`
+  );
+
+  const response = await worker.fetch(
+    makeRequest("https://telemetry.test/admin/api/stats", { token: TOKEN }),
+    makeEnv({ db, adminToken: TOKEN })
+  );
+  assert.equal(response.status, 200);
+  const stats = await response.json();
+
+  assert.equal(stats.total_installs, 3);
+  // Legacy installs (version_code 0) are grouped under their app_version and
+  // counted in the percentages; they are never dropped.
+  assert.deepEqual(stats.by_version, [
+    { version_code: 4, app_version: "1.2.0", installs: 2, percent: 66.7 },
+    { version_code: 0, app_version: "1.1", installs: 1, percent: 33.3 }
+  ]);
+});
+
+test("admin page and admin API carry strict security headers", async () => {
+  const db = createMockD1();
+  const env = makeEnv({ db, adminToken: TOKEN });
+
+  const page = await worker.fetch(makeRequest("https://telemetry.test/admin"), env);
+  assert.equal(page.status, 200);
+  const pageCsp = page.headers.get("content-security-policy") || "";
+  assert.match(pageCsp, /frame-ancestors 'none'/);
+  assert.match(pageCsp, /script-src 'self'/);
+  assert.equal(page.headers.get("referrer-policy"), "no-referrer");
+  assert.equal(page.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(page.headers.get("x-frame-options"), "DENY");
+  assert.match(page.headers.get("cache-control") || "", /no-store/);
+  // The page is fully self-contained: no third-party script/style references.
+  const html = await page.text();
+  assert.doesNotMatch(html, /<script[^>]+src=/);
+  assert.doesNotMatch(html, /<link[^>]+rel=["']stylesheet["'][^>]+href=(?!["'])/);
+
+  for (const path of [
+    "/admin/api/announcements",
+    "/admin/api/announcements/1",
+    "/admin/api/stats",
+    "/admin/verify"
+  ]) {
+    const method = path.endsWith("verify") ? "POST" : "GET";
+    const options = { token: TOKEN, ...(method === "POST" ? { body: {} } : {}) };
+    const response = await worker.fetch(
+      makeRequest("https://telemetry.test" + path, { method, ...options }),
+      env
+    );
+    assert.ok(response.status < 500, path + " should respond");
+    assert.match(response.headers.get("cache-control") || "", /no-store/, path + " no-store");
+    assert.match(
+      response.headers.get("content-security-policy") || "",
+      /frame-ancestors 'none'/,
+      path + " CSP"
+    );
+    assert.equal(response.headers.get("referrer-policy"), "no-referrer", path + " referrer");
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff", path + " nosniff");
+  }
+});
+
 test("daily cron deletes installs inactive for more than 90 days", async () => {
   const db = createMockD1();
   const nowSec = Math.floor(now / 1000);

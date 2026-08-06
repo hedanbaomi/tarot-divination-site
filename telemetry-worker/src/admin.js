@@ -1,15 +1,33 @@
-// Admin API: token-authenticated announcements CRUD + publish/withdraw and
-// active-install statistics. Every admin response is Cache-Control: no-store.
-// The token is read from the Authorization: Bearer header only and compared
-// in constant time; all admin endpoints default to deny.
+﻿// Admin API: token-authenticated announcements CRUD + publish/withdraw and
+// active-install statistics. Every admin response is Cache-Control: no-store
+// with a strict Content-Security-Policy (no third-party scripts, no framing),
+// no-referrer, and nosniff. The token is read from the Authorization: Bearer
+// header only and compared in constant time; all admin endpoints default to
+// deny. The admin page is self-contained (inline CSS/JS only, no third-party
+// resources) and keeps the token in sessionStorage, cleared on logout.
 
-import { json, noStoreHeaders } from "./http.js";
+import { json } from "./http.js";
 import { nowSec } from "./clock.js";
 import { constantTimeEqual } from "./security.js";
 import { hasD1Binding } from "./announcements.js";
 import { validateAnnouncementInput } from "./validation.js";
 import { activeWindowCounts, versionDistribution } from "./stats.js";
 import { ADMIN_PAGE_HTML } from "./admin-page.js";
+
+const ADMIN_SECURITY_HEADERS = {
+  "cache-control": "no-store",
+  "content-security-policy":
+    "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; " +
+    "frame-ancestors 'none'; object-src 'none'",
+  "referrer-policy": "no-referrer",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY"
+};
+
+function adminJson(obj, status) {
+  return json(obj, status, ADMIN_SECURITY_HEADERS);
+}
 
 const ALL_COLUMNS = `
   id, revision, status, severity, title_zh, body_zh, button_zh, title_en,
@@ -45,9 +63,7 @@ export function handleAdminPage() {
     status: 200,
     headers: {
       "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store",
-      "x-frame-options": "DENY",
-      "referrer-policy": "no-referrer"
+      ...ADMIN_SECURITY_HEADERS
     }
   });
 }
@@ -55,18 +71,18 @@ export function handleAdminPage() {
 export async function handleAdminVerify(request, env) {
   const auth = checkAdmin(request, env);
   if (!auth.ok) {
-    return json({ error: auth.error }, auth.status, noStoreHeaders());
+    return adminJson({ error: auth.error }, auth.status);
   }
-  return json({ ok: true }, 200, noStoreHeaders());
+  return adminJson({ ok: true }, 200);
 }
 
 export async function handleAdminApi(request, env, pathname) {
   const auth = checkAdmin(request, env);
   if (!auth.ok) {
-    return json({ error: auth.error }, auth.status, noStoreHeaders());
+    return adminJson({ error: auth.error }, auth.status);
   }
   if (!hasD1Binding(env)) {
-    return json({ error: "announcements_unavailable" }, 503, noStoreHeaders());
+    return adminJson({ error: "announcements_unavailable" }, 503);
   }
 
   const parts = pathname.replace(/^\/admin\/api\//, "").split("/").filter(Boolean);
@@ -84,8 +100,8 @@ export async function handleAdminApi(request, env, pathname) {
     const id = Number(parts[1]);
     if (request.method === "GET") return getAnnouncement(env, id);
     if (request.method === "PUT") return updateAnnouncement(request, env, id);
-    if (request.method === "POST" && (parts[2] === undefined)) {
-      return json({ error: "not_found" }, 404, noStoreHeaders());
+    if (request.method === "POST") {
+      return adminJson({ error: "not_found" }, 404);
     }
   }
 
@@ -97,7 +113,7 @@ export async function handleAdminApi(request, env, pathname) {
     }
   }
 
-  return json({ error: "not_found" }, 404, noStoreHeaders());
+  return adminJson({ error: "not_found" }, 404);
 }
 
 async function readJsonBody(request) {
@@ -121,22 +137,22 @@ async function readJsonBody(request) {
 }
 
 function readError(read) {
-  return json({ error: read.error }, read.status || 400, noStoreHeaders());
+  return adminJson({ error: read.error }, read.status || 400);
 }
 
 async function listAnnouncements(env) {
   const rows = await env.DB.prepare(
     `SELECT ${ALL_COLUMNS} FROM announcements ORDER BY id DESC`
   ).all();
-  return json({ announcements: rows.results }, 200, noStoreHeaders());
+  return adminJson({ announcements: rows.results }, 200);
 }
 
 async function getAnnouncement(env, id) {
   const row = await env.DB.prepare(
     `SELECT ${ALL_COLUMNS} FROM announcements WHERE id = ?`
   ).bind(id).first();
-  if (!row) return json({ error: "not_found" }, 404, noStoreHeaders());
-  return json({ announcement: row }, 200, noStoreHeaders());
+  if (!row) return adminJson({ error: "not_found" }, 404);
+  return adminJson({ announcement: row }, 200);
 }
 
 async function createAnnouncement(request, env) {
@@ -144,7 +160,7 @@ async function createAnnouncement(request, env) {
   if (!read.ok) return readError(read);
 
   const validated = validateAnnouncementInput(read.value, { requireStatus: true });
-  if (!validated.ok) return json({ error: validated.error }, 400, noStoreHeaders());
+  if (!validated.ok) return adminJson({ error: validated.error }, 400);
 
   const value = validated.value;
   const now = nowSec();
@@ -177,8 +193,8 @@ async function createAnnouncement(request, env) {
   const row = await env.DB.prepare(
     `SELECT ${ALL_COLUMNS} FROM announcements WHERE id = ?`
   ).bind(lastRowId).first();
-  if (!row) return json({ error: "create_failed" }, 500, noStoreHeaders());
-  return json({ announcement: row }, 200, noStoreHeaders());
+  if (!row) return adminJson({ error: "create_failed" }, 500);
+  return adminJson({ announcement: row }, 200);
 }
 
 async function updateAnnouncement(request, env, id) {
@@ -186,7 +202,7 @@ async function updateAnnouncement(request, env, id) {
   if (!read.ok) return readError(read);
 
   const validated = validateAnnouncementInput(read.value, { requireStatus: true });
-  if (!validated.ok) return json({ error: validated.error }, 400, noStoreHeaders());
+  if (!validated.ok) return adminJson({ error: validated.error }, 400);
 
   const value = validated.value;
   const now = nowSec();
@@ -219,14 +235,14 @@ async function updateAnnouncement(request, env, id) {
   const changes = result.meta ? result.meta.changes : 0;
   if (changes === 0) {
     const exists = await env.DB.prepare("SELECT id FROM announcements WHERE id = ?").bind(id).first();
-    if (!exists) return json({ error: "not_found" }, 404, noStoreHeaders());
+    if (!exists) return adminJson({ error: "not_found" }, 404);
   }
 
   const row = await env.DB.prepare(
     `SELECT ${ALL_COLUMNS} FROM announcements WHERE id = ?`
   ).bind(id).first();
-  if (!row) return json({ error: "update_failed" }, 500, noStoreHeaders());
-  return json({ announcement: row }, 200, noStoreHeaders());
+  if (!row) return adminJson({ error: "update_failed" }, 500);
+  return adminJson({ announcement: row }, 200);
 }
 
 async function setAnnouncementStatus(env, id, action) {
@@ -239,13 +255,13 @@ async function setAnnouncementStatus(env, id, action) {
   const changes = result.meta ? result.meta.changes : 0;
   if (changes === 0) {
     const exists = await env.DB.prepare("SELECT id FROM announcements WHERE id = ?").bind(id).first();
-    if (!exists) return json({ error: "not_found" }, 404, noStoreHeaders());
+    if (!exists) return adminJson({ error: "not_found" }, 404);
   }
 
   const row = await env.DB.prepare(
     `SELECT ${ALL_COLUMNS} FROM announcements WHERE id = ?`
   ).bind(id).first();
-  return json({ announcement: row }, 200, noStoreHeaders());
+  return adminJson({ announcement: row }, 200);
 }
 
 async function handleStats(env) {
@@ -253,14 +269,13 @@ async function handleStats(env) {
     activeWindowCounts(env),
     versionDistribution(env)
   ]);
-  return json(
+  return adminJson(
     {
       generated_at: nowSec(),
       windows,
       total_installs: distribution.total_installs,
       by_version: distribution.by_version
     },
-    200,
-    noStoreHeaders()
+    200
   );
 }
