@@ -7,6 +7,12 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 
+# The open-source host discovers this ignored local-only adapter by name. Keep
+# only the adapter entry point; its vault dependencies remain obfuscatable.
+-keep,allowoptimization class com.quareia.divination.PrivateLxxxiAssetProvider {
+    public <init>();
+}
+
 # Do not retain source paths or verbose local variable metadata in the
 # distributable mapping. The private mapping file is still generated for crash
 # retracing by the release build.

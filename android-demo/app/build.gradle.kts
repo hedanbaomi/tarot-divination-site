@@ -1,7 +1,94 @@
 import java.util.Properties
+import java.util.zip.ZipFile
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.testing.Test
+import org.gradle.work.DisableCachingByDefault
 
 plugins {
   alias(libs.plugins.android.application)
+}
+
+@DisableCachingByDefault(because = "Verifies a packaged APK without producing an output")
+abstract class VerifyPrivateLxxxiApkTask : DefaultTask() {
+    @get:InputFile
+    abstract val apkFile: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val apk = apkFile.get().asFile
+        if (!apk.isFile) throw GradleException("Expected APK was not produced for private LXXXI verification")
+
+        val failure = ZipFile(apk).use { zip ->
+            val qvCount = zip.entries().asSequence()
+                .count { !it.isDirectory && it.name.startsWith("assets/qv/") }
+            if (qvCount != 82) {
+                return@use "Private LXXXI APK record count is invalid: $qvCount"
+            }
+
+            val providerDescriptor = "Lcom/quareia/divination/PrivateLxxxiAssetProvider;"
+                .toByteArray(Charsets.US_ASCII)
+            val providerPresent = zip.entries().asSequence()
+                .filter { !it.isDirectory && it.name.matches(Regex("classes(\\d*)?\\.dex")) }
+                .any { entry ->
+                    val dex = zip.getInputStream(entry).use { it.readBytes() }
+                    dex.containsSequence(providerDescriptor)
+                }
+            if (!providerPresent) "Private LXXXI provider is absent from the packaged APK" else null
+        }
+        if (failure != null) failAndRemove(apk, failure)
+    }
+
+    private fun failAndRemove(apk: File, message: String): Nothing {
+        if (apk.exists() && !apk.delete()) {
+            throw GradleException("$message; invalid APK could not be removed")
+        }
+        throw GradleException(message)
+    }
+
+    private fun ByteArray.containsSequence(needle: ByteArray): Boolean {
+        if (needle.isEmpty() || needle.size > size) return false
+        outer@ for (start in 0..size - needle.size) {
+            for (offset in needle.indices) {
+                if (this[start + offset] != needle[offset]) continue@outer
+            }
+            return true
+        }
+        return false
+    }
+}
+
+@DisableCachingByDefault(because = "Verifies ignored local-only integration inputs")
+abstract class VerifyPrivateLxxxiSourceTask : DefaultTask() {
+    @get:Internal
+    abstract val providerFile: RegularFileProperty
+
+    @get:Internal
+    abstract val vaultFile: RegularFileProperty
+
+    @get:Internal
+    abstract val materialFile: RegularFileProperty
+
+    @get:Internal
+    abstract val recordsDirectory: DirectoryProperty
+
+    @TaskAction
+    fun verify() {
+        if (!providerFile.get().asFile.isFile) {
+            throw GradleException("Private LXXXI provider is missing")
+        }
+        if (!vaultFile.get().asFile.isFile || !materialFile.get().asFile.isFile) {
+            throw GradleException("Private LXXXI vault implementation is incomplete")
+        }
+        val records = recordsDirectory.get().asFile.listFiles()
+        if (records == null || records.size != 82 || records.any { !it.isFile }) {
+            throw GradleException("Private LXXXI record set must contain exactly 82 files")
+        }
+    }
 }
 
 // Release signing credentials live OUTSIDE the repository and are only ever
@@ -33,6 +120,25 @@ val releaseKeystoreProperties: Properties = Properties().apply {
 val hasReleaseKeystore = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
     .all { !releaseKeystoreProperties.getProperty(it).isNullOrBlank() } &&
     File(releaseKeystoreProperties.getProperty("storeFile")).isFile
+
+val privateLxxxiAdapter = file(
+    "src/main/java/com/quareia/divination/PrivateLxxxiAssetProvider.kt",
+)
+val privateLxxxiVault = file(
+    "src/main/java/com/quareia/divination/LxxxiVault.kt",
+)
+val privateLxxxiMaterial = file(
+    "src/main/java/com/quareia/divination/VaultMaterial.kt",
+)
+val privateLxxxiRecords = file("src/main/assets/qv")
+val privateLxxxiDetected = privateLxxxiAdapter.isFile ||
+    privateLxxxiVault.isFile ||
+    privateLxxxiMaterial.isFile ||
+    privateLxxxiRecords.isDirectory
+val forcePrivateLxxxi = providers.gradleProperty("quareia.requirePrivateLxxxi")
+    .map(String::toBoolean)
+    .getOrElse(false)
+val enforcePrivateLxxxi = forcePrivateLxxxi || privateLxxxiDetected
 
 android {
     namespace = "com.quareia.divination"
@@ -129,4 +235,52 @@ dependencies {
   // Local unit tests
   testImplementation(libs.junit)
   testImplementation(libs.robolectric)
+}
+
+// A public checkout has no private provider and ordinary debug/tests remain
+// buildable and fail closed. Hardened/release packaging is always a complete
+// build and therefore always requires the private integration preflight.
+// -Pquareia.requirePrivateLxxxi=true also makes a direct debug unit-test run
+// strict for official validation automation.
+tasks.withType<Test>().configureEach {
+    if (name == "testDebugUnitTest") {
+        systemProperty("quareia.requirePrivateLxxxi", enforcePrivateLxxxi.toString())
+    }
+}
+
+fun registerPrivateLxxxiApkGate(variantTitle: String, apkName: String) {
+    val packageTask = "package$variantTitle"
+    // AGP creates local unit tests only for debug in this project. The test is
+    // variant-independent and loads the same ignored provider/assets used by
+    // hardened/release, while the packaged APK is checked separately below.
+    val unitTestTask = "testDebugUnitTest"
+    val preflightTask = tasks.register<VerifyPrivateLxxxiSourceTask>(
+        "verify${variantTitle}PrivateLxxxiSources",
+    ) {
+        group = "verification"
+        description = "Fails before $variantTitle packaging when private LXXXI inputs are incomplete."
+        providerFile.set(privateLxxxiAdapter)
+        vaultFile.set(privateLxxxiVault)
+        materialFile.set(privateLxxxiMaterial)
+        recordsDirectory.set(privateLxxxiRecords)
+    }
+    val verifyTask = tasks.register<VerifyPrivateLxxxiApkTask>("verify${variantTitle}PrivateLxxxiApk") {
+        group = "verification"
+        description = "Fails a complete $variantTitle build when private LXXXI integration is incomplete."
+        apkFile.set(layout.buildDirectory.file("outputs/apk/${variantTitle.lowercase()}/$apkName"))
+        mustRunAfter(packageTask)
+    }
+
+    tasks.named(packageTask).configure {
+        dependsOn(preflightTask, unitTestTask)
+        finalizedBy(verifyTask)
+    }
+    tasks.named("assemble$variantTitle").configure {
+        dependsOn(packageTask, verifyTask)
+    }
+}
+
+afterEvaluate {
+    registerPrivateLxxxiApkGate("Hardened", "app-hardened.apk")
+    registerPrivateLxxxiApkGate("Release", "app-release.apk")
 }

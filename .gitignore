@@ -16,6 +16,7 @@ tmp/
 # but they must never enter the public repository.
 android-demo/app/src/main/java/com/quareia/divination/LxxxiVault.kt
 android-demo/app/src/main/java/com/quareia/divination/VaultMaterial.kt
+android-demo/app/src/main/java/com/quareia/divination/PrivateLxxxiAssetProvider.kt
 android-demo/app/src/test/java/com/quareia/divination/LxxxiVaultTest.kt
 android-demo/tests/lxxxi-hardening-contract.test.js
 android-demo/app/src/main/assets/qv/

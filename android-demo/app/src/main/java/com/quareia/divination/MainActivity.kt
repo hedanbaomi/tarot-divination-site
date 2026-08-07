@@ -2,6 +2,7 @@ package com.quareia.divination
 
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -83,9 +84,7 @@ class MainActivity : ComponentActivity() {
 
         // Serve bundled assets over a virtual https origin. The default host
         // is treated as a secure context, which the web app needs for fetch().
-        val assetLoader = WebViewAssetLoader.Builder()
-            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
-            .build()
+        val publicAssetRoute = PublicWebAssetRoute(this)
 
         WebView.setWebContentsDebuggingEnabled(
             (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0,
@@ -121,7 +120,10 @@ class MainActivity : ComponentActivity() {
             // over the homepage anymore.
             addJavascriptInterface(AboutBridge(this@MainActivity), "androidAbout")
 
-            webViewClient = QuareiaWebViewClient(assetLoader, LxxxiAssetRoute(lxxxiRouteToken))
+            webViewClient = QuareiaWebViewClient(
+                publicAssetRoute,
+                LxxxiAssetRoute(lxxxiRouteToken, LxxxiAssetProviderFactory.create()),
+            )
             webChromeClient = WebChromeClient()
             scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
         }
@@ -218,7 +220,7 @@ class MainActivity : ComponentActivity() {
      * doesn't own, which lets the WebView fall back to its default handling.
      */
     private inner class QuareiaWebViewClient(
-        private val assetLoader: WebViewAssetLoader,
+        private val publicAssetRoute: PublicWebAssetRoute,
         private val lxxxiRoute: LxxxiAssetRoute,
     ) : WebViewClient() {
 
@@ -230,7 +232,7 @@ class MainActivity : ComponentActivity() {
             if (lxxxiRoute.isProtectedRequest(url)) {
                 return lxxxiRoute.response(assets, url, request.method)
             }
-            return assetLoader.shouldInterceptRequest(url)
+            return publicAssetRoute.response(url)
         }
 
         // Only the first completed load of the internal home page starts the
@@ -412,26 +414,35 @@ private class AboutBridge(private val activity: ComponentActivity) {
     }
 }
 
-/** Opaque image route that never exposes a native object to page JavaScript. */
-internal class LxxxiAssetRoute(private val token: String) {
-    private val baseHost = MainActivity.APP_HOST
+/** Serves only the public web bundle and explicitly rejects every other asset namespace. */
+internal class PublicWebAssetRoute(context: Context) {
+    private val loader: WebViewAssetLoader
 
-    internal fun baseUrl(): String =
-        "https://$baseHost${MainActivity.PROTECTED_PREFIX}$token"
+    init {
+        val publicAssets = WebViewAssetLoader.AssetsPathHandler(context)
+        loader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/www/") { path -> publicAssets.handle("www/$path") }
+            .build()
+    }
 
-    internal fun isProtectedRequest(uri: Uri): Boolean =
-        uri.scheme.equals("https", ignoreCase = true) &&
-            uri.host == baseHost &&
-            uri.pathSegments.firstOrNull() == MainActivity.PROTECTED_PREFIX.trim('/')
-
-    internal fun response(assets: android.content.res.AssetManager, uri: Uri, method: String): WebResourceResponse {
-        if (!isProtectedRequest(uri) || method != "GET") return notFound()
+    internal fun response(uri: Uri): WebResourceResponse? {
+        if (!uri.scheme.equals("https", ignoreCase = true) ||
+            uri.host != MainActivity.APP_HOST ||
+            uri.port != -1
+        ) {
+            return null
+        }
         val segments = uri.pathSegments
-        if (segments.size != 3 || segments[1] != token) return notFound()
-        // LXXXI card art is distributed only through the signed release APK;
-        // the open-source build deliberately ships without the decryption
-        // implementation, so every opaque request answers 404 here.
-        return notFound()
+        if (segments.firstOrNull() != "assets") return loader.shouldInterceptRequest(uri)
+        if (segments.getOrNull(1) != "www") return notFound()
+        if (segments.drop(2).any { segment ->
+                segment == "." || segment == ".." ||
+                    segment.contains('/') || segment.contains('\\')
+            }
+        ) {
+            return notFound()
+        }
+        return loader.shouldInterceptRequest(uri) ?: notFound()
     }
 
     private fun notFound(): WebResourceResponse = WebResourceResponse(
@@ -442,4 +453,75 @@ internal class LxxxiAssetRoute(private val token: String) {
         mapOf("Cache-Control" to "no-store"),
         ByteArrayInputStream(ByteArray(0)),
     )
+}
+
+/** Opaque image route that never exposes a native object to page JavaScript. */
+internal class LxxxiAssetRoute(
+    private val token: String,
+    private val provider: LxxxiAssetProvider?,
+) {
+    private val baseHost = MainActivity.APP_HOST
+
+    internal fun baseUrl(): String =
+        "https://$baseHost${MainActivity.PROTECTED_PREFIX}$token"
+
+    internal fun isProtectedRequest(uri: Uri): Boolean =
+        uri.scheme.equals("https", ignoreCase = true) &&
+            uri.host == baseHost &&
+            uri.port == -1 &&
+            uri.pathSegments.firstOrNull() == MainActivity.PROTECTED_PREFIX.trim('/')
+
+    internal fun response(assets: android.content.res.AssetManager, uri: Uri, method: String): WebResourceResponse {
+        if (!isProtectedRequest(uri) || method != "GET") return notFound()
+        val segments = uri.pathSegments
+        if (segments.size != 3 || segments[1] != token) return notFound()
+        if (uri.query != null || uri.fragment != null) return notFound()
+        val logicalKey = segments[2]
+        if (!isAllowedLogicalKey(logicalKey)) return notFound()
+
+        val bytes = try {
+            provider?.open(assets, logicalKey)
+        } catch (_: Throwable) {
+            null
+        }
+        val imageBytes = bytes?.takeIf(::isValidWebp) ?: return notFound()
+
+        return WebResourceResponse(
+            "image/webp",
+            null,
+            200,
+            "OK",
+            mapOf("Cache-Control" to "no-store"),
+            ByteArrayInputStream(imageBytes),
+        )
+    }
+
+    internal fun isAllowedLogicalKey(logicalKey: String): Boolean =
+        logicalKey == "lxxxi-back" || FACE_KEY_PATTERN.matches(logicalKey)
+
+    internal fun isValidWebp(bytes: ByteArray): Boolean =
+        bytes.size in WEBP_HEADER_SIZE..MAX_IMAGE_BYTES &&
+            bytes[0] == 'R'.code.toByte() &&
+            bytes[1] == 'I'.code.toByte() &&
+            bytes[2] == 'F'.code.toByte() &&
+            bytes[3] == 'F'.code.toByte() &&
+            bytes[8] == 'W'.code.toByte() &&
+            bytes[9] == 'E'.code.toByte() &&
+            bytes[10] == 'B'.code.toByte() &&
+            bytes[11] == 'P'.code.toByte()
+
+    private fun notFound(): WebResourceResponse = WebResourceResponse(
+        "text/plain",
+        "UTF-8",
+        404,
+        "Not Found",
+        mapOf("Cache-Control" to "no-store"),
+        ByteArrayInputStream(ByteArray(0)),
+    )
+
+    private companion object {
+        const val WEBP_HEADER_SIZE = 12
+        const val MAX_IMAGE_BYTES = 4 * 1024 * 1024
+        val FACE_KEY_PATTERN = Regex("lxxxi-(0[1-9]|[1-7][0-9]|8[01])")
+    }
 }
