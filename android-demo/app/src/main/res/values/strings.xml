@@ -4,13 +4,13 @@
     <!-- 关于 / 版权与署名页面 -->
     <string name="menu_about">关于 / 版权</string>
     <string name="about_title">关于 / 版权与署名</string>
-    <string name="about_status">本项目为非官方、免费、严格非商业工具，与 Quareia、Josephine McCarthy、相关艺术家或出版方不存在隶属、赞助或背书关系。第三方牌面与文本不属于应用代码的开源许可。</string>
-    <string name="about_permission_note">Josephine McCarthy 的书面许可已明确覆盖本免费应用（及对应的免费 GitHub Pages 网站），但仅限严格非商业使用，并排除在一切开源许可之外。</string>
+    <string name="about_status">本项目为非官方工具，与 Quareia、Josephine McCarthy、相关艺术家或出版方不存在隶属、赞助或背书关系。受保护的第三方牌面与文本不属于应用代码的软件许可。</string>
+    <string name="about_permission_note">Josephine McCarthy 的书面许可覆盖本 Android 应用与对应网站；2026-08-05 另行扩展至微信小程序。非商业限制仅适用于 Mystagogus/LXXXI 牌面、牌意、翻译、牌阵及相关授权材料；这些材料不得出售、设置付费墙或付费解锁、单独商业分发、转授权或纳入软件许可，商业利用须另行授权。该限制不是对用户原创软件、基础设施或无关服务的一般性商业禁令，也不代表任何具体商业模式已获批准。</string>
     <string name="about_mystagogus_label">Mystagogus（M 牌）牌面与相关文本</string>
-    <string name="about_mystagogus_rights">© Josephine McCarthy · 经作者书面许可，仅限本严格非商业项目使用。</string>
+    <string name="about_mystagogus_rights">© Josephine McCarthy · 经书面许可按受保护材料的非商业条件使用。</string>
     <string name="about_lxxxi_label">LXXXI 魔法牌牌面与相关文本</string>
-    <string name="about_lxxxi_rights">© Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland · 经作者书面许可，仅限本严格非商业项目使用。</string>
-    <string name="about_oss_boundary">应用代码遵循仓库根目录的 MIT 许可；但第三方牌面、牌意文本及衍生内容不在该许可范围内，也不因开源而获得再分发授权。</string>
+    <string name="about_lxxxi_rights">© Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland · 经书面许可按受保护材料的非商业条件使用。</string>
+    <string name="about_oss_boundary">公开 Android 代码按仓库许可地图使用 MPL-2.0；根网站软件使用 AGPL-3.0-only。第三方牌面、牌意文本、衍生内容及私有 LXXXI 实现不在上述许可范围内，也不因开源而获得再分发授权。</string>
     <string name="about_quareia_label">Quareia 官网</string>
     <string name="about_quareia_url">https://www.quareia.com</string>
     <string name="about_quote_label">作者附言</string>

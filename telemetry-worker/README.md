@@ -11,6 +11,16 @@ local history.
 > this repository, and nothing here touches the existing website, R2, VPS, or
 > Cloudflare configuration outside this worker's binding.
 
+## Licence
+
+Project-authored Worker software, tests, migrations, and maintenance tools in
+this directory are licensed under `AGPL-3.0-only`. Dependencies retain their
+upstream licences. Secrets, deployed account configuration, analytics data,
+and separately copyrighted card/content material are not published or licensed
+by that grant. See [`LICENSE.md`](LICENSE.md) and the repository-level
+[`LICENSE.md`](../LICENSE.md). Historical MIT permissions already received for
+`v1.2.0` and earlier remain valid.
+
 ## Endpoints
 
 | Method | Path | Behaviour |

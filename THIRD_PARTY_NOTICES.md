@@ -1,22 +1,27 @@
 # Third-Party Notices
 
-This is an unofficial, free, strictly non-commercial project. It is not
+This is an unofficial project. It is not
 affiliated with, sponsored by, or endorsed by Quareia, Josephine McCarthy, the
 artists, publishers, or other rights holders named below. Nothing here implies
 an endorsement of this project by any of them.
 
 The official home of Quareia and its materials is <https://www.quareia.com>.
 
-The project's MIT license covers only project-authored source code and original
-content expressly identified as such. It does not grant rights in any material
-described in this notice. The Mystagogus and LXXXI materials are used here with
-the written permission of their author for strictly non-commercial use. Written
-permission covers this free GitHub Pages website and a future free, open-source
-Android application, provided that the copyrighted materials remain strictly
-non-commercial, are reasonably protected from misuse, and are excluded from all
-open-source licences. This repository does not grant downstream users any
-licence to reuse those third-party materials. See [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md)
-for details.
+The project's AGPL-3.0-only and MPL-2.0 grants cover only the project-authored
+software assigned to them in [`LICENSE.md`](LICENSE.md). They do not grant
+rights in any material described in this notice. The Mystagogus and LXXXI
+materials are used with written permission in the website and Android
+application; a separate extension dated 2026-08-05 covers the WeChat Mini
+Program. The protected materials must remain non-commercial, be reasonably
+protected from misuse, and remain outside AGPL, MPL, the Mini Program
+proprietary software licence, and every other software licence. They may not be
+sold, paywalled or offered as a paid unlock, separately distributed for
+commercial purposes, or sublicensed. Commercial use of those materials
+requires separate permission. These restrictions apply to the protected
+materials rather than imposing a general commercial-use ban on project-authored
+software, infrastructure, or unrelated services; no particular commercial
+model is represented as approved. See [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) for
+details.
 
 ## Rider–Waite–Smith tarot
 
@@ -30,13 +35,13 @@ https://commons.wikimedia.org/wiki/Category:Rider-Waite_tarot_deck_(Roses_%26_Li
 The relevant Commons file pages identify the source images as public-domain
 works. Users should consult each file page and the law applicable in their
 jurisdiction. The underlying art is not claimed as project-authored content and
-is not relicensed under this project's MIT license.
+is not relicensed under this project's AGPL or MPL grants.
 
 ## Mystagogus
 
 Mystagogus artwork and related text are © Josephine McCarthy. Used with written
-permission for this strictly non-commercial project. Excluded from the MIT
-License.
+permission under the protected-material conditions above. Excluded from
+AGPL-3.0-only, MPL-2.0, and the Mini Program proprietary software licence.
 
 Quareia identifies Josephine McCarthy as the author, designer, and painter of
 Mystagogus. This repository retains local display derivatives of the 78 card
@@ -47,16 +52,17 @@ or translated from the official Mystagogus book and quick-reference materials:
 - https://www.quareia.com/how-to
 
 The card art, Mystagogus materials, and publication-derived text are excluded
-from the MIT license. Written permission was granted for this project's
-strictly non-commercial use; this repository does not grant downstream users any
+from the project's AGPL/MPL grants. Written permission is subject to the
+protected-material conditions above; this repository does not grant downstream users any
 licence to reuse those materials, and access to
 the website grants no such right either.
 
 ## LXXXI — Quareia The Magician's Deck
 
 The LXXXI Magician's Deck artwork and related text are © Josephine McCarthy,
-Stuart Littlejohn, and Cassandra Beanland. Used with written permission for
-this strictly non-commercial project. Excluded from the MIT License.
+Stuart Littlejohn, and Cassandra Beanland. Used with written permission under
+the protected-material conditions above. Excluded from AGPL-3.0-only,
+MPL-2.0, and the Mini Program proprietary software licence.
 
 Quareia identifies LXXXI as a collaboration between Josephine McCarthy, Stuart
 Littlejohn, and Cassandra Beanland. Card meanings and layouts in this project
@@ -72,10 +78,11 @@ base:
 
 `https://assets.luotianyi.fun/tarot-divination-site/lxxxi/v1`
 
-Written permission was granted for this project's strictly non-commercial use.
+Written permission is subject to the protected-material conditions above.
 This repository does not grant downstream users any licence to reuse those
 materials. The remote display derivatives, card meanings, translations, and
-layouts are not open-source material and are not covered by the MIT license.
+layouts are not open-source material and are not covered by AGPL-3.0-only or
+MPL-2.0.
 Access to the website grants no permission to copy, redistribute, extract, or
 reuse them. Original scan masters are not hosted on the public asset service.
 
@@ -84,7 +91,7 @@ reuse them. Original scan masters are not hosted on the public asset service.
 Some tarot interpretations and spread descriptions were compiled, adapted, or
 translated from third-party publications, including Quareia training material
 and 《21世纪的塔罗技能》. Those publication-derived portions are excluded from
-the MIT license unless a specific file states otherwise.
+the project's AGPL/MPL grants unless a specific file states otherwise.
 
 ## English reference material
 
@@ -95,6 +102,7 @@ Meanings*. The source PDFs are not required at runtime and are not included in
 the website build. Copyright remains with the authors, artists, and publishers
 identified in those documents.
 
-The publication-derived English summaries are excluded from the MIT license.
+The publication-derived English summaries are excluded from the project's
+AGPL/MPL grants.
 This project grants no permission to copy, redistribute, extract, or reuse the
 source publications.

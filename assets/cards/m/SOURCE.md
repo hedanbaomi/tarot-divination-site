@@ -1,8 +1,8 @@
 # Mystagogus (M 牌) Card Faces
 
 Mystagogus artwork and related text are © Josephine McCarthy. Used with written
-permission for this strictly non-commercial project. Excluded from the MIT
-License.
+permission under the protected-material non-commercial conditions. Excluded
+from AGPL-3.0-only, MPL-2.0, and the Mini Program proprietary software licence.
 
 Local JPEG display derivatives (max width 600px) prepared for use in this site.
 
@@ -19,15 +19,19 @@ materials:
 - https://www.quareia.com/how-to
 
 The card art, Mystagogus materials, and publication-derived text are excluded
-from this project's MIT license. Written permission was granted for this
-project's strictly non-commercial use; it covers this free GitHub Pages website
-and a future free, open-source Android application, provided that the
-copyrighted materials remain strictly non-commercial, are reasonably protected
-from misuse, and are excluded from all open-source licences. This repository
-does not grant downstream users any licence to reuse these materials. Access to
+from this project's AGPL/MPL grants. Written permission covers the website and
+Android application; a separate extension dated 2026-08-05 covers the WeChat
+Mini Program. The protected materials must remain non-commercial and reasonably
+protected from misuse. They may not be sold, paywalled or paid-unlocked,
+separately distributed for commercial purposes, sublicensed, or placed under a
+software licence; commercial use requires separate permission. This condition
+applies to the materials, not as a general commercial-use ban on
+project-authored software, infrastructure, or unrelated services. No particular
+commercial model is represented as approved. This repository does not grant
+downstream users any licence to reuse these materials. Access to
 the website or repository grants no such right either. Their inclusion does not
 imply affiliation, sponsorship, or endorsement by Josephine McCarthy or Quareia.
 
-See [`../../ATTRIBUTIONS.md`](../../ATTRIBUTIONS.md) and
-[`../../THIRD_PARTY_NOTICES.md`](../../THIRD_PARTY_NOTICES.md) for the full
+See [`../../../ATTRIBUTIONS.md`](../../../ATTRIBUTIONS.md) and
+[`../../../THIRD_PARTY_NOTICES.md`](../../../THIRD_PARTY_NOTICES.md) for the full
 rights boundaries.

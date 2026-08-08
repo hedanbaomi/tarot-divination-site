@@ -2,7 +2,7 @@
 
 # Quareia 占卜站点
 
-一个非官方、非商业的纯前端占卜网站：支持**塔罗牌**、**Mystagogus（M 牌）** 与 **LXXXI 魔法牌（奎瑞亚）** 三套牌组，并提供**简体中文 / English** 一键切换。左右滑动牌堆、轻点任意一张牌抽出，翻牌解读；塔罗支持正位/逆位模式、大小阿卡那筛选与第六章牌阵，M 牌与 LXXXI 魔法牌固定全正位（说明书未提供逆位含义）。为手机端优化，单手轻点即可完成占卜。
+一个非官方的纯前端占卜网站：支持**塔罗牌**、**Mystagogus（M 牌）** 与 **LXXXI 魔法牌（奎瑞亚）** 三套牌组，并提供**简体中文 / English** 一键切换。左右滑动牌堆、轻点任意一张牌抽出，翻牌解读；塔罗支持正位/逆位模式、大小阿卡那筛选与第六章牌阵，M 牌与 LXXXI 魔法牌固定全正位（说明书未提供逆位含义）。为手机端优化，单手轻点即可完成占卜。
 
 本项目与 Quareia、Josephine McCarthy、相关艺术家和出版方不存在隶属、赞助或背书关系。
 
@@ -101,9 +101,9 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 ## 说明
 
 - **塔罗**牌意文本为面向本网站的整理与改写，参考《21世纪的塔罗技能》和 Quareia 训练语境。
-- **M 牌**关键词与牌阵译自 Josephine McCarthy《Mystagogus》关键词索引与 Layout PDF；牌面图像和由第三方出版物整理或翻译的内容不在 MIT 许可范围内。
-- **LXXXI 魔法牌**牌意译自《LXXXI 奎瑞亚魔法牌·牌意说明书》（繁体中文版）并转写为简体中文；牌阵译自说明书第十章。LXXXI 牌面与相关文本为 Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland 的作品，经作者书面许可在本项目严格非商业使用，不在 MIT 许可范围内；相关视觉素材仅用于站点运行展示，不随公开源码仓库分发，也不向访问者授予复制、再分发或其他开源权利。
-- **英文支持**以本地 `en/` 中的英文资料为依据，对用于网页展示的牌名、关键词、牌义与牌阵说明进行简明整理和改写；不会在网页中逐页转载整本资料，原始 PDF 也不作为网站运行资源发布。据其整理的文本不属于 MIT 许可。
+- **M 牌**关键词与牌阵译自 Josephine McCarthy《Mystagogus》关键词索引与 Layout PDF；牌面图像和由第三方出版物整理或翻译的内容不在 AGPL/MPL 开源许可范围内。
+- **LXXXI 魔法牌**牌意译自《LXXXI 奎瑞亚魔法牌·牌意说明书》（繁体中文版）并转写为简体中文；牌阵译自说明书第十章。LXXXI 牌面与相关文本为 Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland 的作品，经作者书面许可按受保护材料的非商业条件使用，不在 AGPL/MPL 开源许可范围内；相关视觉素材仅用于获授权的产品展示，不随公开源码仓库分发，也不向访问者授予复制、再分发或其他开源权利。
+- **英文支持**以本地 `en/` 中的英文资料为依据，对用于网页展示的牌名、关键词、牌义与牌阵说明进行简明整理和改写；不会在网页中逐页转载整本资料，原始 PDF 也不作为网站运行资源发布。据其整理的文本不属于 AGPL/MPL 开源许可。
 - 健康布局仅用于记录牌阵结构与个人反思，不能替代医生诊断、治疗或其他专业医疗建议。
 
 ## Card Image Source
@@ -136,7 +136,7 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 
 ## 授权与署名
 
-本项目为非官方、免费、严格非商业工具，不暗示 Quareia 或相关作者为项目背书。Josephine McCarthy 的书面许可已明确覆盖本免费的 GitHub Pages 网站，以及免费的 Android 应用，前提是第三方版权素材始终严格非商业、防止滥用，并排除在一切开源许可之外。第三方牌面与文本不适用 MIT License：
+本项目为非官方工具，不暗示 Quareia 或相关作者为项目背书。Josephine McCarthy 的书面许可已明确覆盖 GitHub Pages 网站和 Android 应用；2026-08-05 又单独同意将相同的受保护材料使用范围扩展到微信小程序。Mystagogus/LXXXI 牌面、牌意、翻译、牌阵及相关授权材料必须保持非商业、防止滥用，并排除在 AGPL、MPL 和小程序 proprietary 软件许可之外。第三方牌面与文本不适用 AGPL-3.0-only 或 MPL-2.0：
 
 - **Mystagogus**：© Josephine McCarthy。
 - **LXXXI 魔法牌**：© Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland。
@@ -149,8 +149,8 @@ Quareia 官网：<https://www.quareia.com>。完整权利边界见 [`ATTRIBUTION
 
 ## Android 边界（仅文档说明）
 
-Josephine McCarthy 的书面许可已明确覆盖本免费的 GitHub Pages 网站，以及免费的 Android 应用（`android-demo/`），前提是第三方版权素材始终严格非商业、采取合理措施防止滥用，并排除在一切开源许可之外。Android 版本同样不得包含广告、打赏、订阅、付费云服务、付费解锁或其他盈利功能；第三方牌面与文本（Mystagogus、LXXXI 等）不得纳入 MIT 或其他开源许可。LXXXI 牌面加密实现与密钥材料不随开源仓库发布，完整牌面仅通过正式 APK 提供。未来若要商业化，必须另行取得正式的商业电子版权许可。
+Josephine McCarthy 的书面许可已明确覆盖 GitHub Pages 网站和 Android 应用（`android-demo/`）；微信小程序于 2026-08-05 单独获得扩展同意。该非商业条件只针对 Mystagogus/LXXXI 牌面、牌意、翻译、牌阵及相关授权材料，不是对用户原创软件、基础设施或无关独立服务的一般性商业禁令。授权材料不得出售、设置付费墙或付费解锁、单独商业分发、转授权，也不得纳入 AGPL、MPL 或小程序 proprietary 软件许可；涉及这些材料的商业利用必须另行取得权利人授权。本文不声称 Josephine 已批准任何具体商业模式。LXXXI 牌面加密实现与密钥材料不随开源仓库发布，完整牌面仅通过正式 APK 提供。
 
 ## License
 
-MIT 仅适用于本项目作者原创的程序代码，以及明确标注为项目原创的内容。第三方牌面图像、Mystagogus 与 LXXXI 材料，以及基于第三方出版物整理、改写或翻译的文本与数据均不在 MIT 许可范围内（Mystagogus 与 LXXXI 经作者书面许可仅限本项目严格非商业使用）。详见 [`LICENSE`](LICENSE)、[`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) 与 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+本仓库采用文件/目录级许可地图：根网站、`backend/` 与 `telemetry-worker/` 的原创软件为 `AGPL-3.0-only`；`android-demo/` 的公开 Android 原生代码和 Android 分发的软件资产为 `MPL-2.0`。第三方牌面、牌意、翻译、改编内容以及私有 LXXXI provider/Vault/material/qv 均不进入上述开源许可。`v1.2.0` 及以前已取得的历史 MIT 授权继续有效。完整范围见 [`LICENSE.md`](LICENSE.md)、[`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) 与 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。

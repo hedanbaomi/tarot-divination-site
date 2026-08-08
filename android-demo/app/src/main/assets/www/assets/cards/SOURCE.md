@@ -11,7 +11,7 @@ project uses local display derivatives so the website works from GitHub Pages
 without relying on hotlinked external images.
 
 The Commons file pages identify these source images as public-domain works.
-That status is separate from this project's MIT license; users should consult
+That status is separate from this project's AGPL/MPL software licences; users should consult
 the individual Commons file page and the law applicable in their jurisdiction.
 The project does not claim the underlying art as original project content.
 

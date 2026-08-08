@@ -9,6 +9,15 @@ Android app.
 > depend on this API. Cloud notes are an optional, future-paid feature; this
 > round implements everything **except** payments.
 
+## Licence and status
+
+This is an optional/legacy local-development backend and is not required by the
+current static website, Android application, or telemetry Worker. Its
+project-authored software is licensed under `AGPL-3.0-only`; third-party
+dependencies and separately copyrighted content retain their own terms. See
+[`LICENSE.md`](LICENSE.md) and the repository-level
+[`LICENSE.md`](../LICENSE.md).
+
 ## Tech stack
 
 - **FastAPI** (ASGI) + **SQLAlchemy 2** ORM + **Alembic** migrations

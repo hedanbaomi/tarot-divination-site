@@ -20,10 +20,11 @@ import androidx.core.view.setPadding
  *
  * A clearly accessible, always-on legal notice reachable from the main
  * activity's homepage menu (never a forced startup dialog). It states that the
- * app is an unofficial, free, strictly non-commercial tool, credits the
- * Mystagogus and LXXXI rights holders, separates the third-party materials
- * from the application code's open-source licence, links to the official
- * Quareia website, and reproduces Josephine McCarthy's note verbatim.
+ * app is unofficial, credits the Mystagogus and LXXXI rights holders, limits
+ * the non-commercial condition to the authorised third-party materials,
+ * separates those materials from the application code's software licence,
+ * links to the official Quareia website, and reproduces Josephine McCarthy's
+ * note verbatim.
  *
  * The verbatim English note below is the authoritative text and must be kept
  * word-for-word; the Chinese text shown beneath it is only a reference

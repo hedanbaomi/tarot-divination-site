@@ -4,7 +4,7 @@
 
 This is an Android demo of the Quareia divination website. It packages the mobile interface as an offline experience and requires no sign-in; card art and core functions do not depend on the network. The app requests `INTERNET` permission for opt-out anonymous usage statistics and external links.
 
-This is an unofficial, non-commercial demo. It is not affiliated with, sponsored by, or endorsed by Quareia, Josephine McCarthy, any associated artist, or any publisher.
+This is an unofficial demo. It is not affiliated with, sponsored by, or endorsed by Quareia, Josephine McCarthy, any associated artist, or any publisher.
 
 ## Features
 
@@ -186,11 +186,11 @@ Releases.
 
 ## Content and Rights
 
-This app is an unofficial, free, strictly non-commercial tool. It contains no advertising, donations, subscriptions, paid cloud services, paid unlocks, or other revenue-generating features. Josephine McCarthy's written permission covers this free application (and the corresponding free GitHub Pages website), provided that the copyrighted materials remain strictly non-commercial and are excluded from all open-source licences.
+This is an unofficial application. Josephine McCarthy's written permission covers this Android application and the corresponding GitHub Pages website; the WeChat Mini Program received a separate extension on 2026-08-05. The non-commercial condition applies to Mystagogus/LXXXI artwork, meanings, translations, layouts, and related authorised materials—not as a general commercial-use ban on project-authored Android software, infrastructure, or unrelated independent services. The protected materials may not be sold, paywalled or offered as a paid unlock, separately distributed for commercial purposes, sublicensed, or placed under AGPL, MPL, or the Mini Program proprietary software licence. Commercial use involving those materials requires separate permission from the relevant rights holders. This notice does not claim that Josephine has approved any particular commercial model.
 
-An in-app "About / Copyright & Attribution" screen (entered via the button in the top-right corner of the home screen) is bilingual and contains: the non-commercial statement, the Mystagogus and LXXXI credits, the separation of third-party materials from the application's open-source licence, a clickable link to the official Quareia website, and the author's note kept verbatim in English with a Chinese reference translation.
+An in-app "About / Copyright & Attribution" screen (entered via the button in the top-right corner of the home screen) is bilingual and contains: the protected-material non-commercial boundary, the Mystagogus and LXXXI credits, the separation of third-party materials from the application's open-source licence, a clickable link to the official Quareia website, and the author's note kept verbatim in English with a Chinese reference translation.
 
-The MIT License covers only original program code and content explicitly identified as original to this project. Third-party card artwork (Mystagogus, LXXXI, etc.), publication content, and adapted, rewritten, or translated material are outside the MIT License, and opening the source grants no permission to copy or redistribute them. LXXXI card faces are not distributed with the open-source repository; in the official APK they ship in a protected packaging that includes no original scan masters and offers no bulk-export or raw-image download feature. See the repository-level [`LICENSE`](../LICENSE) and [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
+Project-authored public Android native/host code, Android-specific resources, Gradle project configuration, and tests in this directory use `MPL-2.0`. Web software in the Android bundle follows the directory licence map and is distributed under MPL; the root website is separately distributed under `AGPL-3.0-only`. Third-party artwork (Mystagogus, LXXXI, etc.), publication content, adaptations, rewrites, and translations are outside both open-source grants, and opening the source grants no permission to copy or redistribute them. The private LXXXI provider/Vault/material/qv is also excluded. LXXXI card faces are not distributed with the open-source repository; in the official APK they ship in protected packaging that includes no original scan masters and offers no bulk-export or raw-image download feature. See [`LICENSE.md`](LICENSE.md), the repository-level [`LICENSE.md`](../LICENSE.md), and [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md). Historical MIT permissions already received for `v1.2.0` and earlier remain valid.
 
 The developer key material required to rebuild the full official APK is kept
 only in controlled local directories. Never commit, package, upload, or share

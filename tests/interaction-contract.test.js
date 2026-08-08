@@ -49,12 +49,12 @@ test("website uses the branded dialog for spread and history confirmations", fun
 
 test("root page pins the web-announcement resource cache versions", function () {
   var html = read(surface.html);
-  assert.match(html, /src="js\/i18n\.js\?v=20260806-web-announcements"/);
+  assert.match(html, /src="js\/i18n\.js\?v=20260808-license-scope"/);
   assert.match(html, /href="css\/styles\.css\?v=20260806-web-announcements"/);
   assert.match(html, /src="js\/announcements\.js\?v=1"/);
 });
 
-test("footer carries the non-commercial attribution, creators, Quareia link, and Josephine quote", function () {
+test("footer limits the non-commercial boundary to protected materials", function () {
   var html = read(surface.html);
   var i18n = read(surface.i18n);
   var css = read(surface.css);
@@ -64,6 +64,14 @@ test("footer carries the non-commercial attribution, creators, Quareia link, and
     html,
     /safer, a lot more accurate and far more powerful/
   );
+  assert.match(i18n, /2026-08-05/);
+  assert.match(i18n, /paywall/);
+  assert.match(i18n, /paid unlock/);
+  assert.match(i18n, /commercial use requires separate permission/);
+  assert.match(i18n, /not a general commercial-use ban/);
+  assert.match(html, /设置付费墙或付费解锁/);
+  assert.match(html, /商业利用须另行取得授权/);
+  assert.doesNotMatch(i18n, /strictly non-commercial tool/);
   ["attribution.status", "attribution.mystagogusRights", "attribution.lxxxiRights",
     "attribution.quareiaLink", "attribution.quoteCite"].forEach(function (key) {
     assert.ok(i18n.indexOf('"' + key + '"') !== -1, "missing i18n key " + key);

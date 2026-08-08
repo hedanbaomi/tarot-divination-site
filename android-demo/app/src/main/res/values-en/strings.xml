@@ -4,13 +4,13 @@
     <!-- About / Copyright & attribution screen -->
     <string name="menu_about">About / Copyright</string>
     <string name="about_title">About / Copyright &amp; Attribution</string>
-    <string name="about_status">This is an unofficial, free, strictly non-commercial tool. It is not affiliated with, sponsored by, or endorsed by Quareia, Josephine McCarthy, the associated artists, or any publisher. Third-party card faces and text do not fall under the application code\'s open-source licence.</string>
-    <string name="about_permission_note">Josephine McCarthy\'s written permission covers this free application (and the corresponding free GitHub Pages website), provided that the copyrighted materials remain strictly non-commercial and are excluded from all open-source licences.</string>
+    <string name="about_status">This is an unofficial tool. It is not affiliated with, sponsored by, or endorsed by Quareia, Josephine McCarthy, the associated artists, or any publisher. Protected third-party card faces and text do not fall under the application code\'s software licence.</string>
+    <string name="about_permission_note">Josephine McCarthy\'s written permission covers this Android application and website; a 2026-08-05 extension covers the WeChat Mini Program. The non-commercial restriction applies only to Mystagogus/LXXXI artwork, meanings, translations, layouts, and related authorised material. Those materials may not be sold, placed behind a paywall or paid unlock, separately commercially distributed, sublicensed, or put under a software licence; commercial use requires separate permission. This is not a general ban on commercial use of project-authored software, infrastructure, or unrelated services, and it does not claim approval of any particular commercial model.</string>
     <string name="about_mystagogus_label">Mystagogus artwork and related text</string>
-    <string name="about_mystagogus_rights">© Josephine McCarthy · Used with written permission for this strictly non-commercial project.</string>
+    <string name="about_mystagogus_rights">© Josephine McCarthy · Used with written permission under the protected-material non-commercial conditions.</string>
     <string name="about_lxxxi_label">LXXXI Magician\'s Deck artwork and related text</string>
-    <string name="about_lxxxi_rights">© Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland · Used with written permission for this strictly non-commercial project.</string>
-    <string name="about_oss_boundary">The application code follows the MIT licence in the repository root; however, third-party card faces, card-meaning text, and derived content are not covered by that licence and are not relicensed by opening the source.</string>
+    <string name="about_lxxxi_rights">© Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland · Used with written permission under the protected-material non-commercial conditions.</string>
+    <string name="about_oss_boundary">Public Android code follows the repository MPL-2.0 map; root website software uses AGPL-3.0-only. Third-party card faces, meanings, derived content, and the private LXXXI implementation are outside those grants and receive no redistribution rights merely because the app is open source.</string>
     <string name="about_quareia_label">Official Quareia website</string>
     <string name="about_quareia_url">https://www.quareia.com</string>
     <string name="about_quote_label">A note from the author</string>
