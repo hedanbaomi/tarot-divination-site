@@ -82,6 +82,22 @@ class AnnouncementPrompterTest {
     }
 
     @Test
+    fun activityRecreationDoesNotRepeatAnAlreadyDisplayedRevision() {
+        val item = announcement(1, revision = 1, severity = "important")
+        AnnouncementPrompter(activity).onAnnouncements(listOf(item))
+        assertNotNull(ShadowDialog.getLatestDialog())
+
+        controller.destroy()
+        ShadowDialog.reset()
+        controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
+        activity = controller.get()
+        AnnouncementPrompter(activity).onAnnouncements(listOf(item))
+
+        assertNull(ShadowDialog.getLatestDialog())
+        assertTrue(AnnouncementController.isRead(1, 1))
+    }
+
+    @Test
     fun infoAnnouncementsNeverPopUpAndStayUnread() {
         val prompter = AnnouncementPrompter(activity)
         prompter.onAnnouncements(listOf(announcement(1, revision = 1, severity = "info")))
@@ -118,6 +134,17 @@ class AnnouncementPrompterTest {
         prompter.onAnnouncements(listOf(announcement(1, revision = 1, severity = "important")))
 
         assertNull(ShadowDialog.getLatestDialog())
+        assertFalse(AnnouncementController.isRead(1, 1))
+    }
+
+    @Test
+    fun stoppedActivityDoesNotShowOrMarkAnnouncementRead() {
+        controller.pause().stop()
+        val prompter = AnnouncementPrompter(activity)
+        prompter.onAnnouncements(listOf(announcement(1, revision = 1, severity = "important")))
+
+        assertNull(ShadowDialog.getLatestDialog())
+        assertFalse(AnnouncementController.isRead(1, 1))
     }
 
     @Test

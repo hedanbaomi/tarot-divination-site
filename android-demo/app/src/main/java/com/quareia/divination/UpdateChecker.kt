@@ -104,43 +104,45 @@ internal interface ApkDownloader {
 internal fun checkSync(source: UpdateSource, currentVersionName: String): UpdateCheckResult =
     try {
         val release = source.fetchLatest() ?: return UpdateCheckResult.Failed
-        if (VersionComparator.isNewer(release.tagName, currentVersionName)) {
-            UpdateCheckResult.Available(release)
-        } else {
-            UpdateCheckResult.UpToDate
-        }
+        val comparison = VersionComparator.compare(release.tagName, currentVersionName)
+            ?: return UpdateCheckResult.Failed
+        if (comparison > 0) UpdateCheckResult.Available(release) else UpdateCheckResult.UpToDate
     } catch (_: Throwable) {
         UpdateCheckResult.Failed
     }
 
-/** Numeric `1.2` / `v1.2.3` style comparisons; malformed input is never newer. */
+/** Numeric-core comparison for release, hardened, prerelease and build versions. */
 internal object VersionComparator {
 
-    fun isNewer(tagName: String, currentVersionName: String): Boolean {
-        val latest = parseVersion(tagName) ?: return false
-        val current = parseVersion(currentVersionName) ?: return false
-        val width = maxOf(latest.size, current.size)
+    fun compare(leftVersion: String, rightVersion: String): Int? {
+        val left = parseVersion(leftVersion) ?: return null
+        val right = parseVersion(rightVersion) ?: return null
+        val width = maxOf(left.size, right.size)
         for (index in 0 until width) {
-            val left = latest.getOrElse(index) { 0 }
-            val right = current.getOrElse(index) { 0 }
-            if (left != right) return left > right
+            val leftPart = left.getOrElse(index) { 0 }
+            val rightPart = right.getOrElse(index) { 0 }
+            if (leftPart != rightPart) return leftPart.compareTo(rightPart)
         }
-        return false
+        return 0
     }
 
-    /** True when both values parse to the same numeric version (v-prefix ignored). */
-    fun equal(a: String, b: String): Boolean {
-        val left = parseVersion(a) ?: return false
-        val right = parseVersion(b) ?: return false
-        return left == right
-    }
+    fun isNewer(tagName: String, currentVersionName: String): Boolean =
+        compare(tagName, currentVersionName)?.let { it > 0 } ?: false
+
+    /** True when both values have the same numeric core. */
+    fun equal(a: String, b: String): Boolean = compare(a, b) == 0
 
     private fun parseVersion(raw: String): List<Int>? {
-        val digits = raw.trim().removePrefix("v").split('.')
-        val numbers = digits.map { part -> part.toIntOrNull() ?: return null }
-        if (numbers.isEmpty()) return null
-        return numbers
+        val match = VERSION_PATTERN.matchEntire(raw.trim()) ?: return null
+        return match.groupValues[1].split('.').map { part -> part.toIntOrNull() ?: return null }
     }
+
+    private val VERSION_PATTERN =
+        Regex(
+            "^[vV]?(\\d+(?:\\.\\d+)*)" +
+                "(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?" +
+                "(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$",
+        )
 }
 
 /** HTTPS + trusted-host policy for the API call and every download redirect. */

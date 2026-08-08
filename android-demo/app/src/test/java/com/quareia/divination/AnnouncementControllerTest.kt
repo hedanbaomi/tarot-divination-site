@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Looper
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -103,6 +104,86 @@ class AnnouncementControllerTest {
         waitForCallback(forced)
 
         assertEquals(2, fetchCount)
+    }
+
+    @Test
+    fun foregroundCheckFetchesNewRevisionInsideSixHourWindow() {
+        var revision = 1
+        var fetchCount = 0
+        AnnouncementController.setFetcherForTesting {
+            fetchCount += 1
+            json(listOf(announcement(1, revision = revision, severity = "important")))
+        }
+        val first = CountDownLatch(1)
+        AnnouncementController.check(force = true) { first.countDown() }
+        waitForCallback(first)
+        AnnouncementController.markRead(1, 1)
+
+        revision = 2
+        clock += 1L
+        val receivedRevisions = mutableListOf<Int>()
+        val foreground = CountDownLatch(2)
+        AnnouncementController.checkOnForeground { announcements ->
+            receivedRevisions.add(announcements.single().revision)
+            foreground.countDown()
+        }
+        waitForCallback(foreground)
+
+        assertEquals(2, fetchCount)
+        assertEquals(listOf(1, 2), receivedRevisions)
+        assertTrue(AnnouncementController.isRead(1, 1))
+        assertFalse(AnnouncementController.isRead(1, 2))
+    }
+
+    @Test
+    fun concurrentForegroundChecksShareFetchAndDeliverFreshResultToEveryCaller() {
+        val fetchCount = AtomicInteger(0)
+        val fetchStarted = CountDownLatch(1)
+        val releaseFetch = CountDownLatch(1)
+        AnnouncementController.setFetcherForTesting {
+            fetchCount.incrementAndGet()
+            fetchStarted.countDown()
+            assertTrue(releaseFetch.await(2, TimeUnit.SECONDS))
+            json(listOf(announcement(9, severity = "important")))
+        }
+
+        val results = mutableListOf<List<Announcement>>()
+        val callbacks = CountDownLatch(4)
+        repeat(2) {
+            AnnouncementController.checkOnForeground { announcements ->
+                results.add(announcements)
+                callbacks.countDown()
+            }
+        }
+
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(fetchStarted.await(2, TimeUnit.SECONDS))
+        releaseFetch.countDown()
+        waitForCallback(callbacks)
+
+        assertEquals(1, fetchCount.get())
+        assertEquals(2, results.count { it.singleOrNull()?.id == 9L })
+    }
+
+    @Test
+    fun foregroundNetworkFailureKeepsCachedResultAndStaysSilent() {
+        AnnouncementsStore.update(
+            listOf(
+                Announcement(3, 1, "important", "title", "body", "", ""),
+            ),
+        )
+        AnnouncementController.setFetcherForTesting { throw RuntimeException("network down") }
+
+        val results = mutableListOf<List<Announcement>>()
+        val callbacks = CountDownLatch(2)
+        AnnouncementController.checkOnForeground { announcements ->
+            results.add(announcements)
+            callbacks.countDown()
+        }
+        waitForCallback(callbacks)
+
+        assertEquals(listOf(1, 0), results.map(List<Announcement>::size))
+        assertEquals(1, AnnouncementsStore.lastList().size)
     }
 
     @Test

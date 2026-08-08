@@ -159,11 +159,11 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         // Foreground signal for the active-version statistics; the controller
         // deduplicates to once per 6 hours per version and stays silent when
-        // telemetry is off. Announcements are checked on launch and on every
-        // return to the foreground (deduplicated to once per 6 hours; a
-        // failure is silent and never affects the app).
+        // telemetry is off. A foreground announcement check can reuse cached
+        // unread prompts immediately, then joins one fresh request for a new
+        // id/revision. Failure is silent and never affects the app.
         TelemetryController.recordAppActive()
-        AnnouncementController.check { announcements ->
+        AnnouncementController.checkOnForeground { announcements ->
             AnnouncementPrompter(this).onAnnouncements(announcements)
         }
     }

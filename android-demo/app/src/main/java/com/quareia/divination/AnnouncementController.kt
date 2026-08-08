@@ -14,10 +14,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  * In-app announcements (info / important / update).
  *
  * Fetches published announcements from the telemetry worker's public
- * endpoint, deduplicated to at most one network check per 6 hours on startup
- * and foreground (a manual refresh can force a check). Any network, HTTP, or
- * JSON failure is silent and never affects launch, divination, history, or
- * the updater.
+ * endpoint, deduplicated to at most one ordinary network check per 6 hours
+ * (a manual refresh can force a check). Foreground checks replay the in-memory
+ * snapshot immediately and join one fresh request so a newer revision is not
+ * hidden by the ordinary startup throttle. Any network, HTTP, or JSON failure
+ * is silent and never affects launch, divination, history, or the updater.
  *
  * Read tracking is local and keyed by `id + revision`: marking an
  * announcement read records both values, so when an admin edits an
@@ -43,6 +44,8 @@ internal object AnnouncementController {
     }
     private val mainHandler = Handler(Looper.getMainLooper())
     private val inFlight = AtomicBoolean(false)
+    private val freshCallbackLock = Any()
+    private val pendingFreshCallbacks = mutableListOf<(List<Announcement>) -> Unit>()
 
     @Volatile
     private var appContext: Context? = null
@@ -67,15 +70,42 @@ internal object AnnouncementController {
      */
     fun check(force: Boolean = false, onResult: ((List<Announcement>) -> Unit)? = null) {
         val context = appContext ?: return
-        if (!inFlight.compareAndSet(false, true)) return
-
         val now = currentTimeMillis()
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!force && now - prefs.getLong(KEY_LAST_CHECK_UTC, 0L) < MIN_CHECK_INTERVAL_MS) {
-            inFlight.set(false)
             mainHandler.post { onResult?.invoke(AnnouncementsStore.lastList()) }
             return
         }
+        requestFresh(context, onResult)
+    }
+
+    /**
+     * Called for a real foreground transition. Cached promptable items are
+     * delivered immediately, while all overlapping foreground callers join a
+     * single fresh request and each receive its result. This keeps an Activity
+     * recreation from losing a response that was started by the old instance.
+     */
+    fun checkOnForeground(onResult: ((List<Announcement>) -> Unit)? = null) {
+        val context = appContext ?: return
+        mainHandler.post { onResult?.invoke(AnnouncementsStore.lastList()) }
+        requestFresh(context, onResult)
+    }
+
+    private fun requestFresh(
+        context: Context,
+        onResult: ((List<Announcement>) -> Unit)?,
+    ) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val shouldStart = synchronized(freshCallbackLock) {
+            if (onResult != null) pendingFreshCallbacks.add(onResult)
+            if (inFlight.get()) {
+                false
+            } else {
+                inFlight.set(true)
+                true
+            }
+        }
+        if (!shouldStart) return
 
         executor.execute {
             val fetched = try {
@@ -86,12 +116,15 @@ internal object AnnouncementController {
             }
             val list = fetched ?: emptyList()
             mainHandler.post {
-                inFlight.set(false)
                 if (fetched != null) {
                     prefs.edit().putLong(KEY_LAST_CHECK_UTC, currentTimeMillis()).apply()
                     AnnouncementsStore.update(list)
                 }
-                onResult?.invoke(list)
+                val callbacks = synchronized(freshCallbackLock) {
+                    inFlight.set(false)
+                    pendingFreshCallbacks.toList().also { pendingFreshCallbacks.clear() }
+                }
+                callbacks.forEach { callback -> callback(list) }
             }
         }
     }
@@ -219,7 +252,10 @@ internal object AnnouncementController {
     internal fun resetForTesting() {
         fetcherForTests = null
         nowProviderForTests = null
-        inFlight.set(false)
+        synchronized(freshCallbackLock) {
+            inFlight.set(false)
+            pendingFreshCallbacks.clear()
+        }
         appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.edit()?.clear()?.commit()
     }
 

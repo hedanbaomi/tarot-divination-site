@@ -2,6 +2,7 @@
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -37,11 +38,30 @@ class UpdateCheckerTest {
     }
 
     @Test
+    fun hardenedVersionUsesItsNumericCore() {
+        assertTrue(VersionComparator.isNewer("v1.2.1", "1.2.0-hardened-local"))
+        assertFalse(VersionComparator.isNewer("1.2.0", "1.2.0-hardened-local"))
+        assertTrue(VersionComparator.equal("1.2.0", "1.2.0-hardened-local"))
+    }
+
+    @Test
+    fun prereleaseAndBuildSuffixesUseTheirNumericCore() {
+        assertTrue(VersionComparator.equal("1.2.0", "1.2.0-rc.1"))
+        assertTrue(VersionComparator.equal("v1.2.0", "1.2.0+build.7"))
+        assertTrue(VersionComparator.equal("1.2.0", "1.2.0-rc.1+build.7"))
+        assertTrue(VersionComparator.isNewer("1.2.1+build", "1.2.0-rc.1"))
+    }
+
+    @Test
     fun malformedInputIsNeverNewer() {
         assertFalse(VersionComparator.isNewer("latest", "1.0"))
         assertFalse(VersionComparator.isNewer("v1.x", "1.0"))
         assertFalse(VersionComparator.isNewer("1.0", "abc"))
         assertFalse(VersionComparator.isNewer("", "1.0"))
+        assertNull(VersionComparator.compare("1.0", "1.0-"))
+        assertNull(VersionComparator.compare("1.0+", "1.0"))
+        assertNull(VersionComparator.compare("1.0-rc.", "1.0"))
+        assertNull(VersionComparator.compare("1.0++build", "1.0"))
     }
 
     @Test
@@ -50,6 +70,15 @@ class UpdateCheckerTest {
         assertEquals(
             UpdateCheckResult.Available(release("v1.1.1")),
             checkSync(source, "1.1"),
+        )
+    }
+
+    @Test
+    fun newerReleaseIsAvailableFromHardenedBuild() {
+        val source = UpdateSource { release("v1.2.1") }
+        assertEquals(
+            UpdateCheckResult.Available(release("v1.2.1")),
+            checkSync(source, "1.2.0-hardened-local"),
         )
     }
 
@@ -78,11 +107,15 @@ class UpdateCheckerTest {
     }
 
     @Test
-    fun malformedTagIsUpToDateNotFailed() {
-        // The release metadata is valid; the unparseable tag simply cannot
-        // be newer than anything.
+    fun malformedTagIsFailedNotUpToDate() {
         val source = UpdateSource { release("latest") }
-        assertEquals(UpdateCheckResult.UpToDate, checkSync(source, "1.0"))
+        assertEquals(UpdateCheckResult.Failed, checkSync(source, "1.0"))
+    }
+
+    @Test
+    fun malformedCurrentVersionIsFailedNotUpToDate() {
+        val source = UpdateSource { release("v1.2.1") }
+        assertEquals(UpdateCheckResult.Failed, checkSync(source, "not-a-version"))
     }
 
     companion object {

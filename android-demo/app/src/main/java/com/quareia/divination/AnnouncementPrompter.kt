@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.Lifecycle
 
 /**
  * Shows important/update announcements as a dialog when they are unread, and
@@ -19,13 +20,17 @@ internal class AnnouncementPrompter(private val activity: ComponentActivity) {
 
     /** Picks the first unread important/update announcement and shows it. */
     fun onAnnouncements(announcements: List<Announcement>) {
-        if (activity.isDestroyed || activity.isFinishing) return
+        if (
+            activity.isDestroyed ||
+            activity.isFinishing ||
+            !activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        ) return
         val unread = announcements.firstOrNull {
             (it.severity == SEVERITY_UPDATE || it.severity == SEVERITY_IMPORTANT) &&
                 !AnnouncementController.isRead(it.id, it.revision)
         } ?: return
-        AnnouncementController.markRead(unread.id, unread.revision)
         showDialog(unread)
+        AnnouncementController.markRead(unread.id, unread.revision)
     }
 
     private fun showDialog(announcement: Announcement) {
