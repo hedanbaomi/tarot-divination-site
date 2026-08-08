@@ -120,10 +120,10 @@ last manual install; all later versions can use in-app updates.
 
 ## Announcements and Active-Version Statistics (since v1.2.0)
 
-On launch and on returning to the foreground the app silently checks for
-announcements (deduplicated to at most one check per 6 hours; network failures
-never affect any feature), with an announcements list and a manual refresh
-behind the About / Copyright screen.
+Ordinary announcement checks are throttled to once every 6 hours. Returning to
+the foreground performs a fresh check so new `important` / `update` revisions
+arrive promptly. Network failures never affect any feature; the About /
+Copyright screen provides an announcements list and manual refresh.
 
 - Announcements are filtered server-side (telemetry-worker D1) by status,
   platform, version range, and start/end time; content is plain text and the

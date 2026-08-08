@@ -1,6 +1,5 @@
 ﻿package com.quareia.divination
 
-import android.app.AlertDialog
 import android.app.Application
 import android.os.Looper
 import androidx.activity.ComponentActivity
@@ -39,6 +38,7 @@ class AnnouncementPrompterTest {
         AnnouncementController.resetForTesting()
         AnnouncementsStore.resetForTesting()
         UpdateManager.resetForTest()
+        ShadowDialog.reset()
         controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
         activity = controller.get()
     }
@@ -48,16 +48,61 @@ class AnnouncementPrompterTest {
         AnnouncementController.resetForTesting()
         AnnouncementsStore.resetForTesting()
         UpdateManager.resetForTest()
+        ShadowDialog.reset()
         runCatching { controller.destroy() }
     }
 
     @Test
     fun unreadImportantAnnouncementShowsDialogAndIsMarkedRead() {
         val prompter = AnnouncementPrompter(activity)
-        prompter.onAnnouncements(listOf(announcement(1, revision = 1, severity = "important")))
+        prompter.onAnnouncements(
+            listOf(
+                announcement(
+                    1,
+                    revision = 1,
+                    severity = "important",
+                    title = "重要标题",
+                    body = "重要正文",
+                )
+            )
+        )
 
-        assertNotNull(ShadowDialog.getLatestDialog())
+        val dialog = latestThemedDialog()
+        assertEquals("重要标题", dialog.titleTextView.text.toString())
+        assertEquals("重要正文", dialog.bodyTextView.text.toString())
+        assertEquals(
+            AppLocale.contextFor(activity).getString(R.string.announcement_dialog_severity_important),
+            dialog.severityTextView.text.toString(),
+        )
+        assertNull(dialog.primaryActionView)
+        assertTrue(dialog.laterActionView.minimumHeight >= dp(48))
         assertTrue(AnnouncementController.isRead(1, 1))
+    }
+
+    @Test
+    fun updateAnnouncementCreatesThemedDialogWithLocalizedSeverityAndContent() {
+        AnnouncementPrompter(activity).onAnnouncements(
+            listOf(
+                announcement(
+                    1,
+                    revision = 1,
+                    severity = "update",
+                    title = "更新标题",
+                    body = "更新正文",
+                    button = "立即检查",
+                )
+            )
+        )
+
+        val dialog = latestThemedDialog()
+        assertEquals("更新标题", dialog.titleTextView.text.toString())
+        assertEquals("更新正文", dialog.bodyTextView.text.toString())
+        assertEquals(
+            AppLocale.contextFor(activity).getString(R.string.announcement_dialog_severity_update),
+            dialog.severityTextView.text.toString(),
+        )
+        assertEquals("立即检查", dialog.primaryActionView?.text?.toString())
+        assertTrue(dialog.primaryActionView!!.minimumHeight >= dp(48))
     }
 
     @Test
@@ -112,12 +157,11 @@ class AnnouncementPrompterTest {
         val prompter = AnnouncementPrompter(activity)
         prompter.onAnnouncements(listOf(announcement(1, revision = 1, severity = "update")))
 
-        val dialog = ShadowDialog.getLatestDialog()
-        assertNotNull(dialog)
+        val dialog = latestThemedDialog()
         assertTrue(AnnouncementController.isRead(1, 1))
 
-                clickDialogButton(dialog as AlertDialog)
-                // UpdateManager.checkAndPrompt(manual = true) runs on its own executor;
+        dialog.primaryActionView!!.performClick()
+        // UpdateManager.checkAndPrompt(manual = true) runs on its own executor;
         // give it time, then let the main looper process the posted UI work.
         assertTrue(sourceFetch.await(5, TimeUnit.SECONDS))
         shadowOf(Looper.getMainLooper()).idle()
@@ -125,6 +169,19 @@ class AnnouncementPrompterTest {
 
         // The update check completed and showed the update prompt.
         assertNotNull(ShadowDialog.getLatestDialog())
+    }
+
+    @Test
+    fun laterActionDismissesTheThemedDialog() {
+        AnnouncementPrompter(activity).onAnnouncements(
+            listOf(announcement(1, severity = "important"))
+        )
+
+        val dialog = latestThemedDialog()
+        assertTrue(dialog.isShowing)
+        dialog.laterActionView.performClick()
+
+        assertFalse(dialog.isShowing)
     }
 
     @Test
@@ -151,22 +208,41 @@ class AnnouncementPrompterTest {
     fun httpsActionUrlOpensTheSystemBrowser() {
         val prompter = AnnouncementPrompter(activity)
         prompter.onAnnouncements(
-            listOf(announcement(1, revision = 1, severity = "info", actionUrl = "https://example.com/x"))
+            listOf(
+                announcement(
+                    2,
+                    revision = 1,
+                    severity = "important",
+                    button = "访问网站",
+                    actionUrl = "https://quareia.com",
+                )
+            )
         )
-        assertNull(ShadowDialog.getLatestDialog())
-
-        // The prompter only dialogs important/update; the action is exercised
-        // through a direct call: non-HTTPS links must be refused.
-        val prompter2 = AnnouncementPrompter(activity)
-        prompter2.onAnnouncements(
-            listOf(announcement(2, revision = 1, severity = "important", actionUrl = "https://quareia.com"))
-        )
-        val dialog = ShadowDialog.getLatestDialog()
-        assertNotNull(dialog)
-        clickDialogButton(dialog as AlertDialog)
+        val dialog = latestThemedDialog()
+        assertEquals("访问网站", dialog.primaryActionView?.text?.toString())
+        dialog.primaryActionView!!.performClick()
         val started = shadowOf(activity).nextStartedActivity
         assertNotNull(started)
         assertEquals("android.intent.action.VIEW", started!!.action)
+        assertEquals("https", started.data?.scheme)
+    }
+
+    @Test
+    fun nonHttpsActionDoesNotCreateAnExecutableButton() {
+        AnnouncementPrompter(activity).onAnnouncements(
+            listOf(
+                announcement(
+                    1,
+                    severity = "important",
+                    button = "不安全链接",
+                    actionUrl = "http://example.com",
+                )
+            )
+        )
+
+        val dialog = latestThemedDialog()
+        assertNull(dialog.primaryActionView)
+        assertNull(shadowOf(activity).nextStartedActivity)
     }
 
     private val sourceFetch = CountDownLatch(1)
@@ -218,26 +294,16 @@ class AnnouncementPrompterTest {
             ownsExecutor = false,
         )
     }
-
-
-    /**
-     * Robolectric does not dispatch click events on real AlertDialog buttons
-     * (performClick/clickOn find no listener), so the dialog's own button
-     * message — which carries the DialogInterface.OnClickListener — is driven
-     * directly. This exercises the same listener the user would tap.
-     */
-    private fun clickDialogButton(dialog: AlertDialog) {
-        val alertField = AlertDialog::class.java.getDeclaredField("mAlert")
-        alertField.isAccessible = true
-        val alert = alertField.get(dialog)
-        val messageField = alert.javaClass.getDeclaredField("mButtonPositiveMessage")
-        messageField.isAccessible = true
-        val message = messageField.get(alert) as android.os.Message
-        val listener = (message.obj as? android.content.DialogInterface.OnClickListener)
-            ?: (message.callback as? android.content.DialogInterface.OnClickListener)
-            ?: error("no positive button listener")
-        listener.onClick(dialog, AlertDialog.BUTTON_POSITIVE)
+    private fun latestThemedDialog(): ThemedAnnouncementDialog {
+        val dialog = ShadowDialog.getLatestDialog()
+        assertNotNull(dialog)
+        assertTrue(dialog is ThemedAnnouncementDialog)
+        return dialog as ThemedAnnouncementDialog
     }
+
+    private fun dp(value: Int): Int =
+        (value * activity.resources.displayMetrics.density + 0.5f).toInt()
+
     private fun announcement(
         id: Long,
         revision: Int = 1,

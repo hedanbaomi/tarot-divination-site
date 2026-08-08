@@ -1,6 +1,5 @@
 package com.quareia.divination
 
-import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -35,25 +34,44 @@ internal class AnnouncementPrompter(private val activity: ComponentActivity) {
 
     private fun showDialog(announcement: Announcement) {
         val localized = AppLocale.contextFor(activity)
-        val builder = AlertDialog.Builder(activity)
-        builder.setTitle(announcement.title.ifBlank { localized.getString(R.string.announcements_title) })
-        builder.setMessage(announcement.body)
+        val primaryActionText: String?
+        val onPrimaryAction: (() -> Unit)?
         if (announcement.severity == SEVERITY_UPDATE) {
-            builder.setPositiveButton(
-                announcement.button.ifBlank { localized.getString(R.string.announcement_action_update) }
-            ) { _, _ ->
+            primaryActionText = announcement.button.ifBlank {
+                localized.getString(R.string.announcement_action_update)
+            }
+            onPrimaryAction = {
                 // Reuse the existing in-app updater: re-check and prompt.
                 UpdateManager.checkAndPrompt(activity, manual = true)
             }
         } else if (announcement.actionUrl.isTrustedHttpsUrl()) {
-            builder.setPositiveButton(
-                announcement.button.ifBlank { localized.getString(R.string.announcement_open) }
-            ) { _, _ ->
+            primaryActionText = announcement.button.ifBlank {
+                localized.getString(R.string.announcement_open)
+            }
+            onPrimaryAction = {
                 openBrowser(announcement.actionUrl)
             }
+        } else {
+            primaryActionText = null
+            onPrimaryAction = null
         }
-        builder.setNegativeButton(R.string.announcement_later, null)
-        builder.show()
+        ThemedAnnouncementDialog(
+            activity = activity,
+            severityLabel = localized.getString(
+                if (announcement.severity == SEVERITY_UPDATE) {
+                    R.string.announcement_dialog_severity_update
+                } else {
+                    R.string.announcement_dialog_severity_important
+                }
+            ),
+            announcementTitle = announcement.title.ifBlank {
+                localized.getString(R.string.announcements_title)
+            },
+            announcementBody = announcement.body,
+            laterText = localized.getString(R.string.announcement_later),
+            primaryActionText = primaryActionText,
+            onPrimaryAction = onPrimaryAction,
+        ).show()
     }
 
     private fun openBrowser(url: String) {

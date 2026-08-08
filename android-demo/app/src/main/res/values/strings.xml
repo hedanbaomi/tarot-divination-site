@@ -58,6 +58,8 @@
     <string name="announcement_severity_update">更新</string>
     <string name="announcement_severity_important">重要</string>
     <string name="announcement_severity_info">信息</string>
+    <string name="announcement_dialog_severity_important">✦ 重要</string>
+    <string name="announcement_dialog_severity_update">✦ 更新</string>
     <string name="announcement_action_update">检查更新</string>
     <string name="announcement_later">稍后再说</string>
     <string name="announcement_open">打开</string>
