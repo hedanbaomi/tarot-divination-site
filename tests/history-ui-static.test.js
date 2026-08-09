@@ -13,6 +13,11 @@ var androidHistoryUi = fs.readFileSync(
   path.join(root, "android-demo/app/src/main/assets/www/js/history-ui.js"),
   "utf8"
 );
+var historyRecords = fs.readFileSync(path.join(root, "js", "history-records.js"), "utf8");
+var androidHistoryRecords = fs.readFileSync(
+  path.join(root, "android-demo/app/src/main/assets/www/js/history-records.js"),
+  "utf8"
+);
 var androidMainActivity = fs.readFileSync(
   path.join(root, "android-demo/app/src/main/java/com/quareia/divination/MainActivity.kt"),
   "utf8"
@@ -111,6 +116,30 @@ test("extreme Free Board history coordinates keep cards readable", function () {
   assert.ok(layout.cardHeight * layout.cardScale >= 79);
   assert.ok(layout.stageWidth <= 596);
   assert.ok(layout.stageHeight <= 376);
+});
+
+test("Free Board history details show order only and keep spatial rendering dormant", function () {
+  var freeformCardRenderer = historyUi.slice(
+    historyUi.indexOf("function renderFreeformCard"),
+    historyUi.indexOf("function renderFreeformBoard")
+  );
+  var detailRenderer = historyUi.slice(
+    historyUi.indexOf("function showDetail"),
+    historyUi.indexOf("async function refreshList")
+  );
+  var androidDetailRenderer = androidHistoryUi.slice(
+    androidHistoryUi.indexOf("function showDetail"),
+    androidHistoryUi.indexOf("async function refreshList")
+  );
+
+  assert.ok(freeformCardRenderer.length > 0);
+  assert.doesNotMatch(freeformCardRenderer, /\b(?:x|y|boardRotation|z)\b/);
+  assert.doesNotMatch(detailRenderer, /renderFreeformBoard\(record\)/);
+  assert.doesNotMatch(detailRenderer, /\.sort\(function \(a, b\) \{ return a\.z/);
+  assert.doesNotMatch(androidDetailRenderer, /renderFreeformBoard\(record\)/);
+  assert.match(detailRenderer, /drawOrder/);
+  assert.match(androidDetailRenderer, /drawOrder/);
+  assert.equal(historyRecords, androidHistoryRecords);
 });
 
 test("Android history export uses the system save picker and reports completion", function () {

@@ -136,12 +136,8 @@
           data-i18n="freeBoard.resetView" data-i18n-aria-label="freeBoard.resetViewAria">重置视图</button>
         <button class="btn btn-secondary" id="freeBoardShuffleBtn" type="button"
           data-i18n="freeBoard.shuffle" data-i18n-aria-label="freeBoard.shuffleAria">洗牌</button>
-        <button class="btn btn-secondary" id="freeBoardDiscardDraftBtn" type="button"
-          data-i18n="freeBoard.discardDraft" data-i18n-aria-label="freeBoard.discardDraftAria">丢弃草稿</button>
-        <button class="btn history-danger-btn" id="freeBoardClearBtn" type="button"
-          data-i18n="freeBoard.clear" data-i18n-aria-label="freeBoard.clearAria">清空画板</button>
-        <button class="btn btn-accent" id="freeBoardSaveBtn" type="button"
-          data-i18n="freeBoard.save" data-i18n-aria-label="freeBoard.saveAria">保存到历史</button>
+        <button class="btn history-danger-btn" id="freeBoardDiscardDraftBtn" type="button"
+          data-i18n="freeBoard.clearAndDiscard" data-i18n-aria-label="freeBoard.clearAndDiscardAria">清空画板并放弃草稿</button>
       </div>
       <div class="free-board-viewport" id="freeBoardViewport" tabindex="0" role="application"
         aria-label="自由画板，可拖动画板与卡牌，双指缩放" data-i18n-aria-label="freeBoard.boardAria">
@@ -160,6 +156,8 @@
           data-i18n="freeBoard.rotatePlus90" data-i18n-aria-label="freeBoard.rotatePlus90Aria">＋90°</button>
         <button class="btn btn-secondary" type="button" data-card-control-action="bring-front"
           data-i18n="freeBoard.bringFront" data-i18n-aria-label="freeBoard.bringFrontAria">置于顶层</button>
+        <button class="btn btn-secondary" type="button" data-card-control-action="toggle-meaning"
+          data-i18n="freeBoard.showMeaning" data-i18n-aria-label="freeBoard.showMeaningAria">显示牌意</button>
         <button class="btn history-danger-btn" type="button" data-card-control-action="remove"
           data-i18n="freeBoard.remove" data-i18n-aria-label="freeBoard.removeAria">移除</button>
       </div>
@@ -172,7 +170,7 @@
           aria-label="自由画板待抽牌堆，可任意选择一张" data-i18n-aria-label="freeBoard.pileAria"></div>
       </div>
       <p class="free-board-hint" id="freeBoardHint" data-i18n="freeBoard.hint">
-        空白处拖动画板；拖动卡牌改变位置；轻点牌背开牌，轻点已开牌查看牌意。滚轮或双指可缩放。
+        空白处拖动画板；拖动卡牌改变位置；轻点卡牌仅选中，不会翻牌。需要开牌时请使用“全部开牌”，再从画板外的控制区查看牌意。滚轮或双指可缩放。
       </p>
       <p class="free-board-save-status" id="freeBoardSaveStatus" role="status" aria-live="polite" aria-atomic="true"></p>
     </section>

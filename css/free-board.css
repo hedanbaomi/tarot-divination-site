@@ -56,8 +56,7 @@
 }
 
 .free-board-toolbar .btn,
-.free-board-selected-controls .btn,
-.free-board-card-action {
+.free-board-selected-controls .btn {
   min-width: 2.75rem;
   min-height: 2.65rem;
 }
@@ -174,6 +173,40 @@
     #171934;
 }
 
+.free-board-card-face.is-face-down[data-free-board-back="tarot"],
+.free-board-pile-card-back[data-free-board-back="tarot"] {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(240, 214, 150, 0.2) 0%, transparent 48%),
+    radial-gradient(1px 1px at 20% 16%, rgba(255, 255, 255, 0.8) 50%, transparent 52%),
+    radial-gradient(1px 1px at 78% 24%, rgba(255, 244, 214, 0.7) 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 30% 78%, rgba(214, 226, 255, 0.75) 50%, transparent 52%),
+    radial-gradient(1px 1px at 84% 68%, rgba(255, 255, 255, 0.6) 50%, transparent 52%),
+    radial-gradient(1px 1px at 55% 10%, rgba(255, 236, 190, 0.65) 50%, transparent 52%),
+    linear-gradient(168deg, #28336b 0%, #131a42 55%, #171934 100%);
+}
+
+.free-board-card-face.has-deck-back::after {
+  display: none;
+}
+
+.free-board-card-back-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.free-board-card-face.has-deck-back .free-board-card-back-label {
+  position: relative;
+  z-index: 1;
+  padding: 0.16rem 0.3rem;
+  border-radius: 0.25rem;
+  background: rgba(4, 7, 18, 0.54);
+}
+
 .free-board-card-face.is-face-down::after {
   width: 3.35rem;
   height: 3.35rem;
@@ -188,6 +221,21 @@
 .free-board-card-face.is-revealed {
   background: #e9ddc4;
   color: #1b1730;
+}
+
+.free-board-card-draw-order {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.34rem;
+  z-index: 2;
+  padding: 0.1rem 0.25rem;
+  border: 1px solid rgba(245, 226, 170, 0.25);
+  border-radius: 0.25rem;
+  background: rgba(4, 7, 18, 0.42);
+  color: rgba(255, 245, 215, 0.78);
+  font-size: 0.58rem;
+  line-height: 1.1;
+  pointer-events: none;
 }
 
 .free-board-card-image {
@@ -238,54 +286,17 @@
   font-weight: 600;
 }
 
-.free-board-card-toolbar {
-  position: absolute;
-  right: 0.18rem;
-  bottom: 0.18rem;
-  left: 0.18rem;
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.12rem;
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-
-.free-board-card:hover .free-board-card-toolbar,
-.free-board-card:focus-within .free-board-card-toolbar,
-.free-board-card.is-selected .free-board-card-toolbar {
-  opacity: 1;
-}
-
-.free-board-card-action {
-  min-width: 0;
-  min-height: 1.9rem;
-  padding: 0.1rem;
-  border: 1px solid rgba(241, 213, 145, 0.42);
-  border-radius: 0.28rem;
-  background: rgba(10, 14, 34, 0.86);
-  color: #f7e9c8;
-  cursor: pointer;
-  font-size: 0.58rem;
-  line-height: 1.1;
-}
-
-.free-board-card-action:hover,
-.free-board-card-action:focus-visible {
-  border-color: #f0ce7d;
-  background: #252647;
-  outline: none;
-}
-
-.free-board-card-action.is-danger {
-  color: #ffb4a8;
-}
-
 .free-board-selected-controls {
   margin: 0.7rem 0 0.15rem;
   padding: 0.6rem;
   border: 1px solid rgba(183, 151, 92, 0.25);
   border-radius: 0.65rem;
   background: rgba(3, 7, 19, 0.34);
+}
+
+.free-board-selected-controls .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .free-board-selected-controls[hidden] {
@@ -336,6 +347,7 @@
 }
 
 .free-board-pile-card-back {
+  position: relative;
   display: grid;
   width: 100%;
   height: 100%;
@@ -446,9 +458,16 @@
     margin: -5rem 0 0 -3.3rem;
   }
 
-  /* Card-local controls become too small and cover the artwork on phones.
-     Selecting a card exposes the full-size control row below the viewport. */
-  .free-board-card-toolbar {
-    display: none;
-  }
+}
+
+/* Android uses a compact 3-by-2 default arrangement so six cards fit in a
+   typical phone board without changing the web layout. */
+#freeBoardArea[data-free-board-platform="android"] .free-board-card {
+  width: 5.5rem;
+  height: 8.25rem;
+  margin: -4.125rem 0 0 -2.75rem;
+}
+
+#freeBoardArea[data-free-board-platform="android"] .free-board-viewport {
+  min-height: 21rem;
 }

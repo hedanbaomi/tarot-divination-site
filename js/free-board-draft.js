@@ -131,6 +131,11 @@
       });
     }
 
+    function reportCallbackError(error) {
+      if (typeof options.onError !== "function") return;
+      try { options.onError(error); } catch (_callbackError) {}
+    }
+
     function saveLatest() {
       timer = null;
       if (latest === null) {
@@ -139,16 +144,19 @@
       }
       var candidate = latest;
       latest = null;
+      var serialized;
       try {
-        var serialized = save(storage, candidate, { key: key, modelApi: modelApi });
-        if (typeof options.onSaved === "function") options.onSaved(serialized);
-        settlePending(null, serialized);
-        return Promise.resolve(serialized);
+        serialized = save(storage, candidate, { key: key, modelApi: modelApi });
       } catch (error) {
-        if (typeof options.onError === "function") options.onError(error);
         settlePending(error);
+        reportCallbackError(error);
         return Promise.reject(error);
       }
+      settlePending(null, serialized);
+      if (typeof options.onSaved === "function") {
+        try { options.onSaved(serialized); } catch (callbackError) { reportCallbackError(callbackError); }
+      }
+      return Promise.resolve(serialized);
     }
 
     function schedule(candidate) {

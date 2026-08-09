@@ -242,7 +242,8 @@ class MainActivity : ComponentActivity() {
             if (url != HOME_URL) return
             val homePage = view ?: return
             homePage.evaluateJavascript(
-                "window.__qMediaBase = ${org.json.JSONObject.quote(protectedImageBaseUrl())};",
+                "window.__qMediaBase = ${org.json.JSONObject.quote(protectedImageBaseUrl())};" +
+                    "window.dispatchEvent(new Event('quareia:mediaready'));",
                 null,
             )
             if (homePageFinished) return

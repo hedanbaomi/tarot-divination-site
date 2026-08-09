@@ -137,7 +137,8 @@
       mode: deckType === "tarot" ? mode : "upright-only",
       filterMode: filter,
       cards: shuffle(freeBoardCardsForDeck(deckType, filter)),
-      allDecks: allDecksForFreeBoard()
+      allDecks: allDecksForFreeBoard(),
+      backImage: deckBackImage(deckType)
     };
   }
 
@@ -185,7 +186,7 @@
   }
 
   function createCurrentHistoryRecord() {
-    if (isFreeform()) throw new Error("Free Board uses explicit history save");
+    if (isFreeform()) throw new Error("Free Board saves history after Reveal All");
     if (!isReadingComplete()) throw new Error("Reading is not complete");
     var activeSpread = selectedSpread();
     var deckNames = {
@@ -257,12 +258,29 @@
     el.deckSpread.setAttribute("aria-label", label);
   }
 
+  function setOverviewMethodVisibility(visible) {
+    if (!el.overviewMethodGroup) return;
+    el.overviewMethodGroup.style.display = visible ? "" : "none";
+    el.overviewMethodGroup.hidden = !visible;
+    el.overviewMethodGroup.setAttribute("aria-hidden", visible ? "false" : "true");
+    var select = el.overviewMethod;
+    var trigger = select && select.nextElementSibling;
+    if (trigger && trigger.classList && trigger.classList.contains("themed-select-trigger")) {
+      trigger.style.display = visible ? "" : "none";
+      trigger.hidden = !visible;
+      trigger.setAttribute("aria-hidden", visible ? "false" : "true");
+    }
+  }
+
+  function updateOverviewMethodUi() {
+    setOverviewMethodVisibility(
+      layoutMode === "preset" && deckType === "tarot" && selectedSpreadId === "overview"
+    );
+  }
+
   function applyDeckUi() {
     var nonTarot = isNonTarotDeck();
-    var stackingAvailable = deckType === "tarot" && selectedSpreadId === "overview";
-    if (el.overviewMethodGroup) {
-      el.overviewMethodGroup.style.display = stackingAvailable ? "" : "none";
-    }
+    updateOverviewMethodUi();
     if (el.arcanaFilterGroup) {
       el.arcanaFilterGroup.style.display =
         nonTarot || (!isFreeform() && (isOverviewStacking() || hasPositionDrawRules())) ? "none" : "";
@@ -290,7 +308,7 @@
     if (el.deckArea) el.deckArea.style.display = freeform ? "none" : "";
     if (el.spreadArea) el.spreadArea.style.display = freeform ? "none" : "";
     if (el.resultsSection) el.resultsSection.style.display = freeform ? "none" : "";
-    if (el.overviewMethodGroup) el.overviewMethodGroup.style.display = freeform ? "none" : "";
+    updateOverviewMethodUi();
     if (el.spreadSettingGroup) el.spreadSettingGroup.style.display = freeform ? "none" : "";
     if (el.spreadSettingSummary && freeform) {
       el.spreadSettingSummary.textContent = t("freeBoard.settingsSummary");
@@ -354,12 +372,14 @@
     return deckType === "mystagogus" || deckType === "lxxxi";
   }
 
-  function deckBackImage() {
+  function deckBackImage(type) {
+    type = type || deckType;
     // LXXXI back is decrypted on demand via the native bridge (offline build).
-    if (deckType === "lxxxi" && typeof getLxxxiBackImage === "function") {
+    if (type === "lxxxi" && typeof getLxxxiBackImage === "function") {
       return getLxxxiBackImage();
     }
-    return MYSTAGOGUS_BACK;
+    if (type === "mystagogus") return MYSTAGOGUS_BACK;
+    return "";
   }
 
   function createCardImage(card, className, orientation) {
@@ -1443,6 +1463,8 @@
         modelApi: globalThis.FreeBoardModel,
         draftApi: globalThis.DivinationFreeBoardDraft,
         recordsApi: globalThis.DivinationHistoryRecords,
+        platform: "android",
+        getBackImage: deckBackImage,
         allDecks: allDecksForFreeBoard(),
         getHistoryController: function () { return historyUiController; },
         onRestoreState: function (state) {

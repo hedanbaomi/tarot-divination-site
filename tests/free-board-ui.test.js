@@ -101,28 +101,48 @@ function makeStorage() {
   };
 }
 
-function setup() {
+function setup(config) {
+  config = config || {};
   var document = new FakeDocument();
   var area = document.createElement("section");
   var viewport = document.createElement("div");
   var world = document.createElement("div");
   var pile = document.createElement("div");
   var selected = document.createElement("div");
+  [
+    "rotate-minus-15",
+    "rotate-plus-15",
+    "rotate-minus-90",
+    "rotate-plus-90",
+    "bring-front",
+    "toggle-meaning",
+    "remove"
+  ].forEach(function (action) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("data-card-control-action", action);
+    selected.appendChild(button);
+  });
   viewport.appendChild(world);
   area.appendChild(viewport);
-  var ids = ["major-0", "major-1", "minor-1"];
+  var deckType = config.deckType || "tarot";
+  var ids = deckType === "tarot"
+    ? ["major-0", "major-1", "minor-1"]
+    : [deckType + "-0", deckType + "-1", deckType + "-2"];
   var cards = ids.map(function (id, index) {
     return {
       id: id,
       number: index,
       name: "牌 " + index,
       nameEn: "Card " + index,
-      deck: "tarot",
-      arcana: index === 2 ? "minor" : "major",
-      suit: index === 2 ? "wands" : "",
+      deck: deckType,
+      arcana: deckType === "tarot" ? (index === 2 ? "minor" : "major") : deckType,
+      suit: deckType === "tarot" && index === 2 ? "wands" : "",
       image: ""
     };
   });
+  var allDecks = {};
+  allDecks[deckType] = cards;
   var savedRecord = null;
   var ui = freeBoard.createController({
     document: document,
@@ -131,7 +151,9 @@ function setup() {
     recordsApi: records,
     storage: makeStorage(),
     draftDebounceMs: 0,
-    allDecks: { tarot: cards },
+    allDecks: allDecks,
+    platform: config.platform,
+    getBackImage: config.getBackImage,
     area: area,
     viewport: viewport,
     world: world,
@@ -160,14 +182,21 @@ function setup() {
     }
   });
   ui.enter({
-    deckType: "tarot",
-    deckName: "RWS Tarot",
-    mode: "mixed",
-    filterMode: "major-then-minor",
+    deckType: deckType,
+    deckName: deckType === "tarot" ? "RWS Tarot" : deckType,
+    mode: deckType === "tarot" ? "mixed" : "upright-only",
+    filterMode: deckType === "tarot" ? "major-then-minor" : "not-applicable",
     cards: cards,
-    allDecks: { tarot: cards }
+    allDecks: allDecks
   }, { restoreDraft: false });
-  return { ui: ui, viewport: viewport, world: world, pile: pile, getSaved: function () { return savedRecord; } };
+  return {
+    ui: ui,
+    viewport: viewport,
+    world: world,
+    pile: pile,
+    selected: selected,
+    getSaved: function () { return savedRecord; }
+  };
 }
 
 function tap(element) {
@@ -175,7 +204,7 @@ function tap(element) {
   element.dispatchEvent(event("pointerup", { clientX: 200, clientY: 150, pointerId: 1 }));
 }
 
-test("pointer drag commits one world move, while tap reveals and toggles meaning", function () {
+test("pointer drag commits one world move, while tap only selects without revealing", function () {
   var setupResult = setup();
   var ui = setupResult.ui;
   var card = setupResult.pile.children[0];
@@ -191,9 +220,9 @@ test("pointer drag commits one world move, while tap reveals and toggles meaning
   assert.equal(ui.getState().cards.length, 1);
 
   tap(setupResult.world.children[0]);
-  assert.equal(ui.getState().cards[0].revealed, true);
-  tap(setupResult.world.children[0]);
-  assert.equal(ui.getState().cards[0].meaningVisible, true);
+  assert.equal(ui.getState().cards[0].revealed, false);
+  assert.equal(setupResult.selected.hidden, false);
+  assert.equal(setupResult.selected.children[5].disabled, true);
   ui.exit();
 });
 
@@ -215,42 +244,109 @@ test("pinch and wheel zoom use bounded viewport math", function () {
   setupResult.ui.exit();
 });
 
-test("card controls commit rotation, z ordering, removal, and explicit freeform save", async function () {
+test("selected controls commit rotation, z ordering, removal, and reveal-all auto-save", async function () {
   var setupResult = setup();
   var ui = setupResult.ui;
   setupResult.pile.children[0].dispatchEvent(event("click"));
   setupResult.pile.children[0].dispatchEvent(event("click"));
   var first = setupResult.world.children[0];
-  var plus15 = first.querySelectorAll("[data-free-board-action]").filter(function (button) {
-    return button.getAttribute("data-free-board-action") === "rotate-plus-15";
+  assert.equal(first.querySelectorAll("[data-free-board-action]").length, 0);
+  tap(first);
+  var selectedControls = setupResult.selected.querySelectorAll("[data-card-control-action]");
+  var plus15 = selectedControls.filter(function (button) {
+    return button.getAttribute("data-card-control-action") === "rotate-plus-15";
   })[0];
   plus15.dispatchEvent(event("click", { target: plus15 }));
   assert.equal(ui.getState().cards[0].boardRotation, 15);
 
   var firstId = ui.getState().cards[0].cardId;
   var secondId = ui.getState().cards[1].cardId;
-  var bring = setupResult.world.children[0].querySelectorAll("[data-free-board-action]").filter(function (button) {
-    return button.getAttribute("data-free-board-action") === "bring-front";
+  var bring = setupResult.selected.querySelectorAll("[data-card-control-action]").filter(function (button) {
+    return button.getAttribute("data-card-control-action") === "bring-front";
   })[0];
   bring.dispatchEvent(event("click", { target: bring }));
   var firstAfterZ = ui.getState().cards.filter(function (card) { return card.cardId === firstId; })[0];
   var secondAfterZ = ui.getState().cards.filter(function (card) { return card.cardId === secondId; })[0];
   assert.ok(firstAfterZ.z > secondAfterZ.z);
 
-  var remove = setupResult.world.children.filter(function (element) {
-    return element.getAttribute("data-card-id") === firstId;
-  })[0].querySelectorAll("[data-free-board-action]").filter(function (button) {
-    return button.getAttribute("data-free-board-action") === "remove";
+  var remove = setupResult.selected.querySelectorAll("[data-card-control-action]").filter(function (button) {
+    return button.getAttribute("data-card-control-action") === "remove";
   })[0];
   remove.dispatchEvent(event("click", { target: remove }));
   assert.equal(ui.getState().cards.some(function (card) { return card.cardId === firstId; }), false);
   assert.equal(ui.getState().remainingPile.indexOf(firstId) !== -1, true);
 
-  var saved = await ui.saveHistory();
+  var saved = await ui.revealAll();
   assert.equal(saved.saved, true);
   assert.equal(setupResult.getSaved().layoutMode, "freeform");
   assert.equal(setupResult.getSaved().cards.length, 1);
+  assert.equal(setupResult.getSaved().cards[0].revealed, true);
+  tap(setupResult.world.children[0]);
+  var meaning = setupResult.selected.querySelectorAll("[data-card-control-action]").filter(function (button) {
+    return button.getAttribute("data-card-control-action") === "toggle-meaning";
+  })[0];
+  assert.equal(meaning.disabled, false);
+  meaning.dispatchEvent(event("click", { target: meaning }));
+  assert.equal(ui.getState().cards[0].meaningVisible, true);
   ui.exit();
+});
+
+test("draw order is rendered on both card face states", function () {
+  var setupResult = setup();
+  setupResult.pile.children[0].dispatchEvent(event("click"));
+  var card = setupResult.world.children[0];
+  var order = card.children.filter(function (child) {
+    return child.getAttribute("data-draw-order") !== null;
+  })[0];
+  assert.ok(order);
+  assert.match(order.textContent, /freeBoard\.drawOrder/);
+  assert.equal(order.getAttribute("data-draw-order"), "1");
+  assert.match(card.children[0].children[0].className, /is-face-down/);
+  setupResult.ui.revealAll();
+  var revealed = setupResult.world.children[0];
+  assert.ok(revealed.children.filter(function (child) {
+    return child.getAttribute("data-draw-order") !== null;
+  })[0]);
+  assert.match(revealed.children[0].children[0].className, /is-revealed/);
+  setupResult.ui.exit();
+});
+
+test("Free Board renders resolved Mystagogus and LXXXI backs while Tarot keeps its CSS back", function () {
+  [
+    { deckType: "mystagogus", back: "assets/cards/m/m-back.jpeg" },
+    { deckType: "lxxxi", back: "qmedia://lxxxi-back" }
+  ].forEach(function (entry) {
+    var result = setup({
+      deckType: entry.deckType,
+      getBackImage: function (type) { return type === entry.deckType ? entry.back : ""; }
+    });
+    var pileBack = result.pile.children[0].children[0].children[0];
+    assert.ok(pileBack);
+    assert.equal(pileBack.className, "free-board-card-back-image");
+    assert.equal(pileBack.src, entry.back);
+    result.pile.children[0].dispatchEvent(event("click", { target: result.pile.children[0] }));
+    var boardBack = result.world.children[0].children[0].children[0].children[0];
+    assert.ok(boardBack);
+    assert.equal(boardBack.className, "free-board-card-back-image");
+    assert.equal(boardBack.src, entry.back);
+    result.ui.exit();
+  });
+
+  var liveBack = "lxxxi-back";
+  var restored = setup({
+    deckType: "lxxxi",
+    getBackImage: function () { return liveBack; }
+  });
+  restored.pile.children[0].dispatchEvent(event("click", { target: restored.pile.children[0] }));
+  assert.equal(restored.world.children[0].children[0].children[0].children[0].src, "lxxxi-back");
+  liveBack = "https://appassets.androidplatform.net/_m/token/lxxxi-back";
+  restored.ui.refreshMedia();
+  assert.equal(restored.world.children[0].children[0].children[0].children[0].src, liveBack);
+  restored.ui.exit();
+
+  var tarot = setup({ getBackImage: function () { return ""; } });
+  assert.equal(tarot.pile.children[0].children[0].children.length, 0);
+  tarot.ui.exit();
 });
 
 test("pure pinch and zoom helpers preserve the anchor and enforce bounds", function () {

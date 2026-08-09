@@ -30,9 +30,15 @@ test("Android bundle exposes Free Board in the platform-preserving load order", 
   var history = read("js/history-ui.js");
   var i18n = read("js/i18n.js");
   var css = read("css/free-board.css");
+  var activity = fs.readFileSync(path.join(
+    __dirname, "..", "app", "src", "main", "java", "com", "quareia", "divination", "MainActivity.kt"
+  ), "utf8");
 
   assert.match(html, /id="layoutModeSelect"/);
   assert.match(html, /id="freeBoardArea"/);
+  assert.doesNotMatch(html, /freeBoardClearBtn|freeBoardSaveBtn/);
+  assert.match(html, /id="freeBoardDiscardDraftBtn"[\s\S]*data-i18n="freeBoard\.clearAndDiscard"/);
+  assert.match(html, /data-card-control-action="toggle-meaning"/);
   assert.ok(html.indexOf("js/free-board-model.js") < html.indexOf("js/free-board-draft.js"));
   assert.ok(html.indexOf("js/free-board-draft.js") < html.indexOf("js/history-records.js"));
   assert.ok(html.indexOf("js/history-ui.js") < html.indexOf("js/free-board-ui.js"));
@@ -42,6 +48,11 @@ test("Android bundle exposes Free Board in the platform-preserving load order", 
   assert.match(app, /function freeBoardCardsForDeck\(type, filter\)/);
   assert.match(app, /cards: shuffle\(freeBoardCardsForDeck\(deckType, filter\)\)/);
   assert.match(app, /getLxxxiBackImage/);
+  assert.match(activity, /window\.__qMediaBase[\s\S]*quareia:mediaready/);
+  assert.match(read("js/free-board-ui.js"), /quareia:mediaready[\s\S]*refreshMedia/);
+  assert.match(app, /platform: "android"/);
+  assert.match(app, /getBackImage: deckBackImage/);
+  assert.match(app, /if \(type === "mystagogus"\) return MYSTAGOGUS_BACK;\s*return "";/);
   assert.match(app, /androidTelemetry/);
   assert.match(history, /saveRecord: saveRecord/);
   assert.match(history, /handleBack/);
@@ -49,7 +60,9 @@ test("Android bundle exposes Free Board in the platform-preserving load order", 
   assert.match(i18n, /tForLocale: tForLocale/);
   assert.match(i18n, /freeBoard\.title/);
   assert.match(css, /\.free-board-viewport[\s\S]*touch-action: none/);
-  assert.match(css, /@media \(max-width: 640px\)[\s\S]*\.free-board-card-toolbar[\s\S]*display: none/);
+  assert.doesNotMatch(css, /free-board-card-toolbar/);
+  assert.match(css, /data-free-board-platform="android"/);
+  assert.match(i18n, /freeBoard\.drawOrder/);
 });
 
 test("Android Free Board model keeps pile order, orientation, board rotation, and restore strict", function () {
@@ -128,7 +141,7 @@ test("Android history accepts Free Board v2 records while retaining the closed s
   });
   assert.equal(record.layoutMode, "freeform");
   assert.equal(records.validateRecord(record).layoutMode, "freeform");
-  assert.match(records.serializeExport([record]), /"formatVersion":\s*2/);
+  assert.match(records.serializeExport([record]), /"formatVersion":\s*3/);
   assert.throws(function () {
     records.validateRecord(Object.assign({}, record, { unexpected: true }));
   }, /unexpected field/);

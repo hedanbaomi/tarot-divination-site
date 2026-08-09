@@ -29,6 +29,8 @@
 
   var DEFAULT_CARD_WIDTH = 116;
   var DEFAULT_CARD_HEIGHT = 176;
+  var ANDROID_COLUMN_GAP = 92;
+  var ANDROID_ROW_GAP = 142;
   var MIN_ZOOM = 0.1;
   var MAX_ZOOM = 4;
   var DRAG_THRESHOLD = 6;
@@ -99,7 +101,15 @@
     };
   }
 
-  function defaultDrawPosition(index) {
+  function defaultDrawPosition(index, platform) {
+    if (platform === "android") {
+      var androidColumn = index % 3;
+      var androidRow = Math.floor(index / 3);
+      return {
+        x: (androidColumn - 1) * ANDROID_COLUMN_GAP,
+        y: (androidRow - 0.5) * ANDROID_ROW_GAP
+      };
+    }
     var column = index % 4;
     var row = Math.floor(index / 4);
     return {
@@ -138,15 +148,6 @@
     var current = target;
     while (current) {
       if (current.getAttribute && current.getAttribute("data-card-id")) return current;
-      current = current.parentNode;
-    }
-    return null;
-  }
-
-  function findActionElement(target) {
-    var current = target;
-    while (current) {
-      if (current.getAttribute && current.getAttribute("data-free-board-action")) return current;
       current = current.parentNode;
     }
     return null;
@@ -197,11 +198,11 @@
       redo: options.redo || byId(document, "freeBoardRedoBtn"),
       revealAll: options.revealAll || byId(document, "freeBoardRevealAllBtn"),
       resetView: options.resetView || byId(document, "freeBoardResetViewBtn"),
-      clear: options.clear || byId(document, "freeBoardClearBtn"),
       shuffle: options.shuffle || byId(document, "freeBoardShuffleBtn"),
-      discard: options.discard || byId(document, "freeBoardDiscardDraftBtn"),
-      save: options.save || byId(document, "freeBoardSaveBtn")
+      discard: options.discard || byId(document, "freeBoardDiscardDraftBtn")
     };
+
+    var platform = options.platform === "android" ? "android" : "web";
 
     var stateController = null;
     var context = null;
@@ -215,6 +216,8 @@
     var bound = false;
     var draftAutosave = null;
     var invalidDraft = false;
+
+    if (elements.area) elements.area.setAttribute("data-free-board-platform", platform);
 
     function t(key, values) {
       var i18n = root && root.DivinationI18n;
@@ -232,6 +235,21 @@
     function currentLocaleIsEnglish() {
       var i18n = root && root.DivinationI18n;
       return Boolean(i18n && typeof i18n.isEnglish === "function" && i18n.isEnglish());
+    }
+
+    function backImageForType(type) {
+      if (typeof options.getBackImage === "function") {
+        try {
+          return options.getBackImage(type) || "";
+        } catch (_error) {
+          return "";
+        }
+      }
+      return type === "mystagogus" ? "assets/cards/m/m-back.jpeg" : "";
+    }
+
+    function backImageForState(state) {
+      return context && context.backImage || backImageForType(deckTypeFromState(state));
     }
 
     function setStatus(message, error) {
@@ -345,6 +363,7 @@
         filterMode: filter,
         cards: source,
         allDecks: allDecks,
+        backImage: input.backImage || backImageForType(type),
         deck: deck,
         settings: settings
       };
@@ -425,9 +444,13 @@
         (card.orientation === "reversed" ? " is-reversed" : "");
       inner.setAttribute("data-orientation", card.orientation);
       var face = document.createElement("div");
-      face.className = "free-board-card-face" + (card.revealed ? " is-revealed" : " is-face-down");
+      var backImage = backImageForState(state);
+      face.className = "free-board-card-face" + (card.revealed ? " is-revealed" : " is-face-down") +
+        (!card.revealed && backImage ? " has-deck-back" : "");
+      face.setAttribute("data-free-board-back", deckTypeFromState(state));
 
       if (!card.revealed) {
+        if (backImage) face.appendChild(makeBackImage(backImage));
         face.appendChild(textElement(document, "span", "free-board-card-back-label", t("freeBoard.faceDown")));
       } else if (card.meaningVisible) {
         var meaning = meaningFor(source, card.orientation);
@@ -455,15 +478,14 @@
       return inner;
     }
 
-    function makeCardAction(action, label, ariaLabel, cardId, className) {
-      var button = document.createElement("button");
-      button.type = "button";
-      button.className = "free-board-card-action" + (className ? " " + className : "");
-      button.setAttribute("data-free-board-action", action);
-      button.setAttribute("data-card-id", cardId);
-      button.setAttribute("aria-label", ariaLabel || label);
-      button.textContent = label;
-      return button;
+    function makeBackImage(source) {
+      var image = document.createElement("img");
+      image.className = "free-board-card-back-image";
+      image.src = source;
+      image.alt = "";
+      image.decoding = "async";
+      image.setAttribute("aria-hidden", "true");
+      return image;
     }
 
     function cardAriaLabel(card, source) {
@@ -492,24 +514,11 @@
 
       var inner = makeCardFace(state, card, source);
       cardElement.appendChild(inner);
-
-      var toolbar = document.createElement("div");
-      toolbar.className = "free-board-card-toolbar";
-      toolbar.setAttribute("role", "group");
-      toolbar.setAttribute("aria-label", t("freeBoard.cardControls", { card: cardName(source) }));
-      toolbar.appendChild(makeCardAction("rotate-minus-15", t("freeBoard.rotateMinus15"),
-        t("freeBoard.rotateMinus15Aria"), card.cardId));
-      toolbar.appendChild(makeCardAction("rotate-plus-15", t("freeBoard.rotatePlus15"),
-        t("freeBoard.rotatePlus15Aria"), card.cardId));
-      toolbar.appendChild(makeCardAction("rotate-minus-90", t("freeBoard.rotateMinus90"),
-        t("freeBoard.rotateMinus90Aria"), card.cardId));
-      toolbar.appendChild(makeCardAction("rotate-plus-90", t("freeBoard.rotatePlus90"),
-        t("freeBoard.rotatePlus90Aria"), card.cardId));
-      toolbar.appendChild(makeCardAction("bring-front", t("freeBoard.bringFront"),
-        t("freeBoard.bringFrontAria"), card.cardId));
-      toolbar.appendChild(makeCardAction("remove", t("freeBoard.remove"),
-        t("freeBoard.removeAria"), card.cardId, "is-danger"));
-      cardElement.appendChild(toolbar);
+      var drawOrder = textElement(document, "span", "free-board-card-draw-order",
+        t("freeBoard.drawOrder", { order: card.drawOrder }));
+      drawOrder.setAttribute("data-draw-order", String(card.drawOrder));
+      drawOrder.setAttribute("aria-hidden", "true");
+      cardElement.appendChild(drawOrder);
 
       cardElements[card.cardId] = cardElement;
       return cardElement;
@@ -528,8 +537,12 @@
           index: index + 1,
           count: state.remainingPile.length
         }));
-        var back = textElement(document, "span", "free-board-pile-card-back", t("freeBoard.faceDown"));
+        var backImage = backImageForState(state);
+        var back = textElement(document, "span", "free-board-pile-card-back" +
+          (backImage ? " has-deck-back" : ""), t("freeBoard.faceDown"));
+        back.setAttribute("data-free-board-back", deckTypeFromState(state));
         back.setAttribute("aria-hidden", "true");
+        if (backImage) back.appendChild(makeBackImage(backImage));
         button.appendChild(back);
         button.addEventListener("click", function () { draw(cardId); });
         elements.pile.appendChild(button);
@@ -550,7 +563,18 @@
       Array.prototype.forEach.call(
         elements.selected.querySelectorAll("[data-card-control-action]"),
         function (button) {
+          var action = button.getAttribute("data-card-control-action");
           button.setAttribute("data-card-id", selected.cardId);
+          button.disabled = action === "toggle-meaning" && !selected.revealed;
+          if (action === "toggle-meaning") {
+            var meaningVisible = Boolean(selected.revealed && selected.meaningVisible);
+            var labelKey = meaningVisible ? "freeBoard.hideMeaning" : "freeBoard.showMeaning";
+            var ariaKey = meaningVisible ? "freeBoard.hideMeaningAria" : "freeBoard.showMeaningAria";
+            button.setAttribute("data-i18n", labelKey);
+            button.setAttribute("data-i18n-aria-label", ariaKey);
+            button.textContent = t(labelKey);
+            button.setAttribute("aria-label", t(ariaKey));
+          }
         }
       );
     }
@@ -585,10 +609,13 @@
       if (elements.redo) elements.redo.disabled = !stateController.canRedo();
       if (elements.revealAll) elements.revealAll.disabled = state.cards.length === 0 ||
         state.cards.every(function (card) { return card.revealed; });
-      if (elements.clear) elements.clear.disabled = state.cards.length === 0;
       if (elements.shuffle) elements.shuffle.disabled = state.cards.length === 0 && state.remainingPile.length === 0;
       if (elements.discard) elements.discard.disabled = state.cards.length === 0 && state.remainingPile.length === 0;
-      if (elements.save) elements.save.disabled = state.cards.length === 0;
+    }
+
+    function refreshMedia() {
+      if (context) context.backImage = backImageForType(context.deckType);
+      if (stateController) render();
     }
 
     function setVisible(visible) {
@@ -676,7 +703,7 @@
       if (!stateController) return null;
       var state = getState();
       if (state.remainingPile.indexOf(cardId) === -1) return null;
-      var position = defaultDrawPosition(state.cards.length);
+      var position = defaultDrawPosition(state.cards.length, platform);
       var type = deckTypeFromState(state);
       var orientation = state.settings.orientationMode === "mixed" && type === "tarot" &&
         Math.random() > 0.5 ? "reversed" : "upright";
@@ -691,14 +718,15 @@
     }
 
     function revealAll() {
+      if (!stateController || getState().cards.length === 0) return Promise.resolve(null);
       mutate("revealAll", [], "reveal-all");
+      return saveHistory();
     }
 
     function removeCard(cardId) {
       if (!cardState(cardId)) return null;
-      var result = mutate("removeCard", [cardId], "remove");
       if (selectedCardId === cardId) selectedCardId = null;
-      return result;
+      return mutate("removeCard", [cardId], "remove");
     }
 
     function rotate(cardId, degrees) {
@@ -720,20 +748,6 @@
 
     function clearBoard() {
       return mutate("clear", [], "clear");
-    }
-
-    function resetWithConfirmation() {
-      if (!stateController) return Promise.resolve(false);
-      var hasCards = getState().cards.length > 0;
-      var proceed = hasCards
-        ? requestConfirm(t("confirm.freeBoardClear"), "confirm.title")
-        : Promise.resolve(true);
-      return proceed.then(function (accepted) {
-        if (!accepted) return false;
-        selectedCardId = null;
-        clearBoard();
-        return true;
-      });
     }
 
     function discardDraft() {
@@ -786,6 +800,10 @@
         case "rotate-minus-90": return rotate(cardId, -90);
         case "rotate-plus-90": return rotate(cardId, 90);
         case "bring-front": return bringToFront(cardId);
+        case "toggle-meaning":
+          if (!cardState(cardId) || !cardState(cardId).revealed) return null;
+          selectedCardId = cardId;
+          return mutate("toggleMeaning", [cardId], "meaning");
         case "remove": return removeCard(cardId);
         default: return null;
       }
@@ -879,8 +897,7 @@
           startPoint: point,
           startWorld: world,
           startCard: { x: card.x, y: card.y, boardRotation: card.boardRotation },
-          moved: false,
-          ignoreTap: Boolean(findActionElement(event.target))
+          moved: false
         };
       } else {
         gesture = {
@@ -983,11 +1000,9 @@
           var moved = visualCards[gesture.cardId];
           delete visualCards[gesture.cardId];
           if (moved) mutate("move", [gesture.cardId, moved.x, moved.y], "move");
-        } else if (!gesture.ignoreTap) {
-          if (cardState(gesture.cardId)) {
-            if (!cardState(gesture.cardId).revealed) mutate("reveal", [gesture.cardId], "reveal");
-            else mutate("toggleMeaning", [gesture.cardId], "meaning");
-          }
+        } else if (cardState(gesture.cardId)) {
+          selectedCardId = gesture.cardId;
+          renderSelectedControls(getState());
         }
       } else if (gesture.kind === "pan" && gesture.pointerId === id) {
         if (gesture.moved) commitVisualViewport();
@@ -1024,17 +1039,7 @@
       if (!cardState(cardId)) return;
       if (event.preventDefault) event.preventDefault();
       selectedCardId = cardId;
-      if (!cardState(cardId).revealed) mutate("reveal", [cardId], "reveal");
-      else mutate("toggleMeaning", [cardId], "meaning");
-    }
-
-    function handleActionClick(event) {
-      var actionElement = findActionElement(event.target);
-      if (!actionElement) return;
-      if (event.stopPropagation) event.stopPropagation();
-      var action = actionElement.getAttribute("data-free-board-action");
-      var cardId = actionElement.getAttribute("data-card-id");
-      handleAction(action, cardId);
+      renderSelectedControls(getState());
     }
 
     function handleSelectedAction(event) {
@@ -1059,16 +1064,16 @@
         elements.viewport.addEventListener("wheel", handleWheel, { passive: false });
         elements.viewport.addEventListener("keydown", handleKeydown);
       }
-      if (elements.world) elements.world.addEventListener("click", handleActionClick);
       if (elements.selected) elements.selected.addEventListener("click", handleSelectedAction);
       if (elements.undo) elements.undo.addEventListener("click", function () { mutate("undo", [], "undo"); });
       if (elements.redo) elements.redo.addEventListener("click", function () { mutate("redo", [], "redo"); });
       if (elements.revealAll) elements.revealAll.addEventListener("click", revealAll);
       if (elements.resetView) elements.resetView.addEventListener("click", resetView);
-      if (elements.clear) elements.clear.addEventListener("click", resetWithConfirmation);
       if (elements.shuffle) elements.shuffle.addEventListener("click", shuffleBoard);
       if (elements.discard) elements.discard.addEventListener("click", discardDraft);
-      if (elements.save) elements.save.addEventListener("click", saveHistory);
+      if (root && typeof root.addEventListener === "function") {
+        root.addEventListener("quareia:mediaready", refreshMedia);
+      }
     }
 
     function loadDraft() {
@@ -1100,7 +1105,8 @@
           mode: state.settings.orientationMode,
           filterMode: state.settings.filterMode,
           cards: restoredCards,
-          allDecks: options.allDecks || {}
+          allDecks: options.allDecks || {},
+          backImage: backImageForType(deckTypeFromState(state))
         });
         ensureDraftAutosave();
         selectedCardId = null;
@@ -1208,11 +1214,10 @@
       undo: function () { return mutate("undo", [], "undo"); },
       redo: function () { return mutate("redo", [], "redo"); },
       resetView: resetView,
-      clear: resetWithConfirmation,
       shuffle: shuffleBoard,
       discardDraft: discardDraftExplicit,
-      saveHistory: saveHistory,
       buildHistoryRecord: buildHistoryRecord,
+      refreshMedia: refreshMedia,
       refreshLanguage: refreshLanguage,
       updateContext: updateContext,
       getContext: function () { return context; },

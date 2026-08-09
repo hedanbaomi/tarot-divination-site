@@ -9,8 +9,10 @@
 
   var SCHEMA_VERSION = 1;
   var SCHEMA_V2_VERSION = 2;
+  var SCHEMA_V3_VERSION = 3;
   var FORMAT_VERSION = 1;
   var FORMAT_VERSION_V2 = 2;
+  var FORMAT_VERSION_V3 = 3;
   var MAX_RECORDS = 5000;
   var MAX_CARDS = 100;
   var MAX_IMPORT_BYTES = 5 * 1024 * 1024;
@@ -106,6 +108,31 @@
     "z",
     "drawOrder"
   ];
+  var ORDER_ONLY_FREEFORM_RECORD_KEYS = [
+    "schemaVersion",
+    "layoutMode",
+    "id",
+    "createdAt",
+    "deckType",
+    "deckMode",
+    "deckName",
+    "orientationMode",
+    "filterMode",
+    "overviewMethod",
+    "cards"
+  ];
+  var ORDER_ONLY_FREEFORM_CARD_KEYS = [
+    "cardId",
+    "cardNumber",
+    "cardName",
+    "arcana",
+    "suit",
+    "orientation",
+    "revealed",
+    "drawOrder"
+  ];
+  var LAYOUT_SNAPSHOT_KEYS = ["cards"];
+  var LAYOUT_SNAPSHOT_CARD_KEYS = ["cardId", "x", "y", "boardRotation", "z", "drawOrder"];
   var WORLD_KEYS = ["x", "y"];
 
   function fail(path, message) {
@@ -278,7 +305,7 @@
     return undefined;
   }
 
-  function buildFreeformCard(item, index, deckType) {
+  function buildFreeformLayoutCard(item, index, deckType) {
     var path = "input.cards[" + index + "]";
     assertPlainObject(item, path);
     var sourceCard = isPlainObject(item.card) ? item.card : item;
@@ -331,14 +358,14 @@
     };
   }
 
-  function buildFreeformRecord(input) {
+  function buildFreeformLayoutRecord(input) {
     assertPlainObject(input, "input");
     if (!Array.isArray(input.cards) || input.cards.length === 0) {
       fail("input.cards", "must contain freeform cards");
     }
 
     var cards = input.cards.map(function (item, index) {
-      return buildFreeformCard(item, index, input.deckType);
+      return buildFreeformLayoutCard(item, index, input.deckType);
     });
     cards.sort(function (a, b) {
       if (a.drawOrder !== b.drawOrder) return a.drawOrder - b.drawOrder;
@@ -348,6 +375,52 @@
 
     var record = {
       schemaVersion: SCHEMA_V2_VERSION,
+      layoutMode: "freeform",
+      id: input.id || defaultId(),
+      createdAt: input.createdAt || new Date().toISOString(),
+      deckType: input.deckType,
+      deckMode: input.deckMode,
+      deckName: input.deckName,
+      orientationMode: input.orientationMode,
+      filterMode: input.filterMode,
+      overviewMethod: input.overviewMethod,
+      cards: cards
+    };
+    validateRecord(record);
+    return record;
+  }
+
+  function buildFreeformOrderOnlyCard(item, index, deckType) {
+    var layoutCard = buildFreeformLayoutCard(item, index, deckType);
+    return {
+      cardId: layoutCard.cardId,
+      cardNumber: layoutCard.cardNumber,
+      cardName: layoutCard.cardName,
+      arcana: layoutCard.arcana,
+      suit: layoutCard.suit,
+      orientation: layoutCard.orientation,
+      revealed: layoutCard.revealed,
+      drawOrder: layoutCard.drawOrder
+    };
+  }
+
+  function buildFreeformRecord(input) {
+    assertPlainObject(input, "input");
+    if (!Array.isArray(input.cards) || input.cards.length === 0) {
+      fail("input.cards", "must contain freeform cards");
+    }
+
+    var cards = input.cards.map(function (item, index) {
+      return buildFreeformOrderOnlyCard(item, index, input.deckType);
+    });
+    cards.sort(function (a, b) {
+      if (a.drawOrder !== b.drawOrder) return a.drawOrder - b.drawOrder;
+      if (a.cardId === b.cardId) return 0;
+      return a.cardId < b.cardId ? -1 : 1;
+    });
+
+    var record = {
+      schemaVersion: SCHEMA_V3_VERSION,
       layoutMode: "freeform",
       id: input.id || defaultId(),
       createdAt: input.createdAt || new Date().toISOString(),
@@ -493,6 +566,91 @@
     }
   }
 
+  function validateLayoutSnapshot(snapshot) {
+    assertPlainObject(snapshot, "layoutSnapshot");
+    assertOnlyKeys(snapshot, LAYOUT_SNAPSHOT_KEYS, "layoutSnapshot");
+    if (!Object.prototype.hasOwnProperty.call(snapshot, "cards")) {
+      fail("layoutSnapshot", "missing field cards");
+    }
+    if (!Array.isArray(snapshot.cards) || snapshot.cards.length > MAX_CARDS) {
+      fail("layoutSnapshot.cards", "must be an array with at most " + MAX_CARDS + " cards");
+    }
+
+    var cardIds = Object.create(null);
+    var zValues = Object.create(null);
+    var drawOrders = Object.create(null);
+    var previousDrawOrder = 0;
+    snapshot.cards.forEach(function (item, index) {
+      var path = "layoutSnapshot.cards[" + index + "]";
+      assertPlainObject(item, path);
+      assertOnlyKeys(item, LAYOUT_SNAPSHOT_CARD_KEYS, path);
+      LAYOUT_SNAPSHOT_CARD_KEYS.forEach(function (key) {
+        if (!Object.prototype.hasOwnProperty.call(item, key)) fail(path, "missing field " + key);
+      });
+      assertString(item.cardId, path + ".cardId", 1, 120);
+      assertBoundedNumber(item.x, path + ".x", -MAX_WORLD_COORDINATE, MAX_WORLD_COORDINATE);
+      assertBoundedNumber(item.y, path + ".y", -MAX_WORLD_COORDINATE, MAX_WORLD_COORDINATE);
+      assertBoundedNumber(item.boardRotation, path + ".boardRotation", -MAX_BOARD_ROTATION, MAX_BOARD_ROTATION);
+      assertPositiveSafeInteger(item.z, path + ".z");
+      assertPositiveSafeInteger(item.drawOrder, path + ".drawOrder");
+      if (Object.prototype.hasOwnProperty.call(cardIds, item.cardId)) {
+        fail("layoutSnapshot.cards", "duplicate cardId " + item.cardId);
+      }
+      if (Object.prototype.hasOwnProperty.call(zValues, item.z)) {
+        fail("layoutSnapshot.cards", "duplicate z " + item.z);
+      }
+      if (Object.prototype.hasOwnProperty.call(drawOrders, item.drawOrder)) {
+        fail("layoutSnapshot.cards", "duplicate drawOrder " + item.drawOrder);
+      }
+      if (item.drawOrder <= previousDrawOrder) {
+        fail("layoutSnapshot.cards", "drawOrder must be in canonical ascending order");
+      }
+      cardIds[item.cardId] = true;
+      zValues[item.z] = true;
+      drawOrders[item.drawOrder] = true;
+      previousDrawOrder = item.drawOrder;
+    });
+    return snapshot;
+  }
+
+  function buildLayoutSnapshot(input) {
+    var sourceCards = Array.isArray(input) ? input : input && input.cards;
+    if (!Array.isArray(sourceCards)) fail("input.cards", "must be an array");
+    var cards = sourceCards.map(function (item, index) {
+      var path = "input.cards[" + index + "]";
+      assertPlainObject(item, path);
+      var sourceCard = isPlainObject(item.card) ? item.card : item;
+      var cardId = freeformCardValue(item, sourceCard, "cardId");
+      if (cardId == null && sourceCard && Object.prototype.hasOwnProperty.call(sourceCard, "id")) {
+        cardId = sourceCard.id;
+      }
+      var x = item.x;
+      var y = item.y;
+      if (item.world != null) {
+        x = item.world.x;
+        y = item.world.y;
+      } else if (Object.prototype.hasOwnProperty.call(item, "worldX") ||
+          Object.prototype.hasOwnProperty.call(item, "worldY")) {
+        x = item.worldX;
+        y = item.worldY;
+      }
+      return {
+        cardId: cardId == null ? cardId : String(cardId),
+        x: x,
+        y: y,
+        boardRotation: item.boardRotation,
+        z: item.z,
+        drawOrder: item.drawOrder
+      };
+    });
+    cards.sort(function (a, b) {
+      if (a.drawOrder !== b.drawOrder) return a.drawOrder - b.drawOrder;
+      if (a.cardId === b.cardId) return 0;
+      return a.cardId < b.cardId ? -1 : 1;
+    });
+    return validateLayoutSnapshot({ cards: cards });
+  }
+
   function validateFreeformCard(item, index) {
     var path = "record.cards[" + index + "]";
     assertPlainObject(item, path);
@@ -591,6 +749,90 @@
     return record;
   }
 
+  function validateOrderOnlyFreeformCard(item, index) {
+    var path = "record.cards[" + index + "]";
+    assertPlainObject(item, path);
+    assertOnlyKeys(item, ORDER_ONLY_FREEFORM_CARD_KEYS, path);
+    ORDER_ONLY_FREEFORM_CARD_KEYS.forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(item, key)) fail(path, "missing field " + key);
+    });
+    assertString(item.cardId, path + ".cardId", 1, 120);
+    assertString(item.cardNumber, path + ".cardNumber", 1, 32);
+    assertString(item.cardName, path + ".cardName", 1, 120);
+    assertEnum(item.arcana, ARCANAS, path + ".arcana");
+    assertString(item.suit, path + ".suit", 0, 32);
+    assertEnum(item.orientation, ORIENTATIONS, path + ".orientation");
+    assertBoolean(item.revealed, path + ".revealed");
+    assertPositiveSafeInteger(item.drawOrder, path + ".drawOrder");
+  }
+
+  function validateOrderOnlyFreeformRecord(record) {
+    assertPlainObject(record, "record");
+    assertOnlyKeys(record, ORDER_ONLY_FREEFORM_RECORD_KEYS, "record");
+    ORDER_ONLY_FREEFORM_RECORD_KEYS.forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(record, key)) fail("record", "missing field " + key);
+    });
+    if (record.schemaVersion !== SCHEMA_V3_VERSION) {
+      fail("record.schemaVersion", "unsupported schemaVersion");
+    }
+    assertEnum(record.layoutMode, ["freeform"], "record.layoutMode");
+    assertString(record.id, "record.id", 1, 120);
+    assertIsoDate(record.createdAt, "record.createdAt");
+    assertEnum(record.deckType, DECK_TYPES, "record.deckType");
+    assertEnum(record.deckMode, DECK_TYPES, "record.deckMode");
+    if (record.deckMode !== record.deckType) fail("record.deckMode", "must match deckType");
+    assertString(record.deckName, "record.deckName", 1, 100);
+    assertEnum(record.orientationMode, ORIENTATION_MODES, "record.orientationMode");
+    assertEnum(record.filterMode, FILTER_MODES, "record.filterMode");
+    assertEnum(record.overviewMethod, OVERVIEW_METHODS, "record.overviewMethod");
+    if (!Array.isArray(record.cards) || record.cards.length === 0) {
+      fail("record.cards", "must contain at least 1 card");
+    }
+    assertDeckCardCount(record.cards.length, record.deckType, "record.cards");
+
+    if (record.deckType !== "tarot") {
+      if (record.orientationMode !== "upright-only") {
+        fail("record.orientationMode", "non-tarot decks must be upright-only");
+      }
+      if (record.filterMode !== "not-applicable") {
+        fail("record.filterMode", "non-tarot decks do not use a tarot filter");
+      }
+      if (record.overviewMethod !== "not-applicable") {
+        fail("record.overviewMethod", "non-tarot decks do not use overview methods");
+      }
+    }
+
+    var cardIds = Object.create(null);
+    var drawOrders = Object.create(null);
+    var previousDrawOrder = 0;
+    record.cards.forEach(function (item, index) {
+      validateOrderOnlyFreeformCard(item, index);
+      if (Object.prototype.hasOwnProperty.call(cardIds, item.cardId)) {
+        fail("record.cards", "duplicate cardId " + item.cardId);
+      }
+      if (Object.prototype.hasOwnProperty.call(drawOrders, item.drawOrder)) {
+        fail("record.cards", "duplicate drawOrder " + item.drawOrder);
+      }
+      if (item.drawOrder <= previousDrawOrder) {
+        fail("record.cards", "drawOrder must be in canonical ascending order");
+      }
+      cardIds[item.cardId] = true;
+      drawOrders[item.drawOrder] = true;
+      previousDrawOrder = item.drawOrder;
+
+      if (record.orientationMode === "upright-only" && item.orientation !== "upright") {
+        fail("record.cards", "upright-only records cannot contain reversed cards");
+      }
+      if (record.deckType === "tarot" && item.arcana !== "major" && item.arcana !== "minor") {
+        fail("record.cards", "tarot records require tarot arcana values");
+      }
+      if (record.deckType !== "tarot" && item.arcana !== record.deckType) {
+        fail("record.cards", "card arcana must match the non-tarot deck");
+      }
+    });
+    return record;
+  }
+
   function validateV2PresetRecord(record) {
     assertPlainObject(record, "record");
     assertOnlyKeys(record, V2_PRESET_RECORD_KEYS, "record");
@@ -622,8 +864,16 @@
     fail("record.layoutMode", "invalid value " + String(record.layoutMode));
   }
 
+  function validateV3Record(record) {
+    assertPlainObject(record, "record");
+    if (record.layoutMode === "freeform") return validateOrderOnlyFreeformRecord(record);
+    assertOnlyKeys(record, ORDER_ONLY_FREEFORM_RECORD_KEYS, "record");
+    fail("record.layoutMode", "invalid value " + String(record.layoutMode));
+  }
+
   function validateRecord(record) {
     assertPlainObject(record, "record");
+    if (record.schemaVersion === SCHEMA_V3_VERSION) return validateV3Record(record);
     if (record.schemaVersion === SCHEMA_V2_VERSION) return validateV2Record(record);
     return validateV1Record(record);
   }
@@ -666,6 +916,19 @@
         cards: canonicalCards(record.cards, FREEFORM_CARD_KEYS)
       });
     }
+    if (record && record.schemaVersion === SCHEMA_V3_VERSION && record.layoutMode === "freeform") {
+      return JSON.stringify({
+        schemaVersion: record.schemaVersion,
+        layoutMode: record.layoutMode,
+        deckType: record.deckType,
+        deckMode: record.deckMode,
+        deckName: record.deckName,
+        orientationMode: record.orientationMode,
+        filterMode: record.filterMode,
+        overviewMethod: record.overviewMethod,
+        cards: canonicalCards(record.cards, ORDER_ONLY_FREEFORM_CARD_KEYS)
+      });
+    }
     return JSON.stringify({
       schemaVersion: record.schemaVersion,
       deckType: record.deckType,
@@ -704,6 +967,8 @@
     records.forEach(validateRecord);
     var envelope = {
       formatVersion: records.some(function (record) {
+        return record.schemaVersion === SCHEMA_V3_VERSION;
+      }) ? FORMAT_VERSION_V3 : records.some(function (record) {
         return record.schemaVersion === SCHEMA_V2_VERSION;
       }) ? FORMAT_VERSION_V2 : FORMAT_VERSION,
       exportedAt: exportedAt || new Date().toISOString(),
@@ -732,7 +997,8 @@
     ["formatVersion", "exportedAt", "records"].forEach(function (key) {
       if (!Object.prototype.hasOwnProperty.call(value, key)) fail("import", "missing field " + key);
     });
-    if (value.formatVersion !== FORMAT_VERSION && value.formatVersion !== FORMAT_VERSION_V2) {
+    if (value.formatVersion !== FORMAT_VERSION && value.formatVersion !== FORMAT_VERSION_V2 &&
+        value.formatVersion !== FORMAT_VERSION_V3) {
       fail("import.formatVersion", "unsupported formatVersion");
     }
     assertIsoDate(value.exportedAt, "import.exportedAt");
@@ -742,7 +1008,12 @@
     if (value.formatVersion === FORMAT_VERSION) {
       value.records.forEach(validateV1Record);
     } else {
-      value.records.forEach(validateRecord);
+      value.records.forEach(function (record) {
+        validateRecord(record);
+        if (value.formatVersion === FORMAT_VERSION_V2 && record.schemaVersion === SCHEMA_V3_VERSION) {
+          fail("import.records", "formatVersion 2 cannot contain schemaVersion 3");
+        }
+      });
     }
     return {
       formatVersion: value.formatVersion,
@@ -778,14 +1049,20 @@
   return {
     SCHEMA_VERSION: SCHEMA_VERSION,
     SCHEMA_V2_VERSION: SCHEMA_V2_VERSION,
+    SCHEMA_V3_VERSION: SCHEMA_V3_VERSION,
     FORMAT_VERSION: FORMAT_VERSION,
     FORMAT_VERSION_V2: FORMAT_VERSION_V2,
+    FORMAT_VERSION_V3: FORMAT_VERSION_V3,
     MAX_RECORDS: MAX_RECORDS,
     MAX_CARDS: MAX_CARDS,
     MAX_IMPORT_BYTES: MAX_IMPORT_BYTES,
     buildReadingRecord: buildReadingRecord,
     buildPresetRecord: buildPresetRecord,
+    buildFreeformLayoutRecord: buildFreeformLayoutRecord,
     buildFreeformRecord: buildFreeformRecord,
+    buildFreeformOrderRecord: buildFreeformRecord,
+    buildLayoutSnapshot: buildLayoutSnapshot,
+    validateLayoutSnapshot: validateLayoutSnapshot,
     validateRecord: validateRecord,
     canonicalRecordContent: canonicalRecordContent,
     recordsEquivalent: recordsEquivalent,

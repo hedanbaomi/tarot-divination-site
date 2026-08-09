@@ -345,8 +345,8 @@ test("keeps v1 exports byte-compatible and rejects v2 fields in v1 records", fun
   }, /unexpected field layoutMode/);
 });
 
-test("builds and round-trips a v2 freeform record without rich content", function () {
-  var record = history.buildFreeformRecord(buildFreeformInput([
+test("builds and round-trips a v2 spatial freeform record without rich content", function () {
+  var record = history.buildFreeformLayoutRecord(buildFreeformInput([
     freeformCard("major-00", 0),
     freeformCard("major-01", 1, { orientation: "reversed", boardRotation: -12.5 })
   ]));
@@ -371,6 +371,36 @@ test("builds and round-trips a v2 freeform record without rich content", functio
   var json = history.serializeExport([record], "2026-07-26T13:00:00.000Z");
   var parsed = history.parseImportJson(json);
   assert.equal(parsed.formatVersion, history.FORMAT_VERSION_V2);
+  assert.deepEqual(parsed.records, [record]);
+});
+
+test("builds and round-trips a v3 order-only freeform record", function () {
+  var record = history.buildFreeformRecord(buildFreeformInput([
+    freeformCard("major-01", 1, { revealed: false, x: 999, y: -888, boardRotation: 45, z: 99 }),
+    freeformCard("major-00", 0, { drawOrder: 1, x: -500, y: 700, boardRotation: -90, z: 2 })
+  ]));
+
+  assert.equal(record.schemaVersion, history.SCHEMA_V3_VERSION);
+  assert.equal(record.layoutMode, "freeform");
+  assert.deepEqual(Object.keys(record), [
+    "schemaVersion", "layoutMode", "id", "createdAt", "deckType", "deckMode",
+    "deckName", "orientationMode", "filterMode", "overviewMethod", "cards"
+  ]);
+  assert.deepEqual(Object.keys(record.cards[0]), [
+    "cardId", "cardNumber", "cardName", "arcana", "suit", "orientation", "revealed", "drawOrder"
+  ]);
+  assert.deepEqual(record.cards.map(function (item) { return item.cardId; }), ["major-00", "major-01"]);
+  assert.deepEqual(record.cards.map(function (item) { return item.drawOrder; }), [1, 2]);
+  assert.equal(record.cards[1].revealed, false);
+  assert.equal(Object.prototype.hasOwnProperty.call(record.cards[0], "x"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(record.cards[0], "y"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(record.cards[0], "boardRotation"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(record.cards[0], "z"), false);
+  assert.doesNotThrow(function () { history.validateRecord(record); });
+
+  var json = history.serializeExport([record], "2026-07-26T13:00:00.000Z");
+  var parsed = history.parseImportJson(json);
+  assert.equal(parsed.formatVersion, history.FORMAT_VERSION_V3);
   assert.deepEqual(parsed.records, [record]);
 });
 
@@ -403,21 +433,35 @@ test("accepts a strict v2 preset and chooses a v2 envelope", function () {
   assert.throws(function () { history.validateRecord(extra); }, /unexpected field question/);
 });
 
-test("exports and imports a mixed v1/v2 history collection", function () {
+test("exports and imports a mixed v1/v2/v3 history collection", function () {
   var spread = spreads.getTarotSpread("three-card-horizontal");
   var v1 = history.buildReadingRecord(buildInput(spread, [
     entry(0, card("major-00", "00", "愚者")),
     entry(1, card("major-01", "01", "魔法师")),
     entry(2, card("major-02", "02", "女祭司"))
   ]));
-  var v2 = history.buildFreeformRecord(buildFreeformInput([
+  var v2 = history.buildFreeformLayoutRecord(buildFreeformInput([
     freeformCard("major-03", 0)
   ], { id: "freeform-test-2" }));
-  var envelope = history.createExportEnvelope([v1, v2], "2026-07-26T13:00:00.000Z");
+  var v3 = history.buildFreeformRecord(buildFreeformInput([
+    freeformCard("major-04", 0)
+  ], { id: "freeform-test-3" }));
+  var envelope = history.createExportEnvelope([v1, v2, v3], "2026-07-26T13:00:00.000Z");
   var parsed = history.parseImportJson(JSON.stringify(envelope));
 
-  assert.equal(envelope.formatVersion, history.FORMAT_VERSION_V2);
-  assert.deepEqual(parsed.records, [v1, v2]);
+  assert.equal(envelope.formatVersion, history.FORMAT_VERSION_V3);
+  assert.deepEqual(parsed.records, [v1, v2, v3]);
+  assert.equal(v2.schemaVersion, history.SCHEMA_V2_VERSION);
+  assert.equal(v3.schemaVersion, history.SCHEMA_V3_VERSION);
+  assert.equal(history.recordsEquivalent(v2, v3), false);
+  assert.equal(history.recordsEquivalent(v3, Object.assign({}, v3, {
+    id: "different-id",
+    createdAt: "2026-07-26T12:01:00.000Z"
+  })), true);
+  assert.equal(history.isRecentDuplicate([v3], Object.assign({}, v3, {
+    id: "different-id",
+    createdAt: "2026-07-26T12:00:05.000Z"
+  }), 10000), true);
   assert.equal(history.recordsEquivalent(v2, Object.assign({}, v2, {
     id: "different-id",
     createdAt: "2026-07-26T12:01:00.000Z"
@@ -429,7 +473,7 @@ test("exports and imports a mixed v1/v2 history collection", function () {
 });
 
 test("rejects malformed v2 freeform fields, duplicates, bounds and non-canonical order", function () {
-  var record = history.buildFreeformRecord(buildFreeformInput([
+  var record = history.buildFreeformLayoutRecord(buildFreeformInput([
     freeformCard("major-00", 0),
     freeformCard("major-01", 1)
   ]));
@@ -456,7 +500,55 @@ test("rejects malformed v2 freeform fields, duplicates, bounds and non-canonical
   var tooMany = buildFreeformInput([]);
   tooMany.cards = [];
   for (var i = 0; i < 79; i++) tooMany.cards.push(freeformCard("major-" + i, i));
-  assert.throws(function () { history.buildFreeformRecord(tooMany); }, /cards/);
+  assert.throws(function () { history.buildFreeformLayoutRecord(tooMany); }, /cards/);
+});
+
+test("rejects malformed v3 order-only fields and preserves the spatial boundary", function () {
+  var record = history.buildFreeformRecord(buildFreeformInput([
+    freeformCard("major-00", 0),
+    freeformCard("major-01", 1)
+  ]));
+  var mutate = function (callback, matcher) {
+    var copy = JSON.parse(JSON.stringify(record));
+    callback(copy);
+    assert.throws(function () { history.validateRecord(copy); }, matcher || /record/);
+  };
+
+  mutate(function (copy) { copy.cards[0].x = 0; }, /unexpected field x/);
+  mutate(function (copy) { copy.cards[0].y = 0; }, /unexpected field y/);
+  mutate(function (copy) { copy.cards[0].boardRotation = 0; }, /unexpected field boardRotation/);
+  mutate(function (copy) { copy.cards[0].z = 1; }, /unexpected field z/);
+  mutate(function (copy) { copy.cards[1].cardId = copy.cards[0].cardId; }, /duplicate cardId/);
+  mutate(function (copy) { copy.cards[1].drawOrder = copy.cards[0].drawOrder; }, /duplicate drawOrder/);
+  mutate(function (copy) { copy.cards.reverse(); }, /canonical ascending order/);
+
+  var malformed = JSON.parse(JSON.stringify(record));
+  malformed.cards[0].drawOrder = 0;
+  assert.throws(function () { history.validateRecord(malformed); }, /positive safe integer/);
+});
+
+test("keeps a strict dormant spatial layout snapshot API for future v2 restoration", function () {
+  var snapshot = history.buildLayoutSnapshot([
+    freeformCard("major-01", 1, { x: 25, y: -10, boardRotation: 12, z: 2, drawOrder: 2 }),
+    freeformCard("major-00", 0, { x: -5, y: 9, boardRotation: -12, z: 1, drawOrder: 1 })
+  ]);
+
+  assert.deepEqual(Object.keys(snapshot), ["cards"]);
+  assert.deepEqual(Object.keys(snapshot.cards[0]), [
+    "cardId", "x", "y", "boardRotation", "z", "drawOrder"
+  ]);
+  assert.deepEqual(snapshot.cards.map(function (item) { return item.cardId; }), ["major-00", "major-01"]);
+  assert.doesNotThrow(function () { history.validateLayoutSnapshot(snapshot); });
+
+  var extra = JSON.parse(JSON.stringify(snapshot));
+  extra.cards[0].notes = "forbidden";
+  assert.throws(function () { history.validateLayoutSnapshot(extra); }, /unexpected field notes/);
+  var duplicate = JSON.parse(JSON.stringify(snapshot));
+  duplicate.cards[1].cardId = duplicate.cards[0].cardId;
+  assert.throws(function () { history.validateLayoutSnapshot(duplicate); }, /duplicate cardId/);
+  var outOfBounds = JSON.parse(JSON.stringify(snapshot));
+  outOfBounds.cards[0].x = 1000001;
+  assert.throws(function () { history.validateLayoutSnapshot(outOfBounds); }, /x/);
 });
 
 test("enforces each actual deck maximum and rejects oversized imports", function () {

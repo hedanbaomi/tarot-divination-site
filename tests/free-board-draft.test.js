@@ -83,3 +83,45 @@ test("invalid persisted drafts fail closed without being returned or thrown", fu
   assert.deepEqual(result, { draft: null, invalid: true, unavailable: false });
   assert.equal(store.has(draft.STORAGE_KEY), false);
 });
+
+test("autosave callbacks can schedule a new draft without settling the new waiter early", async function () {
+  var store = storage();
+  var first = makeController();
+  var second = makeController();
+  second.draw("major-1", { x: 12, y: -8, orientation: "upright" });
+  var secondPending = null;
+  var savedCount = 0;
+  var autosave;
+  autosave = draft.createAutosave({
+    storage: store,
+    modelApi: model,
+    debounceMs: 0,
+    onSaved: function () {
+      savedCount += 1;
+      if (savedCount === 1) secondPending = autosave.schedule(second);
+    }
+  });
+
+  assert.equal(await autosave.schedule(first), first.serializeDraft());
+  assert.ok(secondPending);
+  assert.equal(await secondPending, second.serializeDraft());
+  assert.equal(store.getItem(draft.STORAGE_KEY), second.serializeDraft());
+  assert.equal(savedCount, 2);
+});
+
+test("a throwing observer cannot turn a persisted autosave into a failed save", async function () {
+  var store = storage();
+  var controller = makeController();
+  var observedError = null;
+  var autosave = draft.createAutosave({
+    storage: store,
+    modelApi: model,
+    debounceMs: 0,
+    onSaved: function () { throw new Error("observer failed"); },
+    onError: function (error) { observedError = error; }
+  });
+
+  assert.equal(await autosave.schedule(controller), controller.serializeDraft());
+  assert.equal(store.getItem(draft.STORAGE_KEY), controller.serializeDraft());
+  assert.match(observedError.message, /observer failed/);
+});

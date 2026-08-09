@@ -122,3 +122,23 @@ test("Free Board gestures keep viewport transforms, orientation, and board rotat
   assert.match(css, /\.free-board-viewport\s*\{[\s\S]*overscroll-behavior: contain/);
   assert.doesNotMatch(css, /body\s*\{[^}]*touch-action/);
 });
+
+test("Free Board taps select only, while external meaning and automatic history controls remain", function () {
+  var html = read("index.html");
+  var app = read("js/app.js");
+  var ui = read("js/free-board-ui.js");
+  var css = read("css/free-board.css");
+  var finishPointer = ui.match(/function finishPointer\(event\) \{[\s\S]*?\n    \}\n\n    function handleWheel/)[0];
+
+  assert.doesNotMatch(html, /freeBoardClearBtn|freeBoardSaveBtn/);
+  assert.match(html, /freeBoardDiscardDraftBtn/);
+  assert.match(html, /data-card-control-action="toggle-meaning"/);
+  assert.doesNotMatch(ui, /free-board-card-toolbar/);
+  assert.doesNotMatch(finishPointer, /mutate\("reveal"|toggleMeaning/);
+  assert.match(ui, /case "toggle-meaning"/);
+  assert.match(ui, /selected\.revealed/);
+  assert.match(ui, /function revealAll\(\)[\s\S]*saveHistory\(\)/);
+  assert.match(ui, /freeBoard\.drawOrder/);
+  assert.match(css, /data-free-board-platform="android"/);
+  assert.match(app, /layoutMode === "preset" && deckType === "tarot" && selectedSpreadId === "overview"/);
+});

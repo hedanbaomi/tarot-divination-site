@@ -284,11 +284,11 @@
       return item;
     }
 
-    function renderFreeformCard(record, card, source) {
+    function renderFreeformCard(record, card) {
       var item = document.createElement("li");
       item.className = "history-detail-card history-free-board-card-summary";
       var name = document.createElement("h4");
-      name.textContent = displayCardName(record, card);
+      name.textContent = "#" + card.drawOrder + " · " + displayCardName(record, card);
       var orientation = card.orientation === "reversed"
         ? t("history.orientation.reversed")
         : t("history.orientation.upright");
@@ -299,7 +299,7 @@
       details.textContent = t("history.freeBoardCardState", {
         card: displayCardName(record, card),
         state: state
-      }) + " · x " + card.x + " · y " + card.y + " · " + card.boardRotation + "°";
+      });
       item.appendChild(name);
       item.appendChild(details);
       return item;
@@ -395,12 +395,11 @@
       elements.detailBody.appendChild(definitions);
 
       if (record.layoutMode === "freeform") {
-        elements.detailBody.appendChild(renderFreeformBoard(record));
         var freeBoardHeading = document.createElement("h3");
-        freeBoardHeading.textContent = t("history.freeBoardPreview");
+        freeBoardHeading.textContent = t("history.completePositions");
         var freeBoardCards = document.createElement("ol");
         freeBoardCards.className = "history-detail-cards";
-        record.cards.slice().sort(function (a, b) { return a.z - b.z; }).forEach(function (card) {
+        record.cards.slice().sort(function (a, b) { return a.drawOrder - b.drawOrder; }).forEach(function (card) {
           freeBoardCards.appendChild(renderFreeformCard(record, card));
         });
         elements.detailBody.appendChild(freeBoardHeading);

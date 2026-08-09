@@ -64,18 +64,22 @@ test("Free Board controls, statuses, confirmations, and accessibility labels are
       "freeBoard.undoAria",
       "freeBoard.redoAria",
       "freeBoard.cardAria",
-      "freeBoard.save",
+      "freeBoard.showMeaning",
+      "freeBoard.clearAndDiscard",
+      "freeBoard.drawOrder",
       "freeBoard.saveFailed",
       "confirm.layout",
-      "confirm.freeBoardClear",
+      "confirm.freeBoardDiscard",
       "history.freeBoard",
       "history.freeBoardPreview"
     ].forEach(function (key) {
       assert.ok(start.indexOf('"' + key + '"') !== -1, locale + " missing " + key);
     });
   });
-  assert.match(freeBoardUi, /freeBoard\.rotateMinus15Aria/);
-  assert.match(freeBoardUi, /freeBoard\.removeAria/);
+  assert.match(html, /freeBoard\.rotateMinus15Aria/);
+  assert.match(freeBoardUi, /freeBoard\.showMeaning/);
+  assert.match(html, /freeBoard\.removeAria/);
+  assert.doesNotMatch(freeBoardUi, /freeBoard\.saveAria/);
 });
 
 function i18nSourceBlock(source, locale) {

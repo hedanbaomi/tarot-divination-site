@@ -76,7 +76,35 @@ test("Free Board hides the preset spread group and selected controls when hidden
   assert.match(app, /el\.spreadSettingGroup = document\.querySelector\("\.setting-group-spread"\)/);
   assert.match(app, /el\.spreadSettingGroup\) el\.spreadSettingGroup\.style\.display = freeform \? "none" : ""/);
   assert.match(css, /\.free-board-selected-controls\[hidden\]\s*\{[\s\S]*display:\s*none\s*!important/);
-  assert.match(css, /@media \(max-width: 640px\)[\s\S]*\.free-board-card-toolbar\s*\{[\s\S]*display:\s*none/);
+  assert.doesNotMatch(css, /free-board-card-toolbar/);
+});
+
+test("overview method is visible only for the preset Tarot overview spread", function () {
+  var html = read("index.html");
+  var app = read("js/app.js");
+  assert.match(app, /layoutMode === "preset" && deckType === "tarot" && selectedSpreadId === "overview"/);
+  assert.match(app, /function setOverviewMethodVisibility\(visible\)/);
+  assert.match(app, /themed-select-trigger/);
+  assert.match(html, /id="overviewMethodGroup"/);
+});
+
+test("Free Board keeps only selected-card controls and saves after reveal all", function () {
+  var html = read("index.html");
+  var app = read("js/app.js");
+  var ui = read("js/free-board-ui.js");
+  var css = read("css/free-board.css");
+  assert.doesNotMatch(html, /id="freeBoardClearBtn"/);
+  assert.doesNotMatch(html, /id="freeBoardSaveBtn"/);
+  assert.match(html, /id="freeBoardDiscardDraftBtn"[\s\S]*data-i18n="freeBoard\.clearAndDiscard"/);
+  assert.match(html, /data-card-control-action="toggle-meaning"/);
+  assert.doesNotMatch(ui, /free-board-card-toolbar/);
+  assert.match(ui, /data-draw-order/);
+  assert.match(ui, /case "toggle-meaning"/);
+  assert.match(ui, /function revealAll\(\)[\s\S]*saveHistory\(\)/);
+  assert.match(app, /platform: "web"/);
+  assert.match(app, /getBackImage: deckBackImage/);
+  assert.match(app, /if \(type === "mystagogus"\) return MYSTAGOGUS_BACK;\s*return "";/);
+  assert.match(css, /data-free-board-platform="android"/);
 });
 
 test("destructive Free Board transitions use the branded confirmation seam", function () {
@@ -87,7 +115,7 @@ test("destructive Free Board transitions use the branded confirmation seam", fun
   assert.match(app, /el\.layoutModeSelect\.value = layoutMode/);
   assert.match(app, /DivinationDialog\.request/);
   assert.match(app, /if \(!isFreeform\(\) && spread\.length === 0 && freeBoardCards === 0\)/);
-  assert.match(ui, /requestConfirm\(t\("confirm\.freeBoardClear"\)/);
+  assert.doesNotMatch(ui, /requestConfirm\(t\("confirm\.freeBoardClear"\)/);
   assert.match(ui, /requestConfirm\(t\("confirm\.freeBoardDiscard"\)/);
   assert.match(ui, /requestConfirm\(t\("confirm\.freeBoardShuffle"\)/);
   assert.doesNotMatch(ui, /var hasContent = getState\(\)\.cards\.length > 0/);
@@ -138,12 +166,14 @@ test("both locales contain the Free Board surface keys", function () {
       "settings.layoutMode",
       "layout.freeform",
       "freeBoard.title",
-      "freeBoard.save",
+      "freeBoard.showMeaning",
+      "freeBoard.clearAndDiscard",
+      "freeBoard.drawOrder",
       "freeBoard.undoAria",
       "freeBoard.cardAria",
       "history.freeBoard",
       "history.freeBoardPreview",
-      "confirm.freeBoardClear"
+      "confirm.freeBoardDiscard"
     ].forEach(function (key) {
       assert.ok(block.indexOf('"' + key + '"') !== -1, locale + " missing " + key);
     });
