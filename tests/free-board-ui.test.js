@@ -275,12 +275,18 @@ test("selected controls commit rotation, z ordering, removal, and reveal-all aut
   remove.dispatchEvent(event("click", { target: remove }));
   assert.equal(ui.getState().cards.some(function (card) { return card.cardId === firstId; }), false);
   assert.equal(ui.getState().remainingPile.indexOf(firstId) !== -1, true);
+  assert.equal(ui.getState().cards[0].drawOrder, 1);
+  var remainingPosition = setupResult.world.children[0].children.filter(function (child) {
+    return child.getAttribute("data-draw-order") !== null;
+  })[0];
+  assert.equal(remainingPosition.getAttribute("data-draw-order"), "1");
 
   var saved = await ui.revealAll();
   assert.equal(saved.saved, true);
   assert.equal(setupResult.getSaved().layoutMode, "freeform");
   assert.equal(setupResult.getSaved().cards.length, 1);
   assert.equal(setupResult.getSaved().cards[0].revealed, true);
+  assert.equal(setupResult.getSaved().cards[0].drawOrder, 1);
   tap(setupResult.world.children[0]);
   var meaning = setupResult.selected.querySelectorAll("[data-card-control-action]").filter(function (button) {
     return button.getAttribute("data-card-control-action") === "toggle-meaning";
@@ -291,7 +297,7 @@ test("selected controls commit rotation, z ordering, removal, and reveal-all aut
   ui.exit();
 });
 
-test("draw order is rendered on both card face states", function () {
+test("current board position is rendered on both card face states", function () {
   var setupResult = setup();
   setupResult.pile.children[0].dispatchEvent(event("click"));
   var card = setupResult.world.children[0];

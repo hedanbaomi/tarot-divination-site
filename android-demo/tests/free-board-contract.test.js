@@ -99,6 +99,24 @@ test("Android Free Board model keeps pile order, orientation, board rotation, an
   assert.equal(restored.canRedo(), false);
 });
 
+test("Android Free Board keeps current board positions contiguous after remove and legacy restore", function () {
+  var board = model.createController({
+    deck: { id: "tarot", cardIds: ["one", "two", "three"] },
+    settings: { deckType: "tarot", orientationMode: "mixed" }
+  });
+  board.draw("one");
+  board.draw("two");
+  board.draw("three");
+  board.removeCard("one");
+  assert.deepEqual(board.getState().cards.map(function (card) { return card.drawOrder; }), [1, 2]);
+
+  var legacyDraft = JSON.parse(board.serializeDraft());
+  legacyDraft.cards[0].drawOrder = 3;
+  legacyDraft.cards[1].drawOrder = 7;
+  var restored = model.restoreDraft(JSON.stringify(legacyDraft));
+  assert.deepEqual(restored.getState().cards.map(function (card) { return card.drawOrder; }), [1, 2]);
+});
+
 test("Android draft storage fails closed and can discard a saved draft", async function () {
   var store = storage();
   var board = model.createController({

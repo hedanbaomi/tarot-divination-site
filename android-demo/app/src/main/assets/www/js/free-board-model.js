@@ -553,6 +553,12 @@
     };
   }
 
+  function normalizedDraftState(draft, meta) {
+    var state = validateState(parsedDraftToState(draft), meta, true);
+    compactDrawOrders(state.cards);
+    return state;
+  }
+
   function parseDraft(input) {
     var raw;
     if (typeof input === "string") {
@@ -639,6 +645,15 @@
     return max + 1;
   }
 
+  function compactDrawOrders(cards) {
+    cards.slice().sort(function (left, right) {
+      if (left.drawOrder !== right.drawOrder) return left.drawOrder - right.drawOrder;
+      return left.cardId < right.cardId ? -1 : left.cardId > right.cardId ? 1 : 0;
+    }).forEach(function (card, index) {
+      card.drawOrder = index + 1;
+    });
+  }
+
   function normalizeDrawOptions(options) {
     if (options === undefined) return {};
     if (!isPlainObject(options)) fail("BAD_OPTIONS", "draw options must be a plain object");
@@ -682,10 +697,11 @@
     }
     if (hasOwn(options, "initialState")) {
       this._state = validateState(options.initialState, this._meta, true);
+      compactDrawOrders(this._state.cards);
       this._syncCounters();
     }
     if (parsedDraft) {
-      this._state = validateState(parsedDraftToState(parsedDraft), this._meta, true);
+      this._state = normalizedDraftState(parsedDraft, this._meta);
       this._syncCounters();
     }
   }
@@ -759,6 +775,7 @@
     var index = this._cardIndex(cardId);
     var next = cloneInternalState(this._state);
     next.cards.splice(index, 1);
+    compactDrawOrders(next.cards);
     next.remainingPile.push(cardId);
     this._commit(next);
     return this.getState();
@@ -946,7 +963,7 @@
 
   FreeBoardController.prototype.restoreDraft = function (draft) {
     var parsed = parseDraft(draft);
-    var next = validateState(parsedDraftToState(parsed), this._meta, true);
+    var next = normalizedDraftState(parsed, this._meta);
     this._state = next;
     this._undo = [];
     this._redo = [];

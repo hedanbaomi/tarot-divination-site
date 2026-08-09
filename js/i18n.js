@@ -245,7 +245,7 @@
       ,"freeBoard.unrevealed": "未开牌"
       ,"freeBoard.cardAria": "{card}，{state}{orientation}。拖动改变位置，轻点选中"
       ,"freeBoard.selectedControls": "当前选择：{card}"
-      ,"freeBoard.drawOrder": "抽牌序号 {order}"
+      ,"freeBoard.drawOrder": "牌位{order}"
       ,"freeBoard.cardsDrawn": "已放置 {count} 张"
       ,"freeBoard.remaining": "待抽 {count} 张"
       ,"freeBoard.status": "已放置 {cards} 张 · 待抽 {remaining} 张"
@@ -521,7 +521,7 @@
       "freeBoard.unrevealed": "Not revealed",
       "freeBoard.cardAria": "{card}, {state}{orientation}. Drag to move; tap to select.",
       "freeBoard.selectedControls": "Selected: {card}",
-      "freeBoard.drawOrder": "Draw order {order}",
+      "freeBoard.drawOrder": "Position {order}",
       "freeBoard.cardsDrawn": "{count} placed",
       "freeBoard.remaining": "{count} remaining",
       "freeBoard.status": "{cards} placed · {remaining} remaining",

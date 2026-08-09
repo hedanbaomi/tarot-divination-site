@@ -35,7 +35,7 @@ function draftObject(board) {
   return JSON.parse(board.serializeDraft());
 }
 
-test("draw/add and remove return cards to the pile in a defined order", () => {
+test("draw/add and remove keep the pile and current board positions in defined order", () => {
   const board = controller();
 
   assert.deepEqual(board.getState().remainingPile, ["one", "two", "three", "four"]);
@@ -43,11 +43,23 @@ test("draw/add and remove return cards to the pile in a defined order", () => {
   board.addFromPile("three");
 
   assert.deepEqual(board.getState().cards.map((card) => card.cardId), ["one", "three"]);
+  assert.deepEqual(board.getState().cards.map((card) => card.drawOrder), [1, 2]);
   assert.deepEqual(board.getState().remainingPile, ["two", "four"]);
 
   board.removeCard("one");
   assert.deepEqual(board.getState().cards.map((card) => card.cardId), ["three"]);
+  assert.deepEqual(board.getState().cards.map((card) => card.drawOrder), [1]);
   assert.deepEqual(board.getState().remainingPile, ["two", "four", "one"]);
+  const removed = board.getState();
+
+  board.undo();
+  assert.deepEqual(board.getState().cards.map((card) => card.drawOrder), [1, 2]);
+  board.redo();
+  assert.deepEqual(board.getState(), removed);
+
+  board.draw("two");
+  assert.deepEqual(board.getState().cards.map((card) => card.cardId), ["three", "two"]);
+  assert.deepEqual(board.getState().cards.map((card) => card.drawOrder), [1, 2]);
 });
 
 test("duplicate, unknown, and incomplete card sets are rejected", () => {
@@ -82,7 +94,7 @@ test("move, rotate, and z ordering are independent and stay unique", () => {
   assert.equal(new Set(after.cards.map((card) => card.z)).size, after.cards.length);
 });
 
-test("bringToFront changes only stacking z, while draw order remains history", () => {
+test("bringToFront changes only stacking z, while current board position remains stable", () => {
   const board = controller();
   board.draw("one");
   board.draw("two");
@@ -212,6 +224,40 @@ test("draft serialization restores all board, pile, viewport, deck, and settings
   assert.deepEqual(restored.getState(), board.getState());
   assert.equal(restored.canUndo(), false);
   assert.equal(restored.canRedo(), false);
+});
+
+test("legacy drafts with draw-order gaps restore as contiguous current board positions", () => {
+  const board = controller();
+  board.draw("one");
+  board.draw("two");
+  const legacyDraft = draftObject(board);
+  legacyDraft.cards[0].drawOrder = 2;
+  legacyDraft.cards[1].drawOrder = 5;
+
+  const restored = FreeBoardModel.restoreDraft(JSON.stringify(legacyDraft));
+  const expectedPositions = [
+    { cardId: "one", drawOrder: 1 },
+    { cardId: "two", drawOrder: 2 }
+  ];
+  assert.deepEqual(restored.getState().cards.map((card) => ({
+    cardId: card.cardId,
+    drawOrder: card.drawOrder
+  })), expectedPositions);
+
+  const restoredInitialState = controller({
+    initialState: {
+      layoutMode: legacyDraft.layoutMode,
+      cards: legacyDraft.cards,
+      remainingPile: legacyDraft.remainingPile,
+      viewport: legacyDraft.viewport,
+      deck: legacyDraft.deck,
+      settings: legacyDraft.settings
+    }
+  });
+  assert.deepEqual(restoredInitialState.getState().cards.map((card) => ({
+    cardId: card.cardId,
+    drawOrder: card.drawOrder
+  })), expectedPositions);
 });
 
 test("controller draft restore requires the supplied deck and settings snapshot", () => {

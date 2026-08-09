@@ -284,11 +284,12 @@
       return item;
     }
 
-    function renderFreeformCard(record, card) {
+    function renderFreeformCard(record, card, positionNumber) {
       var item = document.createElement("li");
       item.className = "history-detail-card history-free-board-card-summary";
       var name = document.createElement("h4");
-      name.textContent = "#" + card.drawOrder + " · " + displayCardName(record, card);
+      name.textContent = t("freeBoard.drawOrder", { order: positionNumber }) +
+        " · " + displayCardName(record, card);
       var orientation = card.orientation === "reversed"
         ? t("history.orientation.reversed")
         : t("history.orientation.upright");
@@ -399,8 +400,8 @@
         freeBoardHeading.textContent = t("history.completePositions");
         var freeBoardCards = document.createElement("ol");
         freeBoardCards.className = "history-detail-cards";
-        record.cards.slice().sort(function (a, b) { return a.drawOrder - b.drawOrder; }).forEach(function (card) {
-          freeBoardCards.appendChild(renderFreeformCard(record, card));
+        record.cards.slice().sort(function (a, b) { return a.drawOrder - b.drawOrder; }).forEach(function (card, index) {
+          freeBoardCards.appendChild(renderFreeformCard(record, card, index + 1));
         });
         elements.detailBody.appendChild(freeBoardHeading);
         elements.detailBody.appendChild(freeBoardCards);

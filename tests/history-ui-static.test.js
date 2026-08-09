@@ -123,6 +123,10 @@ test("Free Board history details show order only and keep spatial rendering dorm
     historyUi.indexOf("function renderFreeformCard"),
     historyUi.indexOf("function renderFreeformBoard")
   );
+  var androidFreeformCardRenderer = androidHistoryUi.slice(
+    androidHistoryUi.indexOf("function renderFreeformCard"),
+    androidHistoryUi.indexOf("function renderFreeformBoard")
+  );
   var detailRenderer = historyUi.slice(
     historyUi.indexOf("function showDetail"),
     historyUi.indexOf("async function refreshList")
@@ -134,9 +138,14 @@ test("Free Board history details show order only and keep spatial rendering dorm
 
   assert.ok(freeformCardRenderer.length > 0);
   assert.doesNotMatch(freeformCardRenderer, /\b(?:x|y|boardRotation|z)\b/);
+  assert.match(freeformCardRenderer, /t\("freeBoard\.drawOrder", \{ order: positionNumber \}\)/);
+  assert.match(androidFreeformCardRenderer, /t\("freeBoard\.drawOrder", \{ order: positionNumber \}\)/);
   assert.doesNotMatch(detailRenderer, /renderFreeformBoard\(record\)/);
   assert.doesNotMatch(detailRenderer, /\.sort\(function \(a, b\) \{ return a\.z/);
+  assert.match(detailRenderer, /forEach\(function \(card, index\)/);
+  assert.match(detailRenderer, /renderFreeformCard\(record, card, index \+ 1\)/);
   assert.doesNotMatch(androidDetailRenderer, /renderFreeformBoard\(record\)/);
+  assert.match(androidDetailRenderer, /renderFreeformCard\(record, card, index \+ 1\)/);
   assert.match(detailRenderer, /drawOrder/);
   assert.match(androidDetailRenderer, /drawOrder/);
   assert.equal(historyRecords, androidHistoryRecords);

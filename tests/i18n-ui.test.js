@@ -76,6 +76,8 @@ test("Free Board controls, statuses, confirmations, and accessibility labels are
       assert.ok(start.indexOf('"' + key + '"') !== -1, locale + " missing " + key);
     });
   });
+  assert.match(i18nSourceBlock(i18nSource, "zh-CN"), /"freeBoard\.drawOrder": "牌位\{order\}"/);
+  assert.match(i18nSourceBlock(i18nSource, "en"), /"freeBoard\.drawOrder": "Position \{order\}"/);
   assert.match(html, /freeBoard\.rotateMinus15Aria/);
   assert.match(freeBoardUi, /freeBoard\.showMeaning/);
   assert.match(html, /freeBoard\.removeAria/);
