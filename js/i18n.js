@@ -36,6 +36,9 @@
       "settings.mode": "牌位模式",
       "mode.upright": "全正位（推荐）",
       "mode.mixed": "正逆位混合",
+      "settings.layoutMode": "布局方式",
+      "layout.preset": "预设牌阵",
+      "layout.freeform": "自由画板",
       "settings.arcana": "牌组筛选",
       "arcana.mixed": "混合抽取",
       "arcana.majorOnly": "仅大阿卡那",
@@ -168,6 +171,10 @@
       "confirm.spread": "切换牌阵会清空当前抽牌并重新洗牌，是否继续？",
       "confirm.deck": "切换牌组会清空当前牌阵并重新洗牌，是否继续？",
       "confirm.shuffle": "确定要重新洗牌吗？这会清空当前牌阵。",
+      "confirm.layout": "切换布局会清除当前未保存的牌面内容，是否继续？",
+      "confirm.freeBoardClear": "确定清空自由画板吗？画板上的卡牌将返回待抽牌堆。",
+      "confirm.freeBoardDiscard": "确定丢弃自由画板草稿并清空画板吗？此操作无法撤销。",
+      "confirm.freeBoardShuffle": "重新洗牌会清空自由画板并打乱待抽牌堆，是否继续？",
       "confirm.kicker": "牌阵变更",
       "confirm.title": "当前牌阵尚未清空",
       "confirm.cancel": "保留牌阵",
@@ -212,6 +219,71 @@
       "history.imported": "已导入 {count} 条历史记录。",
       "history.remapped": " {count} 条重复 ID 已安全重编号。",
       "history.importFailed": "导入失败：文件格式不正确或内容已损坏。"
+      ,"freeBoard.settingsSummary": "自由画板：可从当前牌组与筛选结果中任意抽牌，不设固定牌位或目标张数。"
+      ,"freeBoard.title": "自由画板"
+      ,"freeBoard.toolbarAria": "自由画板控制"
+      ,"freeBoard.undo": "撤销"
+      ,"freeBoard.undoAria": "撤销上一次自由画板操作"
+      ,"freeBoard.redo": "重做"
+      ,"freeBoard.redoAria": "重做上一次自由画板操作"
+      ,"freeBoard.revealAll": "全部开牌"
+      ,"freeBoard.revealAllAria": "翻开自由画板上的所有卡牌"
+      ,"freeBoard.resetView": "重置视图"
+      ,"freeBoard.resetViewAria": "将自由画板平移和缩放重置为默认"
+      ,"freeBoard.shuffle": "洗牌"
+      ,"freeBoard.shuffleAria": "清空自由画板并重新洗牌"
+      ,"freeBoard.discardDraft": "丢弃草稿"
+      ,"freeBoard.discardDraftAria": "丢弃保存的自由画板草稿"
+      ,"freeBoard.clear": "清空画板"
+      ,"freeBoard.clearAria": "清空自由画板并将卡牌放回待抽牌堆"
+      ,"freeBoard.save": "保存到历史"
+      ,"freeBoard.saveAria": "将当前自由画板保存到占卜历史"
+      ,"freeBoard.boardAria": "自由画板，可拖动画板与卡牌，双指或滚轮缩放"
+      ,"freeBoard.worldAria": "自由画板上的卡牌"
+      ,"freeBoard.selectedControlsAria": "所选卡牌控制"
+      ,"freeBoard.pileTitle": "待抽牌堆"
+      ,"freeBoard.pileAria": "自由画板待抽牌堆，可任意选择一张"
+      ,"freeBoard.drawAria": "待抽牌堆第 {index} 张，共 {count} 张，轻点抽到自由画板"
+      ,"freeBoard.faceDown": "牌背"
+      ,"freeBoard.meaning": "牌意"
+      ,"freeBoard.revealed": "已开牌"
+      ,"freeBoard.unrevealed": "未开牌"
+      ,"freeBoard.cardAria": "{card}，{state}{orientation}。拖动改变位置，轻点查看"
+      ,"freeBoard.cardControls": "{card}的卡牌控制"
+      ,"freeBoard.selectedControls": "当前选择：{card}"
+      ,"freeBoard.cardsDrawn": "已放置 {count} 张"
+      ,"freeBoard.remaining": "待抽 {count} 张"
+      ,"freeBoard.status": "已放置 {cards} 张 · 待抽 {remaining} 张"
+      ,"freeBoard.hint": "空白处拖动画板；拖动卡牌改变位置；轻点牌背开牌，轻点已开牌查看牌意。滚轮或双指可缩放。"
+      ,"freeBoard.rotateMinus15": "−15°"
+      ,"freeBoard.rotateMinus15Aria": "逆时针旋转当前卡牌 15 度"
+      ,"freeBoard.rotatePlus15": "＋15°"
+      ,"freeBoard.rotatePlus15Aria": "顺时针旋转当前卡牌 15 度"
+      ,"freeBoard.rotateMinus90": "−90°"
+      ,"freeBoard.rotateMinus90Aria": "逆时针旋转当前卡牌 90 度"
+      ,"freeBoard.rotatePlus90": "＋90°"
+      ,"freeBoard.rotatePlus90Aria": "顺时针旋转当前卡牌 90 度"
+      ,"freeBoard.bringFront": "置于顶层"
+      ,"freeBoard.bringFrontAria": "将当前卡牌置于最上层"
+      ,"freeBoard.remove": "移除／回牌堆"
+      ,"freeBoard.removeAria": "移除当前卡牌并放回待抽牌堆"
+      ,"freeBoard.draftInvalid": "保存的自由画板草稿无效，已安全忽略。"
+      ,"freeBoard.draftSaveFailed": "自由画板草稿保存失败；当前画板仍可继续使用。"
+      ,"freeBoard.draftDiscarded": "自由画板草稿已丢弃。"
+      ,"freeBoard.saving": "正在保存自由画板历史…"
+      ,"freeBoard.saved": "自由画板已保存到占卜历史。"
+      ,"freeBoard.duplicate": "这份自由画板刚刚已经保存，无需重复保存。"
+      ,"freeBoard.saveFailed": "自由画板历史保存失败；画板仍保留在当前页面。"
+      ,"freeBoard.saveUnavailable": "当前浏览器无法保存历史；自由画板仍可正常使用。"
+      ,"history.freeBoard": "自由画板"
+      ,"history.freeBoardDetail": "自由画板记录"
+      ,"history.freeBoardPreview": "自由画板空间重建（只读）"
+      ,"history.freeBoardHidden": "牌背（未开牌）"
+      ,"history.freeBoardRevealed": "已开牌 · {orientation}"
+      ,"history.freeBoardCardState": "{card} · {state}"
+      ,"history.savingFreeBoard": "正在保存自由画板历史…"
+      ,"history.savedFreeBoard": "自由画板已保存到当前浏览器的占卜历史。"
+      ,"history.duplicateFreeBoard": "这份自由画板刚刚已经保存，无需重复保存。"
     },
     "en": {
       "page.title": "Quareia Divination",
@@ -241,6 +313,9 @@
       "settings.mode": "Orientation",
       "mode.upright": "Upright only (recommended)",
       "mode.mixed": "Upright and reversed",
+      "settings.layoutMode": "Layout",
+      "layout.preset": "Preset spread",
+      "layout.freeform": "Free Board",
       "settings.arcana": "Card pool",
       "arcana.mixed": "Major and Minor Arcana",
       "arcana.majorOnly": "Major Arcana only",
@@ -373,6 +448,10 @@
       "confirm.spread": "Changing the spread will clear the current cards and reshuffle. Continue?",
       "confirm.deck": "Changing decks will clear this spread and reshuffle. Continue?",
       "confirm.shuffle": "Shuffle again? This will clear the current spread.",
+      "confirm.layout": "Changing layouts will clear unsaved card content. Continue?",
+      "confirm.freeBoardClear": "Clear the Free Board? The cards will return to the face-down pile.",
+      "confirm.freeBoardDiscard": "Discard the Free Board draft and clear the board? This cannot be undone.",
+      "confirm.freeBoardShuffle": "Reshuffling clears the Free Board and changes the pile order. Continue?",
       "confirm.kicker": "SPREAD CHANGE",
       "confirm.title": "Your current spread is still here",
       "confirm.cancel": "Keep Spread",
@@ -416,7 +495,72 @@
       "history.exportFailed": "Could not export history. Please try again.",
       "history.imported": "Imported {count} reading(s).",
       "history.remapped": " Safely reassigned {count} duplicate ID(s).",
-      "history.importFailed": "Import failed: the file format is invalid or its contents are damaged."
+      "history.importFailed": "Import failed: the file format is invalid or its contents are damaged.",
+      "freeBoard.settingsSummary": "Free Board: draw any card from the current deck and filter; there are no fixed positions or target count.",
+      "freeBoard.title": "Free Board",
+      "freeBoard.toolbarAria": "Free Board controls",
+      "freeBoard.undo": "Undo",
+      "freeBoard.undoAria": "Undo the last Free Board action",
+      "freeBoard.redo": "Redo",
+      "freeBoard.redoAria": "Redo the last Free Board action",
+      "freeBoard.revealAll": "Reveal all",
+      "freeBoard.revealAllAria": "Reveal every card on the Free Board",
+      "freeBoard.resetView": "Reset view",
+      "freeBoard.resetViewAria": "Reset Free Board pan and zoom",
+      "freeBoard.shuffle": "Shuffle",
+      "freeBoard.shuffleAria": "Clear the Free Board and reshuffle the pile",
+      "freeBoard.discardDraft": "Discard draft",
+      "freeBoard.discardDraftAria": "Discard the saved Free Board draft",
+      "freeBoard.clear": "Clear board",
+      "freeBoard.clearAria": "Clear the Free Board and return its cards to the pile",
+      "freeBoard.save": "Save to history",
+      "freeBoard.saveAria": "Save the current Free Board to divination history",
+      "freeBoard.boardAria": "Free Board. Drag the board or cards; pinch or wheel to zoom.",
+      "freeBoard.worldAria": "Cards on the Free Board",
+      "freeBoard.selectedControlsAria": "Selected card controls",
+      "freeBoard.pileTitle": "Face-down pile",
+      "freeBoard.pileAria": "Free Board face-down pile. Choose any card.",
+      "freeBoard.drawAria": "Face-down pile card {index} of {count}. Tap to draw to the Free Board.",
+      "freeBoard.faceDown": "Face down",
+      "freeBoard.meaning": "Meaning",
+      "freeBoard.revealed": "Revealed",
+      "freeBoard.unrevealed": "Not revealed",
+      "freeBoard.cardAria": "{card}, {state}{orientation}. Drag to move; tap to view.",
+      "freeBoard.cardControls": "Controls for {card}",
+      "freeBoard.selectedControls": "Selected: {card}",
+      "freeBoard.cardsDrawn": "{count} placed",
+      "freeBoard.remaining": "{count} remaining",
+      "freeBoard.status": "{cards} placed · {remaining} remaining",
+      "freeBoard.hint": "Drag empty space to pan; drag a card to move it; tap a card back to reveal it, then tap a revealed card to view its meaning. Use wheel or pinch to zoom.",
+      "freeBoard.rotateMinus15": "−15°",
+      "freeBoard.rotateMinus15Aria": "Rotate the selected card counter-clockwise by 15 degrees",
+      "freeBoard.rotatePlus15": "+15°",
+      "freeBoard.rotatePlus15Aria": "Rotate the selected card clockwise by 15 degrees",
+      "freeBoard.rotateMinus90": "−90°",
+      "freeBoard.rotateMinus90Aria": "Rotate the selected card counter-clockwise by 90 degrees",
+      "freeBoard.rotatePlus90": "+90°",
+      "freeBoard.rotatePlus90Aria": "Rotate the selected card clockwise by 90 degrees",
+      "freeBoard.bringFront": "Bring to front",
+      "freeBoard.bringFrontAria": "Bring the selected card to the front",
+      "freeBoard.remove": "Remove / return to pile",
+      "freeBoard.removeAria": "Remove the selected card and return it to the face-down pile",
+      "freeBoard.draftInvalid": "The saved Free Board draft was invalid and was safely ignored.",
+      "freeBoard.draftSaveFailed": "Could not save the Free Board draft; the current board is still available.",
+      "freeBoard.draftDiscarded": "The Free Board draft was discarded.",
+      "freeBoard.saving": "Saving Free Board history…",
+      "freeBoard.saved": "Free Board saved to divination history.",
+      "freeBoard.duplicate": "This Free Board was just saved; no duplicate was created.",
+      "freeBoard.saveFailed": "Could not save Free Board history; the board remains on this page.",
+      "freeBoard.saveUnavailable": "This browser cannot save history; the Free Board remains available.",
+      "history.freeBoard": "Free Board",
+      "history.freeBoardDetail": "Free Board record",
+      "history.freeBoardPreview": "Read-only Free Board spatial reconstruction",
+      "history.freeBoardHidden": "Face down (not revealed)",
+      "history.freeBoardRevealed": "Revealed · {orientation}",
+      "history.freeBoardCardState": "{card} · {state}",
+      "history.savingFreeBoard": "Saving Free Board history…",
+      "history.savedFreeBoard": "Free Board saved to this browser's divination history.",
+      "history.duplicateFreeBoard": "This Free Board was just saved; no duplicate was created."
     }
   };
 

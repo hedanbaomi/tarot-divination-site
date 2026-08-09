@@ -8,6 +8,7 @@
   var currentPhase = "major";      // used by phase filters (tarot only)
   var selectedSpreadId = "three-card-horizontal";
   var overviewMethod = "single";   // single | stacked
+  var layoutMode = "preset";       // preset | freeform
 
   var pile = [];       // remaining face-down cards (shuffled)
   var spread = [];      // drawn cards: { uid, card, orientation, revealed, slotIndex, layer? }
@@ -18,21 +19,25 @@
 
   var el = {};
   var historyUiController = null;
+  var freeBoardUi = null;
 
   function cacheElements() {
     el.settings = document.getElementById("settings");
     el.settingsToggle = document.getElementById("settingsToggle");
     el.deckSelect = document.getElementById("deckSelect");
     el.modeSelect = document.getElementById("modeSelect");
+    el.layoutModeSelect = document.getElementById("layoutModeSelect");
     el.arcanaFilter = document.getElementById("arcanaFilter");
     el.arcanaFilterGroup = document.getElementById("arcanaFilterGroup");
     el.overviewMethod = document.getElementById("overviewMethod");
     el.overviewMethodGroup = document.getElementById("overviewMethodGroup");
     el.overviewMethodSummary = document.getElementById("overviewMethodSummary");
     el.spreadSelect = document.getElementById("spreadSelect");
+    el.spreadSettingGroup = document.querySelector(".setting-group-spread");
     el.spreadSettingSummary = document.getElementById("spreadSettingSummary");
     el.shuffleBtn = document.getElementById("shuffleBtn");
     el.switchArcanaBtn = document.getElementById("switchArcanaBtn");
+    el.deckArea = document.querySelector(".deck-area");
     el.deckSpread = document.getElementById("deckSpread");
     el.deckRemaining = document.getElementById("deckRemaining");
     el.deckCta = document.getElementById("deckCta");
@@ -49,6 +54,7 @@
     el.positionGuideList = document.getElementById("positionGuideList");
     el.resultsSection = document.getElementById("resultsSection");
     el.resultsList = document.getElementById("resultsList");
+    el.freeBoardArea = document.getElementById("freeBoardArea");
   }
 
   function t(key, values) {
@@ -92,6 +98,49 @@
     };
   }
 
+  function isFreeform() {
+    return layoutMode === "freeform";
+  }
+
+  function freeBoardDeckName(type) {
+    return t("deck.name." + type) || type;
+  }
+
+  function allDecksForFreeBoard() {
+    return {
+      tarot: typeof tarotDeckFull !== "undefined" ? tarotDeckFull : [],
+      mystagogus: typeof mystagogusDeckFull !== "undefined" ? mystagogusDeckFull : [],
+      lxxxi: typeof lxxxiDeckFull !== "undefined" ? lxxxiDeckFull : []
+    };
+  }
+
+  function freeBoardCardsForDeck(type, filter) {
+    var decks = allDecksForFreeBoard();
+    var cards = (decks[type] || []).slice();
+    if (type !== "tarot") return cards;
+    var majors = cards.filter(function (card) { return card.arcana === "major"; });
+    var minors = cards.filter(function (card) { return card.arcana === "minor"; });
+    if (filter === "major-only") return majors;
+    if (filter === "minor-only") return minors;
+    // Free Board keeps both phases in the pile. The ordered concatenation is
+    // important: phase filters must not silently stop after the first phase.
+    if (filter === "major-then-minor") return majors.concat(minors);
+    if (filter === "minor-then-major") return minors.concat(majors);
+    return cards;
+  }
+
+  function freeBoardContext() {
+    var filter = deckType === "tarot" ? arcanaFilter : "not-applicable";
+    return {
+      deckType: deckType,
+      deckName: freeBoardDeckName(deckType),
+      mode: deckType === "tarot" ? mode : "upright-only",
+      filterMode: filter,
+      cards: shuffle(freeBoardCardsForDeck(deckType, filter)),
+      allDecks: allDecksForFreeBoard()
+    };
+  }
+
   // ---------- Deck helpers ----------
   function shuffle(deck) {
     var r = deck.slice();
@@ -131,10 +180,12 @@
   function selectedSpread() { return getSpreadById(deckType, selectedSpreadId); }
 
   function isReadingComplete() {
+    if (isFreeform()) return false;
     return spread.length === spreadTargetCount() && nextOpenSlotIndex() === -1;
   }
 
   function createCurrentHistoryRecord() {
+    if (isFreeform()) throw new Error("Free Board uses explicit history save");
     if (!isReadingComplete()) throw new Error("Reading is not complete");
     var activeSpread = selectedSpread();
     var deckNames = {
@@ -184,6 +235,7 @@
   }
 
   function spreadTargetCount() {
+    if (isFreeform()) return 0;
     return isOverviewStacking()
       ? overviewStackingState().targetCount
       : selectedSpread().positions.length;
@@ -213,7 +265,7 @@
     }
     if (el.arcanaFilterGroup) {
       el.arcanaFilterGroup.style.display =
-        nonTarot || isOverviewStacking() || hasPositionDrawRules() ? "none" : "";
+        nonTarot || (!isFreeform() && (isOverviewStacking() || hasPositionDrawRules())) ? "none" : "";
     }
     if (el.overviewMethodSummary) {
       el.overviewMethodSummary.textContent = isOverviewStacking()
@@ -231,6 +283,25 @@
       }
     }
     updateDeckSpreadAriaLabel(currentPositionDrawRule());
+  }
+
+  function applyLayoutUi() {
+    var freeform = isFreeform();
+    if (el.deckArea) el.deckArea.style.display = freeform ? "none" : "";
+    if (el.spreadArea) el.spreadArea.style.display = freeform ? "none" : "";
+    if (el.resultsSection) el.resultsSection.style.display = freeform ? "none" : "";
+    if (el.overviewMethodGroup) el.overviewMethodGroup.style.display = freeform ? "none" : "";
+    if (el.spreadSettingGroup) el.spreadSettingGroup.style.display = freeform ? "none" : "";
+    if (el.spreadSettingSummary && freeform) {
+      el.spreadSettingSummary.textContent = t("freeBoard.settingsSummary");
+    }
+    if (el.freeBoardArea) {
+      el.freeBoardArea.hidden = !freeform;
+      el.freeBoardArea.setAttribute("aria-hidden", freeform ? "false" : "true");
+    }
+    if (freeBoardUi && typeof freeBoardUi.setVisible === "function") {
+      freeBoardUi.setVisible(freeform);
+    }
   }
 
   function orderedSpreadEntries() {
@@ -256,6 +327,12 @@
 
   // Full reset: rebuild pile and clear the spread.
   function resetDeck() {
+    if (isFreeform()) {
+      if (freeBoardUi && typeof freeBoardUi.reconfigure === "function") {
+        freeBoardUi.reconfigure(freeBoardContext());
+      }
+      return;
+    }
     currentPhase = "major";
     spread = [];
     readingReported = false;
@@ -320,6 +397,7 @@
 
   // ---------- Deck spread (pick any card) ----------
   function renderDeckSpread() {
+    if (isFreeform()) return;
     var prevScroll = el.deckSpread.scrollLeft;
     el.deckSpread.innerHTML = "";
     var stacking = isOverviewStacking();
@@ -603,6 +681,7 @@
   }
 
   function renderSpreadCards() {
+    if (isFreeform()) return;
     var spreadDefinition = selectedSpread();
     var stacking = isOverviewStacking();
     var hadRenderedCards = Boolean(el.spreadGrid.querySelector(".spread-card"));
@@ -776,6 +855,10 @@
   }
 
   function revealAll() {
+    if (isFreeform()) {
+      if (freeBoardUi && typeof freeBoardUi.revealAll === "function") freeBoardUi.revealAll();
+      return;
+    }
     var pending = spread.filter(function (e) { return !e.revealed; });
     pending.forEach(function (entry, i) {
       setTimeout(function () { revealEntry(entry); }, i * 80);
@@ -804,6 +887,12 @@
   }
 
   function renderSpreadMeta() {
+    if (isFreeform()) {
+      el.spreadArea.style.display = "none";
+      el.resultsSection.style.display = "none";
+      if (historyUiController) historyUiController.updateSaveAvailability(false);
+      return;
+    }
     if (spread.length === 0) {
       el.spreadArea.style.display = "none";
       if (historyUiController) historyUiController.updateSaveAvailability(false);
@@ -1008,6 +1097,10 @@
   }
 
   function renderResults() {
+    if (isFreeform()) {
+      el.resultsSection.style.display = "none";
+      return;
+    }
     var revealed = spread.filter(function (e) { return e.revealed; });
     if (revealed.length === 0) {
       el.resultsSection.style.display = "none";
@@ -1039,7 +1132,16 @@
   }
 
   function confirmIfSpread(message) {
-    if (spread.length === 0) return Promise.resolve(true);
+    var freeBoardCards = freeBoardUi && typeof freeBoardUi.getCardCount === "function"
+      ? freeBoardUi.getCardCount()
+      : 0;
+    // A Free Board draft is meaningful even with no cards on the board: its
+    // remaining pile order and viewport are persisted. Never bypass the
+    // destructive-transition confirmation merely because every card was
+    // returned to the pile.
+    if (!isFreeform() && spread.length === 0 && freeBoardCards === 0) {
+      return Promise.resolve(true);
+    }
     if (!globalThis.DivinationDialog) return Promise.resolve(false);
     return globalThis.DivinationDialog.request({
       kicker: t("confirm.kicker"),
@@ -1189,7 +1291,55 @@
   }
 
   async function handleShuffle() {
+    if (isFreeform()) {
+      if (!(await confirmIfSpread(t("confirm.shuffle")))) return;
+      if (freeBoardUi && typeof freeBoardUi.getContext === "function") {
+        var boardContext = freeBoardUi.getContext();
+        if (boardContext) {
+          freeBoardUi.reconfigure({
+            deckType: boardContext.deckType,
+            deckName: boardContext.deckName,
+            mode: boardContext.mode,
+            filterMode: boardContext.filterMode,
+            cards: shuffle(boardContext.cards),
+            allDecks: boardContext.allDecks
+          });
+        }
+      }
+      return;
+    }
     if (!(await confirmIfSpread(t("confirm.shuffle")))) return;
+    resetDeck();
+  }
+
+  async function handleLayoutModeChange() {
+    var newLayoutMode = el.layoutModeSelect.value;
+    if (newLayoutMode === layoutMode) return;
+    if (!(await confirmIfSpread(t("confirm.layout")))) {
+      el.layoutModeSelect.value = layoutMode;
+      return;
+    }
+
+    if (newLayoutMode === "freeform") {
+      // Entering the board intentionally ends the current preset reading, but
+      // preserves deck, Tarot orientation, and Tarot filter selections.
+      spread = [];
+      currentPhase = "major";
+      layoutMode = "freeform";
+      applyDeckUi();
+      applyLayoutUi();
+      if (freeBoardUi) freeBoardUi.enter(freeBoardContext(), { restoreDraft: false });
+      renderSpreadMeta();
+      renderResults();
+      return;
+    }
+
+    layoutMode = "preset";
+    if (freeBoardUi) freeBoardUi.exit();
+    applyDeckUi();
+    applyLayoutUi();
+    populateSpreadSelect();
+    renderSpreadDefinition();
     resetDeck();
   }
 
@@ -1202,6 +1352,16 @@
     applyDeckUi();
     populateSpreadSelect();
     renderSpreadDefinition();
+    applyLayoutUi();
+    if (isFreeform()) {
+      if (freeBoardUi && typeof freeBoardUi.refreshLanguage === "function") {
+        freeBoardUi.refreshLanguage();
+      }
+      if (historyUiController && historyUiController.refreshLanguage) {
+        historyUiController.refreshLanguage();
+      }
+      return;
+    }
     renderSpreadCards();
     renderDeckSpread();
     renderSpreadMeta();
@@ -1211,22 +1371,53 @@
     }
   }
 
+  function syncStateFromFreeBoard(state) {
+    if (!state) return;
+    var settings = state.settings || {};
+    var restoredDeck = settings.deckType || state.deck && (state.deck.deckId || state.deck.id);
+    if (restoredDeck === "tarot" || restoredDeck === "mystagogus" || restoredDeck === "lxxxi") {
+      deckType = restoredDeck;
+    }
+    mode = settings.orientationMode === "mixed" && deckType === "tarot"
+      ? "mixed"
+      : "upright-only";
+    if (deckType === "tarot" && [
+      "mixed", "major-only", "minor-only", "major-then-minor", "minor-then-major"
+    ].indexOf(settings.filterMode) !== -1) {
+      arcanaFilter = settings.filterMode;
+    }
+    if (el.deckSelect) el.deckSelect.value = deckType;
+    if (el.modeSelect) el.modeSelect.value = mode;
+    if (el.arcanaFilter) el.arcanaFilter.value = arcanaFilter;
+    if (el.layoutModeSelect) el.layoutModeSelect.value = "freeform";
+  }
+
+  function syncCustomSelectVisuals() {
+    if (globalThis.DivinationCustomSelects &&
+        typeof globalThis.DivinationCustomSelects.sync === "function") {
+      globalThis.DivinationCustomSelects.sync();
+    }
+  }
+
   // ---------- Init ----------
   function init() {
     cacheElements();
 
     deckType = el.deckSelect.value || "tarot";
     mode = el.modeSelect.value;
+    layoutMode = el.layoutModeSelect ? (el.layoutModeSelect.value || "preset") : "preset";
     arcanaFilter = el.arcanaFilter.value;
     overviewMethod = el.overviewMethod.value || "single";
     applyDeckUi();
     populateSpreadSelect();
     selectedSpreadId = el.spreadSelect.value;
     renderSpreadDefinition();
+    applyLayoutUi();
 
     el.settingsToggle.addEventListener("click", toggleSettings);
     el.deckSelect.addEventListener("change", handleDeckChange);
     el.modeSelect.addEventListener("change", handleModeChange);
+    if (el.layoutModeSelect) el.layoutModeSelect.addEventListener("change", handleLayoutModeChange);
     el.arcanaFilter.addEventListener("change", handleArcanaChange);
     el.overviewMethod.addEventListener("change", handleOverviewMethodChange);
     el.spreadSelect.addEventListener("change", handleSpreadChange);
@@ -1246,7 +1437,41 @@
         createSnapshot: createCurrentHistoryRecord
       });
     }
-    resetDeck();
+    if (globalThis.DivinationFreeBoardUi) {
+      freeBoardUi = globalThis.DivinationFreeBoardUi.init({
+        document: document,
+        modelApi: globalThis.FreeBoardModel,
+        draftApi: globalThis.DivinationFreeBoardDraft,
+        recordsApi: globalThis.DivinationHistoryRecords,
+        allDecks: allDecksForFreeBoard(),
+        getHistoryController: function () { return historyUiController; },
+        onRestoreState: function (state) {
+          syncStateFromFreeBoard(state);
+          layoutMode = "freeform";
+          applyDeckUi();
+          populateSpreadSelect();
+          renderSpreadDefinition();
+          applyLayoutUi();
+          syncCustomSelectVisuals();
+        }
+      });
+    }
+    var restoredFreeBoard = freeBoardUi && typeof freeBoardUi.restoreDraftIfAvailable === "function"
+      ? freeBoardUi.restoreDraftIfAvailable()
+      : null;
+    if (restoredFreeBoard) {
+      syncStateFromFreeBoard(restoredFreeBoard);
+      layoutMode = "freeform";
+      applyDeckUi();
+      populateSpreadSelect();
+      renderSpreadDefinition();
+      applyLayoutUi();
+      if (freeBoardUi && freeBoardUi.refreshLanguage) freeBoardUi.refreshLanguage();
+      syncCustomSelectVisuals();
+    } else {
+      applyLayoutUi();
+      resetDeck();
+    }
   }
 
   if (document.readyState === "loading") {

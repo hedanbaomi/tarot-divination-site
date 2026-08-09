@@ -7,6 +7,7 @@
   <meta name="description" content="Quareia 占卜：支持塔罗、Mystagogus（M 牌）与 LXXXI 魔法牌，轻点牌堆抽牌，翻牌解读，预设牌阵与正逆位模式。">
   <title>Quareia 占卜 · Quareia Divination</title>
   <link rel="stylesheet" href="css/styles.css?v=20260731-drawer">
+  <link rel="stylesheet" href="css/free-board.css?v=20260809-free-board-v1">
 </head>
 <body>
   <div class="sky-moon" aria-hidden="true"></div>
@@ -44,6 +45,13 @@
           <select id="modeSelect">
             <option value="upright-only" data-i18n="mode.upright">全正位（推荐）</option>
             <option value="mixed" data-i18n="mode.mixed">正逆位混合</option>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label for="layoutModeSelect" data-i18n="settings.layoutMode">布局方式</label>
+          <select id="layoutModeSelect">
+            <option value="preset" data-i18n="layout.preset">预设牌阵</option>
+            <option value="freeform" data-i18n="layout.freeform">自由画板</option>
           </select>
         </div>
         <div class="setting-group" id="arcanaFilterGroup">
@@ -109,6 +117,64 @@
       <p class="deck-cta" id="deckCta" role="status" aria-live="polite" aria-atomic="true" data-i18n="deck.initialCta">左右滑动浏览牌堆，轻点任意一张牌抽出</p>
       <div class="deck-spread" id="deckSpread" role="group" aria-label="牌堆，左右滑动浏览，轻点抽牌" data-i18n-aria-label="deck.initialAria"></div>
       <button class="btn btn-switch-arcana" id="switchArcanaBtn" style="display:none;" data-i18n="deck.switch">切换牌组</button>
+    </section>
+
+    <section class="free-board-area" id="freeBoardArea" hidden aria-labelledby="freeBoardTitle">
+      <div class="free-board-head">
+        <h2 id="freeBoardTitle" data-i18n="freeBoard.title">自由画板</h2>
+        <span class="free-board-count" id="freeBoardCount" role="status" aria-live="polite"></span>
+      </div>
+      <p class="free-board-status" id="freeBoardStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div class="free-board-toolbar" role="group" aria-label="画板控制" data-i18n-aria-label="freeBoard.toolbarAria">
+        <button class="btn btn-secondary" id="freeBoardUndoBtn" type="button"
+          data-i18n="freeBoard.undo" data-i18n-aria-label="freeBoard.undoAria">撤销</button>
+        <button class="btn btn-secondary" id="freeBoardRedoBtn" type="button"
+          data-i18n="freeBoard.redo" data-i18n-aria-label="freeBoard.redoAria">重做</button>
+        <button class="btn btn-accent" id="freeBoardRevealAllBtn" type="button"
+          data-i18n="freeBoard.revealAll" data-i18n-aria-label="freeBoard.revealAllAria">全部开牌</button>
+        <button class="btn btn-secondary" id="freeBoardResetViewBtn" type="button"
+          data-i18n="freeBoard.resetView" data-i18n-aria-label="freeBoard.resetViewAria">重置视图</button>
+        <button class="btn btn-secondary" id="freeBoardShuffleBtn" type="button"
+          data-i18n="freeBoard.shuffle" data-i18n-aria-label="freeBoard.shuffleAria">洗牌</button>
+        <button class="btn btn-secondary" id="freeBoardDiscardDraftBtn" type="button"
+          data-i18n="freeBoard.discardDraft" data-i18n-aria-label="freeBoard.discardDraftAria">丢弃草稿</button>
+        <button class="btn history-danger-btn" id="freeBoardClearBtn" type="button"
+          data-i18n="freeBoard.clear" data-i18n-aria-label="freeBoard.clearAria">清空画板</button>
+        <button class="btn btn-accent" id="freeBoardSaveBtn" type="button"
+          data-i18n="freeBoard.save" data-i18n-aria-label="freeBoard.saveAria">保存到历史</button>
+      </div>
+      <div class="free-board-viewport" id="freeBoardViewport" tabindex="0" role="application"
+        aria-label="自由画板，可拖动画板与卡牌，双指缩放" data-i18n-aria-label="freeBoard.boardAria">
+        <div class="free-board-world" id="freeBoardWorld" role="list"
+          aria-label="自由画板上的卡牌" data-i18n-aria-label="freeBoard.worldAria"></div>
+      </div>
+      <div class="free-board-selected-controls" id="freeBoardSelectedControls" hidden
+        role="group" aria-label="所选卡牌控制" data-i18n-aria-label="freeBoard.selectedControlsAria">
+        <button class="btn btn-secondary" type="button" data-card-control-action="rotate-minus-15"
+          data-i18n="freeBoard.rotateMinus15" data-i18n-aria-label="freeBoard.rotateMinus15Aria">−15°</button>
+        <button class="btn btn-secondary" type="button" data-card-control-action="rotate-plus-15"
+          data-i18n="freeBoard.rotatePlus15" data-i18n-aria-label="freeBoard.rotatePlus15Aria">＋15°</button>
+        <button class="btn btn-secondary" type="button" data-card-control-action="rotate-minus-90"
+          data-i18n="freeBoard.rotateMinus90" data-i18n-aria-label="freeBoard.rotateMinus90Aria">−90°</button>
+        <button class="btn btn-secondary" type="button" data-card-control-action="rotate-plus-90"
+          data-i18n="freeBoard.rotatePlus90" data-i18n-aria-label="freeBoard.rotatePlus90Aria">＋90°</button>
+        <button class="btn btn-secondary" type="button" data-card-control-action="bring-front"
+          data-i18n="freeBoard.bringFront" data-i18n-aria-label="freeBoard.bringFrontAria">置于顶层</button>
+        <button class="btn history-danger-btn" type="button" data-card-control-action="remove"
+          data-i18n="freeBoard.remove" data-i18n-aria-label="freeBoard.removeAria">移除</button>
+      </div>
+      <div class="free-board-pile-area">
+        <div class="free-board-pile-head">
+          <h3 data-i18n="freeBoard.pileTitle">待抽牌堆</h3>
+          <span id="freeBoardPileRemaining" role="status" aria-live="polite"></span>
+        </div>
+        <div class="free-board-pile" id="freeBoardPile" role="list"
+          aria-label="自由画板待抽牌堆，可任意选择一张" data-i18n-aria-label="freeBoard.pileAria"></div>
+      </div>
+      <p class="free-board-hint" id="freeBoardHint" data-i18n="freeBoard.hint">
+        空白处拖动画板；拖动卡牌改变位置；轻点牌背开牌，轻点已开牌查看牌意。滚轮或双指可缩放。
+      </p>
+      <p class="free-board-save-status" id="freeBoardSaveStatus" role="status" aria-live="polite" aria-atomic="true"></p>
     </section>
 
     <!-- 牌阵：抽到的牌自动排列 -->
@@ -256,17 +322,20 @@
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js?v=20260727-themed-selects"></script>
   <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js?v=20260731-localized"></script>
+  <script src="js/i18n.js?v=20260809-free-board-v1"></script>
   <script src="js/announcements.js?v=1"></script>
   <script src="js/menu.js?v=20260731-drawer"></script>
   <script src="js/telemetry-notice.js?v=20260731-system-locale"></script>
   <script src="js/dialogs.js?v=20260727-dialog-meaning"></script>
   <script src="js/custom-selects.js?v=20260727-card-picker"></script>
-  <script src="js/history-records.js"></script>
+  <script src="js/free-board-model.js?v=20260809-free-board-v1"></script>
+  <script src="js/free-board-draft.js?v=20260809-free-board-v1"></script>
+  <script src="js/history-records.js?v=20260809-free-board-v1"></script>
   <script src="js/history-store.js"></script>
-  <script src="js/history-ui.js?v=20260727-dialog-meaning"></script>
+  <script src="js/history-ui.js?v=20260809-free-board-v1"></script>
+  <script src="js/free-board-ui.js?v=20260809-free-board-v1"></script>
   <script src="js/back-handler.js?v=20260731-overlay-back"></script>
-  <script src="js/app.js?v=20260731-drawer"></script>
+  <script src="js/app.js?v=20260809-free-board-v1"></script>
   <script src="js/celestial-sky.js" defer></script>
 </body>
 </html>

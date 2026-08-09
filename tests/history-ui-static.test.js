@@ -45,6 +45,32 @@ test("history modules load before the application module", function () {
   assert.ok(uiIndex < appIndex);
 });
 
+test("Free Board resources load after their model and before the application", function () {
+  var freeBoardModelIndex = html.indexOf("js/free-board-model.js");
+  var freeBoardDraftIndex = html.indexOf("js/free-board-draft.js");
+  var recordsIndex = html.indexOf("js/history-records.js");
+  var historyUiIndex = html.indexOf("js/history-ui.js");
+  var freeBoardUiIndex = html.indexOf("js/free-board-ui.js");
+  var appIndex = html.indexOf("js/app.js");
+  var freeBoardUi = fs.readFileSync(path.join(root, "js", "free-board-ui.js"), "utf8");
+  var freeBoardCss = fs.readFileSync(path.join(root, "css", "free-board.css"), "utf8");
+
+  assert.match(html, /href="css\/free-board\.css\?v=20260809-free-board-v1"/);
+  assert.ok(freeBoardModelIndex < freeBoardDraftIndex);
+  assert.ok(freeBoardDraftIndex < recordsIndex);
+  assert.ok(recordsIndex < historyUiIndex);
+  assert.ok(historyUiIndex < freeBoardUiIndex);
+  assert.ok(freeBoardUiIndex < appIndex);
+  assert.match(html, /id="layoutModeSelect"/);
+  assert.match(html, /value="freeform"[^>]*data-i18n="layout\.freeform"/);
+  assert.match(html, /id="freeBoardViewport"/);
+  assert.doesNotMatch(freeBoardUi, /<canvas|createElement\(["']canvas/);
+  assert.match(freeBoardUi, /boardRotation/);
+  assert.match(freeBoardUi, /data-orientation/);
+  assert.match(freeBoardCss, /\.free-board-viewport[\s\S]*touch-action: none/);
+  assert.match(freeBoardCss, /\.free-board-viewport[\s\S]*overscroll-behavior: contain/);
+});
+
 test("opening a completed reading saves automatically without a manual save control", function () {
   assert.equal(/id="saveHistoryBtn"/.test(html), false);
   assert.equal(/getElementById\("saveHistoryBtn"\)/.test(historyUi), false);
@@ -72,6 +98,19 @@ test("automatic saves are queued without dropping a different reading", async fu
   releaseFirst();
   await Promise.all([first, second]);
   assert.deepEqual(events, ["first:start", "first:end", "second:start", "second:end"]);
+});
+
+test("extreme Free Board history coordinates keep cards readable", function () {
+  var layout = historyUiApi.calculateFreeformPreviewLayout([
+    { x: -1000000, y: -1000000 },
+    { x: 1000000, y: 1000000 }
+  ]);
+
+  assert.equal(layout.cardScale, 0.5);
+  assert.ok(layout.cardWidth * layout.cardScale >= 52);
+  assert.ok(layout.cardHeight * layout.cardScale >= 79);
+  assert.ok(layout.stageWidth <= 596);
+  assert.ok(layout.stageHeight <= 376);
 });
 
 test("Android history export uses the system save picker and reports completion", function () {

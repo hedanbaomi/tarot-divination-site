@@ -44,12 +44,12 @@ test("website uses the branded dialog for spread and history confirmations", fun
   assert.match(html, /id="confirmProceedBtn"/);
   assert.match(html, /src="js\/dialogs\.js\?v=20260727-card-picker"/);
   assert.match(html, /src="js\/spreads\.js\?v=20260727-spread-labels"/);
-  assert.match(html, /src="js\/app\.js\?v=20260730-android-coverage"/);
+  assert.match(html, /src="js\/app\.js\?v=20260809-free-board-v1"/);
 });
 
 test("root page pins the web-announcement resource cache versions", function () {
   var html = read(surface.html);
-  assert.match(html, /src="js\/i18n\.js\?v=20260808-license-scope"/);
+  assert.match(html, /src="js\/i18n\.js\?v=20260809-free-board-v1"/);
   assert.match(html, /href="css\/styles\.css\?v=20260806-web-announcements"/);
   assert.match(html, /src="js\/announcements\.js\?v=1"/);
 });
@@ -98,4 +98,27 @@ test("revealed cards can flip between artwork and an in-place meaning panel", fu
   assert.match(css, /rotateY\(360deg\)/);
   assert.match(i18n, /"app\.meaningAria"/);
   assert.match(i18n, /"app\.meaningHint"/);
+});
+
+test("Free Board gestures keep viewport transforms, orientation, and board rotation separate", function () {
+  var app = read(surface.app);
+  var ui = read("js/free-board-ui.js");
+  var draft = read("js/free-board-draft.js");
+  var css = read("css/free-board.css");
+  assert.match(app, /var layoutMode = "preset"/);
+  assert.match(app, /function freeBoardCardsForDeck\(type, filter\)/);
+  assert.match(app, /majors\.concat\(minors\)/);
+  assert.match(app, /minors\.concat\(majors\)/);
+  assert.match(ui, /function handlePointerDown\(event\)/);
+  assert.match(ui, /setPointerCapture/);
+  assert.match(ui, /function pinchViewport/);
+  assert.match(ui, /function handleWheel\(event\)/);
+  assert.match(ui, /mutate\("move", \[gesture\.cardId, moved\.x, moved\.y\]/);
+  assert.match(ui, /style\.transform = "translate3d\("/);
+  assert.match(ui, /value\.boardRotation \+ "deg/);
+  assert.match(ui, /className = "free-board-card-inner"/);
+  assert.match(draft, /quareia-divination-free-board-draft-v1/);
+  assert.match(css, /\.free-board-viewport\s*\{[\s\S]*touch-action: none/);
+  assert.match(css, /\.free-board-viewport\s*\{[\s\S]*overscroll-behavior: contain/);
+  assert.doesNotMatch(css, /body\s*\{[^}]*touch-action/);
 });

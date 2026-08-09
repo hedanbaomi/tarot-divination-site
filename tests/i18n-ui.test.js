@@ -9,6 +9,7 @@ var root = path.join(__dirname, "..");
 var html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 var app = fs.readFileSync(path.join(root, "js", "app.js"), "utf8");
 var historyUi = fs.readFileSync(path.join(root, "js", "history-ui.js"), "utf8");
+var i18nSource = fs.readFileSync(path.join(root, "js", "i18n.js"), "utf8");
 var i18n = require("../js/i18n.js");
 
 test("language switch and localization scripts load before interactive modules", function () {
@@ -52,3 +53,33 @@ test("runtime surfaces rerender on locale changes without resetting the reading"
   assert.match(historyUi, /refreshStatus\(elements\.saveStatus\)/);
   assert.match(historyUi, /refreshStatus\(elements\.actionStatus\)/);
 });
+
+test("Free Board controls, statuses, confirmations, and accessibility labels are bilingual", function () {
+  var freeBoardUi = fs.readFileSync(path.join(root, "js", "free-board-ui.js"), "utf8");
+  ["zh-CN", "en"].forEach(function (locale) {
+    var start = i18nSourceBlock(i18nSource, locale);
+    [
+      "settings.layoutMode",
+      "layout.freeform",
+      "freeBoard.undoAria",
+      "freeBoard.redoAria",
+      "freeBoard.cardAria",
+      "freeBoard.save",
+      "freeBoard.saveFailed",
+      "confirm.layout",
+      "confirm.freeBoardClear",
+      "history.freeBoard",
+      "history.freeBoardPreview"
+    ].forEach(function (key) {
+      assert.ok(start.indexOf('"' + key + '"') !== -1, locale + " missing " + key);
+    });
+  });
+  assert.match(freeBoardUi, /freeBoard\.rotateMinus15Aria/);
+  assert.match(freeBoardUi, /freeBoard\.removeAria/);
+});
+
+function i18nSourceBlock(source, locale) {
+  var start = source.indexOf('"' + locale + '": {');
+  var nextLocale = locale === "zh-CN" ? source.indexOf('"en": {', start) : source.indexOf("\n    }\n  };", start);
+  return source.slice(start, nextLocale === -1 ? source.length : nextLocale);
+}

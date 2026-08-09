@@ -44,6 +44,7 @@ function createHarness(bridge) {
     readingReported: false,
     currentPhase: "major",
     androidTelemetry: bridge,
+    isFreeform() { return false; },
     buildPile() {},
     renderSpreadCards() {},
     renderDeckSpread() {},

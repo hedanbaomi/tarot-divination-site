@@ -41,6 +41,37 @@ function buildInput(spreadDefinition, entries, overrides) {
   }, overrides || {});
 }
 
+function freeformCard(id, index, overrides) {
+  return Object.assign({
+    cardId: id,
+    cardNumber: String(index),
+    cardName: "自由牌 " + index,
+    arcana: "major",
+    suit: "",
+    orientation: "upright",
+    revealed: true,
+    x: index * 10,
+    y: index === 0 ? 0 : index * -5,
+    boardRotation: 0,
+    z: index + 1,
+    drawOrder: index + 1
+  }, overrides || {});
+}
+
+function buildFreeformInput(cards, overrides) {
+  return Object.assign({
+    id: "freeform-test-1",
+    createdAt: "2026-07-26T12:00:00.000Z",
+    deckType: "tarot",
+    deckMode: "tarot",
+    deckName: "塔罗牌（Rider–Waite 体系）",
+    orientationMode: "mixed",
+    filterMode: "mixed",
+    overviewMethod: "not-applicable",
+    cards: cards
+  }, overrides || {});
+}
+
 test("builds a complete immutable snapshot for a normal spread", function () {
   var spread = spreads.getTarotSpread("three-card-horizontal");
   var record = history.buildReadingRecord(buildInput(spread, [
@@ -286,4 +317,203 @@ test("malicious or over-broad JSON is rejected without accepting notes or meanin
   }).replace('"cards"', '"__proto__":{"polluted":true},"cards"');
   assert.throws(function () { history.parseImportJson(polluted); }, /unexpected field/);
   assert.equal({}.polluted, undefined);
+});
+
+test("keeps v1 exports byte-compatible and rejects v2 fields in v1 records", function () {
+  var spread = spreads.getTarotSpread("three-card-horizontal");
+  var record = history.buildReadingRecord(buildInput(spread, [
+    entry(0, card("major-00", "00", "愚者")),
+    entry(1, card("major-01", "01", "魔法师")),
+    entry(2, card("major-02", "02", "女祭司"))
+  ]));
+  var expected = JSON.stringify({
+    formatVersion: 1,
+    exportedAt: "2026-07-26T13:00:00.000Z",
+    records: [record]
+  }, null, 2);
+
+  assert.equal(history.serializeExport([record], "2026-07-26T13:00:00.000Z"), expected);
+  var withLayoutMode = JSON.parse(JSON.stringify(record));
+  withLayoutMode.layoutMode = "preset";
+  assert.throws(function () { history.validateRecord(withLayoutMode); }, /unexpected field layoutMode/);
+  assert.throws(function () {
+    history.parseImportJson(JSON.stringify({
+      formatVersion: 1,
+      exportedAt: "2026-07-26T13:00:00.000Z",
+      records: [withLayoutMode]
+    }));
+  }, /unexpected field layoutMode/);
+});
+
+test("builds and round-trips a v2 freeform record without rich content", function () {
+  var record = history.buildFreeformRecord(buildFreeformInput([
+    freeformCard("major-00", 0),
+    freeformCard("major-01", 1, { orientation: "reversed", boardRotation: -12.5 })
+  ]));
+
+  assert.equal(record.schemaVersion, history.SCHEMA_V2_VERSION);
+  assert.equal(record.layoutMode, "freeform");
+  assert.deepEqual(Object.keys(record), [
+    "schemaVersion", "layoutMode", "id", "createdAt", "deckType", "deckMode",
+    "deckName", "orientationMode", "filterMode", "overviewMethod", "cards"
+  ]);
+  assert.deepEqual(Object.keys(record.cards[0]), [
+    "cardId", "cardNumber", "cardName", "arcana", "suit", "orientation",
+    "revealed", "x", "y", "boardRotation", "z", "drawOrder"
+  ]);
+  assert.equal(Object.prototype.hasOwnProperty.call(record, "question"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(record, "viewport"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(record.cards[0], "image"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(record.cards[0], "meaning"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(record.cards[0], "notes"), false);
+  assert.doesNotThrow(function () { history.validateRecord(record); });
+
+  var json = history.serializeExport([record], "2026-07-26T13:00:00.000Z");
+  var parsed = history.parseImportJson(json);
+  assert.equal(parsed.formatVersion, history.FORMAT_VERSION_V2);
+  assert.deepEqual(parsed.records, [record]);
+});
+
+test("accepts a strict v2 preset and chooses a v2 envelope", function () {
+  var spread = spreads.getTarotSpread("three-card-horizontal");
+  var v1 = history.buildReadingRecord(buildInput(spread, [
+    entry(0, card("major-00", "00", "愚者")),
+    entry(1, card("major-01", "01", "魔法师")),
+    entry(2, card("major-02", "02", "女祭司"))
+  ]));
+  var preset = Object.assign({}, v1, {
+    schemaVersion: history.SCHEMA_V2_VERSION,
+    layoutMode: "preset"
+  });
+
+  assert.doesNotThrow(function () { history.validateRecord(preset); });
+  assert.equal(history.createExportEnvelope([preset], "2026-07-26T13:00:00.000Z").formatVersion,
+    history.FORMAT_VERSION_V2);
+
+  var missingLayout = JSON.parse(JSON.stringify(preset));
+  delete missingLayout.layoutMode;
+  assert.throws(function () { history.validateRecord(missingLayout); }, /layoutMode/);
+
+  var badLayout = JSON.parse(JSON.stringify(preset));
+  badLayout.layoutMode = "free-board";
+  assert.throws(function () { history.validateRecord(badLayout); }, /layoutMode/);
+
+  var extra = JSON.parse(JSON.stringify(preset));
+  extra.question = "do not persist";
+  assert.throws(function () { history.validateRecord(extra); }, /unexpected field question/);
+});
+
+test("exports and imports a mixed v1/v2 history collection", function () {
+  var spread = spreads.getTarotSpread("three-card-horizontal");
+  var v1 = history.buildReadingRecord(buildInput(spread, [
+    entry(0, card("major-00", "00", "愚者")),
+    entry(1, card("major-01", "01", "魔法师")),
+    entry(2, card("major-02", "02", "女祭司"))
+  ]));
+  var v2 = history.buildFreeformRecord(buildFreeformInput([
+    freeformCard("major-03", 0)
+  ], { id: "freeform-test-2" }));
+  var envelope = history.createExportEnvelope([v1, v2], "2026-07-26T13:00:00.000Z");
+  var parsed = history.parseImportJson(JSON.stringify(envelope));
+
+  assert.equal(envelope.formatVersion, history.FORMAT_VERSION_V2);
+  assert.deepEqual(parsed.records, [v1, v2]);
+  assert.equal(history.recordsEquivalent(v2, Object.assign({}, v2, {
+    id: "different-id",
+    createdAt: "2026-07-26T12:01:00.000Z"
+  })), true);
+  assert.equal(history.isRecentDuplicate([v2], Object.assign({}, v2, {
+    id: "different-id",
+    createdAt: "2026-07-26T12:00:05.000Z"
+  }), 10000), true);
+});
+
+test("rejects malformed v2 freeform fields, duplicates, bounds and non-canonical order", function () {
+  var record = history.buildFreeformRecord(buildFreeformInput([
+    freeformCard("major-00", 0),
+    freeformCard("major-01", 1)
+  ]));
+  var mutate = function (callback) {
+    var copy = JSON.parse(JSON.stringify(record));
+    callback(copy);
+    assert.throws(function () { history.validateRecord(copy); });
+  };
+
+  mutate(function (copy) { copy.extra = true; });
+  mutate(function (copy) { copy.cards[0].notes = "forbidden"; });
+  mutate(function (copy) { copy.cards[0].world = { x: 0, y: 0 }; });
+  mutate(function (copy) { copy.cards[1].cardId = copy.cards[0].cardId; });
+  mutate(function (copy) { copy.cards[1].z = copy.cards[0].z; });
+  mutate(function (copy) { copy.cards[1].drawOrder = copy.cards[0].drawOrder; });
+  mutate(function (copy) { copy.cards[0].x = Number.POSITIVE_INFINITY; });
+  mutate(function (copy) { copy.cards[0].y = 1000001; });
+  mutate(function (copy) { copy.cards[0].boardRotation = 361; });
+  mutate(function (copy) { copy.cards[0].y = "0"; });
+  mutate(function (copy) {
+    copy.cards.reverse();
+  });
+
+  var tooMany = buildFreeformInput([]);
+  tooMany.cards = [];
+  for (var i = 0; i < 79; i++) tooMany.cards.push(freeformCard("major-" + i, i));
+  assert.throws(function () { history.buildFreeformRecord(tooMany); }, /cards/);
+});
+
+test("enforces each actual deck maximum and rejects oversized imports", function () {
+  [
+    { deckType: "tarot", arcana: "major", maximum: 78 },
+    { deckType: "mystagogus", arcana: "mystagogus", maximum: 78 },
+    { deckType: "lxxxi", arcana: "lxxxi", maximum: 81 }
+  ].forEach(function (spec) {
+    var cards = [];
+    for (var index = 0; index < spec.maximum; index++) {
+      cards.push(freeformCard(spec.deckType + "-" + index, index, { arcana: spec.arcana }));
+    }
+    var input = buildFreeformInput(cards, spec.deckType === "tarot" ? {} : {
+      deckType: spec.deckType,
+      deckMode: spec.deckType,
+      deckName: spec.deckType,
+      orientationMode: "upright-only",
+      filterMode: "not-applicable",
+      overviewMethod: "not-applicable"
+    });
+    assert.doesNotThrow(function () { history.buildFreeformRecord(input); });
+    input.cards.push(freeformCard(spec.deckType + "-too-many", spec.maximum, {
+      arcana: spec.arcana
+    }));
+    assert.throws(function () { history.buildFreeformRecord(input); }, /cards/);
+  });
+
+  assert.throws(function () {
+    history.parseImportJson("x".repeat(history.MAX_IMPORT_BYTES + 1));
+  }, /size limit/);
+
+  var record = history.buildFreeformRecord(buildFreeformInput([freeformCard("major-00", 0)]));
+  var envelope = history.createExportEnvelope([record], "2026-07-26T13:00:00.000Z");
+  var withUnknownEnvelopeField = Object.assign({}, envelope, { unexpected: true });
+  assert.throws(function () {
+    history.parseImportJson(JSON.stringify(withUnknownEnvelopeField));
+  }, /unexpected field/);
+});
+
+test("enforces upright-only orientation for non-Tarot freeform records", function () {
+  var mystagogus = buildFreeformInput([freeformCard("m-01", 0, {
+    arcana: "mystagogus"
+  })], {
+    deckType: "mystagogus",
+    deckMode: "mystagogus",
+    deckName: "Mystagogus",
+    orientationMode: "upright-only",
+    filterMode: "not-applicable",
+    overviewMethod: "not-applicable"
+  });
+  assert.doesNotThrow(function () { history.buildFreeformRecord(mystagogus); });
+
+  var reversed = JSON.parse(JSON.stringify(mystagogus));
+  reversed.cards[0].orientation = "reversed";
+  assert.throws(function () { history.buildFreeformRecord(reversed); }, /upright/);
+
+  var mixedMode = JSON.parse(JSON.stringify(mystagogus));
+  mixedMode.orientationMode = "mixed";
+  assert.throws(function () { history.buildFreeformRecord(mixedMode); }, /upright-only/);
 });

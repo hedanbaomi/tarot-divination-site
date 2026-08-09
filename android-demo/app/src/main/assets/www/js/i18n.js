@@ -40,6 +40,9 @@
       "settings.mode": "牌位模式",
       "mode.upright": "全正位（推荐）",
       "mode.mixed": "正逆位混合",
+      "settings.layoutMode": "布局方式",
+      "layout.preset": "预设牌阵",
+      "layout.freeform": "自由画板",
       "settings.arcana": "牌组筛选",
       "arcana.mixed": "混合抽取",
       "arcana.majorOnly": "仅大阿卡那",
@@ -84,6 +87,15 @@
       "history.detailTitle": "占卜记录详情",
       "history.delete": "删除这条记录",
       "footer.note": "塔罗牌意参考《21世纪的塔罗技能》与 Quareia 语境；M 牌关键词译自 Josephine McCarthy《Mystagogus》；LXXXI 牌意参考其英文说明书 · 仅供娱乐，请理性看待占卜结果",
+      "attribution.status": "本站为非官方工具，不暗示 Quareia 或作者为项目背书。书面许可覆盖网站与 Android，并于 2026-08-05 扩展至微信小程序；非商业限制只针对 Mystagogus/LXXXI 牌面、牌意、翻译、牌阵及相关授权材料。这些材料不得出售、设置付费墙或付费解锁、单独商业分发、转授权或纳入软件许可；商业利用须另行授权。该限制不是对用户原创软件、基础设施或无关服务的一般性商业禁令，也不代表任何具体商业模式已获批准。",
+      "attribution.mystagogusLabel": "Mystagogus 牌面与相关文本",
+      "attribution.mystagogusRights": "© Josephine McCarthy",
+      "attribution.lxxxiLabel": "LXXXI 魔法牌牌面与相关文本",
+      "attribution.lxxxiRights": "© Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland",
+      "attribution.quareiaLink": "Quareia 官网",
+      "attribution.quoteCite": "— Josephine McCarthy",
+      "attribution.quoteZh": "（中文参考译文：「虽然数字占卜工具在紧急情况下可能会有用，但占卜师用双手亲自接触和洗牌的互动更安全，准确度也更高，且力量强大得多。」原文以英文为准。）",
+      "privacy.analytics": "本站使用 Cloudflare Web Analytics 统计匿名访问量与页面性能，不收集邮箱、占卜内容、抽牌结果或本地历史记录。",
       "source.tarot": "参考《21世纪的塔罗技能》与 Quareia 训练语境整理",
       "source.mystagogus": "参考 Josephine McCarthy《Mystagogus》关键词索引与 Quareia 体系整理",
       "source.lxxxi": "参考《LXXXI 奎瑞亚魔法牌·牌意说明书》整理翻译",
@@ -163,6 +175,10 @@
       "confirm.spread": "切换牌阵会清空当前抽牌并重新洗牌，是否继续？",
       "confirm.deck": "切换牌组会清空当前牌阵并重新洗牌，是否继续？",
       "confirm.shuffle": "确定要重新洗牌吗？这会清空当前牌阵。",
+      "confirm.layout": "切换布局会清除当前未保存的牌面内容，是否继续？",
+      "confirm.freeBoardClear": "确定清空自由画板吗？画板上的卡牌将返回待抽牌堆。",
+      "confirm.freeBoardDiscard": "确定丢弃自由画板草稿并清空画板吗？此操作无法撤销。",
+      "confirm.freeBoardShuffle": "重新洗牌会清空自由画板并打乱待抽牌堆，是否继续？",
       "confirm.kicker": "牌阵变更",
       "confirm.title": "当前牌阵尚未清空",
       "confirm.cancel": "保留牌阵",
@@ -182,17 +198,17 @@
       "history.field.deck": "牌组",
       "history.field.cards": "牌数",
       "history.completePositions": "完整牌位",
-      "history.unavailableSave": "本应用当前无法保存历史；占卜仍可正常使用。",
-      "history.unavailable": "本应用当前无法访问本地存储，历史不可用；占卜功能不受影响。",
-      "history.saveSnapshotError": "自动保存失败；当前占卜结果仍会保留。",
+      "history.unavailableSave": "当前浏览器无法保存历史；占卜仍可正常使用。",
+      "history.unavailable": "当前浏览器无法访问 IndexedDB，历史不可用；占卜功能不受影响。",
+      "history.saveSnapshotError": "自动保存失败；占卜结果仍保留在当前页面。",
       "history.saving": "正在自动保存占卜历史…",
-      "history.saveUnavailable": "自动保存失败；本应用的本地历史当前不可用。",
+      "history.saveUnavailable": "自动保存失败；当前浏览器无法使用本地历史。",
       "history.duplicate": "这次完整占卜刚刚已经自动保存，无需重复保存。",
-      "history.saved": "开牌完成，已自动保存到本应用的占卜历史。",
+      "history.saved": "开牌完成，已自动保存到当前浏览器的占卜历史。",
       "history.deleted": "已删除这条历史记录。",
       "history.deleteFailed": "删除失败，请稍后再试。",
       "history.deleteConfirm": "确定删除这条占卜历史吗？此操作无法撤销。",
-      "history.clearConfirm": "确定清空本应用中的全部占卜历史吗？此操作无法撤销。",
+      "history.clearConfirm": "确定清空当前浏览器中的全部占卜历史吗？此操作无法撤销。",
       "history.confirmKicker": "本地历史",
       "history.confirmTitle": "删除占卜记录？",
       "history.confirmCancel": "保留记录",
@@ -207,6 +223,71 @@
       "history.imported": "已导入 {count} 条历史记录。",
       "history.remapped": " {count} 条重复 ID 已安全重编号。",
       "history.importFailed": "导入失败：文件格式不正确或内容已损坏。"
+      ,"freeBoard.settingsSummary": "自由画板：可从当前牌组与筛选结果中任意抽牌，不设固定牌位或目标张数。"
+      ,"freeBoard.title": "自由画板"
+      ,"freeBoard.toolbarAria": "自由画板控制"
+      ,"freeBoard.undo": "撤销"
+      ,"freeBoard.undoAria": "撤销上一次自由画板操作"
+      ,"freeBoard.redo": "重做"
+      ,"freeBoard.redoAria": "重做上一次自由画板操作"
+      ,"freeBoard.revealAll": "全部开牌"
+      ,"freeBoard.revealAllAria": "翻开自由画板上的所有卡牌"
+      ,"freeBoard.resetView": "重置视图"
+      ,"freeBoard.resetViewAria": "将自由画板平移和缩放重置为默认"
+      ,"freeBoard.shuffle": "洗牌"
+      ,"freeBoard.shuffleAria": "清空自由画板并重新洗牌"
+      ,"freeBoard.discardDraft": "丢弃草稿"
+      ,"freeBoard.discardDraftAria": "丢弃保存的自由画板草稿"
+      ,"freeBoard.clear": "清空画板"
+      ,"freeBoard.clearAria": "清空自由画板并将卡牌放回待抽牌堆"
+      ,"freeBoard.save": "保存到历史"
+      ,"freeBoard.saveAria": "将当前自由画板保存到占卜历史"
+      ,"freeBoard.boardAria": "自由画板，可拖动画板与卡牌，双指或滚轮缩放"
+      ,"freeBoard.worldAria": "自由画板上的卡牌"
+      ,"freeBoard.selectedControlsAria": "所选卡牌控制"
+      ,"freeBoard.pileTitle": "待抽牌堆"
+      ,"freeBoard.pileAria": "自由画板待抽牌堆，可任意选择一张"
+      ,"freeBoard.drawAria": "待抽牌堆第 {index} 张，共 {count} 张，轻点抽到自由画板"
+      ,"freeBoard.faceDown": "牌背"
+      ,"freeBoard.meaning": "牌意"
+      ,"freeBoard.revealed": "已开牌"
+      ,"freeBoard.unrevealed": "未开牌"
+      ,"freeBoard.cardAria": "{card}，{state}{orientation}。拖动改变位置，轻点查看"
+      ,"freeBoard.cardControls": "{card}的卡牌控制"
+      ,"freeBoard.selectedControls": "当前选择：{card}"
+      ,"freeBoard.cardsDrawn": "已放置 {count} 张"
+      ,"freeBoard.remaining": "待抽 {count} 张"
+      ,"freeBoard.status": "已放置 {cards} 张 · 待抽 {remaining} 张"
+      ,"freeBoard.hint": "空白处拖动画板；拖动卡牌改变位置；轻点牌背开牌，轻点已开牌查看牌意。滚轮或双指可缩放。"
+      ,"freeBoard.rotateMinus15": "−15°"
+      ,"freeBoard.rotateMinus15Aria": "逆时针旋转当前卡牌 15 度"
+      ,"freeBoard.rotatePlus15": "＋15°"
+      ,"freeBoard.rotatePlus15Aria": "顺时针旋转当前卡牌 15 度"
+      ,"freeBoard.rotateMinus90": "−90°"
+      ,"freeBoard.rotateMinus90Aria": "逆时针旋转当前卡牌 90 度"
+      ,"freeBoard.rotatePlus90": "＋90°"
+      ,"freeBoard.rotatePlus90Aria": "顺时针旋转当前卡牌 90 度"
+      ,"freeBoard.bringFront": "置于顶层"
+      ,"freeBoard.bringFrontAria": "将当前卡牌置于最上层"
+      ,"freeBoard.remove": "移除／回牌堆"
+      ,"freeBoard.removeAria": "移除当前卡牌并放回待抽牌堆"
+      ,"freeBoard.draftInvalid": "保存的自由画板草稿无效，已安全忽略。"
+      ,"freeBoard.draftSaveFailed": "自由画板草稿保存失败；当前画板仍可继续使用。"
+      ,"freeBoard.draftDiscarded": "自由画板草稿已丢弃。"
+      ,"freeBoard.saving": "正在保存自由画板历史…"
+      ,"freeBoard.saved": "自由画板已保存到占卜历史。"
+      ,"freeBoard.duplicate": "这份自由画板刚刚已经保存，无需重复保存。"
+      ,"freeBoard.saveFailed": "自由画板历史保存失败；画板仍保留在当前页面。"
+      ,"freeBoard.saveUnavailable": "当前浏览器无法保存历史；自由画板仍可正常使用。"
+      ,"history.freeBoard": "自由画板"
+      ,"history.freeBoardDetail": "自由画板记录"
+      ,"history.freeBoardPreview": "自由画板空间重建（只读）"
+      ,"history.freeBoardHidden": "牌背（未开牌）"
+      ,"history.freeBoardRevealed": "已开牌 · {orientation}"
+      ,"history.freeBoardCardState": "{card} · {state}"
+      ,"history.savingFreeBoard": "正在保存自由画板历史…"
+      ,"history.savedFreeBoard": "自由画板已保存到当前浏览器的占卜历史。"
+      ,"history.duplicateFreeBoard": "这份自由画板刚刚已经保存，无需重复保存。"
     },
     "en": {
       "page.title": "Quareia Divination",
@@ -240,6 +321,9 @@
       "settings.mode": "Orientation",
       "mode.upright": "Upright only (recommended)",
       "mode.mixed": "Upright and reversed",
+      "settings.layoutMode": "Layout",
+      "layout.preset": "Preset spread",
+      "layout.freeform": "Free Board",
       "settings.arcana": "Card pool",
       "arcana.mixed": "Major and Minor Arcana",
       "arcana.majorOnly": "Major Arcana only",
@@ -284,6 +368,15 @@
       "history.detailTitle": "Reading Details",
       "history.delete": "Delete This Reading",
       "footer.note": "Tarot meanings are based on Tarot Skills for the 21st Century and the Quareia context; Mystagogus keywords and LXXXI meanings follow their English guidebooks · For entertainment only - approach divination thoughtfully",
+      "attribution.status": "This is an unofficial tool and does not imply endorsement by Quareia or the authors. Written permission covers the website and Android application, with a 2026-08-05 extension for the WeChat Mini Program. The non-commercial restriction applies only to Mystagogus/LXXXI artwork, meanings, translations, layouts, and related authorised material. Those materials may not be sold, placed behind a paywall or paid unlock, separately commercially distributed, sublicensed, or placed under a software licence; commercial use requires separate permission. This is not a general commercial-use ban on project-authored software, infrastructure, or unrelated services, and it does not claim approval of any particular commercial model.",
+      "attribution.mystagogusLabel": "Mystagogus artwork and related text",
+      "attribution.mystagogusRights": "© Josephine McCarthy",
+      "attribution.lxxxiLabel": "LXXXI Magician's Deck artwork and related text",
+      "attribution.lxxxiRights": "© Josephine McCarthy, Stuart Littlejohn, and Cassandra Beanland",
+      "attribution.quareiaLink": "Official Quareia website",
+      "attribution.quoteCite": "— Josephine McCarthy",
+      "attribution.quoteZh": "(Chinese reference translation is shown on the Chinese interface; the English original is authoritative.)",
+      "privacy.analytics": "This site uses Cloudflare Web Analytics for anonymous traffic and performance statistics. It does not collect email addresses, reading questions, card results, or locally stored history.",
       "source.tarot": "Based on Tarot Skills for the 21st Century and the Quareia training context",
       "source.mystagogus": "Based on Josephine McCarthy's Mystagogus keyword index and the Quareia system",
       "source.lxxxi": "Based on LXXXI - The Magician's Deck: A Guide to the Card Meanings",
@@ -363,6 +456,10 @@
       "confirm.spread": "Changing the spread will clear the current cards and reshuffle. Continue?",
       "confirm.deck": "Changing decks will clear this spread and reshuffle. Continue?",
       "confirm.shuffle": "Shuffle again? This will clear the current spread.",
+      "confirm.layout": "Changing layouts will clear unsaved card content. Continue?",
+      "confirm.freeBoardClear": "Clear the Free Board? The cards will return to the face-down pile.",
+      "confirm.freeBoardDiscard": "Discard the Free Board draft and clear the board? This cannot be undone.",
+      "confirm.freeBoardShuffle": "Reshuffling clears the Free Board and changes the pile order. Continue?",
       "confirm.kicker": "SPREAD CHANGE",
       "confirm.title": "Your current spread is still here",
       "confirm.cancel": "Keep Spread",
@@ -382,17 +479,17 @@
       "history.field.deck": "Deck",
       "history.field.cards": "Cards",
       "history.completePositions": "Complete Spread",
-      "history.unavailableSave": "This app cannot save history right now. Divination remains available.",
-      "history.unavailable": "This app cannot access local storage, so history is unavailable. Divination is unaffected.",
-      "history.saveSnapshotError": "Automatic save failed. Your current reading remains available.",
+      "history.unavailableSave": "This browser cannot save history. Divination remains available.",
+      "history.unavailable": "This browser cannot access IndexedDB, so history is unavailable. Divination is unaffected.",
+      "history.saveSnapshotError": "Automatic save failed. Your reading is still available on this page.",
       "history.saving": "Saving this reading automatically…",
-      "history.saveUnavailable": "Automatic save failed because this app's local history is unavailable.",
+      "history.saveUnavailable": "Automatic save failed because local history is unavailable in this browser.",
       "history.duplicate": "This complete reading was just saved, so no duplicate was created.",
-      "history.saved": "Reading revealed and saved automatically in this app.",
+      "history.saved": "Reading revealed and saved automatically in this browser.",
       "history.deleted": "Reading deleted.",
       "history.deleteFailed": "Could not delete the reading. Please try again.",
       "history.deleteConfirm": "Delete this saved reading? This cannot be undone.",
-      "history.clearConfirm": "Clear all reading history saved by this app? This cannot be undone.",
+      "history.clearConfirm": "Clear all reading history in this browser? This cannot be undone.",
       "history.confirmKicker": "LOCAL HISTORY",
       "history.confirmTitle": "Delete reading history?",
       "history.confirmCancel": "Keep Records",
@@ -406,7 +503,72 @@
       "history.exportFailed": "Could not export history. Please try again.",
       "history.imported": "Imported {count} reading(s).",
       "history.remapped": " Safely reassigned {count} duplicate ID(s).",
-      "history.importFailed": "Import failed: the file format is invalid or its contents are damaged."
+      "history.importFailed": "Import failed: the file format is invalid or its contents are damaged.",
+      "freeBoard.settingsSummary": "Free Board: draw any card from the current deck and filter; there are no fixed positions or target count.",
+      "freeBoard.title": "Free Board",
+      "freeBoard.toolbarAria": "Free Board controls",
+      "freeBoard.undo": "Undo",
+      "freeBoard.undoAria": "Undo the last Free Board action",
+      "freeBoard.redo": "Redo",
+      "freeBoard.redoAria": "Redo the last Free Board action",
+      "freeBoard.revealAll": "Reveal all",
+      "freeBoard.revealAllAria": "Reveal every card on the Free Board",
+      "freeBoard.resetView": "Reset view",
+      "freeBoard.resetViewAria": "Reset Free Board pan and zoom",
+      "freeBoard.shuffle": "Shuffle",
+      "freeBoard.shuffleAria": "Clear the Free Board and reshuffle the pile",
+      "freeBoard.discardDraft": "Discard draft",
+      "freeBoard.discardDraftAria": "Discard the saved Free Board draft",
+      "freeBoard.clear": "Clear board",
+      "freeBoard.clearAria": "Clear the Free Board and return its cards to the pile",
+      "freeBoard.save": "Save to history",
+      "freeBoard.saveAria": "Save the current Free Board to divination history",
+      "freeBoard.boardAria": "Free Board. Drag the board or cards; pinch or wheel to zoom.",
+      "freeBoard.worldAria": "Cards on the Free Board",
+      "freeBoard.selectedControlsAria": "Selected card controls",
+      "freeBoard.pileTitle": "Face-down pile",
+      "freeBoard.pileAria": "Free Board face-down pile. Choose any card.",
+      "freeBoard.drawAria": "Face-down pile card {index} of {count}. Tap to draw to the Free Board.",
+      "freeBoard.faceDown": "Face down",
+      "freeBoard.meaning": "Meaning",
+      "freeBoard.revealed": "Revealed",
+      "freeBoard.unrevealed": "Not revealed",
+      "freeBoard.cardAria": "{card}, {state}{orientation}. Drag to move; tap to view.",
+      "freeBoard.cardControls": "Controls for {card}",
+      "freeBoard.selectedControls": "Selected: {card}",
+      "freeBoard.cardsDrawn": "{count} placed",
+      "freeBoard.remaining": "{count} remaining",
+      "freeBoard.status": "{cards} placed · {remaining} remaining",
+      "freeBoard.hint": "Drag empty space to pan; drag a card to move it; tap a card back to reveal it, then tap a revealed card to view its meaning. Use wheel or pinch to zoom.",
+      "freeBoard.rotateMinus15": "−15°",
+      "freeBoard.rotateMinus15Aria": "Rotate the selected card counter-clockwise by 15 degrees",
+      "freeBoard.rotatePlus15": "+15°",
+      "freeBoard.rotatePlus15Aria": "Rotate the selected card clockwise by 15 degrees",
+      "freeBoard.rotateMinus90": "−90°",
+      "freeBoard.rotateMinus90Aria": "Rotate the selected card counter-clockwise by 90 degrees",
+      "freeBoard.rotatePlus90": "+90°",
+      "freeBoard.rotatePlus90Aria": "Rotate the selected card clockwise by 90 degrees",
+      "freeBoard.bringFront": "Bring to front",
+      "freeBoard.bringFrontAria": "Bring the selected card to the front",
+      "freeBoard.remove": "Remove / return to pile",
+      "freeBoard.removeAria": "Remove the selected card and return it to the face-down pile",
+      "freeBoard.draftInvalid": "The saved Free Board draft was invalid and was safely ignored.",
+      "freeBoard.draftSaveFailed": "Could not save the Free Board draft; the current board is still available.",
+      "freeBoard.draftDiscarded": "The Free Board draft was discarded.",
+      "freeBoard.saving": "Saving Free Board history…",
+      "freeBoard.saved": "Free Board saved to divination history.",
+      "freeBoard.duplicate": "This Free Board was just saved; no duplicate was created.",
+      "freeBoard.saveFailed": "Could not save Free Board history; the board remains on this page.",
+      "freeBoard.saveUnavailable": "This browser cannot save history; the Free Board remains available.",
+      "history.freeBoard": "Free Board",
+      "history.freeBoardDetail": "Free Board record",
+      "history.freeBoardPreview": "Read-only Free Board spatial reconstruction",
+      "history.freeBoardHidden": "Face down (not revealed)",
+      "history.freeBoardRevealed": "Revealed · {orientation}",
+      "history.freeBoardCardState": "{card} · {state}",
+      "history.savingFreeBoard": "Saving Free Board history…",
+      "history.savedFreeBoard": "Free Board saved to this browser's divination history.",
+      "history.duplicateFreeBoard": "This Free Board was just saved; no duplicate was created."
     }
   };
 
