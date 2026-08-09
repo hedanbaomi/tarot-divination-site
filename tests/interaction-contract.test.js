@@ -128,7 +128,7 @@ test("Free Board taps select only, while external meaning and automatic history 
   var app = read("js/app.js");
   var ui = read("js/free-board-ui.js");
   var css = read("css/free-board.css");
-  var finishPointer = ui.match(/function finishPointer\(event\) \{[\s\S]*?\n    \}\n\n    function handleWheel/)[0];
+  var finishPointer = ui.match(/function finishPointer\(event\) \{[\s\S]*?\r?\n    \}\r?\n\r?\n    function handleWheel/)[0];
 
   assert.doesNotMatch(html, /freeBoardClearBtn|freeBoardSaveBtn/);
   assert.match(html, /freeBoardDiscardDraftBtn/);
