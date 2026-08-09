@@ -311,6 +311,35 @@ test("draw order is rendered on both card face states", function () {
   setupResult.ui.exit();
 });
 
+test("a reversed Tarot card keeps a neutral back until reveal-all", function () {
+  var originalRandom = Math.random;
+  var setupResult;
+  Math.random = function () { return 1; };
+  try {
+    setupResult = setup();
+    setupResult.pile.children[0].dispatchEvent(event("click"));
+    assert.equal(setupResult.ui.getState().cards[0].orientation, "reversed");
+    assert.doesNotMatch(setupResult.world.children[0].children[0].className, /\bis-reversed\b/);
+
+    setupResult.ui.revealAll();
+    assert.match(setupResult.world.children[0].children[0].className, /\bis-reversed\b/);
+  } finally {
+    if (setupResult) setupResult.ui.exit();
+    Math.random = originalRandom;
+  }
+});
+
+test("pile and board backs omit the face-down text label", function () {
+  var setupResult = setup();
+  var pileBack = setupResult.pile.children[0].children[0];
+  assert.equal(pileBack.textContent, "");
+
+  setupResult.pile.children[0].dispatchEvent(event("click"));
+  var boardBack = setupResult.world.children[0].children[0].children[0];
+  assert.equal(boardBack.children.length, 0);
+  setupResult.ui.exit();
+});
+
 test("Free Board renders resolved Mystagogus and LXXXI backs while Tarot keeps its CSS back", function () {
   [
     { deckType: "mystagogus", back: "assets/cards/m/m-back.jpeg" },

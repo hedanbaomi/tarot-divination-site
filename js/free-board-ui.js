@@ -441,7 +441,7 @@
     function makeCardFace(state, card, source) {
       var inner = document.createElement("div");
       inner.className = "free-board-card-inner" +
-        (card.orientation === "reversed" ? " is-reversed" : "");
+        (card.revealed && card.orientation === "reversed" ? " is-reversed" : "");
       inner.setAttribute("data-orientation", card.orientation);
       var face = document.createElement("div");
       var backImage = backImageForState(state);
@@ -451,7 +451,6 @@
 
       if (!card.revealed) {
         if (backImage) face.appendChild(makeBackImage(backImage));
-        face.appendChild(textElement(document, "span", "free-board-card-back-label", t("freeBoard.faceDown")));
       } else if (card.meaningVisible) {
         var meaning = meaningFor(source, card.orientation);
         face.appendChild(textElement(document, "span", "free-board-card-meaning-kicker", t("freeBoard.meaning")));
@@ -538,8 +537,9 @@
           count: state.remainingPile.length
         }));
         var backImage = backImageForState(state);
-        var back = textElement(document, "span", "free-board-pile-card-back" +
-          (backImage ? " has-deck-back" : ""), t("freeBoard.faceDown"));
+        var back = document.createElement("span");
+        back.className = "free-board-pile-card-back" +
+          (backImage ? " has-deck-back" : "");
         back.setAttribute("data-free-board-back", deckTypeFromState(state));
         back.setAttribute("aria-hidden", "true");
         if (backImage) back.appendChild(makeBackImage(backImage));

@@ -30,6 +30,7 @@ test("Android bundle exposes Free Board in the platform-preserving load order", 
   var history = read("js/history-ui.js");
   var i18n = read("js/i18n.js");
   var css = read("css/free-board.css");
+  var freeBoardUi = read("js/free-board-ui.js");
   var activity = fs.readFileSync(path.join(
     __dirname, "..", "app", "src", "main", "java", "com", "quareia", "divination", "MainActivity.kt"
   ), "utf8");
@@ -49,7 +50,10 @@ test("Android bundle exposes Free Board in the platform-preserving load order", 
   assert.match(app, /cards: shuffle\(freeBoardCardsForDeck\(deckType, filter\)\)/);
   assert.match(app, /getLxxxiBackImage/);
   assert.match(activity, /window\.__qMediaBase[\s\S]*quareia:mediaready/);
-  assert.match(read("js/free-board-ui.js"), /quareia:mediaready[\s\S]*refreshMedia/);
+  assert.match(freeBoardUi, /quareia:mediaready[\s\S]*refreshMedia/);
+  assert.match(freeBoardUi, /card\.revealed && card\.orientation === "reversed"/);
+  assert.doesNotMatch(freeBoardUi, /free-board-card-back-label/);
+  assert.doesNotMatch(freeBoardUi, /free-board-pile-card-back[\s\S]{0,160}freeBoard\.faceDown/);
   assert.match(app, /platform: "android"/);
   assert.match(app, /getBackImage: deckBackImage/);
   assert.match(app, /if \(type === "mystagogus"\) return MYSTAGOGUS_BACK;\s*return "";/);
