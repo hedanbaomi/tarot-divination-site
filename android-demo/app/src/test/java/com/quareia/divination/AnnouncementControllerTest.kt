@@ -63,7 +63,7 @@ class AnnouncementControllerTest {
         assertEquals("update", result!![1].severity)
         assertEquals(1L, result!![0].id)
         assertTrue(seen.single().contains("platform=android"))
-        assertTrue(seen.single().contains("version_code=4"))
+        assertTrue(Regex("[?&]version_code=5(?:&|$)").containsMatchIn(seen.single()))
         // Store was updated for offline display.
         assertEquals(2, AnnouncementsStore.lastList().size)
     }
