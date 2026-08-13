@@ -49,8 +49,8 @@ test("website uses the branded dialog for spread and history confirmations", fun
 
 test("root page pins the web-announcement resource cache versions", function () {
   var html = read(surface.html);
-  assert.match(html, /src="js\/i18n\.js\?v=20260809-free-board-v1"/);
-  assert.match(html, /href="css\/styles\.css\?v=20260806-web-announcements"/);
+  assert.match(html, /src="js\/i18n\.js\?v=20260813-themes"/);
+  assert.match(html, /href="css\/styles\.css\?v=20260813-parchment-chrome"/);
   assert.match(html, /src="js\/announcements\.js\?v=1"/);
 });
 

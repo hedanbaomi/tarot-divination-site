@@ -60,7 +60,7 @@ test("Free Board resources load after their model and before the application", f
   var freeBoardUi = fs.readFileSync(path.join(root, "js", "free-board-ui.js"), "utf8");
   var freeBoardCss = fs.readFileSync(path.join(root, "css", "free-board.css"), "utf8");
 
-  assert.match(html, /href="css\/free-board\.css\?v=20260809-free-board-v1"/);
+  assert.match(html, /href="css\/free-board\.css\?v=20260813-themes"/);
   assert.ok(freeBoardModelIndex < freeBoardDraftIndex);
   assert.ok(freeBoardDraftIndex < recordsIndex);
   assert.ok(recordsIndex < historyUiIndex);

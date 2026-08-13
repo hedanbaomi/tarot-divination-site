@@ -5,10 +5,10 @@
 .free-board-area {
   margin: 1.1rem 0 1.5rem;
   padding: 1rem;
-  border: 1px solid rgba(176, 145, 88, 0.35);
+  border: 1px solid var(--accent-border, rgba(176, 145, 88, 0.35));
   border-radius: 1.1rem;
-  background: linear-gradient(145deg, rgba(19, 25, 52, 0.96), rgba(8, 12, 29, 0.98));
-  box-shadow: 0 1rem 2.8rem rgba(0, 0, 0, 0.24);
+  background: var(--panel-bg, linear-gradient(145deg, rgba(19, 25, 52, 0.96), rgba(8, 12, 29, 0.98)));
+  box-shadow: var(--shadow, 0 1rem 2.8rem rgba(0, 0, 0, 0.24));
 }
 
 .free-board-head,
@@ -36,7 +36,7 @@
 .free-board-status,
 .free-board-save-status,
 .free-board-hint {
-  color: var(--text-muted, #b9b3a6);
+  color: var(--text-muted, var(--text-secondary, #b9b3a6));
   font-size: 0.86rem;
 }
 
@@ -65,12 +65,12 @@
   position: relative;
   min-height: 26rem;
   overflow: hidden;
-  border: 1px solid rgba(183, 151, 92, 0.34);
+  border: 1px solid var(--accent-border, rgba(183, 151, 92, 0.34));
   border-radius: 0.85rem;
   background:
-    radial-gradient(circle at 50% 42%, rgba(115, 92, 49, 0.14), transparent 58%),
-    linear-gradient(135deg, rgba(5, 9, 23, 0.88), rgba(19, 28, 54, 0.92));
-  box-shadow: inset 0 0 3rem rgba(0, 0, 0, 0.25);
+    radial-gradient(circle at 50% 42%, rgba(var(--accent-rgb, 115, 92, 49), 0.14), transparent 58%),
+    var(--dialog-bg, linear-gradient(135deg, rgba(5, 9, 23, 0.88), rgba(19, 28, 54, 0.92)));
+  box-shadow: inset 0 0 3rem rgba(0, 0, 0, 0.18);
   touch-action: none;
   overscroll-behavior: contain;
   user-select: none;
@@ -78,7 +78,7 @@
 }
 
 .free-board-viewport:focus-visible {
-  outline: 2px solid rgba(229, 194, 120, 0.85);
+  outline: 2px solid var(--accent-light, rgba(229, 194, 120, 0.85));
   outline-offset: 3px;
 }
 
@@ -170,7 +170,7 @@
   background:
     repeating-linear-gradient(135deg, rgba(214, 178, 103, 0.11) 0 2px, transparent 2px 8px),
     radial-gradient(circle at 50% 45%, rgba(203, 166, 93, 0.3), transparent 44%),
-    #171934;
+    var(--bg-card-back, #171934);
 }
 
 .free-board-card-face.is-face-down[data-free-board-back="tarot"],
@@ -182,7 +182,7 @@
     radial-gradient(1.5px 1.5px at 30% 78%, rgba(214, 226, 255, 0.75) 50%, transparent 52%),
     radial-gradient(1px 1px at 84% 68%, rgba(255, 255, 255, 0.6) 50%, transparent 52%),
     radial-gradient(1px 1px at 55% 10%, rgba(255, 236, 190, 0.65) 50%, transparent 52%),
-    linear-gradient(168deg, #28336b 0%, #131a42 55%, #171934 100%);
+    linear-gradient(168deg, var(--tarot-back-from, #28336b) 0%, var(--tarot-back-mid, #131a42) 55%, var(--bg-card-back, #171934) 100%);
 }
 
 .free-board-card-face.has-deck-back::after {

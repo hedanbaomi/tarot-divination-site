@@ -71,7 +71,9 @@ test("Free Board controls, statuses, confirmations, and accessibility labels are
       "confirm.layout",
       "confirm.freeBoardDiscard",
       "history.freeBoard",
-      "history.freeBoardPreview"
+      "history.freeBoardPreview",
+      "settings.theme",
+      "theme.celestial"
     ].forEach(function (key) {
       assert.ok(start.indexOf('"' + key + '"') !== -1, locale + " missing " + key);
     });

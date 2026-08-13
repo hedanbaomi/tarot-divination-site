@@ -24,10 +24,11 @@ test("Free Board is a synthetic layout option with stable load order and no pres
   assert.ok(html.indexOf("js/free-board-draft.js") < html.indexOf("js/history-records.js"));
   assert.ok(html.indexOf("js/history-ui.js") < html.indexOf("js/free-board-ui.js"));
   assert.ok(html.indexOf("js/free-board-ui.js") < html.indexOf("js/app.js"));
-  ["i18n.js", "free-board-model.js", "free-board-draft.js", "history-records.js",
+  ["free-board-model.js", "free-board-draft.js", "history-records.js",
     "history-ui.js", "free-board-ui.js", "app.js"].forEach(function (asset) {
     assert.match(html, new RegExp(asset.replace(".", "\\.") + "\\?v=20260809-free-board-v1"));
   });
+  assert.match(html, /i18n\.js\?v=20260813-themes/);
   assert.match(app, /var layoutMode = "preset"/);
   assert.match(app, /function freeBoardCardsForDeck\(type, filter\)/);
   assert.match(app, /return majors\.concat\(minors\)/);
