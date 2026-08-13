@@ -365,7 +365,7 @@
   padding: 0.75rem;
   border: 1px solid rgba(183, 151, 92, 0.28);
   border-radius: 0.7rem;
-  background: rgba(5, 9, 23, 0.32);
+  background: var(--panel-bg);
 }
 
 .history-free-board-preview h3 {
@@ -436,8 +436,8 @@
   width: 100%;
   height: 100%;
   place-items: center;
-  background: #171934;
-  color: #ead39e;
+  background: var(--bg-card-back);
+  color: var(--accent);
 }
 
 @media (max-width: 640px) {

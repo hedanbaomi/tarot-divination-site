@@ -128,6 +128,26 @@ test("Android keeps theme switching in the hamburger menu, not reading setup", f
   assert.match(mainActivity, /removeJavascriptInterface\("androidThemeChrome"\)/);
 });
 
+test("Android parchment reading and history panels use theme tokens, not night navy", function () {
+  var css = read("app/src/main/assets/www/css/styles.css");
+  var freeBoard = read("app/src/main/assets/www/css/free-board.css");
+  var html = read("app/src/main/assets/www/index.html");
+  assert.match(html, /href="css\/styles\.css\?v=20260813-sun-blank"/);
+  assert.match(css, /\.position-guide\s*\{[^}]*background:\s*var\(--panel-bg\)/);
+  assert.match(css, /\.result-card\s*\{[^}]*background:\s*var\(--panel-bg\)/);
+  assert.match(css, /\.history-list-item\s*\{[^}]*background:\s*var\(--bg-card\)/);
+  assert.match(css, /\.history-detail-card\s*\{[^}]*background:\s*var\(--bg-card\)/);
+  assert.doesNotMatch(css, /\.position-guide\s*\{[^}]*background:\s*rgba\(19, 26, 60/);
+  assert.doesNotMatch(css, /\.result-card\s*\{[^}]*background:\s*linear-gradient\(180deg, rgba\(24, 31, 68/);
+  var parchment = css.slice(css.indexOf('html[data-theme="parchment"]'), css.indexOf('html[data-theme="ember"]'));
+  assert.match(parchment, /--neutral-dark:\s*#f3e6c8/);
+  assert.match(freeBoard, /\.history-free-board-preview\s*\{[^}]*background:\s*var\(--panel-bg\)/);
+  assert.match(html, /class="sky-sun-blank"/);
+  assert.match(html, /src="assets\/icons\/parchment-sun-blank\.png"/);
+  assert.match(html, /data-theme-face="celestial"/);
+  assert.match(html, /celestial-sky\.js\?v=20260813-sun-blank/);
+});
+
 test("language toggle keeps its label and value nodes for runtime localization", function () {
   var html = read("app/src/main/assets/www/index.html");
   var i18n = read("app/src/main/assets/www/js/i18n.js");
