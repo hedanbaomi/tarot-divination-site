@@ -203,24 +203,24 @@
       "history.field.deck": "牌组",
       "history.field.cards": "牌数",
       "history.completePositions": "完整牌位",
-      "history.unavailableSave": "当前浏览器无法保存历史；占卜仍可正常使用。",
-      "history.unavailable": "当前浏览器无法访问 IndexedDB，历史不可用；占卜功能不受影响。",
+      "history.unavailableSave": "本机无法保存历史；占卜仍可正常使用。",
+      "history.unavailable": "本机无法访问本地存储，历史不可用；占卜功能不受影响。",
       "history.saveSnapshotError": "自动保存失败；占卜结果仍保留在当前页面。",
       "history.saving": "正在自动保存占卜历史…",
-      "history.saveUnavailable": "自动保存失败；当前浏览器无法使用本地历史。",
+      "history.saveUnavailable": "自动保存失败；本机无法使用本地历史。",
       "history.duplicate": "这次完整占卜刚刚已经自动保存，无需重复保存。",
-      "history.saved": "开牌完成，已自动保存到当前浏览器的占卜历史。",
+      "history.saved": "开牌完成，已自动保存到本机占卜历史。",
       "history.deleted": "已删除这条历史记录。",
       "history.deleteFailed": "删除失败，请稍后再试。",
       "history.deleteConfirm": "确定删除这条占卜历史吗？此操作无法撤销。",
-      "history.clearConfirm": "确定清空当前浏览器中的全部占卜历史吗？此操作无法撤销。",
+      "history.clearConfirm": "确定清空本机中的全部占卜历史吗？此操作无法撤销。",
       "history.confirmKicker": "本地历史",
       "history.confirmTitle": "删除占卜记录？",
       "history.confirmCancel": "保留记录",
       "history.confirmProceed": "确认删除",
       "history.cleared": "全部历史记录已清空。",
       "history.clearFailed": "清空失败，请稍后再试。",
-      "history.exported": "已下载 JSON 备份：{fileName}。请在浏览器下载列表或“下载”文件夹中查看。",
+      "history.exported": "已导出 JSON 备份：{fileName}。",
       "history.exportChoosing": "正在打开保存位置，请在系统窗口中选择文件夹：{fileName}",
       "history.exportedTo": "已保存 JSON 备份：{fileName}，位置为你刚刚选择的文件夹。",
       "history.exportCancelled": "已取消导出，历史记录没有改变。",
@@ -283,7 +283,7 @@
       ,"freeBoard.saved": "自由画板已自动保存到占卜历史。"
       ,"freeBoard.duplicate": "这份自由画板刚刚已经保存，无需重复保存。"
       ,"freeBoard.saveFailed": "自由画板历史保存失败；画板仍保留在当前页面。"
-      ,"freeBoard.saveUnavailable": "当前浏览器无法保存历史；自由画板仍可正常使用。"
+      ,"freeBoard.saveUnavailable": "本机无法保存历史；自由画板仍可正常使用。"
       ,"history.freeBoard": "自由画板"
       ,"history.freeBoardDetail": "自由画板记录"
       ,"history.freeBoardPreview": "自由画板空间重建（只读）"
@@ -291,7 +291,7 @@
       ,"history.freeBoardRevealed": "已开牌 · {orientation}"
       ,"history.freeBoardCardState": "{card} · {state}"
       ,"history.savingFreeBoard": "正在保存自由画板历史…"
-      ,"history.savedFreeBoard": "自由画板已保存到当前浏览器的占卜历史。"
+      ,"history.savedFreeBoard": "自由画板已保存到本机占卜历史。"
       ,"history.duplicateFreeBoard": "这份自由画板刚刚已经保存，无需重复保存。"
     },
     "en": {
@@ -489,24 +489,24 @@
       "history.field.deck": "Deck",
       "history.field.cards": "Cards",
       "history.completePositions": "Complete Spread",
-      "history.unavailableSave": "This browser cannot save history. Divination remains available.",
-      "history.unavailable": "This browser cannot access IndexedDB, so history is unavailable. Divination is unaffected.",
+      "history.unavailableSave": "This device cannot save history. Divination remains available.",
+      "history.unavailable": "Local storage is unavailable on this device, so history is unavailable. Divination is unaffected.",
       "history.saveSnapshotError": "Automatic save failed. Your reading is still available on this page.",
       "history.saving": "Saving this reading automatically…",
-      "history.saveUnavailable": "Automatic save failed because local history is unavailable in this browser.",
+      "history.saveUnavailable": "Automatic save failed because local history is unavailable on this device.",
       "history.duplicate": "This complete reading was just saved, so no duplicate was created.",
-      "history.saved": "Reading revealed and saved automatically in this browser.",
+      "history.saved": "Reading revealed and saved automatically on this device.",
       "history.deleted": "Reading deleted.",
       "history.deleteFailed": "Could not delete the reading. Please try again.",
       "history.deleteConfirm": "Delete this saved reading? This cannot be undone.",
-      "history.clearConfirm": "Clear all reading history in this browser? This cannot be undone.",
+      "history.clearConfirm": "Clear all reading history on this device? This cannot be undone.",
       "history.confirmKicker": "LOCAL HISTORY",
       "history.confirmTitle": "Delete reading history?",
       "history.confirmCancel": "Keep Records",
       "history.confirmProceed": "Delete",
       "history.cleared": "All reading history has been cleared.",
       "history.clearFailed": "Could not clear history. Please try again.",
-      "history.exported": "JSON backup downloaded: {fileName}. Check the browser downloads list or Downloads folder.",
+      "history.exported": "JSON backup exported: {fileName}.",
       "history.exportChoosing": "Opening the save location. Choose a folder in the system dialog for {fileName}.",
       "history.exportedTo": "JSON backup saved as {fileName} in the folder you selected.",
       "history.exportCancelled": "Export cancelled. Your history was not changed.",
@@ -569,7 +569,7 @@
       "freeBoard.saved": "Free Board saved to divination history automatically.",
       "freeBoard.duplicate": "This Free Board was just saved; no duplicate was created.",
       "freeBoard.saveFailed": "Could not save Free Board history; the board remains on this page.",
-      "freeBoard.saveUnavailable": "This browser cannot save history; the Free Board remains available.",
+      "freeBoard.saveUnavailable": "This device cannot save history; the Free Board remains available.",
       "history.freeBoard": "Free Board",
       "history.freeBoardDetail": "Free Board record",
       "history.freeBoardPreview": "Read-only Free Board spatial reconstruction",
@@ -577,7 +577,7 @@
       "history.freeBoardRevealed": "Revealed · {orientation}",
       "history.freeBoardCardState": "{card} · {state}",
       "history.savingFreeBoard": "Saving Free Board history…",
-      "history.savedFreeBoard": "Free Board saved to this browser's divination history.",
+      "history.savedFreeBoard": "Free Board saved to this device's divination history.",
       "history.duplicateFreeBoard": "This Free Board was just saved; no duplicate was created."
     }
   };

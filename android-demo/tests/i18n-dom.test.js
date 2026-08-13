@@ -194,3 +194,11 @@ test("history privacy copy distinguishes local history from anonymous statistics
     assert.match(chinese, pair[1]);
   });
 });
+
+test("Android history save copy talks about this device, not a browser", function () {
+  assert.match(i18nSource, /"history\.savedFreeBoard": "自由画板已保存到本机占卜历史。"/);
+  assert.match(i18nSource, /"history\.savedFreeBoard": "Free Board saved to this device's divination history\."/);
+  assert.match(i18nSource, /"history\.saved": "开牌完成，已自动保存到本机占卜历史。"/);
+  assert.doesNotMatch(i18nSource, /当前浏览器的占卜历史/);
+  assert.doesNotMatch(i18nSource, /this browser's divination history/);
+});
