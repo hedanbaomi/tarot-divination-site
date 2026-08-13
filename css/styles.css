@@ -44,6 +44,7 @@ html[data-theme="celestial"] {
     radial-gradient(130% 100% at 50% -10%, #131b44 0%, #0b1130 42%, #060919 78%, #04060f 100%),
     #060919;
   --panel-bg: linear-gradient(180deg, rgba(24, 31, 68, 0.72), rgba(15, 20, 46, 0.72));
+  --panel-bg-alt: linear-gradient(180deg, rgba(21, 37, 73, 0.78), rgba(14, 24, 52, 0.76));
   --panel-border: rgba(var(--accent-rgb), 0.22);
   --select-trigger-bg: linear-gradient(135deg, rgba(31, 35, 65, 0.96), rgba(18, 22, 48, 0.98));
   --control-inset: inset 0 1px 0 rgba(255, 255, 255, 0.035);
@@ -104,6 +105,8 @@ html[data-theme="parchment"] {
   --bg-card: #fff8ec;
   --bg-card-back: #f3e6c8;
   --bg-card-rgb: 255, 248, 236;
+  --neutral-dark: #f3e6c8;
+  --neutral-contain: #efe4cc;
   --accent: #7a5a28;
   --accent-rgb: 122, 90, 40;
   --accent-light: #5c4318;
@@ -122,6 +125,7 @@ html[data-theme="parchment"] {
     radial-gradient(120% 80% at 50% -8%, #fff6e4 0%, #f4e6c8 46%, #e9d7b0 100%),
     #efe4cc;
   --panel-bg: linear-gradient(180deg, rgba(255, 250, 240, 0.92), rgba(244, 232, 204, 0.92));
+  --panel-bg-alt: linear-gradient(180deg, rgba(255, 252, 244, 0.94), rgba(236, 220, 186, 0.94));
   --panel-border: rgba(122, 90, 40, 0.28);
   --select-trigger-bg: linear-gradient(180deg, #fffef9 0%, #f2e4c6 100%);
   --control-inset: inset 0 1px 0 rgba(255, 255, 255, 0.78), 0 1px 2px rgba(90, 70, 30, 0.08);
@@ -196,6 +200,7 @@ html[data-theme="ember"] {
     radial-gradient(130% 100% at 50% -10%, #3a1c12 0%, #1c0e0a 42%, #140a08 78%, #0c0604 100%),
     #140a08;
   --panel-bg: linear-gradient(180deg, rgba(46, 22, 16, 0.78), rgba(22, 10, 8, 0.78));
+  --panel-bg-alt: linear-gradient(180deg, rgba(52, 24, 16, 0.78), rgba(22, 10, 8, 0.76));
   --panel-border: rgba(224, 138, 72, 0.24);
   --select-trigger-bg: linear-gradient(135deg, rgba(52, 24, 16, 0.96), rgba(24, 12, 8, 0.98));
   --control-inset: inset 0 1px 0 rgba(255, 220, 180, 0.08);
@@ -266,6 +271,7 @@ html[data-theme="grove"] {
     radial-gradient(130% 100% at 50% -10%, #16382c 0%, #0c221a 42%, #07140f 78%, #040c08 100%),
     #07140f;
   --panel-bg: linear-gradient(180deg, rgba(18, 44, 34, 0.76), rgba(8, 22, 16, 0.76));
+  --panel-bg-alt: linear-gradient(180deg, rgba(22, 52, 40, 0.78), rgba(8, 22, 16, 0.76));
   --panel-border: rgba(198, 176, 106, 0.22);
   --select-trigger-bg: linear-gradient(135deg, rgba(22, 48, 40, 0.96), rgba(10, 28, 22, 0.98));
   --control-inset: inset 0 1px 0 rgba(210, 230, 200, 0.08);
@@ -1212,8 +1218,8 @@ html[data-theme="parchment"] .setting-group select {
   padding: 2px 5px;
   border: 1px solid rgba(123, 171, 219, 0.38);
   border-radius: 999px;
-  color: #bad8f3;
-  background: rgba(13, 32, 65, 0.58);
+  color: var(--text-secondary);
+  background: var(--btn-secondary-bg);
   font-size: 0.42rem;
   font-weight: 700;
   line-height: 1.2;
@@ -1559,7 +1565,7 @@ html[data-theme="parchment"] .setting-group select {
   margin: 14px auto 0;
   border: 1px solid rgba(var(--accent-rgb), 0.24);
   border-radius: 12px;
-  background: rgba(19, 26, 60, 0.6);
+  background: var(--panel-bg);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   overflow: hidden;
@@ -1613,7 +1619,7 @@ html[data-theme="parchment"] .setting-group select {
 .results-section > h2::after { content: " ✦"; color: var(--accent); }
 .results-list { display: flex; flex-direction: column; gap: 12px; }
 .result-card {
-  background: linear-gradient(180deg, rgba(24, 31, 68, 0.72), rgba(15, 20, 46, 0.72));
+  background: var(--panel-bg);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   border-radius: var(--radius);
@@ -1630,7 +1636,7 @@ html[data-theme="parchment"] .setting-group select {
   padding: 14px;
   border: 1px solid rgba(var(--accent-rgb), 0.24);
   border-radius: var(--radius);
-  background: linear-gradient(180deg, rgba(24, 31, 68, 0.62), rgba(15, 20, 46, 0.58));
+  background: var(--panel-bg);
   box-shadow: var(--shadow);
 }
 .result-pair-card h3 {
@@ -1659,7 +1665,7 @@ html[data-theme="parchment"] .setting-group select {
 }
 .result-pair-grid .stack-layer-minor {
   border-left-color: rgba(123, 171, 219, 0.82);
-  background: linear-gradient(180deg, rgba(21, 37, 73, 0.78), rgba(14, 24, 52, 0.76));
+  background: var(--panel-bg-alt);
 }
 .result-pair-pending {
   min-height: 116px;
@@ -1721,7 +1727,7 @@ html[data-theme="parchment"] .setting-group select {
   font-size: 0.64rem;
   color: var(--text-secondary);
   padding: 2px 6px;
-  background: rgba(28, 36, 80, 0.6);
+  background: var(--btn-secondary-bg);
   border: 1px solid rgba(var(--accent-rgb), 0.12);
   border-radius: 5px;
 }
@@ -2025,7 +2031,7 @@ body.choice-open { overflow: hidden; }
 
 .announcement-item {
   padding: 13px 14px;
-  background: rgba(20, 22, 51, 0.86);
+  background: var(--bg-card);
   border: 1px solid rgba(var(--accent-rgb), 0.18);
   border-radius: 12px;
 }
@@ -2237,7 +2243,7 @@ body.choice-open { overflow: hidden; }
 }
 .history-list-item {
   padding: 12px;
-  background: rgba(28, 36, 80, 0.58);
+  background: var(--bg-card);
   border: 1px solid rgba(var(--accent-rgb), 0.18);
   border-radius: 11px;
 }
@@ -2301,7 +2307,7 @@ body.choice-open { overflow: hidden; }
   grid-template-columns: minmax(5em, auto) 1fr;
   gap: 10px;
   padding: 8px 10px;
-  background: rgba(28, 36, 80, 0.5);
+  background: var(--bg-card);
   border-radius: 8px;
 }
 .history-definition-row dt {
@@ -2317,7 +2323,7 @@ body.choice-open { overflow: hidden; }
 .history-detail-summary,
 .history-detail-card {
   padding: 11px 12px;
-  background: rgba(28, 36, 80, 0.58);
+  background: var(--bg-card);
   border: 1px solid rgba(var(--accent-rgb), 0.16);
   border-radius: 10px;
 }

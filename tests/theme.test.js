@@ -25,7 +25,7 @@ function i18nSourceBlock(source, locale) {
 test("theme boot script applies a closed allow-list before styles load", function () {
   var bootStart = html.indexOf("<script>");
   var bootEnd = html.indexOf("</script>");
-  var cssLink = html.indexOf('href="css/styles.css?v=20260813-parchment-chrome"');
+  var cssLink = html.indexOf('href="css/styles.css?v=20260813-parchment-panels"');
   assert.ok(bootStart > 0 && bootEnd > bootStart);
   assert.ok(cssLink > bootEnd, "FOUC boot must run before styles.css");
   var boot = html.slice(bootStart, bootEnd);
@@ -77,6 +77,51 @@ test("theme tokens restyle chrome without filtering protected card faces", funct
   assert.doesNotMatch(css, /\.deck-card-m\s*\{[^}]*filter:/);
   assert.doesNotMatch(css, /\.deck-card-lxxxi\s*\{[^}]*filter:/);
   assert.match(css, /M 牌 \/ LXXXI 牌堆：真实牌背图，保持中性原样/);
+});
+
+function cssRule(source, selector) {
+  var start = source.indexOf(selector);
+  assert.ok(start !== -1, "missing selector " + selector);
+  var open = source.indexOf("{", start);
+  var close = source.indexOf("}", open);
+  return source.slice(open, close + 1);
+}
+
+var NIGHT_NAVY = /rgba\(\s*(?:19,\s*26,\s*60|28,\s*36,\s*80|24,\s*31,\s*68|15,\s*20,\s*46|21,\s*37,\s*73|14,\s*24,\s*52|13,\s*32,\s*65|20,\s*22,\s*51)/;
+
+test("reading, history, and announcement panels follow theme tokens instead of night navy", function () {
+  var positionGuide = cssRule(css, ".position-guide {");
+  var resultCard = cssRule(css, ".result-card {");
+  var resultPair = cssRule(css, ".result-pair-card {");
+  var resultSuit = cssRule(css, ".result-suit {");
+  var historyItem = cssRule(css, ".history-list-item {");
+  var historyDef = cssRule(css, ".history-definition-row {");
+  var historyDetail = cssRule(css, ".history-detail-card {");
+  var announcementItem = cssRule(css, ".announcement-item {");
+  var slotRule = cssRule(css, ".slot-draw-rule {");
+  [positionGuide, resultCard, resultPair, resultSuit, historyItem, historyDef, historyDetail, announcementItem, slotRule].forEach(function (rule) {
+    assert.doesNotMatch(rule, NIGHT_NAVY);
+  });
+  assert.match(positionGuide, /background:\s*var\(--panel-bg\)/);
+  assert.match(resultCard, /background:\s*var\(--panel-bg\)/);
+  assert.match(resultPair, /background:\s*var\(--panel-bg\)/);
+  assert.match(css, /\.stack-layer-minor\s*\{[^}]*background:\s*var\(--panel-bg-alt\)/);
+  assert.match(resultSuit, /background:\s*var\(--btn-secondary-bg\)/);
+  assert.match(historyItem, /background:\s*var\(--bg-card\)/);
+  assert.match(historyDef, /background:\s*var\(--bg-card\)/);
+  assert.match(historyDetail, /background:\s*var\(--bg-card\)/);
+  assert.match(announcementItem, /background:\s*var\(--bg-card\)/);
+  assert.match(slotRule, /background:\s*var\(--btn-secondary-bg\)/);
+  var freeBoardCss = fs.readFileSync(path.join(root, "css", "free-board.css"), "utf8");
+  assert.match(freeBoardCss, /\.history-free-board-preview\s*\{[^}]*background:\s*var\(--panel-bg\)/);
+  assert.match(freeBoardCss, /\.history-free-board-card-back\s*\{[^}]*background:\s*var\(--bg-card-back\)/);
+  var parchmentStart = css.indexOf('html[data-theme="parchment"]');
+  var emberStart = css.indexOf('html[data-theme="ember"]');
+  var parchment = css.slice(parchmentStart, emberStart);
+  assert.match(parchment, /--neutral-dark:\s*#f3e6c8/);
+  assert.match(parchment, /--neutral-contain:\s*#efe4cc/);
+  assert.match(parchment, /--panel-bg-alt:/);
+  assert.doesNotMatch(parchment, /--neutral-dark:\s*#0e1018/);
 });
 
 test("parchment settings chrome uses light tokens instead of night indigo", function () {
