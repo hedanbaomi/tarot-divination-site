@@ -46,7 +46,8 @@ test("themed picker resynchronizes after custom confirmation settles", function 
 });
 
 test("Android settings collapse to one bounded column on narrow screens", function () {
-  var css = read("app/src/main/assets/www/css/styles.css");
+  var css = read("app/src/main/assets/www/css/styles.css") +
+    read("app/src/main/assets/www/css/android-shell.css");
   assert.match(css, /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
   assert.match(css, /\.setting-group\s*\{[^}]*min-width:\s*0/);
   assert.match(css, /\.themed-select-trigger\s*\{[^}]*min-width:\s*0[^}]*max-width:\s*100%/);
@@ -80,7 +81,8 @@ test("homepage uses a localized first-launch dialog instead of a native bottom b
 
 test("homepage menu is a right-side sliding drawer and keeps the author quote on the page", function () {
   var html = read("app/src/main/assets/www/index.html");
-  var css = read("app/src/main/assets/www/css/styles.css");
+  var css = read("app/src/main/assets/www/css/styles.css") +
+    read("app/src/main/assets/www/css/android-shell.css");
   var menu = read("app/src/main/assets/www/js/menu.js");
   var mainActivity = read("app/src/main/java/com/quareia/divination/MainActivity.kt");
 
@@ -91,6 +93,7 @@ test("homepage menu is a right-side sliding drawer and keeps the author quote on
   assert.match(html, /data-i18n="home\.quote"/);
   assert.ok(html.indexOf('class="settings"') < html.indexOf('class="app-menu"'));
   assert.ok(html.indexOf('class="author-note"') > html.indexOf('id="resultsSection"'));
+  assert.match(html, /href="css\/android-shell\.css\?v=20260813-themes"/);
   assert.match(css, /\.app-menu\s*\{[\s\S]*transform:\s*translateX\(104%\)/);
   assert.match(css, /\.app-menu\.is-open\s*\{[\s\S]*transform:\s*translateX\(0\)/);
   assert.match(css, /\.menu-backdrop\.is-visible/);
@@ -99,6 +102,30 @@ test("homepage menu is a right-side sliding drawer and keeps the author quote on
   assert.match(mainActivity, /addJavascriptInterface\(AboutBridge/);
   assert.match(mainActivity, /fun setLocale\(locale: String\)/);
   assert.match(mainActivity, /removeJavascriptInterface\("androidAbout"\)/);
+});
+
+test("Android keeps theme switching in the hamburger menu, not reading setup", function () {
+  var html = read("app/src/main/assets/www/index.html");
+  var i18n = read("app/src/main/assets/www/js/i18n.js");
+  var theme = read("app/src/main/assets/www/js/theme.js");
+  var mainActivity = read("app/src/main/java/com/quareia/divination/MainActivity.kt");
+  var settings = html.slice(html.indexOf('id="settings"'), html.indexOf('id="appMenu"'));
+  var menu = html.slice(html.indexOf('id="appMenu"'), html.indexOf('id="menuBackdrop"'));
+
+  assert.doesNotMatch(settings, /data-theme-id|setting-group-theme/);
+  assert.match(menu, /class="menu-theme"/);
+  assert.match(menu, /data-theme-id="celestial"/);
+  assert.match(menu, /data-theme-id="parchment"/);
+  assert.match(menu, /data-theme-id="ember"/);
+  assert.match(menu, /data-theme-id="grove"/);
+  assert.match(html, /src="js\/theme\.js\?v=20260813-themes"/);
+  assert.match(html, /quareia-divination-theme/);
+  assert.match(i18n, /"settings\.theme": "界面主题"/);
+  assert.match(i18n, /"theme\.parchment": "羊皮纸晨光"/);
+  assert.match(i18n, /"theme\.parchment": "Parchment Dawn"/);
+  assert.match(theme, /androidThemeChrome\.set/);
+  assert.match(mainActivity, /addJavascriptInterface\(ThemeChromeBridge/);
+  assert.match(mainActivity, /removeJavascriptInterface\("androidThemeChrome"\)/);
 });
 
 test("language toggle keeps its label and value nodes for runtime localization", function () {

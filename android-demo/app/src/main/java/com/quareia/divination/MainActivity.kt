@@ -72,15 +72,9 @@ class MainActivity : ComponentActivity() {
             ?: UUID.randomUUID().toString().replace("-", "")
         restorePendingHistoryExport(savedInstanceState)
 
-        // Edge-to-edge with a dark, page-matching background (#090d1e from the site meta).
+        // Edge-to-edge; the WebView theme later paints matching system bars.
         WindowCompat.setDecorFitsSystemWindows(window, true)
-        @Suppress("DEPRECATION")
-        window.statusBarColor = Color.parseColor("#090d1e")
-        @Suppress("DEPRECATION")
-        window.navigationBarColor = Color.parseColor("#090d1e")
-        val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.isAppearanceLightStatusBars = false
-        controller.isAppearanceLightNavigationBars = false
+        applyThemeChrome("#060919", light = false)
 
         // Serve bundled assets over a virtual https origin. The default host
         // is treated as a secure context, which the web app needs for fetch().
@@ -91,7 +85,7 @@ class MainActivity : ComponentActivity() {
         )
 
         webView = WebView(this).apply {
-            setBackgroundColor(Color.parseColor("#090d1e"))
+            setBackgroundColor(Color.parseColor("#060919"))
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true            // localStorage powers the history feature
@@ -119,6 +113,7 @@ class MainActivity : ComponentActivity() {
             // through this narrowly scoped bridge. Native chrome does not sit
             // over the homepage anymore.
             addJavascriptInterface(AboutBridge(this@MainActivity), "androidAbout")
+            addJavascriptInterface(ThemeChromeBridge(this@MainActivity), "androidThemeChrome")
 
             webViewClient = QuareiaWebViewClient(
                 publicAssetRoute,
@@ -132,7 +127,7 @@ class MainActivity : ComponentActivity() {
         // Keeping native chrome out of the page prevents a second, mismatched
         // navigation layer from covering the web UI.
         val root = FrameLayout(this).apply {
-            setBackgroundColor(Color.parseColor("#090d1e"))
+            setBackgroundColor(Color.parseColor("#060919"))
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -286,6 +281,7 @@ class MainActivity : ComponentActivity() {
             webView.removeJavascriptInterface("androidTelemetry")
             webView.removeJavascriptInterface("androidHistoryExport")
             webView.removeJavascriptInterface("androidAbout")
+            webView.removeJavascriptInterface("androidThemeChrome")
             webView.destroy()
         }
         if (!isChangingConfigurations) clearPendingHistoryExport()
@@ -388,6 +384,25 @@ class MainActivity : ComponentActivity() {
 
     private fun protectedImageBaseUrl(): String =
         "https://${APP_HOST}${PROTECTED_PREFIX}${lxxxiRouteToken}"
+
+    internal fun applyThemeChrome(color: String, light: Boolean) {
+        val parsed = try {
+            Color.parseColor(color)
+        } catch (_: IllegalArgumentException) {
+            Color.parseColor("#060919")
+        }
+        @Suppress("DEPRECATION")
+        window.statusBarColor = parsed
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = parsed
+        if (this::webView.isInitialized) {
+            webView.setBackgroundColor(parsed)
+            (webView.parent as? View)?.setBackgroundColor(parsed)
+        }
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.isAppearanceLightStatusBars = light
+        controller.isAppearanceLightNavigationBars = light
+    }
 }
 
 /** Bridges the web export payload to Android's user-visible save picker. */
@@ -396,6 +411,17 @@ private class HistoryExportBridge(private val activity: MainActivity) {
     @android.webkit.JavascriptInterface
     fun save(json: String, fileName: String) {
         activity.runOnUiThread { activity.requestHistoryExport(json, fileName) }
+    }
+}
+
+/** Paints system bars to match the WebView theme chosen in the app menu. */
+private class ThemeChromeBridge(private val activity: MainActivity) {
+
+    @android.webkit.JavascriptInterface
+    fun set(color: String, isLight: String) {
+        activity.runOnUiThread {
+            activity.applyThemeChrome(color, isLight == "1" || isLight.equals("true", ignoreCase = true))
+        }
     }
 }
 

@@ -38,6 +38,14 @@ class UpdateCheckerTest {
     }
 
     @Test
+    fun threePartPatchReleaseIsNewerThanInstalledBase() {
+        assertTrue(VersionComparator.isNewer("v1.3.1", "1.3.0"))
+        assertTrue(VersionComparator.isNewer("1.3.1", "1.3"))
+        assertTrue(VersionComparator.equal("v1.3.1", "1.3.1"))
+        assertFalse(VersionComparator.isNewer("1.3.0", "1.3.1"))
+    }
+
+    @Test
     fun hardenedVersionUsesItsNumericCore() {
         assertTrue(VersionComparator.isNewer("v1.2.1", "1.2.0-hardened-local"))
         assertFalse(VersionComparator.isNewer("1.2.0", "1.2.0-hardened-local"))

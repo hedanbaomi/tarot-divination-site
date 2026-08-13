@@ -1,10 +1,10 @@
 /* ==========================================================================
-   星夜秘境 · 可交互月亮
-   - idle：月亮表面纹理缓慢自转（--spin）+ 轻微上下浮动
-   - 按住拖动：移动月亮并带动旋转（横向位移映射为转角）
+   星夜秘境 · 可交互天体（月亮 / 羊皮纸主题下的中世纪太阳）
+   - idle：缓慢自转（--spin）+ 轻微上下浮动
+   - 按住拖动：移动天体并带动旋转（横向位移映射为转角）
    - 松手：惯性滑行 + 自转角速度，摩擦力衰减，边缘轻弹，随后恢复 idle
-   - rAF 驱动、passive 监听、仅 transform；touch-action:none 由 CSS 保证，
-     只有月亮本身接收指针事件，不影响抽牌/滚动/弹窗
+   - 主题切换只换外观，物理与月亮相同
+   - rAF 驱动、passive 监听、仅 transform；touch-action:none 由 CSS 保证
    - prefers-reduced-motion：关闭自转/浮动/惯性，仅保留直接拖动
    ========================================================================== */
 (function () {
@@ -12,7 +12,7 @@
 
   var moon = document.querySelector(".sky-moon");
   if (!moon) return;
-  if (!window.PointerEvent) return;   // 老浏览器优雅降级为静态月亮
+  if (!window.PointerEvent) return;   // 老浏览器优雅降级为静态天体
 
   var reduceMQ = window.matchMedia("(prefers-reduced-motion: reduce)");
   var rm = reduceMQ.matches;
@@ -97,11 +97,9 @@
     x = startX + (e.clientX - startPX);
     y = startY + (e.clientY - startPY);
     if (dt > 0) {
-      // 平滑速度估计（px/ms），供松手后的惯性初速度
       vx = 0.3 * vx + 0.7 * ((e.clientX - lastMX) / dt);
       vy = 0.3 * vy + 0.7 * ((e.clientY - lastMY) / dt);
     }
-    // 拖动带动自转：直接映射，最直觉；reduced-motion 下亦为用户直接操作，保留
     angle += (e.clientX - lastMX) * SPIN_PER_PX;
     lastMX = e.clientX;
     lastMY = e.clientY;
@@ -118,7 +116,7 @@
     if (vy > V_CAP) vy = V_CAP;
     else if (vy < -V_CAP) vy = -V_CAP;
     angVel = vx * SPIN_PER_PX;
-    if (rm) { vx = 0; vy = 0; angVel = 0; }   // reduced-motion：无惯性滑行
+    if (rm) { vx = 0; vy = 0; angVel = 0; }
   }
 
   moon.addEventListener("pointerdown", onDown, { passive: true });
@@ -132,11 +130,16 @@
     clampPos(false);
   }, { passive: true });
 
+  window.addEventListener("quareia:themechange", function () {
+    measure();
+    clampPos(false);
+  });
+
   function frame(t) {
     if (!lastT) lastT = t;
     var dt = t - lastT;
     lastT = t;
-    if (dt > 50) dt = 50;         // 切后台回来不跳变
+    if (dt > 50) dt = 50;
     if (dt < 0) dt = 0;
 
     if (!dragging && !rm) {
@@ -147,12 +150,10 @@
       vy *= Math.pow(FRICTION, steps);
       if (Math.abs(vx) < 0.005) vx = 0;
       if (Math.abs(vy) < 0.005) vy = 0;
-      // 角速度摩擦衰减，并渐近恢复到 idle 自转速度
       angVel *= Math.pow(ANG_FRICTION, steps);
       angVel += (IDLE_SPIN - angVel) * Math.min(1, dt * 0.002);
       angle += angVel * dt;
       clampPos(true);
-      // 静止后浮动缓缓恢复
       var settled = vx === 0 && vy === 0;
       floatAmp += ((settled ? FLOAT_AMP : 0) - floatAmp) * Math.min(1, dt * 0.004);
     } else {
