@@ -82,6 +82,10 @@ html[data-theme="celestial"] {
   --moon-glow-mid: rgba(216, 190, 130, 0.16);
   --moon-glow-far: rgba(140, 130, 200, 0.12);
   --moon-opacity: 0.95;
+  --moon-maria: 168, 148, 105;
+  --moon-maria-hi: 190, 165, 110;
+  --moon-shade: rgba(24, 18, 48, 0.42);
+  --moon-lit: rgba(255, 250, 230, 0.28);
   --nebula-1: rgba(88, 70, 180, 0.20);
   --nebula-2: rgba(56, 84, 175, 0.18);
   --nebula-3: rgba(122, 62, 164, 0.14);
@@ -230,14 +234,18 @@ html[data-theme="ember"] {
   --switch-to: #8a3820;
   --language-border: rgba(232, 176, 120, 0.42);
   --language-color: #f3c49a;
-  --moon-hi: #f8e0c4;
-  --moon-mid: #e8b888;
-  --moon-lo: #d08048;
-  --moon-edge: #b05a28;
-  --moon-glow-near: rgba(240, 160, 90, 0.35);
-  --moon-glow-mid: rgba(200, 90, 40, 0.16);
-  --moon-glow-far: rgba(120, 40, 20, 0.12);
-  --moon-opacity: 0.92;
+  --moon-hi: #ffd4a0;
+  --moon-mid: #ff8c58;
+  --moon-lo: #e86840;
+  --moon-edge: #c44c30;
+  --moon-glow-near: rgba(255, 176, 96, 0.52);
+  --moon-glow-mid: rgba(255, 112, 56, 0.24);
+  --moon-glow-far: rgba(200, 56, 32, 0.12);
+  --moon-opacity: 0.96;
+  --moon-maria: 176, 78, 54;
+  --moon-maria-hi: 204, 104, 72;
+  --moon-shade: rgba(72, 18, 14, 0.36);
+  --moon-lit: rgba(255, 214, 168, 0.34);
   --nebula-1: rgba(180, 70, 36, 0.22);
   --nebula-2: rgba(140, 48, 28, 0.18);
   --nebula-3: rgba(90, 30, 20, 0.16);
@@ -309,6 +317,10 @@ html[data-theme="grove"] {
   --moon-glow-mid: rgba(80, 140, 110, 0.16);
   --moon-glow-far: rgba(40, 90, 70, 0.12);
   --moon-opacity: 0.92;
+  --moon-maria: 140, 148, 96;
+  --moon-maria-hi: 168, 172, 110;
+  --moon-shade: rgba(18, 32, 22, 0.42);
+  --moon-lit: rgba(236, 234, 206, 0.26);
   --nebula-1: rgba(40, 110, 80, 0.22);
   --nebula-2: rgba(30, 80, 70, 0.18);
   --nebula-3: rgba(20, 70, 50, 0.16);
@@ -440,6 +452,8 @@ body::after {
     0 0 80px 28px var(--moon-glow-mid),
     0 0 160px 70px var(--moon-glow-far);
   opacity: var(--moon-opacity);
+  isolation: isolate;
+  overflow: hidden;
   cursor: grab;
   touch-action: none;        /* 按住月亮不触发页面滚动 */
   user-select: none;
@@ -447,9 +461,13 @@ body::after {
   will-change: transform;
 }
 .sky-moon.dragging { cursor: grabbing; }
-.sky-sun { display: none; }
-html[data-theme="parchment"] .sky-sun {
+.sky-sun,
+.sky-sun-blank { display: none; }
+html[data-theme="parchment"] .sky-sun,
+html[data-theme="parchment"] .sky-sun-blank {
   display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -458,6 +476,16 @@ html[data-theme="parchment"] .sky-sun {
   -webkit-user-drag: none;
   transform: rotate(var(--spin, 0deg));
   transform-origin: 50% 50%;
+}
+html[data-theme="parchment"] .sky-sun-blank { z-index: 0; }
+html[data-theme="parchment"] .sky-sun {
+  z-index: 1;
+  opacity: 1;
+  transition: opacity 0.9s ease;
+}
+html[data-theme="parchment"] .sky-moon[data-face="sleeping"] .sky-sun,
+html[data-theme="parchment"] .sky-moon[data-face="hidden"] .sky-sun {
+  opacity: 0;
 }
 html[data-theme="parchment"] .sky-moon {
   width: 120px;
@@ -481,14 +509,15 @@ html[data-theme="parchment"] .sky-moon::after {
   inset: 0;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 30% 34%, rgba(168, 148, 105, 0.5) 0 9%, transparent 10%),
-    radial-gradient(circle at 62% 60%, rgba(190, 165, 110, 0.55) 0 8%, transparent 9%),
-    radial-gradient(circle at 45% 70%, rgba(190, 165, 110, 0.4) 0 5%, transparent 6%),
-    radial-gradient(circle at 72% 30%, rgba(190, 165, 110, 0.4) 0 6%, transparent 7%),
-    radial-gradient(circle at 20% 62%, rgba(190, 165, 110, 0.35) 0 4%, transparent 5%);
+    radial-gradient(circle at 30% 34%, rgba(var(--moon-maria), 0.5) 0 9%, transparent 10%),
+    radial-gradient(circle at 62% 60%, rgba(var(--moon-maria-hi), 0.55) 0 8%, transparent 9%),
+    radial-gradient(circle at 45% 70%, rgba(var(--moon-maria-hi), 0.4) 0 5%, transparent 6%),
+    radial-gradient(circle at 72% 30%, rgba(var(--moon-maria-hi), 0.4) 0 6%, transparent 7%),
+    radial-gradient(circle at 20% 62%, rgba(var(--moon-maria-hi), 0.35) 0 4%, transparent 5%);
   transform: rotate(var(--spin, 0deg));
   will-change: transform;
   pointer-events: none;
+  z-index: 0;
 }
 /* 明暗界线与球面立体感：静止不随自转 */
 .sky-moon::after {
@@ -497,9 +526,91 @@ html[data-theme="parchment"] .sky-moon::after {
   inset: 0;
   border-radius: 50%;
   box-shadow:
-    inset -14px -10px 24px rgba(24, 18, 48, 0.42),
-    inset 5px 6px 14px rgba(255, 250, 230, 0.28);
+    inset -14px -10px 24px var(--moon-shade),
+    inset 5px 6px 14px var(--moon-lit);
   pointer-events: none;
+  z-index: 2;
+}
+
+.sky-face {
+  position: absolute;
+  inset: 2%;
+  z-index: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  transform: rotate(var(--spin, 0deg));
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+.sky-face-art {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  mix-blend-mode: multiply;
+}
+html[data-theme="ember"] .sky-face-art {
+  mix-blend-mode: overlay;
+}
+html[data-theme="celestial"] .sky-face-art[data-theme-face="celestial"],
+html[data-theme="ember"] .sky-face-art[data-theme-face="ember"],
+html[data-theme="grove"] .sky-face-art[data-theme-face="grove"] {
+  display: block;
+}
+.sky-eyelid {
+  position: absolute;
+  z-index: 1;
+  width: 28%;
+  height: 18%;
+  border-radius: 50% 50% 40% 40%;
+  background: linear-gradient(180deg, var(--moon-hi) 0%, var(--moon-mid) 100%);
+  box-shadow: inset 0 -1px 2px var(--moon-shade);
+  transform-origin: 50% 0%;
+  transform: scaleY(1);
+  transition: transform 0.7s ease;
+  pointer-events: none;
+}
+.sky-eyelid-l { left: 18%; top: 28%; }
+.sky-eyelid-r { left: auto; right: 14%; top: 29%; }
+html[data-theme="parchment"] .sky-eyelid {
+  width: 26%;
+  height: 20%;
+  background: linear-gradient(180deg, #e6c56a 0%, #c49a48 100%);
+  box-shadow: inset 0 -1px 2px rgba(90, 60, 20, 0.25);
+  transform: scaleY(0.08);
+}
+html[data-theme="parchment"] .sky-eyelid-l { left: 24%; top: 25%; }
+html[data-theme="parchment"] .sky-eyelid-r { left: auto; right: 20%; top: 25%; }
+.sky-moon[data-face="waking"] .sky-face,
+.sky-moon[data-face="shown"] .sky-face {
+  opacity: 1;
+}
+.sky-moon[data-face="sleeping"] .sky-face,
+.sky-moon[data-face="hidden"] .sky-face {
+  opacity: 0;
+}
+.sky-moon[data-face="shown"] .sky-eyelid {
+  transform: scaleY(0.08);
+}
+.sky-moon[data-face="waking"] .sky-eyelid,
+.sky-moon[data-face="sleeping"] .sky-eyelid,
+.sky-moon[data-face="hidden"] .sky-eyelid {
+  transform: scaleY(1);
+}
+html[data-theme="parchment"] .sky-face {
+  inset: 24%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sky-face,
+  .sky-sun,
+  .sky-eyelid { transition: none; }
 }
 
 /* 流星：转瞬即逝的斜向划落，长周期 + 短可见窗 */
@@ -2444,9 +2555,9 @@ body.choice-open { overflow: hidden; }
     top: 46px;
     right: 14px;
     box-shadow:
-      0 0 16px 4px rgba(246, 226, 160, 0.32),
-      0 0 56px 20px rgba(216, 190, 130, 0.15),
-      0 0 120px 52px rgba(140, 130, 200, 0.1);
+      0 0 16px 4px var(--moon-glow-near),
+      0 0 56px 20px var(--moon-glow-mid),
+      0 0 120px 52px var(--moon-glow-far);
   }
   html[data-theme="parchment"] .sky-moon {
     width: 92px;

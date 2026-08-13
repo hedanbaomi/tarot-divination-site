@@ -25,7 +25,7 @@ function i18nSourceBlock(source, locale) {
 test("theme boot script applies a closed allow-list before styles load", function () {
   var bootStart = html.indexOf("<script>");
   var bootEnd = html.indexOf("</script>");
-  var cssLink = html.indexOf('href="css/styles.css?v=20260813-parchment-panels"');
+  var cssLink = html.indexOf('href="css/styles.css?v=20260813-sun-blank"');
   assert.ok(bootStart > 0 && bootEnd > bootStart);
   assert.ok(cssLink > bootEnd, "FOUC boot must run before styles.css");
   var boot = html.slice(bootStart, bootEnd);
@@ -138,10 +138,49 @@ test("parchment settings chrome uses light tokens instead of night indigo", func
   assert.doesNotMatch(css, /\.choice-option\s*\{[^}]*background:\s*rgba\(24, 28, 55/);
 });
 
-test("parchment theme uses the engraved sun sprite with the same pinball motion as the moon", function () {
+test("moon and sun share a ten-tap face easter egg with wake and sleep animation", function () {
+  var sky = fs.readFileSync(path.join(root, "js", "celestial-sky.js"), "utf8");
+  var icons = path.join(root, "assets", "icons");
+  assert.match(html, /class="sky-face"/);
+  assert.match(html, /class="sky-eyelid sky-eyelid-l"/);
+  assert.match(html, /celestial-sky\.js\?v=20260813-sun-blank/);
+  THEMES.filter(function (id) { return id !== "parchment"; }).forEach(function (id) {
+    assert.match(html, new RegExp('data-theme-face="' + id + '"'));
+    assert.ok(fs.existsSync(path.join(icons, "sky-face-" + id + ".png")));
+  });
+  assert.doesNotMatch(html, /data-theme-face="parchment"|sky-face-parchment\.png/);
+  assert.match(sky, /var TAP_NEED = 10/);
+  assert.match(sky, /var TAP_WINDOW = 60000/);
+  assert.match(sky, /maxDist < TAP_SLOP && held < TAP_MS/);
+  assert.match(sky, /function wakeFace\(/);
+  assert.match(sky, /function sleepFace\(/);
+  assert.match(sky, /setFace\("waking"\)/);
+  assert.match(sky, /setFace\("sleeping"\)/);
+  assert.match(sky, /FACE_WAKE_MS/);
+  assert.match(sky, /quareia:themechange[\s\S]*resetFace\(/);
+  assert.match(css, /\.sky-face\s*\{[^}]*transition:\s*opacity/);
+  assert.match(css, /\.sky-eyelid\s*\{[^}]*transform:\s*scaleY\(1\)/);
+  assert.match(css, /\.sky-eyelid\s*\{[^}]*var\(--moon-hi\)/);
+  assert.match(css, /\.sky-face-art\s*\{[^}]*mix-blend-mode:\s*multiply/);
+  assert.match(css, /\[data-face="shown"\] \.sky-eyelid[\s\S]*scaleY\(0\.08\)/);
+  assert.match(html, /class="sky-sun-blank"/);
+  assert.match(html, /src="assets\/icons\/parchment-sun-blank\.png"/);
+  assert.ok(fs.existsSync(path.join(icons, "parchment-sun-blank.png")));
+  assert.ok(fs.existsSync(path.join(icons, "parchment-sun.png")));
+  assert.match(css, /html\[data-theme="parchment"\] \.sky-sun-blank/);
+  assert.match(css, /\[data-face="hidden"\] \.sky-sun/);
+  assert.doesNotMatch(css, /sky-face-veil/);
+  assert.doesNotMatch(html, /sky-face-veil|celestial-face\.png|sky-face-parchment/);
+  assert.match(css, /prefers-reduced-motion: reduce[\s\S]*\.sky-eyelid \{ transition: none/);
+  assert.doesNotMatch(sky, /var FLOAT_AMP = [^5]/);
+  assert.match(sky, /var BOUNCE = 0\.42/);
+});
+
+test("parchment sun uses the painted disk and keeps the same physics as the moon", function () {
   var sky = fs.readFileSync(path.join(root, "js", "celestial-sky.js"), "utf8");
   assert.match(html, /class="sky-sun"/);
   assert.match(html, /src="assets\/icons\/parchment-sun\.png"/);
+  assert.match(html, /src="assets\/icons\/parchment-sun-blank\.png"/);
   assert.match(css, /html\[data-theme="parchment"\] \.sky-sun/);
   assert.match(css, /html\[data-theme="parchment"\] \.sky-moon::before/);
   assert.match(css, /transform: rotate\(var\(--spin/);
@@ -151,4 +190,24 @@ test("parchment theme uses the engraved sun sprite with the same pinball motion 
   assert.match(sky, /angVel = vx \* SPIN_PER_PX/);
   assert.doesNotMatch(sky, /parchmentTheme/);
   assert.doesNotMatch(sky, /settleForSun/);
+});
+
+test("ember moon is a copper blood moon using the shared CSS crater texture", function () {
+  var emberStart = css.indexOf('html[data-theme="ember"]');
+  var groveStart = css.indexOf('html[data-theme="grove"]');
+  var ember = css.slice(emberStart, groveStart);
+  assert.match(ember, /--moon-hi:\s*#ffd4a0/);
+  assert.match(ember, /--moon-mid:\s*#ff8c58/);
+  assert.match(ember, /--moon-lo:\s*#e86840/);
+  assert.match(ember, /--moon-edge:\s*#c44c30/);
+  assert.match(ember, /--moon-maria:\s*176, 78, 54/);
+  assert.match(ember, /rgba\(255, 176, 96/);
+  assert.doesNotMatch(ember, /#ff0000|#e02020|#ff0|#d4783c|#8a2e24|#5c1c18|#ffc484|#f07848/);
+  assert.doesNotMatch(html, /sky-ember-moon|ember-blood-moon\.png/);
+  assert.doesNotMatch(css, /ember-blood-moon\.png/);
+  assert.match(css, /\.sky-moon::before\s*\{[^}]*var\(--moon-maria/);
+  assert.match(css, /\.sky-moon::after\s*\{[^}]*var\(--moon-shade\)/);
+  assert.match(css, /@media\s*\(max-width:\s*480px\)[\s\S]*?\.sky-moon\s*\{[^}]*var\(--moon-glow-near\)/);
+  assert.doesNotMatch(css, /html\[data-theme="ember"\] \.sky-moon\s*\{/);
+  assert.match(css, /\.sky-moon\s*\{[^}]*width:\s*82px/);
 });
