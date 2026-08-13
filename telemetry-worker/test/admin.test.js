@@ -175,6 +175,18 @@ test("invalid severities, platforms, statuses are rejected", async () => {
   assert.equal((await createAnnouncement(validBody({ status: "archived" }))).status, 400);
 });
 
+test("admin can create a mini-program-only announcement", async () => {
+  const response = await createAnnouncement(validBody({ platform: "miniprogram" }));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).announcement.platform, "miniprogram");
+});
+
+test("admin can create a mini-game-only announcement", async () => {
+  const response = await createAnnouncement(validBody({ platform: "minigame" }));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).announcement.platform, "minigame");
+});
+
 test("non-HTTPS action URLs are rejected", async () => {
   for (const url of ["http://example.com/x", "javascript:alert(1)", "ftp://x"]) {
     const response = await createAnnouncement(validBody({ action_url: url }));
@@ -252,17 +264,17 @@ test("stats report per-window active installs and per-window version distributio
   // Per-window distribution: each window counts only its own active installs
   // and percentages use that window's active total as the denominator.
   assert.deepEqual(stats.version_distribution.active_24h, [
-    { version_code: 4, app_version: "1.2.0", installs: 1, percent: 50 },
-    { version_code: 2, app_version: "1.2.0", installs: 1, percent: 50 }
+    { platform: "android", env_version: "", version_code: 4, app_version: "1.2.0", installs: 1, percent: 50 },
+    { platform: "android", env_version: "", version_code: 2, app_version: "1.2.0", installs: 1, percent: 50 }
   ]);
   assert.deepEqual(stats.version_distribution.active_7d, [
-    { version_code: 4, app_version: "1.2.0", installs: 2, percent: 66.7 },
-    { version_code: 2, app_version: "1.2.0", installs: 1, percent: 33.3 }
+    { platform: "android", env_version: "", version_code: 4, app_version: "1.2.0", installs: 2, percent: 66.7 },
+    { platform: "android", env_version: "", version_code: 2, app_version: "1.2.0", installs: 1, percent: 33.3 }
   ]);
   assert.deepEqual(stats.version_distribution.active_30d, [
-    { version_code: 4, app_version: "1.2.0", installs: 2, percent: 50 },
-    { version_code: 3, app_version: "1.2.0", installs: 1, percent: 25 },
-    { version_code: 2, app_version: "1.2.0", installs: 1, percent: 25 }
+    { platform: "android", env_version: "", version_code: 4, app_version: "1.2.0", installs: 2, percent: 50 },
+    { platform: "android", env_version: "", version_code: 3, app_version: "1.2.0", installs: 1, percent: 25 },
+    { platform: "android", env_version: "", version_code: 2, app_version: "1.2.0", installs: 1, percent: 25 }
   ]);
   // A device inactive for 60 days never enters the 30-day distribution.
   const all30d = stats.version_distribution.active_30d
@@ -304,7 +316,7 @@ test("version distribution reflects the most recently reported version", async (
   const stats = await response.json();
   assert.equal(stats.known_installs_90d, 2);
   assert.deepEqual(stats.version_distribution.active_30d, [
-    { version_code: 4, app_version: "1.2.0", installs: 2, percent: 100 }
+    { platform: "android", env_version: "", version_code: 4, app_version: "1.2.0", installs: 2, percent: 100 }
   ]);
 });
 
@@ -329,8 +341,31 @@ test("version distribution keeps legacy installs alongside new clients", async (
   // Legacy installs (version_code 0) are grouped under their app_version and
   // counted in the percentages; they are never dropped.
   assert.deepEqual(stats.version_distribution.active_30d, [
-    { version_code: 4, app_version: "1.2.0", installs: 2, percent: 66.7 },
-    { version_code: 0, app_version: "1.1", installs: 1, percent: 33.3 }
+    { platform: "android", env_version: "", version_code: 4, app_version: "1.2.0", installs: 2, percent: 66.7 },
+    { platform: "android", env_version: "", version_code: 0, app_version: "1.1", installs: 1, percent: 33.3 }
+  ]);
+});
+
+test("version distribution never merges Mini Game versions into Android rows", async () => {
+  const db = createMockD1();
+  const nowSec = Math.floor(now / 1000);
+  db.exec(
+    `INSERT INTO install_state
+       (install_hash, app_version, version_code, locale, android_major, platform, env_version,
+        first_seen_at, last_seen_at)
+     VALUES ('${"a".repeat(64)}', '1.0.0', 0, 'zh-CN', 35, 'android', '', ${nowSec}, ${nowSec}),
+            ('${"b".repeat(64)}', '1.0.0', 0, 'zh-CN', 0, 'minigame', 'release', ${nowSec}, ${nowSec})`
+  );
+
+  const response = await worker.fetch(
+    makeRequest("https://telemetry.test/admin/api/stats", { token: TOKEN }),
+    makeEnv({ db, adminToken: TOKEN })
+  );
+  assert.equal(response.status, 200);
+  const stats = await response.json();
+  assert.deepEqual(stats.version_distribution.active_30d, [
+    { platform: "android", env_version: "", version_code: 0, app_version: "1.0.0", installs: 1, percent: 50 },
+    { platform: "minigame", env_version: "release", version_code: 0, app_version: "1.0.0", installs: 1, percent: 50 }
   ]);
 });
 

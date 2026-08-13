@@ -135,7 +135,7 @@ test("Analytics Engine arrays use the fixed order and one index", async () => {
   assert.deepEqual(analytics.points, [{
     blobs: [
       "reading_completed", "a".repeat(64), "lxxxi", "GB", "GB-ENG", "England",
-      "2.4.6", "en-US"
+      "2.4.6", "en-US", "android", ""
     ],
     doubles: [8, 34],
     indexes: ["a".repeat(64)]
@@ -149,7 +149,7 @@ test("non-reading events use empty deck and zero card-count slots", async () => 
   await post(event, makeEnv(analytics));
 
   assert.deepEqual(analytics.points[0].blobs, [
-    "install_seen", "b".repeat(64), "", "TW", "", "", "1.0", "zh-CN"
+    "install_seen", "b".repeat(64), "", "TW", "", "", "1.0", "zh-CN", "android", ""
   ]);
   assert.deepEqual(analytics.points[0].doubles, [0, 35]);
   assert.deepEqual(analytics.points[0].indexes, ["b".repeat(64)]);
@@ -243,7 +243,7 @@ test("Cloudflare country and first-level subdivision fields are mapped", async (
 
   assert.equal(response.status, 204);
   assert.deepEqual(analytics.points[0].blobs, [
-    "install_seen", "d".repeat(64), "", "CN", "CN-BJ", "Beijing", "1.0", "zh-CN"
+    "install_seen", "d".repeat(64), "", "CN", "CN-BJ", "Beijing", "1.0", "zh-CN", "android", ""
   ]);
 });
 
@@ -280,11 +280,12 @@ test("region names are capped and forbidden geo fields are never written", async
   );
 
   assert.equal(response.status, 204);
-  assert.equal(analytics.points[0].blobs.length, 8);
+  assert.equal(analytics.points[0].blobs.length, 10);
   assert.equal(analytics.points[0].blobs[5], "R".repeat(64));
   assert.equal(JSON.stringify(analytics.points[0]), JSON.stringify({
     blobs: [
-      "install_seen", "f".repeat(64), "", "US", "US-CA", "R".repeat(64), "1.0", "zh-CN"
+      "install_seen", "f".repeat(64), "", "US", "US-CA", "R".repeat(64), "1.0", "zh-CN",
+      "android", ""
     ],
     doubles: [0, 35],
     indexes: ["f".repeat(64)]
@@ -418,4 +419,66 @@ test("health remains available without a telemetry binding", async () => {
 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true });
+});
+
+test("mini-program events omit Android fields and retain only platform-safe reading metrics", async () => {
+  const analytics = mockAnalytics();
+  const event = makeEvent("reading_completed", {
+    platform: "miniprogram",
+    env_version: "trial",
+    app_version: "0.0.0",
+    deck_type: "tarot",
+    card_count: 5
+  });
+  delete event.android_major;
+
+  const response = await post(event, makeEnv(analytics));
+
+  assert.equal(response.status, 204);
+  assert.deepEqual(analytics.points[0].blobs.slice(8), ["miniprogram", "trial"]);
+  assert.deepEqual(analytics.points[0].doubles, [5, 0]);
+  const serialized = JSON.stringify(analytics.points[0]);
+  assert.doesNotMatch(serialized, /card_name|card_id|question|history/);
+});
+
+test("mini-program schema requires a known environment and still rejects content fields", async () => {
+  const base = makeEvent("install_seen", { platform: "miniprogram" });
+  delete base.android_major;
+  assert.equal((await post(base, makeEnv())).status, 400);
+  assert.match(await (await post({ ...base, env_version: "production" }, makeEnv())).text(), /invalid_env_version/);
+  assert.match(await (await post({ ...base, env_version: "release", question: "private" }, makeEnv())).text(), /unexpected_field:question/);
+
+  const active = { ...base, event: "app_active", env_version: "release" };
+  assert.match(await (await post({ ...active, android_major: 35 }, makeEnv())).text(), /invalid_android_major/);
+  assert.match(await (await post({ ...active, android_major: null }, makeEnv())).text(), /invalid_field:android_major/);
+  assert.match(await (await post({ ...active, version_code: 4 }, makeEnv())).text(), /invalid_version_code/);
+  assert.match(await (await post({ ...active, version_code: null }, makeEnv())).text(), /invalid_field:version_code/);
+});
+
+test("mini-game events use their own platform and the same closed WeChat environment contract", async () => {
+  const analytics = mockAnalytics();
+  const event = makeEvent("app_active", {
+    platform: "minigame",
+    env_version: "release",
+    app_version: "1.0.0"
+  });
+  delete event.android_major;
+  delete event.version_code;
+
+  const response = await post(event, makeEnv(analytics));
+  assert.equal(response.status, 204);
+  assert.deepEqual(analytics.points[0].blobs.slice(8), ["minigame", "release"]);
+  assert.equal(analytics.points[0].doubles[1], 0);
+
+  const invalid = { ...event, env_version: "production" };
+  assert.match(await (await post(invalid, makeEnv())).text(), /invalid_env_version/);
+
+  const fakeAndroidApi = { ...event, android_major: 35 };
+  assert.match(await (await post(fakeAndroidApi, makeEnv())).text(), /invalid_android_major/);
+  assert.match(await (await post({ ...event, android_major: null }, makeEnv())).text(), /invalid_field:android_major/);
+
+  const fakeAndroidVersion = { ...event, version_code: 4 };
+  assert.match(await (await post(fakeAndroidVersion, makeEnv())).text(), /invalid_version_code/);
+  assert.match(await (await post({ ...event, version_code: null }, makeEnv())).text(), /invalid_field:version_code/);
+  assert.match(await (await post({ ...event, platform: null }, makeEnv())).text(), /invalid_field:platform/);
 });

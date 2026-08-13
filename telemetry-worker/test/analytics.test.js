@@ -61,6 +61,9 @@ function upstreamResponse(rows, { status = 200, body, headers } = {}) {
 // to deviate from the happy path override specific queries before falling back
 // to these rows.
 function upstreamRowsFor(sql) {
+  if (sql.includes("blob9")) {
+    return [{ value: "android", count: 3 }];
+  }
   if (sql.includes("COUNT(DISTINCT index1)")) {
     return [{ active_estimate: 3 }];
   }
@@ -92,6 +95,9 @@ function installDefaultAnalyticsFetch({ onCall } = {}) {
     if (onCall) return onCall(call, calls.length);
 
     const sql = String(init.body);
+    if (sql.includes("blob9")) {
+      return upstreamResponse([{ value: "android", count: 3 }]);
+    }
     if (sql.includes("COUNT(DISTINCT index1)")) {
       return upstreamResponse([{ active_estimate: 3 }]);
     }
@@ -132,12 +138,13 @@ test("analytics returns weighted summary, fixed distributions, and a UTC daily t
   assert.equal(result.active_estimate_meta.estimated, true);
   assert.deepEqual(result.active_estimate_meta.event_types, ["daily_active", "app_active"]);
   assert.equal(result.reading_completed_average_card_count, 3.5);
-  for (const dimension of ["deck_type", "event", "app_version", "locale", "country", "subdivision"]) {
+  for (const dimension of ["platform", "deck_type", "event", "app_version", "locale", "country", "subdivision"]) {
     assert.ok(result.distributions[dimension]);
     assert.ok(Array.isArray(result.distributions[dimension].rows));
     assert.equal(typeof result.distributions[dimension].truncated, "boolean");
   }
   assert.equal(result.distributions.deck_type.rows[0].value, "tarot");
+  assert.equal(result.distributions.platform.rows[0].value, "android");
   assert.equal(result.distributions.event.rows[0].value, "install_seen");
   assert.equal(result.distributions.app_version.basis, "first_report_snapshot");
   assert.equal(result.distributions.locale.basis, "first_report_snapshot");
@@ -179,7 +186,7 @@ test("analytics accepts only 24h, 7d, and 30d and interpolates only fixed window
     module: "analytics",
     allowed_windows: ["24h", "7d", "30d"]
   });
-  assert.equal(calls.length, 9);
+  assert.equal(calls.length, 10);
 });
 
 test("analytics authenticates before doing any upstream work", async () => {
@@ -396,6 +403,74 @@ test("reading_metrics SQL is a direct weighted average without an outer IF", () 
   assert.doesNotMatch(queries.reading_metrics, /AS reading_completed/);
 });
 
+test("platform analytics groups active installs and falls back old empty slots to android", () => {
+  const queries = buildAnalyticsQueries("24h");
+  assert.match(queries.platform, /if\(blob9 = '', 'android', blob9\)/);
+  assert.match(queries.platform, /COUNT\(DISTINCT index1\) AS count/);
+  assert.match(queries.platform, /daily_active/);
+  assert.match(queries.platform, /app_active/);
+});
+
+test("analytics platform filter is closed and scopes every fixed query", async () => {
+  const allQueries = buildAnalyticsQueries("24h", "all");
+  const androidQueries = buildAnalyticsQueries("24h", "android");
+  const miniQueries = buildAnalyticsQueries("24h", "miniprogram");
+  const gameQueries = buildAnalyticsQueries("24h", "minigame");
+  assert.ok(allQueries && androidQueries && miniQueries && gameQueries);
+  assert.equal(buildAnalyticsQueries("24h", "web"), null);
+  Object.values(androidQueries).forEach((sql) => {
+    assert.match(sql, /if\(blob9 = '', 'android', blob9\) = 'android'/);
+  });
+  Object.values(miniQueries).forEach((sql) => {
+    assert.match(sql, /blob9 = 'miniprogram'/);
+  });
+  Object.values(gameQueries).forEach((sql) => {
+    assert.match(sql, /blob9 = 'minigame'/);
+  });
+
+  const calls = installDefaultAnalyticsFetch();
+  const response = await worker.fetch(
+    makeRequest("https://telemetry.test/admin/api/analytics?window=24h&platform=miniprogram", {
+      token: ADMIN_TOKEN,
+      ip: "198.51.100.44"
+    }),
+    analyticsEnv()
+  );
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.platform, "miniprogram");
+  assert.ok(calls.length > 0);
+  calls.forEach(({ init }) => assert.match(String(init.body), /blob9 = 'miniprogram'/));
+
+  const gameCalls = installDefaultAnalyticsFetch();
+  const gameResponse = await worker.fetch(
+    makeRequest("https://telemetry.test/admin/api/analytics?window=7d&platform=minigame", {
+      token: ADMIN_TOKEN,
+      ip: "198.51.100.46"
+    }),
+    analyticsEnv()
+  );
+  assert.equal(gameResponse.status, 200);
+  const gameResult = await gameResponse.json();
+  assert.equal(gameResult.platform, "minigame");
+  assert.ok(gameCalls.length > 0);
+  gameCalls.forEach(({ init }) => assert.match(String(init.body), /blob9 = 'minigame'/));
+
+  const invalid = await worker.fetch(
+    makeRequest("https://telemetry.test/admin/api/analytics?window=24h&platform=web", {
+      token: ADMIN_TOKEN,
+      ip: "198.51.100.45"
+    }),
+    analyticsEnv()
+  );
+  assert.equal(invalid.status, 400);
+  assert.deepEqual(await invalid.json(), {
+    error: "invalid_platform",
+    module: "analytics",
+    allowed_platforms: ["all", "android", "miniprogram", "minigame"]
+  });
+});
+
 test("no reading data yields a null average without marking the section failed", async () => {
   globalThis.fetch = async (_url, init) => {
     const sql = String(init.body);
@@ -463,7 +538,7 @@ test("analytics returns 503 available=false only when every section fails", asyn
   assert.equal(result.available, false);
   assert.equal(result.partial, false);
   assert.equal(result.error, "analytics_unavailable");
-  assert.equal(result.failed_sections.length, 9);
+  assert.equal(result.failed_sections.length, 10);
   assert.equal(result.install_seen, null);
   assert.equal(result.reading_completed, null);
   assert.equal(result.active_estimate, null);

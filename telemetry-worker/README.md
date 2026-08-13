@@ -1,7 +1,7 @@
 # Quareia Telemetry Worker
 
 Anonymous, opt-out usage-statistics ingest for the **Quareia Divination Android
-app**. It stores aggregate signals only: active-device events, deck usage, and
+app, WeChat Mini Program, and WeChat Mini Game**. It stores aggregate signals only: active-device events, deck usage, and
 completed-reading counts. It never stores raw IP addresses, request bodies,
 card faces, card names, orientations, spread layouts, questions, notes, or
 local history.
@@ -45,10 +45,12 @@ Every event must carry these fields:
 |---|---|---|
 | `schema_version` | int | Must be exactly `1`. |
 | `event` | string | `install_seen`, `daily_active`, `reading_completed`, or `app_active`. |
-| `install_hash` | string | 64-character lowercase hexadecimal SHA-256 of a random per-install UUID; the raw UUID is never sent. |
-| `app_version` | string | Android app version name. |
+| `install_hash` | string | 64-character lowercase hexadecimal pseudonymous per-install identifier; never an account ID or device fingerprint. |
+| `app_version` | string | Android app version name, or the WeChat runtime release version (`0.0.0` when unavailable). |
 | `locale` | string | BCP-47 language tag, such as `zh-CN`. |
-| `android_major` | int | Inclusive range `1..100`. |
+| `platform` | string | Optional for backward compatibility; omitted means `android`. Otherwise `android`, `miniprogram`, or `minigame`. |
+| `env_version` | string | Required for `miniprogram` and `minigame`: `develop`, `trial`, or `release`. Omitted for Android. |
+| `android_major` | int | Android only, inclusive range `1..100`; must be omitted by both WeChat runtimes. |
 
 `reading_completed` additionally carries:
 
@@ -61,7 +63,7 @@ Every event must carry these fields:
 
 | Field | Type | Notes |
 |---|---|---|
-| `version_code` | int | Android `versionCode`, inclusive range `1..2147483647`. |
+| `version_code` | int | Required for Android (`1..2147483647`); must be omitted by a WeChat client. The server owns the internal `0` sentinel. |
 
 Any field not listed above is rejected with HTTP `400`. This includes card IDs,
 card names, orientations, positions, questions, notes, history, raw IP, and
@@ -90,16 +92,17 @@ at all.
 
 ## D1 schema
 
-See `migrations/0001_init.sql`. Two tables:
+See `migrations/0001_init.sql` and `migrations/0002_miniprogram_platform.sql`. Two tables:
 
 - `announcements` — id, revision (incremented on every edit/publish/withdraw),
   status (`draft`/`published`/`withdrawn`), severity
   (`info`/`important`/`update`), zh/en title/body/button, optional HTTPS-only
-  `action_url`, platform (`all`/`android`/`web`), min/max `version_code`,
+  `action_url`, platform (`all`/`android`/`web`/`miniprogram`/`minigame`), min/max `version_code`,
   `starts_at`/`ends_at` (epoch seconds, `0` = unlimited), `created_at`,
   `updated_at`. All content is plain text; the client never renders HTML.
 - `install_state` — `install_hash` (primary key), `app_version`,
-  `version_code`, `locale`, `android_major`, `first_seen_at`, `last_seen_at`.
+  `version_code`, `locale`, `android_major`, `platform`, `env_version`,
+  `first_seen_at`, `last_seen_at`. Existing rows migrate as `platform=android`.
   No raw IP, IP digest, User-Agent, device model, city, card, spread, question,
   note, or history is ever stored. The daily cron deletes rows inactive for
   more than 90 days.
@@ -111,7 +114,7 @@ GET /v1/announcements?platform=android&version_code=4&locale=zh-CN
 ```
 
 Returns only announcements that are `published`, already started, not expired,
-and matching the platform (`android`/`web`, plus `all`) and version range.
+and matching the platform (`android`/`web`/`miniprogram`/`minigame`, plus `all`) and version range.
 Results are ordered by severity (`update` > `important` > `info`), then publish
 time, then id. The response is a stable schema:
 
@@ -151,8 +154,8 @@ strings, logs, or client storage other than `sessionStorage` in the admin page.
 | `PUT` | `/admin/api/announcements/:id` | Update; `revision` and `updated_at` bump. |
 | `POST` | `/admin/api/announcements/:id/publish` | Set `published`; `revision` bumps. |
 | `POST` | `/admin/api/announcements/:id/withdraw` | Set `withdrawn`; `revision` bumps. |
-| `GET` | `/admin/api/stats` | Active installs in the last 24h/7d/30d windows, a per-window "24小时/7天/30天活跃版本分布" (`version_distribution.active_24h/7d/30d`) counting only installs whose `last_seen_at` falls inside each window, with percentages against that window's active total, plus `known_installs_90d` — the total install records seen in the last 90 days, deliberately not an active-version count. Rows with `version_code 0` are legacy clients without a known version code; they are labelled "未知/旧客户端" and still counted under their `app_version`. |
-| `GET` | `/admin/api/analytics?window=24h\|7d\|30d` | Read-only historical Analytics Engine summary and distributions. The window is a strict allow-list; arbitrary SQL, fields, and table names are never accepted. |
+| `GET` | `/admin/api/stats` | Active installs in the last 24h/7d/30d windows, per-window version distributions grouped by platform, WeChat environment, and app version, plus `platform_distribution` and `known_installs_90d`. A `version_code` of `0` is labelled legacy/unknown only for Android; WeChat rows use their `app_version` and environment. |
+| `GET` | `/admin/api/analytics?window=24h\|7d\|30d&platform=all\|android\|miniprogram\|minigame` | Read-only historical Analytics Engine summary and distributions. Window and platform are strict allow-lists, so the admin can inspect either WeChat runtime's active, deck and coarse geographic distributions without accepting arbitrary SQL, fields, or table names. |
 
 Statistics wording is always "活跃安装数/活跃设备数" (active installs /
 active devices), never exact user counts: the numbers come from 6-hourly
@@ -217,8 +220,10 @@ The worker writes one data point for each accepted event. Arrays are positional:
 |  | `blob6` | Cloudflare first-level subdivision name, capped at 64 characters, or `""` |
 |  | `blob7` | `app_version` |
 |  | `blob8` | `locale` |
+|  | `blob9` | `platform`; historical empty slots are interpreted as `android` by admin analytics |
+|  | `blob10` | WeChat `env_version`, or `""` for Android |
 | `doubles` | `double1` | `card_count`, or `0` for non-reading events |
-|  | `double2` | `android_major` |
+|  | `double2` | `android_major`, or `0` for a WeChat client |
 | `indexes` | `index1` | `install_hash` — the only index |
 
 Analytics Engine currently accepts an ordered array with one sampling index;

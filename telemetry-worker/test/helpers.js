@@ -1,7 +1,7 @@
 // Shared test helpers: a D1-shaped facade over an in-memory SQLite database
 // that executes the real migration SQL, plus request builders.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -16,8 +16,12 @@ const MIGRATIONS_DIR = path.join(
 export function createMockD1() {
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON;");
-  const files = readFileSync(path.join(MIGRATIONS_DIR, "0001_init.sql"), "utf8");
-  db.exec(files);
+  const files = readdirSync(MIGRATIONS_DIR)
+    .filter((name) => /^\d+.*\.sql$/.test(name))
+    .sort();
+  for (const file of files) {
+    db.exec(readFileSync(path.join(MIGRATIONS_DIR, file), "utf8"));
+  }
 
   return {
     prepare(sql) {

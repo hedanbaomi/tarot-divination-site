@@ -118,6 +118,8 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
             <option value="all">all</option>
             <option value="android">android</option>
             <option value="web">web</option>
+            <option value="miniprogram">miniprogram · 微信小程序</option>
+            <option value="minigame">minigame · 微信小游戏端</option>
           </select></div>
           <div><label>状态</label><select id="fStatus">
             <option value="draft">draft</option>
@@ -156,6 +158,10 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
       </div>
       <div class="grid" id="windowCards"></div>
       <div class="card">
+        <h3>按平台与微信运行环境分组</h3>
+        <div id="platformList"></div>
+      </div>
+      <div class="card">
         <h3>按最近上报版本分组的版本分布</h3>
         <div id="versionList"></div>
       </div>
@@ -169,6 +175,13 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
         <button id="historyWindow24h" class="window-choice active" type="button" data-window="24h" aria-pressed="true">24 小时</button>
         <button id="historyWindow7d" class="window-choice" type="button" data-window="7d" aria-pressed="false">7 天</button>
         <button id="historyWindow30d" class="window-choice" type="button" data-window="30d" aria-pressed="false">30 天</button>
+        <label class="muted" for="historyPlatform">平台：</label>
+        <select id="historyPlatform">
+          <option value="all">全部</option>
+          <option value="android">Android</option>
+          <option value="miniprogram">微信小程序</option>
+          <option value="minigame">微信小游戏端</option>
+        </select>
         <button id="refreshHistory" type="button">刷新历史遥测</button>
       </div>
       <p id="historyHint" class="muted" role="status" aria-live="polite">正在加载历史遥测……</p>
@@ -199,6 +212,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     announcements: [],
     editingId: null,
     historyWindow: "24h",
+    historyPlatform: "all",
     analyticsRequestId: 0
   };
   var analyticsWindows = ["24h", "7d", "30d"];
@@ -521,10 +535,17 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
         var line = document.createElement("div");
         line.style.marginTop = "10px";
         var label = document.createElement("div");
-        var versionLabel = row.version_code === 0
+        var platform = row.platform || "android";
+        var environment = (platform === "miniprogram" || platform === "minigame") && row.env_version
+          ? " · " + row.env_version
+          : "";
+        var versionLabel = platform === "android" && row.version_code === 0
           ? "未知/旧客户端"
-          : "versionCode " + row.version_code;
-        label.textContent = versionLabel + " · " + (row.app_version || "?") +
+          : platform === "android"
+            ? "versionCode " + row.version_code
+            : "微信版本";
+        label.textContent = historyPlatformLabel(platform) + environment + " · " +
+          versionLabel + " · " + (row.app_version || "?") +
           " · " + row.installs + " 个安装 · " + row.percent + "%";
         var bar = document.createElement("div");
         bar.className = "bar";
@@ -543,13 +564,43 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
       }
       list.appendChild(block);
     });
+
+    var platformList = $("platformList");
+    platformList.textContent = "";
+    windows.forEach(function (pair) {
+      var block = document.createElement("div");
+      block.className = "card";
+      var title = document.createElement("h3");
+      title.textContent = pair[1].replace("版本", "平台");
+      block.appendChild(title);
+      var rows = data.platform_distribution && data.platform_distribution[pair[0]] || [];
+      rows.forEach(function (row) {
+        var line = document.createElement("div");
+        line.style.marginTop = "10px";
+        var environment = (row.platform === "miniprogram" || row.platform === "minigame") && row.env_version
+          ? " · " + row.env_version
+          : "";
+        line.textContent = row.platform + environment + " · " + row.installs +
+          " 个活跃安装 · " + row.percent + "%";
+        block.appendChild(line);
+      });
+      if (rows.length === 0) {
+        var empty = document.createElement("div");
+        empty.className = "muted";
+        empty.textContent = "该窗口暂无数据";
+        block.appendChild(empty);
+      }
+      platformList.appendChild(block);
+    });
   }
 
   function loadAnalytics() {
     var requestId = ++state.analyticsRequestId;
     var selectedWindow = state.historyWindow;
+    var selectedPlatform = state.historyPlatform;
     updateHistoryWindowControls();
-    $("historyHint").textContent = "正在加载历史遥测（" + historyWindowLabel(selectedWindow) + "）……";
+    $("historyHint").textContent = "正在加载历史遥测（" + historyWindowLabel(selectedWindow) +
+      " · " + historyPlatformLabel(selectedPlatform) + "）……";
     $("historyUnavailable").style.display = "none";
     var controller = typeof AbortController === "function" ? new AbortController() : null;
     var timeoutId = null;
@@ -557,7 +608,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
       timeoutId = setTimeout(function () { controller.abort(); }, 10000);
     }
 
-    api("/admin/api/analytics?window=" + selectedWindow, {
+    api("/admin/api/analytics?window=" + selectedWindow + "&platform=" + encodeURIComponent(selectedPlatform), {
       isolated: true,
       signal: controller ? controller.signal : undefined
     }).then(function (response) {
@@ -574,7 +625,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
           showHistoryUnavailable("历史遥测不可用：Analytics Engine 未返回可用数据。");
           return;
         }
-        renderAnalytics(data, selectedWindow);
+        renderAnalytics(data, selectedWindow, selectedPlatform);
       });
     }).catch(function (error) {
       if (requestId !== state.analyticsRequestId) return;
@@ -599,6 +650,13 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     return "24 小时";
   }
 
+  function historyPlatformLabel(value) {
+    if (value === "android") return "Android";
+    if (value === "miniprogram") return "微信小程序";
+    if (value === "minigame") return "微信小游戏端";
+    return "全部平台";
+  }
+
   function updateHistoryWindowControls() {
     var controls = [
       ["24h", "historyWindow24h"],
@@ -619,11 +677,11 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     loadAnalytics();
   }
 
-  function renderAnalytics(data, selectedWindow) {
+  function renderAnalytics(data, selectedWindow, selectedPlatform) {
     $("historyContent").style.display = "block";
     $("historyUnavailable").style.display = "none";
     $("historyHint").textContent = "历史窗口 " + historyWindowLabel(selectedWindow) +
-      " · Analytics Engine · 已加载";
+      " · " + historyPlatformLabel(selectedPlatform) + " · Analytics Engine · 已加载";
     renderHistorySummary(data);
     renderHistoryDistributions(data.distributions || {});
     renderHistoryTrend(data.daily_trend || {});
@@ -763,6 +821,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     var container = $("historyDistributionTables");
     container.textContent = "";
     [
+      ["platform", "活跃平台（估算）"],
       ["deck_type", "牌组"],
       ["event", "事件"],
       ["app_version", "应用版本（首次上报快照）"],
@@ -962,6 +1021,12 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
   $("historyWindow24h").addEventListener("click", function () { selectHistoryWindow("24h"); });
   $("historyWindow7d").addEventListener("click", function () { selectHistoryWindow("7d"); });
   $("historyWindow30d").addEventListener("click", function () { selectHistoryWindow("30d"); });
+  $("historyPlatform").addEventListener("change", function () {
+    var value = $("historyPlatform").value;
+    if (["all", "android", "miniprogram", "minigame"].indexOf(value) === -1) return;
+    state.historyPlatform = value;
+    loadAnalytics();
+  });
   $("refreshHistory").addEventListener("click", loadAnalytics);
   $("saveAnnouncement").addEventListener("click", saveForm);
   $("previewAnnouncement").addEventListener("click", preview);

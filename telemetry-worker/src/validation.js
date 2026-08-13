@@ -3,7 +3,7 @@
 // integers are range-bounded, and the action URL must be HTTPS.
 
 export const SEVERITIES = ["info", "important", "update"];
-export const PLATFORMS = ["all", "android", "web"];
+export const PLATFORMS = ["all", "android", "web", "miniprogram", "minigame"];
 export const STATUSES = ["draft", "published", "withdrawn"];
 export const MAX_VERSION_CODE = 2147483647;
 export const MAX_EPOCH = 2147483647;

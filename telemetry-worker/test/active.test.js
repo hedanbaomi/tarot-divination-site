@@ -351,3 +351,103 @@ test("oversized app_active payloads are rejected with 413", async () => {
 
   assert.equal(response.status, 413);
 });
+
+test("mini-program app_active needs no Android major or version_code and records its environment", async () => {
+  const db = createMockD1();
+  const event = makeEvent("app_active", {
+    install_hash: INSTALL_A,
+    platform: "miniprogram",
+    env_version: "release",
+    app_version: "1.3.0"
+  });
+  delete event.android_major;
+
+  const response = await postEvent(makeEnv({ db, analytics: mockAnalytics() }), event);
+  assert.equal(response.status, 204);
+  assert.deepEqual(installRows(db).map((row) => ({
+    platform: row.platform,
+    env_version: row.env_version,
+    app_version: row.app_version,
+    version_code: row.version_code,
+    android_major: row.android_major
+  })), [{
+    platform: "miniprogram",
+    env_version: "release",
+    app_version: "1.3.0",
+    version_code: 0,
+    android_major: 0
+  }]);
+});
+
+test("mini-game app_active is stored as its own platform with no Android version fields", async () => {
+  const db = createMockD1();
+  const event = makeEvent("app_active", {
+    install_hash: INSTALL_A,
+    platform: "minigame",
+    env_version: "develop",
+    app_version: "0.0.0"
+  });
+  delete event.android_major;
+  delete event.version_code;
+
+  const response = await postEvent(makeEnv({ db, analytics: mockAnalytics() }), event);
+  assert.equal(response.status, 204);
+  assert.deepEqual(installRows(db).map((row) => ({
+    platform: row.platform,
+    env_version: row.env_version,
+    app_version: row.app_version,
+    version_code: row.version_code,
+    android_major: row.android_major
+  })), [{
+    platform: "minigame",
+    env_version: "develop",
+    app_version: "0.0.0",
+    version_code: 0,
+    android_major: 0
+  }]);
+});
+
+test("old install_state inserts inherit the Android platform migration default", () => {
+  const db = createMockD1();
+  db.exec(`INSERT INTO install_state
+    (install_hash, app_version, version_code, locale, android_major, first_seen_at, last_seen_at)
+    VALUES ('${INSTALL_A}', '1.1', 0, 'zh-CN', 33, 1, 1)`);
+  const row = installRows(db)[0];
+  assert.equal(row.platform, "android");
+  assert.equal(row.env_version, "");
+});
+
+test("admin current stats separate Android, mini-program and mini-game active installs", async () => {
+  const db = createMockD1();
+  const env = makeEnv({ db, analytics: mockAnalytics() });
+  await postActive(env, { install_hash: "1".repeat(64) });
+  const mini = makeEvent("app_active", {
+    install_hash: "2".repeat(64),
+    platform: "miniprogram",
+    env_version: "trial",
+    app_version: "0.0.0"
+  });
+  delete mini.android_major;
+  await postEvent(env, mini);
+  const game = makeEvent("app_active", {
+    install_hash: "3".repeat(64),
+    platform: "minigame",
+    env_version: "develop",
+    app_version: "0.0.0"
+  });
+  delete game.android_major;
+  delete game.version_code;
+  await postEvent(env, game);
+
+  const response = await worker.fetch(makeRequest("https://telemetry.test/admin/api/stats", {
+    token: "test-admin-token",
+    ip: "198.51.100.77"
+  }), env);
+  assert.equal(response.status, 200);
+  const stats = await response.json();
+  assert.deepEqual(stats.platform_distribution.active_24h, [
+    { platform: "android", env_version: "", installs: 1, percent: 33.3 },
+    { platform: "minigame", env_version: "develop", installs: 1, percent: 33.3 },
+    { platform: "miniprogram", env_version: "trial", installs: 1, percent: 33.3 }
+  ]);
+});

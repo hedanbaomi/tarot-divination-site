@@ -29,7 +29,24 @@ const WINDOW_SPECS = Object.freeze({
   "30d": Object.freeze({ interval: "INTERVAL '30' DAY", seconds: 30 * 24 * 60 * 60 })
 });
 
+const PLATFORM_FILTERS = Object.freeze({
+  all: "",
+  android: "if(blob9 = '', 'android', blob9) = 'android'",
+  miniprogram: "blob9 = 'miniprogram'",
+  minigame: "blob9 = 'minigame'"
+});
+
 const DIMENSION_SPECS = Object.freeze({
+  platform: Object.freeze({
+    alias: "platform",
+    // blob9 was added after the Android rollout. Empty historical slots are
+    // therefore Android, not an unknown platform.
+    field: "if(blob9 = '', 'android', blob9)",
+    filter: "blob1 IN ('daily_active', 'app_active')",
+    aggregate: "COUNT(DISTINCT index1)",
+    basis: "sampled_distinct_active_install_estimate",
+    semantics: "estimated distinct active installs; historical empty blob9 falls back to android"
+  }),
   deck_type: Object.freeze({
     alias: "deck_type",
     field: "blob3",
@@ -71,6 +88,7 @@ const QUERY_NAMES = Object.freeze([
   "event_totals",
   "active_estimate",
   "reading_metrics",
+  "platform",
   "deck_type",
   "app_version",
   "locale",
@@ -83,8 +101,9 @@ function timeFilter(interval) {
   return `timestamp >= NOW() - ${interval}`;
 }
 
-function queryTemplates(interval) {
-  const filter = timeFilter(interval);
+function queryTemplates(interval, platform = "all") {
+  const platformFilter = PLATFORM_FILTERS[platform];
+  const filter = timeFilter(interval) + (platformFilter ? ` AND ${platformFilter}` : "");
   const eventFilter = "blob1 IN ('install_seen', 'daily_active', 'app_active', 'reading_completed')";
 
   return {
@@ -109,6 +128,7 @@ FROM ${ANALYTICS_DATASET}
 WHERE ${filter} AND blob1 = 'reading_completed'
 LIMIT 1
 `,
+    platform: dimensionQuery(DIMENSION_SPECS.platform, filter),
     deck_type: dimensionQuery(DIMENSION_SPECS.deck_type, filter),
     app_version: dimensionQuery(DIMENSION_SPECS.app_version, filter),
     locale: dimensionQuery(DIMENSION_SPECS.locale, filter),
@@ -126,8 +146,9 @@ LIMIT ${ANALYTICS_MAX_DAILY_TREND_ROWS + 1}
 }
 
 function dimensionQuery(spec, filter) {
+  const aggregate = spec.aggregate || "SUM(_sample_interval)";
   return `
-SELECT ${spec.field} AS value, SUM(_sample_interval) AS count
+SELECT ${spec.field} AS value, ${aggregate} AS count
 FROM ${ANALYTICS_DATASET}
 WHERE ${filter} AND ${spec.filter} AND ${spec.field} <> ''
 GROUP BY value
@@ -140,9 +161,11 @@ LIMIT ${ANALYTICS_MAX_DISTRIBUTION_ROWS + 1}
  * Exposes only the fixed query set for deterministic tests and audits. An
  * invalid window returns null; no caller can supply SQL, a field, or a table.
  */
-export function buildAnalyticsQueries(window) {
+export function buildAnalyticsQueries(window, platform = "all") {
   const spec = WINDOW_SPECS[window];
-  return spec ? queryTemplates(spec.interval) : null;
+  return spec && Object.prototype.hasOwnProperty.call(PLATFORM_FILTERS, platform)
+    ? queryTemplates(spec.interval, platform)
+    : null;
 }
 
 function analyticsJson(obj, status) {
@@ -170,6 +193,7 @@ export async function handleAnalytics(request, env) {
   }
 
   const window = new URL(request.url).searchParams.get("window");
+  const platform = new URL(request.url).searchParams.get("platform") || "all";
   const windowSpec = WINDOW_SPECS[window];
   if (!windowSpec) {
     return analyticsJson({
@@ -178,19 +202,26 @@ export async function handleAnalytics(request, env) {
       allowed_windows: Object.keys(WINDOW_SPECS)
     }, 400);
   }
-
-  if (!hasAnalyticsConfig(env)) {
-    return unavailableResponse(window, [], "missing_config");
+  if (!Object.prototype.hasOwnProperty.call(PLATFORM_FILTERS, platform)) {
+    return analyticsJson({
+      error: "invalid_platform",
+      module: "analytics",
+      allowed_platforms: Object.keys(PLATFORM_FILTERS)
+    }, 400);
   }
 
-  const queries = queryTemplates(windowSpec.interval);
+  if (!hasAnalyticsConfig(env)) {
+    return unavailableResponse(window, platform, [], "missing_config");
+  }
+
+  const queries = queryTemplates(windowSpec.interval, platform);
   const jobs = QUERY_NAMES.map((name) => ({
     name,
     sql: queries[name],
     maxRows: maxRowsFor(name)
   }));
   const outcomes = await runQueries(jobs, env);
-  const parsed = parseOutcomes(outcomes, window);
+  const parsed = parseOutcomes(outcomes, window, platform);
 
   const response = buildAnalyticsResponse(window, parsed);
   if (parsed.failedSections.length >= QUERY_NAMES.length) {
@@ -203,7 +234,7 @@ export async function handleAnalytics(request, env) {
 }
 
 function maxRowsFor(name) {
-  if (name === "deck_type" || name === "app_version" || name === "locale" ||
+  if (name === "platform" || name === "deck_type" || name === "app_version" || name === "locale" ||
       name === "country" || name === "subdivision") {
     return ANALYTICS_MAX_DISTRIBUTION_ROWS + 1;
   }
@@ -420,7 +451,7 @@ function extractRows(payload) {
   throw new AnalyticsQueryError("upstream_invalid_rows");
 }
 
-function parseOutcomes(outcomes, window) {
+function parseOutcomes(outcomes, window, platform) {
   const byName = new Map();
   const failedSections = [];
   for (const outcome of outcomes) {
@@ -433,6 +464,7 @@ function parseOutcomes(outcomes, window) {
 
   const parsed = {
     window,
+    platform,
     failedSections,
     eventTotals: parseEventTotals(byName, "event_totals", failedSections),
     activeEstimate: parseActiveEstimate(byName, "active_estimate", failedSections),
@@ -635,6 +667,7 @@ function buildAnalyticsResponse(window, parsed) {
     partial: failedCount > 0 && !allFailed,
     failed_sections: parsed.failedSections,
     window,
+    platform: parsed.platform,
     window_seconds: WINDOW_SPECS[window].seconds,
     generated_at: nowSec(),
     install_seen: installSeen,
@@ -661,13 +694,15 @@ function buildAnalyticsResponse(window, parsed) {
   };
 }
 
-function unavailableResponse(window, failedSections, reason) {
+function unavailableResponse(window, platform, failedSections, reason) {
   const response = buildAnalyticsResponse(window, {
+    platform,
     failedSections: failedSections.length > 0 ? failedSections : [reason],
     eventTotals: null,
     activeEstimate: null,
     readingMetrics: null,
     distributions: {
+      platform: null,
       deck_type: null,
       app_version: null,
       locale: null,

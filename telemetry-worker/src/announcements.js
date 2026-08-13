@@ -55,7 +55,7 @@ export async function handleAnnouncements(request, env) {
 
   const platform = boundedParam(url.searchParams.get("platform"), 16);
   const requestedPlatform = platform === "" || platform === "all" ? null : platform;
-  if (requestedPlatform !== null && !["android", "web"].includes(requestedPlatform)) {
+  if (requestedPlatform !== null && !["android", "web", "miniprogram", "minigame"].includes(requestedPlatform)) {
     return json({ error: "invalid_platform" }, 400, corsHeaders);
   }
 

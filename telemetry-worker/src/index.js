@@ -25,7 +25,7 @@
  *    coordinates, metro code, and all client-supplied geo fields are ignored.
  *  - Timestamps come from the server clock, never the client.
  *  - D1 stores only the anonymous install state (hash, app version, locale,
- *    android major, first/last seen) and announcements; never an IP,
+ *    platform/environment, Android major where applicable, first/last seen) and announcements; never an IP,
  *    User-Agent, device model, city, card, spread, question, note or history.
  *  - On success the worker returns 204 with an empty body.
  *  - Admin endpoints are deny-by-default: the ADMIN_TOKEN secret is required
@@ -50,7 +50,7 @@ const EVENT_DEFS = {
   install_seen: {},
   daily_active: {},
   reading_completed: { deck_type: "string", card_count: "int" },
-  app_active: { version_code: "int" }
+  app_active: { version_code: "optional_int" }
 };
 
 const DECK_TYPES = new Set(["tarot", "mystagogus", "lxxxi"]);
@@ -62,8 +62,13 @@ const BASE_FIELDS = {
   install_hash: "string",
   app_version: "string",
   locale: "string",
-  android_major: "int"
+  platform: "optional_string",
+  env_version: "optional_string",
+  android_major: "optional_int"
 };
+
+const TELEMETRY_PLATFORMS = new Set(["android", "miniprogram", "minigame"]);
+const WECHAT_ENV_VERSIONS = new Set(["develop", "trial", "release"]);
 
 // Default rate limits (per worker instance / in-memory; reset on redeploy/restart).
 const DEFAULT_RATE_LIMIT = {
@@ -308,8 +313,33 @@ function validateEvent(event) {
     return { ok: false, error: "unsupported_schema_version" };
   }
 
-  if (value.android_major < ANDROID_MAJOR_MIN || value.android_major > ANDROID_MAJOR_MAX) {
-    return { ok: false, error: "invalid_android_major" };
+  // Old Android payloads predate the platform field. Normalize them here so
+  // every accepted event has a stable Analytics Engine platform value.
+  value.platform = value.platform || "android";
+  value.env_version = value.env_version || "";
+  if (!TELEMETRY_PLATFORMS.has(value.platform)) {
+    return { ok: false, error: "invalid_platform" };
+  }
+
+  if (value.platform === "android") {
+    if (value.env_version !== "") {
+      return { ok: false, error: "invalid_env_version" };
+    }
+    if (!Number.isInteger(value.android_major) ||
+        value.android_major < ANDROID_MAJOR_MIN || value.android_major > ANDROID_MAJOR_MAX) {
+      return { ok: false, error: "invalid_android_major" };
+    }
+  } else {
+    if (!WECHAT_ENV_VERSIONS.has(value.env_version)) {
+      return { ok: false, error: "invalid_env_version" };
+    }
+    // Android API level has no meaning in either WeChat runtime. Require the
+    // field to be absent rather than silently accepting forged Android data,
+    // then write an aggregate-safe sentinel internally.
+    if (value.android_major !== undefined) {
+      return { ok: false, error: "invalid_android_major" };
+    }
+    value.android_major = 0;
   }
 
   // install_hash must be a 64-char lowercase hex SHA-256 digest.
@@ -334,10 +364,19 @@ function validateEvent(event) {
   }
 
   if (type === "app_active") {
-    if (!Number.isInteger(value.version_code) ||
-        value.version_code < 1 ||
-        value.version_code > MAX_VERSION_CODE) {
+    if (value.platform === "android" &&
+        (!Number.isInteger(value.version_code) ||
+         value.version_code < 1 ||
+         value.version_code > MAX_VERSION_CODE)) {
       return { ok: false, error: "invalid_version_code" };
+    }
+    if (value.platform === "miniprogram" || value.platform === "minigame") {
+      // Android version_code has no counterpart in a Mini Program/Mini Game.
+      // The server owns the 0 sentinel; clients must omit the field.
+      if (value.version_code !== undefined) {
+        return { ok: false, error: "invalid_version_code" };
+      }
+      value.version_code = 0;
     }
   }
 
@@ -346,8 +385,14 @@ function validateEvent(event) {
 
 function validateField(src, dst, field, ftype) {
   const v = src[field];
-  if (v === undefined || v === null) return false;
-  if (ftype === "int") {
+  const optional = ftype.startsWith("optional_");
+  const actualType = optional ? ftype.slice("optional_".length) : ftype;
+  // Optional means the key may be absent. Explicit null is still a supplied
+  // value and must fail type validation so platform-specific fields cannot be
+  // smuggled through as null and normalized into server-owned sentinels.
+  if (v === undefined) return optional;
+  if (v === null) return false;
+  if (actualType === "int") {
     if (!Number.isInteger(v)) return false;
     dst[field] = v;
   } else {
@@ -377,7 +422,9 @@ function writeDataPoint(env, event, geo) {
     geo.subdivisionCode,
     geo.regionName,
     event.app_version,
-    event.locale
+    event.locale,
+    event.platform,
+    event.env_version
   ];
   const doubles = [
     event.event === "reading_completed" ? Number(event.card_count) : 0,

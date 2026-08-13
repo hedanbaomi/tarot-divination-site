@@ -274,7 +274,8 @@ async function handleStats(env) {
       generated_at: nowSec(),
       windows,
       known_installs_90d: distribution.known_installs_90d,
-      version_distribution: distribution.by_window
+      version_distribution: distribution.by_window,
+      platform_distribution: distribution.by_platform
     },
     200
   );

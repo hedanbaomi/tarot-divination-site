@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "Anonymous, opt-out usage-statistics ingest for the Quareia Divination Android app. Stores aggregate signals only in Cloudflare Analytics Engine; never stores raw IP, request bodies, or card/reading content.",
+  "description": "Anonymous, opt-out usage-statistics ingest for Quareia Android, WeChat Mini Program, and WeChat Mini Game clients. Stores aggregate signals only; never stores raw IP or reading content.",
   "main": "src/index.js",
   "type": "module",
   "scripts": {

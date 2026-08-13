@@ -52,6 +52,15 @@ test("the history UI uses the authenticated analytics endpoint and fixed windows
   assert.match(ADMIN_PAGE_HTML, /sessionStorage/);
 });
 
+test("the admin page exposes Mini Game as an announcement target and analytics filter", () => {
+  assert.match(ADMIN_PAGE_HTML, /value="minigame">minigame · 微信小游戏端<\/option>/);
+  assert.match(ADMIN_PAGE_HTML, /value="minigame">微信小游戏端<\/option>/);
+  assert.match(ADMIN_PAGE_HTML, /if \(value === "minigame"\) return "微信小游戏端"/);
+  assert.match(ADMIN_PAGE_HTML, /按平台与微信运行环境分组/);
+  assert.match(ADMIN_PAGE_HTML, /platform === "android" && row\.version_code === 0/);
+  assert.match(ADMIN_PAGE_HTML, /微信版本/);
+});
+
 test("the admin page stays DOM-only and has no external page resources", () => {
   assert.doesNotMatch(ADMIN_PAGE_HTML, /innerHTML/i);
   assert.doesNotMatch(ADMIN_PAGE_HTML, /<script\b[^>]*\bsrc\s*=|<link\b[^>]*\bhref\s*=/i);

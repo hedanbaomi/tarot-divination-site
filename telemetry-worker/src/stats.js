@@ -9,17 +9,20 @@ export const ACTIVE_DEDUPE_SECONDS = 6 * 60 * 60; // 6 hours
 export const STALE_AFTER_SECONDS = 90 * 24 * 60 * 60; // 90 days
 
 const SELECT_STATE =
-  "SELECT app_version, version_code, last_seen_at FROM install_state WHERE install_hash = ?";
+  "SELECT app_version, version_code, platform, env_version, last_seen_at FROM install_state WHERE install_hash = ?";
 
 const UPSERT_STATE = `
   INSERT INTO install_state
-    (install_hash, app_version, version_code, locale, android_major, first_seen_at, last_seen_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+    (install_hash, app_version, version_code, locale, android_major, platform, env_version,
+     first_seen_at, last_seen_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(install_hash) DO UPDATE SET
     app_version = excluded.app_version,
     version_code = excluded.version_code,
     locale = excluded.locale,
     android_major = excluded.android_major,
+    platform = excluded.platform,
+    env_version = excluded.env_version,
     last_seen_at = excluded.last_seen_at
 `;
 
@@ -27,15 +30,16 @@ const UPSERT_STATE = `
  * Records an install-activity event (app_active or legacy daily_active) in
  * install_state. Returns "written" or "deduped".
  *
- *  - app_active carries the real version_code and always wins: it overwrites
+ *  - Android app_active carries the real version_code and always wins: it overwrites
  *    a legacy row's app_version/version_code, moving the install into the new
  *    version group while preserving first_seen_at. Dedupe applies only to the
  *    same version_code within 6 hours.
  *  - legacy daily_active (no version_code, stored as 0) never downgrades a
  *    row that already has a real version_code: it only refreshes locale,
  *    android_major and last_seen_at, respecting the 6-hour rule.
- *  - between two legacy rows the 6-hour dedupe also compares app_version, so
- *    a v1.0 -> v1.1 upgrade migrates immediately even inside the window.
+ *  - version-code-free rows (legacy Android or mini program) also compare
+ *    platform, environment, and app_version, so a release/environment change
+ *    migrates immediately even inside the window.
  *  - Throws when the write fails so the caller can return a retryable 503.
  */
 export async function recordInstallActivity(env, event) {
@@ -43,34 +47,39 @@ export async function recordInstallActivity(env, event) {
 
   const now = nowSec();
   const incomingCode = Number.isInteger(event.version_code) ? event.version_code : 0;
-  const isAppActive = incomingCode > 0;
+  const platform = event.platform || "android";
+  const envVersion = event.env_version || "";
+  const isVersionedAndroidActive = platform === "android" && incomingCode > 0;
   const existing = await env.DB.prepare(SELECT_STATE).bind(event.install_hash).first();
 
   if (!existing) {
     await env.DB.prepare(UPSERT_STATE)
       .bind(event.install_hash, event.app_version, incomingCode, event.locale,
-        event.android_major, now, now)
+        event.android_major, platform, envVersion, now, now)
       .run();
     return "written";
   }
 
-  if (isAppActive) {
+  if (isVersionedAndroidActive) {
     if (
+      existing.platform === platform &&
+      existing.env_version === envVersion &&
       existing.version_code === incomingCode &&
+      existing.app_version === event.app_version &&
       now - existing.last_seen_at < ACTIVE_DEDUPE_SECONDS
     ) {
       return "deduped";
     }
     await env.DB.prepare(UPSERT_STATE)
       .bind(event.install_hash, event.app_version, incomingCode, event.locale,
-        event.android_major, now, now)
+        event.android_major, platform, envVersion, now, now)
       .run();
     return "written";
   }
 
   // Legacy daily_active hitting an install already recorded by a newer client:
   // never downgrade app_version/version_code; only refresh time fields.
-  if (existing.version_code > 0) {
+  if (platform === "android" && existing.platform === "android" && existing.version_code > 0) {
     if (now - existing.last_seen_at < ACTIVE_DEDUPE_SECONDS) return "deduped";
     await env.DB.prepare(
       "UPDATE install_state SET locale = ?, android_major = ?, last_seen_at = ? WHERE install_hash = ?"
@@ -81,6 +90,8 @@ export async function recordInstallActivity(env, event) {
   // Both rows are legacy: dedupe only when the app_version is identical too,
   // so a legacy upgrade migrates immediately.
   if (
+    existing.platform === platform &&
+    existing.env_version === envVersion &&
     existing.app_version === event.app_version &&
     now - existing.last_seen_at < ACTIVE_DEDUPE_SECONDS
   ) {
@@ -88,7 +99,7 @@ export async function recordInstallActivity(env, event) {
   }
   await env.DB.prepare(UPSERT_STATE)
     .bind(event.install_hash, event.app_version, 0, event.locale,
-      event.android_major, now, now)
+      event.android_major, platform, envVersion, now, now)
     .run();
   return "written";
 }
@@ -128,18 +139,36 @@ export async function versionDistribution(env) {
   const now = nowSec();
 
   const by_window = {};
+  const by_platform = {};
   for (const [key, seconds] of Object.entries(windows)) {
     const rows = await env.DB.prepare(
-      "SELECT version_code, app_version, COUNT(*) AS installs FROM install_state " +
-        "WHERE last_seen_at >= ? GROUP BY version_code, app_version " +
-        "ORDER BY installs DESC, version_code DESC"
+      "SELECT platform, env_version, version_code, app_version, COUNT(*) AS installs FROM install_state " +
+        "WHERE last_seen_at >= ? GROUP BY platform, env_version, version_code, app_version " +
+        "ORDER BY installs DESC, platform ASC, env_version ASC, version_code DESC"
     ).bind(now - seconds).all();
     const total = rows.results.reduce((sum, row) => sum + row.installs, 0);
     by_window[key] = rows.results.map((row) => ({
+      platform: row.platform || "android",
+      env_version: row.env_version || "",
       version_code: row.version_code,
       app_version: row.app_version,
       installs: row.installs,
       percent: total > 0 ? Math.round((row.installs / total) * 1000) / 10 : 0
+    }));
+
+    const platformRows = await env.DB.prepare(
+      "SELECT platform, env_version, COUNT(*) AS installs FROM install_state " +
+        "WHERE last_seen_at >= ? GROUP BY platform, env_version " +
+        "ORDER BY installs DESC, platform ASC, env_version ASC"
+    ).bind(now - seconds).all();
+    const platformTotal = platformRows.results.reduce((sum, row) => sum + row.installs, 0);
+    by_platform[key] = platformRows.results.map((row) => ({
+      platform: row.platform || "android",
+      env_version: row.env_version || "",
+      installs: row.installs,
+      percent: platformTotal > 0
+        ? Math.round((row.installs / platformTotal) * 1000) / 10
+        : 0
     }));
   }
 
@@ -149,7 +178,8 @@ export async function versionDistribution(env) {
 
   return {
     known_installs_90d: knownRow ? knownRow.count : 0,
-    by_window
+    by_window,
+    by_platform
   };
 }
 

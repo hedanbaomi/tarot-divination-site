@@ -94,6 +94,38 @@ test("platform filter matches android and all, excludes web", async () => {
   );
 });
 
+test("mini-program platform filter matches miniprogram and all only", async () => {
+  const db = createMockD1();
+  insertAnnouncement(db, { platform: "miniprogram" });
+  insertAnnouncement(db, { platform: "all" });
+  insertAnnouncement(db, { platform: "android" });
+  insertAnnouncement(db, { platform: "web" });
+
+  const response = await getAnnouncements(db, "platform=miniprogram&version_code=0");
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.deepEqual(
+    data.announcements.map((announcement) => announcement.platform).sort(),
+    ["all", "miniprogram"]
+  );
+});
+
+test("mini-game platform filter matches minigame and all only", async () => {
+  const db = createMockD1();
+  insertAnnouncement(db, { platform: "minigame" });
+  insertAnnouncement(db, { platform: "all" });
+  insertAnnouncement(db, { platform: "miniprogram" });
+  insertAnnouncement(db, { platform: "android" });
+
+  const response = await getAnnouncements(db, "platform=minigame&version_code=0");
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.deepEqual(
+    data.announcements.map((announcement) => announcement.platform).sort(),
+    ["all", "minigame"]
+  );
+});
+
 test("version range filter applies min and max version_code", async () => {
   const db = createMockD1();
   insertAnnouncement(db, { min_version_code: 0, max_version_code: 2147483647 });
