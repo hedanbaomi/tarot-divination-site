@@ -44,13 +44,13 @@ test("website uses the branded dialog for spread and history confirmations", fun
   assert.match(html, /id="confirmProceedBtn"/);
   assert.match(html, /src="js\/dialogs\.js\?v=20260727-card-picker"/);
   assert.match(html, /src="js\/spreads\.js\?v=20260727-spread-labels"/);
-  assert.match(html, /src="js\/app\.js\?v=20260809-free-board-v1"/);
+  assert.match(html, /src="js\/app\.js\?v=20260814-empty-spread"/);
 });
 
 test("root page pins the web-announcement resource cache versions", function () {
   var html = read(surface.html);
-  assert.match(html, /src="js\/i18n\.js\?v=20260813-themes"/);
-  assert.match(html, /href="css\/styles\.css\?v=20260813-sun-blank"/);
+  assert.match(html, /src="js\/i18n\.js\?v=20260814-empty-spread"/);
+  assert.match(html, /href="css\/styles\.css\?v=20260814-empty-spread"/);
   assert.match(html, /src="js\/announcements\.js\?v=1"/);
 });
 
@@ -141,4 +141,31 @@ test("Free Board taps select only, while external meaning and automatic history 
   assert.match(ui, /freeBoard\.drawOrder/);
   assert.match(css, /data-free-board-platform="android"/);
   assert.match(app, /layoutMode === "preset" && deckType === "tarot" && selectedSpreadId === "overview"/);
+});
+
+test("preset mode shows an empty spread preview and a settings-adjacent position guide", function () {
+  var html = read(surface.html);
+  var app = read(surface.app);
+  var i18n = read(surface.i18n);
+  var settingsEnd = html.indexOf("</section>", html.indexOf('class="settings"'));
+  var deckStart = html.indexOf('class="deck-area"');
+  var guideStart = html.indexOf('id="positionGuide"');
+  var spreadArea = html.slice(html.indexOf('id="spreadArea"'), html.indexOf('id="resultsSection"'));
+
+  assert.ok(guideStart > settingsEnd && guideStart < deckStart);
+  assert.match(html.slice(guideStart, deckStart), /data-i18n="spread\.guide"/);
+  assert.doesNotMatch(spreadArea, /id="positionGuide"/);
+  assert.match(app, /el\.spreadArea\.style\.display = "block"/);
+  assert.match(app, /el\.spreadArea\.classList\.toggle\("is-empty", spread\.length === 0\)/);
+  assert.match(app, /el\.positionGuide\.hidden = freeform/);
+  assert.match(app, /t\("app\.emptySpreadHint"\)/);
+  assert.match(app, /el\.revealBtn\.disabled = empty \|\| allRevealed/);
+  assert.doesNotMatch(app, /if \(spread\.length === 0\) \{\s*el\.spreadArea\.style\.display = "none"/);
+  assert.match(app, /if \(usedSlots\[index\]\) return;/);
+  assert.match(app, /slot\.className = "spread-slot"/);
+  ["zh-CN", "en"].forEach(function (locale) {
+    var block = i18n.match(new RegExp('"' + locale + '": \\{[\\s\\S]*?\\n    \\}'))[0];
+    assert.ok(block.indexOf('"app.emptySpreadHint"') !== -1, locale + " missing app.emptySpreadHint");
+    assert.ok(block.indexOf('"spread.guide"') !== -1, locale + " missing spread.guide");
+  });
 });

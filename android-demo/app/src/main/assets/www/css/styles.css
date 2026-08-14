@@ -1673,7 +1673,7 @@ html[data-theme="parchment"] .setting-group select {
 }
 .position-guide {
   max-width: 620px;
-  margin: 14px auto 0;
+  margin: 0 auto 16px;
   border: 1px solid rgba(var(--accent-rgb), 0.24);
   border-radius: 12px;
   background: var(--panel-bg);

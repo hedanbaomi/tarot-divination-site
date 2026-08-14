@@ -304,6 +304,7 @@
     var freeform = isFreeform();
     if (el.deckArea) el.deckArea.style.display = freeform ? "none" : "";
     if (el.spreadArea) el.spreadArea.style.display = freeform ? "none" : "";
+    if (el.positionGuide) el.positionGuide.hidden = freeform;
     if (el.resultsSection) el.resultsSection.style.display = freeform ? "none" : "";
     updateOverviewMethodUi();
     if (el.spreadSettingGroup) el.spreadSettingGroup.style.display = freeform ? "none" : "";
@@ -886,16 +887,13 @@
     if (isFreeform()) {
       el.spreadArea.style.display = "none";
       el.resultsSection.style.display = "none";
+      if (el.positionGuide) el.positionGuide.hidden = true;
       if (historyUiController) historyUiController.updateSaveAvailability(false);
       return;
     }
-    if (spread.length === 0) {
-      el.spreadArea.style.display = "none";
-      if (historyUiController) historyUiController.updateSaveAvailability(false);
-      return;
-    }
+    if (el.positionGuide) el.positionGuide.hidden = false;
     el.spreadArea.style.display = "block";
-    el.spreadCount.textContent = spread.length;
+    el.spreadArea.classList.toggle("is-empty", spread.length === 0);
 
     // Keep position numbers on face-down cards in sync after removals.
     spread.forEach(function (entry) {
@@ -934,11 +932,14 @@
       el.phaseLabel.style.display = "none";
     }
 
-    var allRevealed = spread.every(function (e) { return e.revealed; });
+    var empty = spread.length === 0;
+    var allRevealed = !empty && spread.every(function (e) { return e.revealed; });
     el.revealBtn.textContent = allRevealed ? t("app.revealedAll") : t("spread.reveal");
-    el.revealBtn.disabled = allRevealed;
+    el.revealBtn.disabled = empty || allRevealed;
     el.spreadHint.style.display = "block";
-    el.spreadHint.textContent = allRevealed
+    el.spreadHint.textContent = empty
+      ? t("app.emptySpreadHint")
+      : allRevealed
       ? t("app.meaningHint")
       : stacking
       ? t("app.stackHint")

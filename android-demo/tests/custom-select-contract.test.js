@@ -132,7 +132,7 @@ test("Android parchment reading and history panels use theme tokens, not night n
   var css = read("app/src/main/assets/www/css/styles.css");
   var freeBoard = read("app/src/main/assets/www/css/free-board.css");
   var html = read("app/src/main/assets/www/index.html");
-  assert.match(html, /href="css\/styles\.css\?v=20260813-sun-blank"/);
+  assert.match(html, /href="css\/styles\.css\?v=20260814-empty-spread"/);
   assert.match(css, /\.position-guide\s*\{[^}]*background:\s*var\(--panel-bg\)/);
   assert.match(css, /\.result-card\s*\{[^}]*background:\s*var\(--panel-bg\)/);
   assert.match(css, /\.history-list-item\s*\{[^}]*background:\s*var\(--bg-card\)/);
@@ -172,4 +172,26 @@ test("Android activity gives Web UI overlays priority over WebView history", fun
   assert.match(backHandler, /DivinationTelemetryNotice/);
   assert.match(backHandler, /DivinationHistoryUi/);
   assert.match(backHandler, /DivinationMenu/);
+});
+
+test("preset mode shows an empty spread preview and a settings-adjacent position guide", function () {
+  var html = read("app/src/main/assets/www/index.html");
+  var app = read("app/src/main/assets/www/js/app.js");
+  var i18n = read("app/src/main/assets/www/js/i18n.js");
+  var deckStart = html.indexOf('class="deck-area"');
+  var guideStart = html.indexOf('id="positionGuide"');
+  var spreadArea = html.slice(html.indexOf('id="spreadArea"'), html.indexOf('id="resultsSection"'));
+
+  assert.ok(guideStart > -1 && guideStart < deckStart);
+  assert.match(html.slice(guideStart, deckStart), /data-i18n="spread\.guide"/);
+  assert.doesNotMatch(spreadArea, /id="positionGuide"/);
+  assert.match(app, /el\.spreadArea\.classList\.toggle\("is-empty", spread\.length === 0\)/);
+  assert.match(app, /t\("app\.emptySpreadHint"\)/);
+  assert.doesNotMatch(app, /if \(spread\.length === 0\) \{\s*el\.spreadArea\.style\.display = "none"/);
+  assert.match(html, /src="js\/app\.js\?v=20260814-empty-spread"/);
+  assert.match(html, /src="js\/i18n\.js\?v=20260814-empty-spread"/);
+  ["zh-CN", "en"].forEach(function (locale) {
+    var block = i18n.match(new RegExp('"' + locale + '": \\{[\\s\\S]*?\\n    \\}'))[0];
+    assert.ok(block.indexOf('"app.emptySpreadHint"') !== -1, locale + " missing app.emptySpreadHint");
+  });
 });

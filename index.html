@@ -18,7 +18,7 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="css/styles.css?v=20260813-sun-blank">
+  <link rel="stylesheet" href="css/styles.css?v=20260814-empty-spread">
   <link rel="stylesheet" href="css/free-board.css?v=20260813-parchment-panels">
 </head>
 <body>
@@ -130,6 +130,11 @@
       </div>
     </section>
 
+    <details class="position-guide" id="positionGuide">
+      <summary data-i18n="spread.guide">牌位说明</summary>
+      <ol id="positionGuideList"></ol>
+    </details>
+
     <!-- 牌堆：左右滑动浏览，轻点任意一张抽出 -->
     <section class="deck-area">
       <div class="deck-head">
@@ -211,10 +216,6 @@
         <button class="btn btn-secondary" id="clearBtn" data-i18n="spread.clear">重新洗牌</button>
       </div>
       <p class="spread-hint" id="spreadHint" data-i18n="spread.hint">轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开；开牌后再次轻点牌面可查看牌意。</p>
-      <details class="position-guide" id="positionGuide">
-        <summary data-i18n="spread.guide">查看牌位说明</summary>
-        <ol id="positionGuideList"></ol>
-      </details>
     </section>
     <p class="history-save-status" id="historySaveStatus" role="status" aria-live="polite" aria-atomic="true"></p>
 
@@ -361,7 +362,7 @@
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js?v=20260727-spread-labels"></script>
   <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js?v=20260813-themes"></script>
+  <script src="js/i18n.js?v=20260814-empty-spread"></script>
   <script src="js/theme.js?v=20260813-themes"></script>
   <script src="js/announcements.js?v=1"></script>
   <script src="js/dialogs.js?v=20260727-card-picker"></script>
@@ -372,7 +373,7 @@
   <script src="js/history-store.js"></script>
   <script src="js/history-ui.js?v=20260809-free-board-v1"></script>
   <script src="js/free-board-ui.js?v=20260809-free-board-v1"></script>
-  <script src="js/app.js?v=20260809-free-board-v1"></script>
+  <script src="js/app.js?v=20260814-empty-spread"></script>
   <script src="js/celestial-sky.js?v=20260813-sun-blank" defer></script>
   <script src="js/web-analytics.js"></script>
 </body>
