@@ -20,6 +20,7 @@
   var el = {};
   var historyUiController = null;
   var freeBoardUi = null;
+  var customSpreadsUi = null;
 
   function cacheElements() {
     el.settings = document.getElementById("settings");
@@ -178,7 +179,10 @@
     }
   }
 
-  function selectedSpread() { return getSpreadById(deckType, selectedSpreadId); }
+  function selectedSpread() {
+    var custom = customSpreadsUi && customSpreadsUi.getById(selectedSpreadId);
+    return custom || getSpreadById(deckType, selectedSpreadId);
+  }
 
   function isReadingComplete() {
     if (isFreeform()) return false;
@@ -1189,6 +1193,26 @@
     resetDeck();
   }
 
+  async function resolveCustomSpreadFilter(spreadDefinition, requestedDeckType, requestedFilter) {
+    if (!spreadDefinition || !spreadDefinition.isCustom ||
+        requestedDeckType !== "tarot" || requestedFilter !== "major-only") {
+      return requestedFilter;
+    }
+    var majorCount = tarotDeckFull.filter(function (card) { return card.arcana === "major"; }).length;
+    if (spreadDefinition.positions.length <= majorCount) return requestedFilter;
+    if (!globalThis.DivinationDialog || !(await globalThis.DivinationDialog.request({
+      kicker: t("customSpread.capacityKicker"),
+      title: t("customSpread.capacityTitle"),
+      message: t("customSpread.capacityMessage", {
+        positions: spreadDefinition.positions.length,
+        available: majorCount
+      }),
+      cancelLabel: t("customSpread.keepFilter"),
+      proceedLabel: t("customSpread.switchFullDeck")
+    }))) return null;
+    return "mixed";
+  }
+
   async function handleArcanaChange() {
     if (deckType !== "tarot") return;
     var newFilter = el.arcanaFilter.value;
@@ -1197,7 +1221,13 @@
       el.arcanaFilter.value = arcanaFilter;
       return;
     }
-    arcanaFilter = newFilter;
+    var resolvedFilter = await resolveCustomSpreadFilter(selectedSpread(), deckType, newFilter);
+    if (resolvedFilter === null || resolvedFilter === arcanaFilter) {
+      el.arcanaFilter.value = arcanaFilter;
+      return;
+    }
+    arcanaFilter = resolvedFilter;
+    el.arcanaFilter.value = arcanaFilter;
     resetDeck();
   }
 
@@ -1221,15 +1251,59 @@
       el.spreadSelect.value = selectedSpreadId;
       return;
     }
+    var nextCustomSpread = customSpreadsUi && customSpreadsUi.getById(newSpreadId);
+    var resolvedFilter = await resolveCustomSpreadFilter(nextCustomSpread, deckType, arcanaFilter);
+    if (resolvedFilter === null) {
+      el.spreadSelect.value = selectedSpreadId;
+      return;
+    }
+    arcanaFilter = resolvedFilter;
+    el.arcanaFilter.value = arcanaFilter;
     selectedSpreadId = newSpreadId;
     applyDeckUi();
     renderSpreadDefinition();
     resetDeck();
   }
 
+  async function activateCustomSpread(spreadDefinition) {
+    if (!spreadDefinition || !spreadDefinition.id) return false;
+    if (!(await confirmIfSpread(t("confirm.spread")))) return false;
+    var resolvedFilter = await resolveCustomSpreadFilter(spreadDefinition, deckType, arcanaFilter);
+    if (resolvedFilter === null) return false;
+    arcanaFilter = resolvedFilter;
+    el.arcanaFilter.value = arcanaFilter;
+    layoutMode = "preset";
+    selectedSpreadId = spreadDefinition.id;
+    if (el.layoutModeSelect) el.layoutModeSelect.value = "preset";
+    applyDeckUi();
+    populateSpreadSelect();
+    renderSpreadDefinition();
+    applyLayoutUi();
+    resetDeck();
+    syncCustomSelectVisuals();
+    return true;
+  }
+
+  function handleCustomCatalogueChange(preferredId, removedId) {
+    if (removedId && selectedSpreadId === removedId) {
+      selectedSpreadId = defaultSpreadIdForDeck(deckType);
+      resetDeck();
+    }
+    populateSpreadSelect();
+    if (preferredId && customSpreadsUi && customSpreadsUi.getById(preferredId)) {
+      el.spreadSelect.value = preferredId;
+    }
+    renderSpreadDefinition();
+    syncCustomSelectVisuals();
+  }
+
   function populateSpreadSelect() {
     el.spreadSelect.innerHTML = "";
     var catalogue = getSpreadsForDeck(deckType);
+    var customCatalogue = customSpreadsUi ? customSpreadsUi.list() : [];
+    var customGroup = document.createElement("optgroup");
+    customGroup.className = "custom-spreads";
+    customGroup.label = t("customSpread.group");
     var mGroup = document.createElement("optgroup");
     mGroup.label = t("deck.group.mystagogus");
     var tGroup = document.createElement("optgroup");
@@ -1247,6 +1321,14 @@
       else if (spreadDefinition.deck === "lxxxi") lGroup.appendChild(option);
       else tGroup.appendChild(option);
     });
+    customCatalogue.forEach(function (spreadDefinition) {
+      var option = document.createElement("option");
+      option.value = spreadDefinition.id;
+      option.textContent = localizedSpreadName(spreadDefinition) + " · " +
+        t("app.cards", { count: spreadDefinition.positions.length });
+      customGroup.appendChild(option);
+    });
+    if (customCatalogue.length) el.spreadSelect.appendChild(customGroup);
     // 当前牌组本族牌阵分组排在前面
     if (deckType === "mystagogus") {
       el.spreadSelect.appendChild(mGroup);
@@ -1261,7 +1343,7 @@
       el.spreadSelect.appendChild(mGroup);
       el.spreadSelect.appendChild(lGroup);
     }
-    if (!catalogue.some(function (s) { return s.id === selectedSpreadId; })) {
+    if (!catalogue.concat(customCatalogue).some(function (s) { return s.id === selectedSpreadId; })) {
       selectedSpreadId = defaultSpreadIdForDeck(deckType);
     }
     el.spreadSelect.value = selectedSpreadId;
@@ -1274,9 +1356,17 @@
       el.deckSelect.value = deckType;
       return;
     }
+    var currentCustomSpread = customSpreadsUi && customSpreadsUi.getById(selectedSpreadId);
+    var resolvedFilter = await resolveCustomSpreadFilter(currentCustomSpread, newDeck, arcanaFilter);
+    if (resolvedFilter === null) {
+      el.deckSelect.value = deckType;
+      return;
+    }
+    arcanaFilter = resolvedFilter;
+    el.arcanaFilter.value = arcanaFilter;
     deckType = newDeck;
     // 双方均可使用对方牌阵；仅在 id 无效时回退默认。
-    var allowed = getSpreadsForDeck(deckType);
+    var allowed = getSpreadsForDeck(deckType).concat(customSpreadsUi ? customSpreadsUi.list() : []);
     if (!allowed.some(function (s) { return s.id === selectedSpreadId; })) {
       selectedSpreadId = defaultSpreadIdForDeck(deckType);
     }
@@ -1429,6 +1519,15 @@
     layoutMode = el.layoutModeSelect ? (el.layoutModeSelect.value || "preset") : "preset";
     arcanaFilter = el.arcanaFilter.value;
     overviewMethod = el.overviewMethod.value || "single";
+    if (globalThis.DivinationCustomSpreadUi && globalThis.DivinationCustomSpreads) {
+      customSpreadsUi = globalThis.DivinationCustomSpreadUi.init({
+        document: document,
+        core: globalThis.DivinationCustomSpreads,
+        platform: "android",
+        activateSpread: activateCustomSpread,
+        onCatalogueChange: handleCustomCatalogueChange
+      });
+    }
     applyDeckUi();
     populateSpreadSelect();
     selectedSpreadId = el.spreadSelect.value;

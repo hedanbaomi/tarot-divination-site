@@ -31,9 +31,14 @@ test("history UI never renders imported data through innerHTML", function () {
 });
 
 test("history center has no notes, questions, titles or free-text editing controls", function () {
-  assert.equal(/<textarea\b/i.test(html), false);
-  assert.equal(/\bcontenteditable\b/i.test(html), false);
-  var inputs = html.match(/<input\b[^>]*>/gi) || [];
+  var historyStart = html.indexOf('<dialog class="history-dialog" id="historyDialog"');
+  var historyEnd = html.indexOf("</dialog>", historyStart);
+  assert.ok(historyStart >= 0, "history dialog must exist");
+  assert.ok(historyEnd > historyStart, "history dialog must close");
+  var historyHtml = html.slice(historyStart, historyEnd);
+  assert.equal(/<textarea\b/i.test(historyHtml), false);
+  assert.equal(/\bcontenteditable\b/i.test(historyHtml), false);
+  var inputs = historyHtml.match(/<input\b[^>]*>/gi) || [];
   assert.deepEqual(inputs.map(function (input) {
     return (input.match(/\btype="([^"]+)"/i) || [null, "text"])[1].toLowerCase();
   }), ["file"]);

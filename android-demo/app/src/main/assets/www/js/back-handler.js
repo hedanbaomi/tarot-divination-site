@@ -9,6 +9,7 @@
       global.DivinationDialog,
       global.DivinationCustomSelects,
       global.DivinationTelemetryNotice,
+      global.DivinationCustomSpreadUi,
       global.DivinationHistoryUi,
       global.DivinationMenu
     ];

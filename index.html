@@ -20,6 +20,7 @@
   </script>
   <link rel="stylesheet" href="css/styles.css?v=20260814-empty-spread">
   <link rel="stylesheet" href="css/free-board.css?v=20260813-parchment-panels">
+  <link rel="stylesheet" href="css/custom-spreads.css?v=20260820-custom-spreads">
 </head>
 <body>
   <div class="sky-moon" aria-hidden="true">
@@ -126,6 +127,11 @@
           <label for="spreadSelect" data-i18n="settings.spread">预设牌阵</label>
           <select id="spreadSelect" aria-describedby="spreadSettingSummary"></select>
           <p class="setting-summary" id="spreadSettingSummary"></p>
+          <div class="custom-spread-launch">
+            <button class="btn btn-secondary" id="customSpreadOpenBtn" type="button"
+              aria-haspopup="dialog" aria-controls="customSpreadDialog"
+              data-i18n="customSpread.open">设计或导入牌阵</button>
+          </div>
         </div>
       </div>
     </section>
@@ -301,6 +307,111 @@
       </div>
     </dialog>
 
+    <dialog class="custom-spread-dialog" id="customSpreadDialog" aria-labelledby="customSpreadDialogTitle"
+      aria-describedby="customSpreadPrivacy" aria-hidden="true">
+      <div class="custom-spread-shell">
+        <header class="custom-spread-header">
+          <div>
+            <p class="custom-spread-kicker" data-i18n="customSpread.kicker">SPREAD STUDIO</p>
+            <h2 id="customSpreadDialogTitle" data-i18n="customSpread.title">自定义牌阵工作室</h2>
+          </div>
+          <button class="history-icon-btn" id="customSpreadCloseBtn" type="button"
+            aria-label="关闭自定义牌阵工作室" data-i18n-aria-label="customSpread.closeLabel">×</button>
+        </header>
+        <p class="custom-spread-privacy" id="customSpreadPrivacy"></p>
+        <div class="custom-spread-tabs" role="tablist" aria-label="自定义牌阵功能"
+          data-i18n-aria-label="customSpread.tabsAria">
+          <button class="custom-spread-tab is-active" id="customSpreadLibraryTab" type="button" role="tab"
+            aria-selected="true" aria-controls="customSpreadLibraryPanel" tabindex="0"
+            data-custom-spread-tab="library" data-i18n="customSpread.libraryTab">本次牌阵</button>
+          <button class="custom-spread-tab" id="customSpreadDesignerTab" type="button" role="tab"
+            aria-selected="false" aria-controls="customSpreadDesigner" tabindex="-1"
+            data-custom-spread-tab="designer" data-i18n="customSpread.designerTab">设计牌阵</button>
+          <button class="custom-spread-tab" id="customSpreadImportTab" type="button" role="tab"
+            aria-selected="false" aria-controls="customSpreadImportPanel" tabindex="-1"
+            data-custom-spread-tab="import" data-i18n="customSpread.importTab">导入分享码</button>
+        </div>
+        <div class="custom-spread-content">
+          <section class="custom-spread-panel" id="customSpreadLibraryPanel" role="tabpanel"
+            aria-labelledby="customSpreadLibraryTab" data-custom-spread-panel="library">
+            <div class="custom-spread-panel-head">
+              <h3 data-i18n="customSpread.libraryTitle">可用的自定义牌阵</h3>
+              <button class="btn btn-accent" id="customSpreadNewBtn" type="button"
+                data-i18n="customSpread.new">新建设计</button>
+            </div>
+            <p class="custom-spread-empty" id="customSpreadLibraryEmpty"
+              data-i18n="customSpread.libraryEmpty">还没有自定义牌阵，可新建设计或导入分享码。</p>
+            <div class="custom-spread-library" id="customSpreadLibrary"></div>
+          </section>
+
+          <section class="custom-spread-panel" data-custom-spread-panel="designer" id="customSpreadDesigner"
+            role="tabpanel" aria-labelledby="customSpreadDesignerTab" hidden>
+            <div class="custom-spread-form-grid">
+              <label class="custom-spread-field custom-spread-field-wide">
+                <span data-i18n="customSpread.name">牌阵名称</span>
+                <input id="customSpreadName" type="text" maxlength="80" autocomplete="off">
+              </label>
+              <label class="custom-spread-field custom-spread-field-wide">
+                <span data-i18n="customSpread.description">用途说明</span>
+                <textarea id="customSpreadDescription" maxlength="500"></textarea>
+              </label>
+              <label class="custom-spread-field">
+                <span data-i18n="customSpread.columns">网格列数</span>
+                <input id="customSpreadColumns" type="number" min="1" max="7" value="3">
+              </label>
+              <label class="custom-spread-field">
+                <span data-i18n="customSpread.rows">网格行数</span>
+                <input id="customSpreadRows" type="number" min="1" max="10" value="3">
+              </label>
+            </div>
+            <div class="custom-spread-preview-wrap">
+              <h4 data-i18n="customSpread.preview">布局预览</h4>
+              <div class="custom-spread-preview-scroll">
+                <div class="custom-spread-preview" id="customSpreadPreview" role="group"
+                  aria-label="自定义牌阵布局预览" data-i18n-aria-label="customSpread.previewAria"></div>
+              </div>
+            </div>
+            <div class="custom-spread-positions-head">
+              <h4 data-i18n="customSpread.positions">牌位</h4>
+              <button class="btn btn-secondary" id="customSpreadAddPositionBtn" type="button"
+                data-i18n="customSpread.addPosition">添加牌位</button>
+            </div>
+            <ol class="custom-spread-positions" id="customSpreadPositions"></ol>
+            <div class="custom-spread-designer-actions">
+              <button class="btn btn-accent" id="customSpreadSaveUseBtn" type="button">本次使用</button>
+              <button class="btn btn-secondary" id="customSpreadGenerateBtn" type="button"
+                data-i18n="customSpread.generateCode">生成分享码</button>
+            </div>
+            <div class="custom-spread-share">
+              <h4 data-i18n="customSpread.shareCode">分享码</h4>
+              <textarea class="custom-spread-code" id="customSpreadShareCode" readonly
+                aria-label="自定义牌阵分享码" data-i18n-aria-label="customSpread.shareCodeAria"></textarea>
+              <div class="custom-spread-share-actions">
+                <button class="btn btn-secondary" id="customSpreadCopyBtn" type="button"
+                  data-i18n="customSpread.copyCode">复制分享码</button>
+                <button class="btn btn-secondary" id="customSpreadDownloadBtn" type="button"
+                  data-i18n="customSpread.downloadCode">保存分享码文件</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="custom-spread-panel" id="customSpreadImportPanel" role="tabpanel"
+            aria-labelledby="customSpreadImportTab" data-custom-spread-panel="import" hidden>
+            <label class="custom-spread-field">
+              <span data-i18n="customSpread.importLabel">粘贴分享码</span>
+              <textarea class="custom-spread-code" id="customSpreadImportCode" maxlength="16000"
+                autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+            </label>
+            <div class="custom-spread-designer-actions">
+              <button class="btn btn-accent" id="customSpreadImportUseBtn" type="button"
+                data-i18n="customSpread.importAndUse">导入并使用</button>
+            </div>
+          </section>
+        </div>
+        <p class="custom-spread-status" id="customSpreadStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+      </div>
+    </dialog>
+
     <dialog class="confirm-overlay" id="confirmDialog" role="alertdialog" aria-modal="true"
       aria-labelledby="confirmDialogTitle" aria-describedby="confirmMessage" aria-hidden="true">
       <section class="confirm-card">
@@ -367,6 +478,8 @@
   <script src="js/announcements.js?v=1"></script>
   <script src="js/dialogs.js?v=20260727-card-picker"></script>
   <script src="js/custom-selects.js?v=20260727-card-picker"></script>
+  <script src="js/custom-spreads.js?v=20260820-custom-spreads"></script>
+  <script src="js/custom-spread-ui.js?v=20260820-custom-spreads"></script>
   <script src="js/free-board-model.js?v=20260809-free-board-v1"></script>
   <script src="js/free-board-draft.js?v=20260809-free-board-v1"></script>
   <script src="js/history-records.js?v=20260809-free-board-v1"></script>

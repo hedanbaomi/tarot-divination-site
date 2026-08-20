@@ -17,6 +17,7 @@ test("unified back contract consumes only the first open overlay", function () {
     DivinationDialog: { handleBack: function () { calls.push("confirm"); return false; } },
     DivinationCustomSelects: { handleBack: function () { calls.push("choice"); return false; } },
     DivinationTelemetryNotice: { handleBack: function () { calls.push("privacy"); return false; } },
+    DivinationCustomSpreadUi: { handleBack: function () { calls.push("custom-spread"); return false; } },
     DivinationHistoryUi: { handleBack: function () { calls.push("history"); return true; } },
     DivinationMenu: { handleBack: function () { calls.push("menu"); return true; } },
     globalThis: null
@@ -25,11 +26,11 @@ test("unified back contract consumes only the first open overlay", function () {
   vm.runInNewContext(source, context, { filename: "back-handler.js" });
 
   assert.equal(context.DivinationUiBack.handleBack(), true);
-  assert.deepEqual(calls, ["confirm", "choice", "privacy", "history"]);
+  assert.deepEqual(calls, ["confirm", "choice", "privacy", "custom-spread", "history"]);
   calls.length = 0;
   context.DivinationHistoryUi.handleBack = function () { calls.push("history"); return false; };
   assert.equal(context.DivinationUiBack.handleBack(), true);
-  assert.deepEqual(calls, ["confirm", "choice", "privacy", "history", "menu"]);
+  assert.deepEqual(calls, ["confirm", "choice", "privacy", "custom-spread", "history", "menu"]);
 });
 
 test("unified back contract returns false when no overlay is open", function () {
@@ -37,6 +38,7 @@ test("unified back contract returns false when no overlay is open", function () 
     DivinationDialog: { handleBack: function () { return false; } },
     DivinationCustomSelects: { handleBack: function () { return false; } },
     DivinationTelemetryNotice: { handleBack: function () { return false; } },
+    DivinationCustomSpreadUi: { handleBack: function () { return false; } },
     DivinationHistoryUi: { handleBack: function () { return false; } },
     DivinationMenu: { handleBack: function () { return false; } },
     globalThis: null
