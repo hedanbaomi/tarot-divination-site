@@ -64,8 +64,8 @@ test("custom activation protects completion when Major Arcana only is too small"
     assert.match(app, /return "mixed"/);
     assert.match(app, /function handleArcanaChange\(\)[\s\S]*resolveCustomSpreadFilter\(selectedSpread\(\), deckType, newFilter\)/);
     assert.match(app, /function handleSpreadChange\(\)[\s\S]*resolveCustomSpreadFilter\(nextCustomSpread, deckType, arcanaFilter\)/);
-    assert.match(app, /function activateCustomSpread\(spreadDefinition\)[\s\S]*resolveCustomSpreadFilter\(spreadDefinition, deckType, arcanaFilter\)/);
-    assert.match(app, /function handleDeckChange\(\)[\s\S]*resolveCustomSpreadFilter\(currentCustomSpread, newDeck, arcanaFilter\)/);
+    assert.match(app, /function activateCustomSpread\(spreadDefinition\)[\s\S]*resolveCustomSpreadFilter\(spreadDefinition, targetDeckType, arcanaFilter\)/);
+    assert.match(app, /function handleDeckChange\(\)[\s\S]*?resolveCustomSpreadFilter\([\s\S]*?newDeck,\s*arcanaFilter\s*\)/);
   });
 });
 
@@ -122,5 +122,108 @@ test("localized copy states Android persistence and website session-only behavio
     assert.match(block, /"customSpread\.downloadCode"/);
     assert.match(block, /"customSpread\.storageFailed"/);
     assert.match(block, /"customSpread\.capacityMessage"/);
+  });
+});
+
+test("v2 designer exposes deck, Tarot mode, stacking, and per-position rule controls", function () {
+  [webHtml, androidHtml].forEach(function (html) {
+    assert.match(html, /id="customSpreadDeckScope"/);
+    assert.match(html, /id="customSpreadTarotMode"/);
+    assert.match(html, /id="customSpreadStackingMode"/);
+    assert.match(html, /label for="customSpreadDeckScope"/);
+    assert.match(html, /label for="customSpreadTarotMode"/);
+    assert.match(html, /label for="customSpreadStackingMode"/);
+    assert.match(html, /id="customSpreadColumns"[^>]*max="10"/);
+    assert.match(html, /id="customSpreadPreviewEffectBtn"/);
+    assert.match(html, /id="customSpreadEffectPreview"/);
+  });
+  var ui = read("js/custom-spread-ui.js");
+  assert.match(ui, /deckScope/);
+  assert.match(ui, /tarotMode/);
+  assert.match(ui, /stackingMode/);
+  assert.match(ui, /drawRule/);
+  assert.match(ui, /stackOn/);
+  assert.match(ui, /customSpread\.drawRuleFollowing/);
+  assert.match(ui, /customSpread\.stackOnNone/);
+  assert.match(ui, /core\.normalizeDefinition/);
+  assert.match(ui, /toRuntimeSpread/);
+  assert.match(ui, /customSpreadEffectPreview/);
+  assert.match(ui, /pointerdown/);
+  assert.match(ui, /setPointerCapture/);
+  assert.match(ui, /pointercancel/);
+  assert.doesNotMatch(ui, /Math\.min\(7/);
+  assert.match(ui, /var maxColumns = 10;/);
+  assert.match(ui, /elements\.columns\.addEventListener\("change"/);
+  assert.match(ui, /elements\.rows\.addEventListener\("change"/);
+  assert.doesNotMatch(ui, /elements\.(?:columns|rows)\.addEventListener\("input"/);
+  assert.match(ui, /draft\.tarotMode === "major-only"/);
+  assert.match(ui, /draft\.tarotMode === "minor-only"/);
+  assert.match(ui, /draft\.stackingMode === "major-minor"/);
+});
+
+test("v2 designer protects stack references, uses the ten-column grid, and keeps preview DOM-safe", function () {
+  var ui = read("js/custom-spread-ui.js");
+  var css = read("css/custom-spreads.css");
+  assert.match(ui, /remapStackReferences/);
+  assert.match(ui, /function syncStackedCoordinates\(\)/);
+  assert.match(ui, /function applyDraggedCell\([\s\S]*sanitizeStackReferences\(draft\.positions\);[\s\S]*syncStackedCoordinates\(\)/);
+  assert.match(ui, /stackOn.*index/);
+  assert.match(ui, /major-minor/);
+  assert.match(ui, /non-tarot-only/);
+  assert.match(ui, /textContent/);
+  assert.doesNotMatch(ui, /\binnerHTML\b/);
+  assert.match(css, /touch-action:\s*none/);
+  assert.match(css, /custom-spread-position-item\.is-dragging/);
+  assert.match(css, /custom-spread-effect-preview/);
+  assert.match(css, /@media\s*\(max-width:\s*375px\)/);
+  assert.match(ui, /numberOr\(runtimePosition\.offsetX, 0\)/);
+  assert.match(ui, /layerName === "major" \? -8 : 8/);
+  assert.match(ui, /layerName === "major" \? -10 : 12/);
+  assert.match(css, /transform:\s*translate\(var\(--effect-offset-x/);
+  assert.match(ui, /data-preview-card-state", "face-down"/);
+  assert.match(ui, /spread-card-face spread-card-back/);
+  assert.match(ui, /spread-card-back-art/);
+  assert.match(ui, /className = "pos-num"/);
+  assert.match(css, /aspect-ratio:\s*0\.62/);
+});
+
+test("v2 designer localization covers both locales", function () {
+  var i18n = read("js/i18n.js");
+  var androidI18n = read("android-demo/app/src/main/assets/www/js/i18n.js");
+  [i18n, androidI18n].forEach(function (source) {
+    ["zh-CN", "en"].forEach(function (locale) {
+      var marker = '"' + locale + '": {';
+      var start = source.indexOf(marker);
+      assert.notEqual(start, -1);
+      var next = source.indexOf('\n    }', start);
+      var block = source.slice(start, next);
+    [
+      "customSpread.deckScope",
+      "customSpread.tarotMode",
+      "customSpread.stackingMode",
+      "customSpread.deckScopeAny",
+      "customSpread.deckScopeTarotOnly",
+      "customSpread.deckScopeNonTarotOnly",
+      "customSpread.tarotModeMixed",
+      "customSpread.tarotModeMajorOnly",
+      "customSpread.tarotModeMinorOnly",
+      "customSpread.stackingModeSingle",
+      "customSpread.stackingModeMajorMinor",
+      "customSpread.drawRuleFollowing",
+      "customSpread.drawRuleMajor",
+      "customSpread.drawRuleMinor",
+      "customSpread.drawRuleWands",
+      "customSpread.drawRuleCups",
+      "customSpread.drawRuleSwords",
+      "customSpread.drawRulePentacles",
+      "customSpread.stackOnNone",
+      "customSpread.stackOnPrevious",
+      "customSpread.dragHint",
+      "customSpread.previewEffect",
+      "customSpread.previewEffectClose"
+      ].forEach(function (key) {
+        assert.ok(block.indexOf('"' + key + '"') !== -1, locale + " missing " + key);
+      });
+    });
   });
 });

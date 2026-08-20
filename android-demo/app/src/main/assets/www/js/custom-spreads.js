@@ -7,12 +7,15 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (root) {
   "use strict";
 
-  var PREFIX = "QSP1.";
+  var PREFIX = "QSP2.";
+  var LEGACY_PREFIX = "QSP1.";
   var STORAGE_KEY = "quareia-custom-spreads-v1";
-  var SCHEMA_VERSION = 1;
+  var SCHEMA_VERSION = 2;
+  var LEGACY_SCHEMA_VERSION = 1;
+  var LEGACY_MAX_COLUMNS = 7;
   var MAX_NAME_LENGTH = 80;
   var MAX_DESCRIPTION_LENGTH = 500;
-  var MAX_COLUMNS = 7;
+  var MAX_COLUMNS = 10;
   var MAX_ROWS = 10;
   var MAX_POSITIONS = 24;
   var MAX_POSITION_NAME_LENGTH = 80;
@@ -22,10 +25,28 @@
   var STACK_OFFSET_X = 14;
   var STACK_OFFSET_Y = 32;
   var CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F]/;
-  var TOP_FIELDS = ["name", "nameEn", "description", "columns", "rows", "positions"];
-  var POSITION_FIELDS = ["number", "name", "nameEn", "meaning", "meaningEn", "column", "row"];
-  var COMPACT_FIELDS = ["v", "n", "d", "c", "r", "p"];
+  var TOP_FIELDS = ["name", "nameEn", "description", "columns", "rows", "deckScope", "tarotMode", "stackingMode", "positions"];
+  var POSITION_FIELDS = ["number", "name", "nameEn", "meaning", "meaningEn", "column", "row", "drawRule", "stackOn"];
+  var LEGACY_COMPACT_FIELDS = ["v", "n", "d", "c", "r", "p"];
+  var COMPACT_FIELDS = ["v", "n", "d", "c", "r", "s", "t", "m", "p"];
   var BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var DECK_SCOPES = ["any", "tarot-only", "non-tarot-only"];
+  var TAROT_MODES = ["mixed", "major-only", "minor-only"];
+  var STACKING_MODES = ["single", "major-minor"];
+  var ARCANA_RULES = ["major", "minor"];
+  var SUIT_RULES = ["wands", "cups", "swords", "pentacles"];
+  var RUNTIME_SUITS = {
+    wands: "权杖",
+    cups: "圣杯",
+    swords: "宝剑",
+    pentacles: "星币"
+  };
+  var SUIT_LABELS = {
+    wands: ["仅限权杖牌", "Wands only"],
+    cups: ["仅限圣杯牌", "Cups only"],
+    swords: ["仅限宝剑牌", "Swords only"],
+    pentacles: ["仅限星币牌", "Pentacles only"]
+  };
 
   function fail(message) {
     throw new Error("Invalid custom spread: " + message);
@@ -98,7 +119,26 @@
     });
   }
 
-  function normalizePosition(value, index, columns, rows) {
+  function normalizeEnum(value, choices, path) {
+    if (typeof value !== "string" || choices.indexOf(value) === -1) {
+      fail(path + " has an unsupported value");
+    }
+    return value;
+  }
+
+  function normalizeDrawRule(value, path) {
+    if (value === null) return null;
+    if (!isPlainObject(value)) fail(path + " must be null or a plain object");
+    assertAllowedKeys(value, ["arcana", "suit"], path);
+    var keys = ownKeys(value).filter(function (key) { return typeof key === "string"; });
+    if (keys.length !== 1) fail(path + " must contain exactly one rule");
+    if (hasOwn(value, "arcana")) {
+      return { arcana: normalizeEnum(value.arcana, ARCANA_RULES, path + ".arcana") };
+    }
+    return { suit: normalizeEnum(value.suit, SUIT_RULES, path + ".suit") };
+  }
+
+  function normalizePosition(value, index, columns, rows, previousPositions) {
     var path = "positions[" + index + "]";
     if (!isPlainObject(value)) fail(path + " must be a plain object");
     assertAllowedKeys(value, POSITION_FIELDS, path);
@@ -111,6 +151,20 @@
     var meaning = normalizeText(value.meaning, MAX_MEANING_LENGTH, path + ".meaning", false);
     var column = normalizeInteger(value.column, 1, columns, path + ".column");
     var row = normalizeInteger(value.row, 1, rows, path + ".row");
+    var drawRule = hasOwn(value, "drawRule")
+      ? normalizeDrawRule(value.drawRule, path + ".drawRule")
+      : null;
+    var stackOn = hasOwn(value, "stackOn") ? value.stackOn : null;
+    if (stackOn !== null) {
+      stackOn = normalizeInteger(stackOn, 1, index, path + ".stackOn");
+      if (!previousPositions || !previousPositions[stackOn - 1]) {
+        fail(path + ".stackOn must reference a previous position");
+      }
+      // An explicit stack is always anchored to its target cell. The input
+      // coordinates are still type/range checked above, then canonicalized.
+      column = previousPositions[stackOn - 1].column;
+      row = previousPositions[stackOn - 1].row;
+    }
 
     if (hasOwn(value, "number")) {
       if (normalizeInteger(value.number, 1, MAX_POSITIONS, path + ".number") !== index + 1) {
@@ -133,8 +187,66 @@
       meaning: meaning,
       meaningEn: meaning,
       column: column,
-      row: row
+      row: row,
+      drawRule: drawRule,
+      stackOn: stackOn
     };
+  }
+
+  function validateDefinitionRules(normalized) {
+    var positions = normalized.positions;
+    var drawRules = positions.map(function (position) { return position.drawRule; });
+    var hasDrawRules = drawRules.some(function (rule) { return rule !== null; });
+
+    if (normalized.deckScope === "non-tarot-only" &&
+        (normalized.tarotMode !== "mixed" || normalized.stackingMode !== "single" || hasDrawRules)) {
+      fail("non-tarot-only spreads cannot require Tarot rules");
+    }
+
+    if (normalized.stackingMode === "major-minor" &&
+        (normalized.deckScope !== "tarot-only" || normalized.tarotMode !== "mixed" || hasDrawRules)) {
+      fail("major-minor stacking requires tarot-only mixed mode without position rules");
+    }
+
+    var majorCount = 0;
+    var minorCount = 0;
+    var suitCounts = { wands: 0, cups: 0, swords: 0, pentacles: 0 };
+    drawRules.forEach(function (rule) {
+      if (!rule) return;
+      if (rule.arcana === "major") majorCount++;
+      if (rule.arcana === "minor") minorCount++;
+      if (rule.suit) {
+        minorCount++;
+        suitCounts[rule.suit]++;
+      }
+    });
+
+    if (normalized.tarotMode === "major-only") {
+      if (positions.length > 22) fail("major-only spreads cannot exceed 22 positions");
+      if (drawRules.some(function (rule) {
+        return rule && rule.arcana !== "major";
+      })) {
+        fail("major-only spreads cannot use minor draw rules");
+      }
+    } else if (normalized.tarotMode === "minor-only") {
+      if (positions.length > 56) fail("minor-only spreads cannot exceed 56 positions");
+      if (drawRules.some(function (rule) {
+        return rule && rule.arcana === "major";
+      })) {
+        fail("minor-only spreads cannot use major draw rules");
+      }
+    }
+
+    if (normalized.tarotMode === "mixed") {
+      if (majorCount > 22) fail("major draw rules exceed the Tarot capacity");
+      if (minorCount > 56) fail("minor draw rules exceed the Tarot capacity");
+    }
+    Object.keys(suitCounts).forEach(function (suit) {
+      if (suitCounts[suit] > 14) fail("draw rules exceed the " + suit + " capacity");
+    });
+    if (normalized.stackingMode === "major-minor" && positions.length > 22) {
+      fail("major-minor stacking requires at most 22 positions");
+    }
   }
 
   function normalizeDefinition(input) {
@@ -148,6 +260,15 @@
     var description = normalizeText(input.description, MAX_DESCRIPTION_LENGTH, "description", false);
     var columns = normalizeInteger(input.columns, 1, MAX_COLUMNS, "columns");
     var rows = normalizeInteger(input.rows, 1, MAX_ROWS, "rows");
+    var deckScope = hasOwn(input, "deckScope")
+      ? normalizeEnum(input.deckScope, DECK_SCOPES, "deckScope")
+      : "any";
+    var tarotMode = hasOwn(input, "tarotMode")
+      ? normalizeEnum(input.tarotMode, TAROT_MODES, "tarotMode")
+      : "mixed";
+    var stackingMode = hasOwn(input, "stackingMode")
+      ? normalizeEnum(input.stackingMode, STACKING_MODES, "stackingMode")
+      : "single";
     var positions = input.positions;
     if (!Array.isArray(positions)) fail("positions must be an array");
     assertArrayProperties(positions, "positions");
@@ -163,16 +284,21 @@
     var normalizedPositions = [];
     for (var index = 0; index < positions.length; index++) {
       if (!hasOwn(positions, index)) fail("positions must not contain holes");
-      normalizedPositions.push(normalizePosition(positions[index], index, columns, rows));
+      normalizedPositions.push(normalizePosition(positions[index], index, columns, rows, normalizedPositions));
     }
-    return {
+    var normalized = {
       name: name,
       nameEn: name,
       description: description,
       columns: columns,
       rows: rows,
+      deckScope: deckScope,
+      tarotMode: tarotMode,
+      stackingMode: stackingMode,
       positions: normalizedPositions
     };
+    validateDefinitionRules(normalized);
+    return normalized;
   }
 
   function utf8Encode(value) {
@@ -320,9 +446,9 @@
     return hash.toString(16).padStart(8, "0");
   }
 
-  function compactFromNormalized(normalized) {
+  function legacyCompactFromNormalized(normalized) {
     return {
-      v: SCHEMA_VERSION,
+      v: LEGACY_SCHEMA_VERSION,
       n: normalized.name,
       d: normalized.description,
       c: normalized.columns,
@@ -333,11 +459,31 @@
     };
   }
 
-  function normalizedFromCompact(input) {
+  function compactFromNormalized(normalized) {
+    return {
+      v: SCHEMA_VERSION,
+      n: normalized.name,
+      d: normalized.description,
+      c: normalized.columns,
+      r: normalized.rows,
+      s: normalized.deckScope,
+      t: normalized.tarotMode,
+      m: normalized.stackingMode,
+      p: normalized.positions.map(function (position) {
+        return [position.name, position.meaning, position.column, position.row,
+          position.drawRule, position.stackOn];
+      })
+    };
+  }
+
+  function normalizedFromLegacyCompact(input) {
     if (!isPlainObject(input)) fail("payload schema must be a plain object");
-    assertAllowedKeys(input, COMPACT_FIELDS, "payload");
-    COMPACT_FIELDS.forEach(function (key) { assertRequired(input, key, "payload"); });
-    if (input.v !== SCHEMA_VERSION) fail("unknown payload version");
+    assertAllowedKeys(input, LEGACY_COMPACT_FIELDS, "payload");
+    LEGACY_COMPACT_FIELDS.forEach(function (key) { assertRequired(input, key, "payload"); });
+    if (input.v !== LEGACY_SCHEMA_VERSION) fail("unknown payload version");
+    if (typeof input.c === "number" && input.c > LEGACY_MAX_COLUMNS) {
+      fail("legacy payload columns exceed the v1 limit");
+    }
     if (!Array.isArray(input.p)) fail("payload positions must be an array");
     assertArrayProperties(input.p, "payload.p");
     if (input.p.length < 1 || input.p.length > MAX_POSITIONS) fail("payload positions exceed the limit");
@@ -353,7 +499,9 @@
         name: item[0],
         meaning: item[1],
         column: item[2],
-        row: item[3]
+        row: item[3],
+        drawRule: null,
+        stackOn: null
       });
     }
     return normalizeDefinition({
@@ -361,6 +509,43 @@
       description: input.d,
       columns: input.c,
       rows: input.r,
+      positions: positions
+    });
+  }
+
+  function normalizedFromCompact(input) {
+    if (!isPlainObject(input)) fail("payload schema must be a plain object");
+    assertAllowedKeys(input, COMPACT_FIELDS, "payload");
+    COMPACT_FIELDS.forEach(function (key) { assertRequired(input, key, "payload"); });
+    if (input.v !== SCHEMA_VERSION) fail("unknown payload version");
+    if (!Array.isArray(input.p)) fail("payload positions must be an array");
+    assertArrayProperties(input.p, "payload.p");
+    if (input.p.length < 1 || input.p.length > MAX_POSITIONS) fail("payload positions exceed the limit");
+    var positions = [];
+    for (var index = 0; index < input.p.length; index++) {
+      var item = input.p[index];
+      if (!Array.isArray(item) || item.length !== 6) fail("payload position must have six fields");
+      assertArrayProperties(item, "payload.p[" + index + "]");
+      for (var itemIndex = 0; itemIndex < 6; itemIndex++) {
+        if (!hasOwn(item, itemIndex)) fail("payload position must not contain holes");
+      }
+      positions.push({
+        name: item[0],
+        meaning: item[1],
+        column: item[2],
+        row: item[3],
+        drawRule: item[4],
+        stackOn: item[5]
+      });
+    }
+    return normalizeDefinition({
+      name: input.n,
+      description: input.d,
+      columns: input.c,
+      rows: input.r,
+      deckScope: input.s,
+      tarotMode: input.t,
+      stackingMode: input.m,
       positions: positions
     });
   }
@@ -379,8 +564,17 @@
 
   function decode(code) {
     if (typeof code !== "string" || code.length > MAX_CODE_LENGTH) fail("share code exceeds the size limit");
-    if (code.indexOf(PREFIX) !== 0) fail("unknown share-code version");
-    var parts = code.slice(PREFIX.length).split(".");
+    var prefix;
+    var legacy = false;
+    if (code.indexOf(PREFIX) === 0) {
+      prefix = PREFIX;
+    } else if (code.indexOf(LEGACY_PREFIX) === 0) {
+      prefix = LEGACY_PREFIX;
+      legacy = true;
+    } else {
+      fail("unknown share-code version");
+    }
+    var parts = code.slice(prefix.length).split(".");
     if (parts.length !== 2 || !/^[0-9a-f]{8}$/.test(parts[1])) fail("share code is malformed");
     if (fnv1aAscii(parts[0]) !== parts[1]) fail("share-code checksum does not match");
     var json;
@@ -396,8 +590,9 @@
     } catch (_parseError) {
       fail("share-code payload is not JSON");
     }
-    var normalized = normalizedFromCompact(parsed);
-    if (JSON.stringify(compactFromNormalized(normalized)) !== json) {
+    var normalized = legacy ? normalizedFromLegacyCompact(parsed) : normalizedFromCompact(parsed);
+    var canonical = legacy ? legacyCompactFromNormalized(normalized) : compactFromNormalized(normalized);
+    if (JSON.stringify(canonical) !== json) {
       fail("share-code payload is not canonical JSON");
     }
     return normalized;
@@ -412,13 +607,43 @@
     return "custom-" + fnv1aAscii(canonical) + fnv1aAscii(reversed);
   }
 
+  function runtimeDrawRule(rule) {
+    if (!rule) return null;
+    if (rule.arcana === "major") {
+      return {
+        arcana: "major",
+        ruleCode: "major",
+        label: "仅限大阿卡那",
+        labelEn: "Major Arcana only"
+      };
+    }
+    if (rule.arcana === "minor") {
+      return {
+        arcana: "minor",
+        ruleCode: "minor",
+        label: "仅限小阿卡那",
+        labelEn: "Minor Arcana only"
+      };
+    }
+    var labels = SUIT_LABELS[rule.suit];
+    return {
+      suit: RUNTIME_SUITS[rule.suit],
+      ruleCode: rule.suit,
+      label: labels[0],
+      labelEn: labels[1]
+    };
+  }
+
   function runtimeFromNormalized(normalized) {
     var counts = Object.create(null);
-    var positions = normalized.positions.map(function (position) {
+    var positions = [];
+    normalized.positions.forEach(function (position) {
       var key = position.column + ":" + position.row;
       var layer = counts[key] || 0;
       counts[key] = layer + 1;
-      return {
+      var offsetX = layer * STACK_OFFSET_X;
+      var offsetY = layer * STACK_OFFSET_Y;
+      positions.push({
         number: position.number,
         name: position.name,
         nameEn: position.nameEn,
@@ -426,9 +651,11 @@
         meaningEn: position.meaningEn,
         column: position.column,
         row: position.row,
-        offsetX: layer * STACK_OFFSET_X,
-        offsetY: layer * STACK_OFFSET_Y
-      };
+        drawRule: runtimeDrawRule(position.drawRule),
+        stackOn: position.stackOn,
+        offsetX: offsetX,
+        offsetY: offsetY
+      });
     });
     return {
       id: runtimeId(normalized),
@@ -437,6 +664,9 @@
       description: normalized.description,
       columns: normalized.columns,
       rows: normalized.rows,
+      deckScope: normalized.deckScope,
+      tarotMode: normalized.tarotMode,
+      stackingMode: normalized.stackingMode,
       positions: positions,
       category: "custom",
       source: "User-created spread",
@@ -447,6 +677,36 @@
   function toRuntimeSpread(definition) {
     var normalized = normalizeDefinition(definition);
     return runtimeFromNormalized(normalized);
+  }
+
+  function requiredTarotMode(value) {
+    return value && TAROT_MODES.indexOf(value.tarotMode) !== -1 ? value.tarotMode : "mixed";
+  }
+
+  function runtimeTarotMode(value) {
+    return requiredTarotMode(value);
+  }
+
+  function supportsDeck(value, deckType) {
+    if (!isPlainObject(value)) return false;
+    if (deckType !== "tarot" && deckType !== "mystagogus" && deckType !== "lxxxi") return false;
+    var scope = value.deckScope;
+    if (scope === undefined) scope = "any";
+    if (DECK_SCOPES.indexOf(scope) === -1) return false;
+    var isTarot = deckType === "tarot";
+    if (scope === "tarot-only" && !isTarot) return false;
+    if (scope === "non-tarot-only" && isTarot) return false;
+    return true;
+  }
+
+  function isMajorMinorStacking(value, deckType) {
+    if (!isPlainObject(value) || value.stackingMode !== "major-minor") return false;
+    if (value.deckScope !== "tarot-only" || requiredTarotMode(value) !== "mixed") return false;
+    if (!Array.isArray(value.positions)) return false;
+    if (value.positions.some(function (position) {
+      return position && position.drawRule !== null && position.drawRule !== undefined;
+    })) return false;
+    return deckType === undefined ? true : supportsDeck(value, deckType);
   }
 
   function clone(value) {
@@ -468,25 +728,30 @@
 
   function loadRecords(storage) {
     if (!storage || typeof storage.getItem !== "function") {
-      return { records: [], writeBlocked: false };
+      return { records: [], writeBlocked: false, needsMigration: false };
     }
     var raw;
     try {
       raw = storage.getItem(STORAGE_KEY);
-      if (raw === null || raw === "") return { records: [], writeBlocked: false };
+      if (raw === null || raw === "") return { records: [], writeBlocked: false, needsMigration: false };
       if (typeof raw !== "string") fail("stored library must be a string");
       var parsed = JSON.parse(raw);
       if (JSON.stringify(parsed) !== raw) fail("stored library is not canonical JSON");
       if (!isPlainObject(parsed)) fail("stored library must be a plain object");
       assertAllowedKeys(parsed, ["v", "items"], "storage");
-      if (parsed.v !== SCHEMA_VERSION || !Array.isArray(parsed.items) ||
+      if (parsed.v !== SCHEMA_VERSION && parsed.v !== LEGACY_SCHEMA_VERSION) {
+        fail("stored library version or size is invalid");
+      }
+      if (!Array.isArray(parsed.items) ||
           parsed.items.length > MAX_LIBRARY_SIZE) fail("stored library version or size is invalid");
       assertArrayProperties(parsed.items, "storage.items");
       var records = [];
       var ids = Object.create(null);
       for (var index = 0; index < parsed.items.length; index++) {
         if (!hasOwn(parsed.items, index)) fail("stored library must not contain holes");
-        var normalized = normalizedFromCompact(parsed.items[index]);
+        var normalized = parsed.v === LEGACY_SCHEMA_VERSION
+          ? normalizedFromLegacyCompact(parsed.items[index])
+          : normalizedFromCompact(parsed.items[index]);
         var id = runtimeId(normalized);
         if (ids[id]) {
           // A duplicate runtime ID may only represent the exact same
@@ -500,11 +765,15 @@
           records.push(normalized);
         }
       }
-      return { records: records, writeBlocked: false };
+      return {
+        records: records,
+        writeBlocked: false,
+        needsMigration: parsed.v === LEGACY_SCHEMA_VERSION
+      };
     } catch (_error) {
       // Do not let the next save overwrite data that a future version or a
       // recovery tool may still understand.
-      return { records: [], writeBlocked: true };
+      return { records: [], writeBlocked: true, needsMigration: false };
     }
   }
 
@@ -524,7 +793,7 @@
     var storage = platform === "android" ? (options.storage || defaultStorage()) : null;
     var loaded = platform === "android"
       ? loadRecords(storage)
-      : { records: [], writeBlocked: false };
+      : { records: [], writeBlocked: false, needsMigration: false };
     var records = loaded.records;
     var writeBlocked = loaded.writeBlocked;
 
@@ -555,6 +824,7 @@
       try {
         storage.setItem(STORAGE_KEY, compactEnvelope(nextRecords));
         writeBlocked = false;
+        loaded.needsMigration = false;
       } catch (error) {
         throw storageFailure("storage write failed", error);
       }
@@ -619,8 +889,11 @@
 
   return {
     PREFIX: PREFIX,
+    LEGACY_PREFIX: LEGACY_PREFIX,
     STORAGE_KEY: STORAGE_KEY,
     SCHEMA_VERSION: SCHEMA_VERSION,
+    LEGACY_SCHEMA_VERSION: LEGACY_SCHEMA_VERSION,
+    LEGACY_MAX_COLUMNS: LEGACY_MAX_COLUMNS,
     MAX_NAME_LENGTH: MAX_NAME_LENGTH,
     MAX_DESCRIPTION_LENGTH: MAX_DESCRIPTION_LENGTH,
     MAX_COLUMNS: MAX_COLUMNS,
@@ -636,6 +909,10 @@
     encode: encode,
     decode: decode,
     toRuntimeSpread: toRuntimeSpread,
+    supportsDeck: supportsDeck,
+    requiredTarotMode: requiredTarotMode,
+    runtimeTarotMode: runtimeTarotMode,
+    isMajorMinorStacking: isMajorMinorStacking,
     createLibrary: createLibrary
   };
 });

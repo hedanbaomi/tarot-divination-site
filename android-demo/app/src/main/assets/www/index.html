@@ -386,19 +386,61 @@
               </label>
               <label class="custom-spread-field">
                 <span data-i18n="customSpread.columns">网格列数</span>
-                <input id="customSpreadColumns" type="number" min="1" max="7" value="3">
+                <input id="customSpreadColumns" type="number" min="1" max="10" value="3">
               </label>
               <label class="custom-spread-field">
                 <span data-i18n="customSpread.rows">网格行数</span>
                 <input id="customSpreadRows" type="number" min="1" max="10" value="3">
               </label>
+              <div class="custom-spread-field">
+                <label for="customSpreadDeckScope" data-i18n="customSpread.deckScope">牌组限制</label>
+                <select id="customSpreadDeckScope">
+                  <option value="any" data-i18n="customSpread.deckScopeAny">不限牌组</option>
+                  <option value="tarot-only" data-i18n="customSpread.deckScopeTarotOnly">仅塔罗</option>
+                  <option value="non-tarot-only" data-i18n="customSpread.deckScopeNonTarotOnly">仅非塔罗</option>
+                </select>
+              </div>
+              <div class="custom-spread-field">
+                <label for="customSpreadTarotMode" data-i18n="customSpread.tarotMode">塔罗抽牌模式</label>
+                <select id="customSpreadTarotMode">
+                  <option value="mixed" data-i18n="customSpread.tarotModeMixed">大阿与小阿混合</option>
+                  <option value="major-only" data-i18n="customSpread.tarotModeMajorOnly">仅大阿卡那</option>
+                  <option value="minor-only" data-i18n="customSpread.tarotModeMinorOnly">仅小阿卡那</option>
+                </select>
+              </div>
+              <div class="custom-spread-field">
+                <label for="customSpreadStackingMode" data-i18n="customSpread.stackingMode">叠牌法</label>
+                <select id="customSpreadStackingMode">
+                  <option value="single" data-i18n="customSpread.stackingModeSingle">单牌</option>
+                  <option value="major-minor" data-i18n="customSpread.stackingModeMajorMinor">大阿＋小阿叠放</option>
+                </select>
+              </div>
             </div>
             <div class="custom-spread-preview-wrap">
-              <h4 data-i18n="customSpread.preview">布局预览</h4>
+              <div class="custom-spread-panel-head">
+                <h4 data-i18n="customSpread.preview">布局预览</h4>
+                <button class="btn btn-secondary" id="customSpreadPreviewEffectBtn" type="button"
+                  data-i18n="customSpread.previewEffect">抽牌效果预览</button>
+              </div>
               <div class="custom-spread-preview-scroll">
                 <div class="custom-spread-preview" id="customSpreadPreview" role="group"
                   aria-label="自定义牌阵布局预览" data-i18n-aria-label="customSpread.previewAria"></div>
               </div>
+              <p class="custom-spread-drag-hint" id="customSpreadDragHint" data-i18n="customSpread.dragHint">
+                拖动牌位到网格单元格；点击或键盘仍可编辑字段。
+              </p>
+            </div>
+            <div class="custom-spread-effect-preview" id="customSpreadEffectPreview" role="dialog"
+              aria-modal="true" aria-labelledby="customSpreadEffectPreviewTitle" aria-hidden="true" hidden>
+              <section class="custom-spread-effect-card-panel">
+                <div class="custom-spread-effect-preview-head">
+                  <h3 id="customSpreadEffectPreviewTitle" data-i18n="customSpread.previewEffectTitle">抽牌效果预览</h3>
+                  <button class="history-icon-btn" id="customSpreadEffectPreviewCloseBtn" type="button"
+                    aria-label="关闭抽牌效果预览" data-i18n-aria-label="customSpread.previewEffectClose">×</button>
+                </div>
+                <div class="custom-spread-effect-preview-grid" id="customSpreadEffectPreviewContent"
+                  role="group" aria-label="抽牌效果预览内容" data-i18n-aria-label="customSpread.previewEffectAria"></div>
+              </section>
             </div>
             <div class="custom-spread-positions-head">
               <h4 data-i18n="customSpread.positions">牌位</h4>

@@ -528,7 +528,8 @@
       }
     }
     if (record.overviewMethod === "stacked") {
-      if (record.deckType !== "tarot" || record.spreadId !== "overview") {
+      if (record.deckType !== "tarot" ||
+          (record.spreadId !== "overview" && !/^custom-[0-9a-f]{16}$/.test(record.spreadId))) {
         fail("record.overviewMethod", "stacked mode is only valid for the tarot overview spread");
       }
       if (record.cards.length !== record.positionCount * 2) {

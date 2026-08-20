@@ -172,6 +172,82 @@ test("captures the Overview 26-card major/minor layers in slot order", function 
   assert.doesNotThrow(function () { history.validateRecord(record); });
 });
 
+test("accepts a custom runtime spread ID for stacked Tarot history", function () {
+  var spread = {
+    id: "custom-0123456789abcdef",
+    name: "自定义叠牌",
+    positions: [
+      { number: 1, name: "核心", nameEn: "Core" },
+      { number: 2, name: "阻碍", nameEn: "Obstacle" }
+    ]
+  };
+  var entries = [];
+  spread.positions.forEach(function (_position, slotIndex) {
+    entries.push(entry(slotIndex, card("major-custom-" + slotIndex, String(slotIndex), "大牌" + slotIndex),
+      "upright", "major"));
+    entries.push(entry(slotIndex, card("minor-custom-" + slotIndex, String(slotIndex), "小牌" + slotIndex, {
+      arcana: "minor",
+      suit: "圣杯"
+    }), "upright", "minor"));
+  });
+
+  var record = history.buildReadingRecord(buildInput(spread, entries, {
+    overviewMethod: "stacked",
+    filterMode: "not-applicable",
+    orientationMode: "upright-only"
+  }));
+
+  assert.equal(record.spreadId, "custom-0123456789abcdef");
+  assert.equal(record.cards.length, record.positionCount * 2);
+  assert.doesNotThrow(function () { history.validateRecord(record); });
+});
+
+test("rejects malformed custom IDs, preset non-overview spreads and non-Tarot stacked records", function () {
+  var buildStackedInput = function (spread, overrides) {
+    var entries = [];
+    spread.positions.forEach(function (_position, slotIndex) {
+      entries.push(entry(slotIndex, card("major-stacked-" + slotIndex, String(slotIndex), "大牌" + slotIndex),
+        "upright", "major"));
+      entries.push(entry(slotIndex, card("minor-stacked-" + slotIndex, String(slotIndex), "小牌" + slotIndex, {
+        arcana: "minor",
+        suit: "圣杯"
+      }), "upright", "minor"));
+    });
+    return buildInput(spread, entries, Object.assign({
+      overviewMethod: "stacked",
+      filterMode: "not-applicable",
+      orientationMode: "upright-only"
+    }, overrides || {}));
+  };
+  var customSpread = {
+    id: "custom-0123456789abcdef",
+    name: "自定义叠牌",
+    positions: [
+      { number: 1, name: "核心", nameEn: "Core" },
+      { number: 2, name: "阻碍", nameEn: "Obstacle" }
+    ]
+  };
+
+  assert.throws(function () {
+    history.buildReadingRecord(buildStackedInput(customSpread, {
+      spreadId: "custom-0123456789abcde"
+    }));
+  }, /stacked mode/);
+
+  assert.throws(function () {
+    history.buildReadingRecord(buildStackedInput(spreads.getTarotSpread("three-card-horizontal")));
+  }, /stacked mode/);
+
+  assert.throws(function () {
+    history.buildReadingRecord(buildStackedInput(customSpread, {
+      deckType: "mystagogus",
+      deckMode: "mystagogus",
+      deckName: "Mystagogus",
+      filterMode: "not-applicable"
+    }));
+  }, /non-tarot decks do not use overview methods/);
+});
+
 test("serializes an export envelope with formatVersion and round-trips", function () {
   var spread = spreads.getTarotSpread("three-card-horizontal");
   var record = history.buildReadingRecord(buildInput(spread, [

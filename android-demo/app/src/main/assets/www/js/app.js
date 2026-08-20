@@ -179,9 +179,40 @@
     }
   }
 
+  function customSpreadSupportsDeck(spreadDefinition, requestedDeckType) {
+    if (!spreadDefinition || !spreadDefinition.isCustom) return true;
+    if (globalThis.DivinationCustomSpreads &&
+        typeof globalThis.DivinationCustomSpreads.supportsDeck === "function") {
+      return globalThis.DivinationCustomSpreads.supportsDeck(spreadDefinition, requestedDeckType);
+    }
+    if (spreadDefinition.deckScope === "tarot-only") return requestedDeckType === "tarot";
+    if (spreadDefinition.deckScope === "non-tarot-only") return requestedDeckType !== "tarot";
+    return true;
+  }
+
+  function customSpreadTarotFilter(spreadDefinition, requestedDeckType, requestedFilter) {
+    if (!spreadDefinition || !spreadDefinition.isCustom || requestedDeckType !== "tarot") {
+      return requestedFilter;
+    }
+    if (globalThis.DivinationCustomSpreads &&
+        typeof globalThis.DivinationCustomSpreads.requiredTarotMode === "function") {
+      return globalThis.DivinationCustomSpreads.requiredTarotMode(spreadDefinition);
+    }
+    return spreadDefinition.tarotMode || requestedFilter;
+  }
+
+  function preferredDeckForCustomSpread(spreadDefinition, currentDeckType) {
+    if (customSpreadSupportsDeck(spreadDefinition, currentDeckType)) return currentDeckType;
+    if (spreadDefinition && spreadDefinition.deckScope === "tarot-only") return "tarot";
+    if (spreadDefinition && spreadDefinition.deckScope === "non-tarot-only") return "mystagogus";
+    return currentDeckType;
+  }
+
   function selectedSpread() {
     var custom = customSpreadsUi && customSpreadsUi.getById(selectedSpreadId);
-    return custom || getSpreadById(deckType, selectedSpreadId);
+    return custom && customSpreadSupportsDeck(custom, deckType)
+      ? custom
+      : getSpreadById(deckType, selectedSpreadId);
   }
 
   function isReadingComplete() {
@@ -206,16 +237,30 @@
       spreadName: activeSpread.name,
       orientationMode: deckType === "tarot" ? mode : "upright-only",
       filterMode: deckType === "tarot" ? arcanaFilter : "not-applicable",
-      overviewMethod: deckType === "tarot" && activeSpread.id === "overview"
-        ? overviewMethod
-        : "not-applicable",
+      overviewMethod: isOverviewStacking()
+        ? "stacked"
+        : deckType === "tarot" && activeSpread.id === "overview"
+          ? overviewMethod
+          : "not-applicable",
       positions: activeSpread.positions,
       entries: orderedSpreadEntries()
     });
   }
 
   function isOverviewStacking() {
-    return isOverviewStackingMode(deckType, selectedSpreadId, overviewMethod);
+    var activeSpread = selectedSpread();
+    var customStacking = Boolean(
+      activeSpread && activeSpread.isCustom &&
+      globalThis.DivinationCustomSpreads &&
+      typeof globalThis.DivinationCustomSpreads.isMajorMinorStacking === "function" &&
+      globalThis.DivinationCustomSpreads.isMajorMinorStacking(activeSpread, deckType)
+    );
+    return isOverviewStackingMode(deckType, selectedSpreadId, overviewMethod) || customStacking;
+  }
+
+  function hasCustomTarotMode() {
+    var activeSpread = selectedSpread();
+    return deckType === "tarot" && Boolean(activeSpread && activeSpread.isCustom);
   }
 
   function hasPositionDrawRules() {
@@ -287,7 +332,8 @@
     updateOverviewMethodUi();
     if (el.arcanaFilterGroup) {
       el.arcanaFilterGroup.style.display =
-        nonTarot || (!isFreeform() && (isOverviewStacking() || hasPositionDrawRules())) ? "none" : "";
+        nonTarot || (!isFreeform() &&
+          (isOverviewStacking() || hasPositionDrawRules() || hasCustomTarotMode())) ? "none" : "";
     }
     if (el.overviewMethodSummary) {
       el.overviewMethodSummary.textContent = isOverviewStacking()
@@ -1194,6 +1240,7 @@
   }
 
   async function resolveCustomSpreadFilter(spreadDefinition, requestedDeckType, requestedFilter) {
+    requestedFilter = customSpreadTarotFilter(spreadDefinition, requestedDeckType, requestedFilter);
     if (!spreadDefinition || !spreadDefinition.isCustom ||
         requestedDeckType !== "tarot" || requestedFilter !== "major-only") {
       return requestedFilter;
@@ -1268,8 +1315,12 @@
   async function activateCustomSpread(spreadDefinition) {
     if (!spreadDefinition || !spreadDefinition.id) return false;
     if (!(await confirmIfSpread(t("confirm.spread")))) return false;
-    var resolvedFilter = await resolveCustomSpreadFilter(spreadDefinition, deckType, arcanaFilter);
+    var targetDeckType = preferredDeckForCustomSpread(spreadDefinition, deckType);
+    if (!customSpreadSupportsDeck(spreadDefinition, targetDeckType)) return false;
+    var resolvedFilter = await resolveCustomSpreadFilter(spreadDefinition, targetDeckType, arcanaFilter);
     if (resolvedFilter === null) return false;
+    deckType = targetDeckType;
+    el.deckSelect.value = deckType;
     arcanaFilter = resolvedFilter;
     el.arcanaFilter.value = arcanaFilter;
     layoutMode = "preset";
@@ -1301,6 +1352,9 @@
     el.spreadSelect.innerHTML = "";
     var catalogue = getSpreadsForDeck(deckType);
     var customCatalogue = customSpreadsUi ? customSpreadsUi.list() : [];
+    customCatalogue = customCatalogue.filter(function (spreadDefinition) {
+      return customSpreadSupportsDeck(spreadDefinition, deckType);
+    });
     var customGroup = document.createElement("optgroup");
     customGroup.className = "custom-spreads";
     customGroup.label = t("customSpread.group");
@@ -1357,7 +1411,12 @@
       return;
     }
     var currentCustomSpread = customSpreadsUi && customSpreadsUi.getById(selectedSpreadId);
-    var resolvedFilter = await resolveCustomSpreadFilter(currentCustomSpread, newDeck, arcanaFilter);
+    var currentCustomIsAllowed = customSpreadSupportsDeck(currentCustomSpread, newDeck);
+    var resolvedFilter = await resolveCustomSpreadFilter(
+      currentCustomIsAllowed ? currentCustomSpread : null,
+      newDeck,
+      arcanaFilter
+    );
     if (resolvedFilter === null) {
       el.deckSelect.value = deckType;
       return;
@@ -1366,7 +1425,10 @@
     el.arcanaFilter.value = arcanaFilter;
     deckType = newDeck;
     // 双方均可使用对方牌阵；仅在 id 无效时回退默认。
-    var allowed = getSpreadsForDeck(deckType).concat(customSpreadsUi ? customSpreadsUi.list() : []);
+    var allowedCustomSpreads = customSpreadsUi ? customSpreadsUi.list().filter(function (spreadDefinition) {
+      return customSpreadSupportsDeck(spreadDefinition, deckType);
+    }) : [];
+    var allowed = getSpreadsForDeck(deckType).concat(allowedCustomSpreads);
     if (!allowed.some(function (s) { return s.id === selectedSpreadId; })) {
       selectedSpreadId = defaultSpreadIdForDeck(deckType);
     }
