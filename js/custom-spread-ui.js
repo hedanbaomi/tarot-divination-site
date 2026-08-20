@@ -398,6 +398,10 @@
     }
 
     function setOperationError(error, fallbackKey) {
+      if (error && error.code === "CUSTOM_SPREAD_LIBRARY_FULL") {
+        setStatus("customSpread.libraryFull", { limit: error.limit || core.MAX_ANDROID_LIBRARY_SIZE }, "error");
+        return;
+      }
       setStatus(error && error.code === "CUSTOM_SPREAD_STORAGE"
         ? "customSpread.storageFailed"
         : fallbackKey, null, "error");

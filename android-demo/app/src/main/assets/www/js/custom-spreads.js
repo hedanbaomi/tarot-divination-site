@@ -22,6 +22,7 @@
   var MAX_MEANING_LENGTH = 300;
   var MAX_CODE_LENGTH = 16000;
   var MAX_LIBRARY_SIZE = 50;
+  var MAX_ANDROID_LIBRARY_SIZE = 5;
   var STACK_OFFSET_X = 14;
   var STACK_OFFSET_Y = 32;
   var CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F]/;
@@ -59,6 +60,13 @@
     var error = new Error("Custom spread storage: " + message);
     error.code = "CUSTOM_SPREAD_STORAGE";
     if (cause) error.cause = cause;
+    return error;
+  }
+
+  function libraryFullFailure(limit) {
+    var error = new Error("Custom spread library contains at most " + limit + " spreads");
+    error.code = "CUSTOM_SPREAD_LIBRARY_FULL";
+    error.limit = limit;
     return error;
   }
 
@@ -763,7 +771,7 @@
         fail("stored library version or size is invalid");
       }
       if (!Array.isArray(parsed.items) ||
-          parsed.items.length > MAX_LIBRARY_SIZE) fail("stored library version or size is invalid");
+          parsed.items.length > MAX_ANDROID_LIBRARY_SIZE) fail("stored library version or size is invalid");
       assertArrayProperties(parsed.items, "storage.items");
       var records = [];
       var ids = Object.create(null);
@@ -816,6 +824,7 @@
       : { records: [], writeBlocked: false, needsMigration: false };
     var records = loaded.records;
     var writeBlocked = loaded.writeBlocked;
+    var maxLibrarySize = platform === "android" ? MAX_ANDROID_LIBRARY_SIZE : MAX_LIBRARY_SIZE;
 
     function findIndex(id, expected) {
       if (typeof id !== "string") return -1;
@@ -865,7 +874,10 @@
       var index = findIndex(id, normalized);
       var nextRecords = records.slice();
       if (index < 0) {
-        if (records.length >= MAX_LIBRARY_SIZE) fail("library contains at most " + MAX_LIBRARY_SIZE + " spreads");
+        if (records.length >= maxLibrarySize) {
+          if (platform === "android") throw libraryFullFailure(maxLibrarySize);
+          fail("library contains at most " + maxLibrarySize + " spreads");
+        }
         nextRecords.push(normalized);
       } else {
         nextRecords[index] = normalized;
@@ -923,6 +935,7 @@
     MAX_MEANING_LENGTH: MAX_MEANING_LENGTH,
     MAX_CODE_LENGTH: MAX_CODE_LENGTH,
     MAX_LIBRARY_SIZE: MAX_LIBRARY_SIZE,
+    MAX_ANDROID_LIBRARY_SIZE: MAX_ANDROID_LIBRARY_SIZE,
     STACK_OFFSET_X: STACK_OFFSET_X,
     STACK_OFFSET_Y: STACK_OFFSET_Y,
     MIN_ROTATION: MIN_ROTATION,

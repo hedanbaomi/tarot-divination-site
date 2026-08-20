@@ -152,6 +152,7 @@ test("localized copy states Android persistence and website session-only behavio
     assert.match(block, /"customSpread\.importAndUse"/);
     assert.match(block, /"customSpread\.downloadCode"/);
     assert.match(block, /"customSpread\.storageFailed"/);
+    assert.match(block, /"customSpread\.libraryFull"/);
     assert.match(block, /"customSpread\.capacityMessage"/);
   });
 });

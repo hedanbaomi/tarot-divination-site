@@ -472,7 +472,7 @@ test("runtime IDs do not reproduce the 32-bit s24797/s101153 collision", functio
   assert.deepEqual(library.list().map(function (spread) { return spread.name; }), ["s24797", "s101153"]);
 });
 
-test("Android library persists, reloads, removes, locks corrupt storage, and caps at 50", function () {
+test("Android library persists, reloads, removes, locks corrupt storage, and rolls at 5", function () {
   var storage = storageFixture();
   var android = customSpreads.createLibrary({ platform: "android", storage: storage });
   var saved = android.upsert(definition());
@@ -513,7 +513,8 @@ test("Android library persists, reloads, removes, locks corrupt storage, and cap
 
   var cappedStorage = storageFixture();
   var capped = customSpreads.createLibrary({ platform: "android", storage: cappedStorage });
-  for (var index = 0; index < customSpreads.MAX_LIBRARY_SIZE; index++) {
+  assert.equal(customSpreads.MAX_ANDROID_LIBRARY_SIZE, 5);
+  for (var index = 0; index < customSpreads.MAX_ANDROID_LIBRARY_SIZE; index++) {
     capped.upsert({
       name: "Spread " + index,
       description: "",
@@ -522,7 +523,8 @@ test("Android library persists, reloads, removes, locks corrupt storage, and cap
       positions: [{ name: "Position", meaning: "", column: 1, row: 1 }]
     });
   }
-  assert.equal(capped.list().length, customSpreads.MAX_LIBRARY_SIZE);
+  assert.equal(capped.list().length, customSpreads.MAX_ANDROID_LIBRARY_SIZE);
+  var fullRaw = cappedStorage.raw();
   assert.throws(function () {
     capped.upsert({
       name: "One too many",
@@ -531,8 +533,37 @@ test("Android library persists, reloads, removes, locks corrupt storage, and cap
       rows: 1,
       positions: [{ name: "Position", meaning: "", column: 1, row: 1 }]
     });
+  }, function (error) {
+    return error && error.code === "CUSTOM_SPREAD_LIBRARY_FULL" && error.limit === 5;
   });
-  assert.equal(capped.list().length, customSpreads.MAX_LIBRARY_SIZE);
+  assert.equal(capped.list().length, customSpreads.MAX_ANDROID_LIBRARY_SIZE);
+  assert.equal(cappedStorage.raw(), fullRaw, "a rejected sixth spread must not rewrite storage");
+
+  var reloadedAtCap = customSpreads.createLibrary({ platform: "android", storage: cappedStorage });
+  assert.equal(reloadedAtCap.list().length, 5);
+  assert.equal(reloadedAtCap.importCode(reloadedAtCap.exportCode(reloadedAtCap.list()[0].id)).id,
+    reloadedAtCap.list()[0].id, "re-importing an existing spread remains allowed at the cap");
+  assert.equal(reloadedAtCap.remove(reloadedAtCap.list()[0].id), true);
+  assert.equal(reloadedAtCap.list().length, 4);
+  reloadedAtCap.upsert({
+    name: "Replacement",
+    description: "",
+    columns: 1,
+    rows: 1,
+    positions: [{ name: "Position", meaning: "", column: 1, row: 1 }]
+  });
+  assert.equal(reloadedAtCap.list().length, 5, "deleting one spread opens exactly one slot");
+
+  var oversizedEnvelope = JSON.parse(cappedStorage.raw());
+  oversizedEnvelope.items.push(oversizedEnvelope.items[0]);
+  var oversizedRaw = JSON.stringify(oversizedEnvelope);
+  var oversizedStorage = storageFixture(oversizedRaw);
+  var oversized = customSpreads.createLibrary({ platform: "android", storage: oversizedStorage });
+  assert.deepEqual(oversized.list(), []);
+  assert.throws(function () { oversized.upsert(definition()); }, function (error) {
+    return error && error.code === "CUSTOM_SPREAD_STORAGE";
+  });
+  assert.equal(oversizedStorage.raw(), oversizedRaw, "oversized stored data must not be overwritten");
 });
 
 test("library results are defensive clones and the web library never touches storage", function () {
@@ -551,6 +582,17 @@ test("library results are defensive clones and the web library never touches sto
   assert.equal(web.getById(web.list()[0].id).positions[0].name, "过去");
   assert.equal(web.getById(web.list()[0].id).positions[0].meaning, "已经发生的事");
   assert.equal(web.importCode(web.exportCode(web.list()[0].id)).id, web.list()[0].id);
+  for (var index = 0; index < customSpreads.MAX_ANDROID_LIBRARY_SIZE; index++) {
+    web.upsert({
+      name: "Session spread " + index,
+      description: "",
+      columns: 1,
+      rows: 1,
+      positions: [{ name: "Position", meaning: "", column: 1, row: 1 }]
+    });
+  }
+  assert.equal(web.list().length, customSpreads.MAX_ANDROID_LIBRARY_SIZE + 1,
+    "the Android persistence cap must not limit the website session library");
 });
 
 test("Android storage failures are coded and leave library state unchanged", function () {
