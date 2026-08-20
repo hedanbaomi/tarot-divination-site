@@ -29,11 +29,15 @@ test("website replaces every native select surface with the themed card picker",
   });
 
   assert.match(html, /id="choiceDialog"/);
-  assert.match(html, /src="js\/custom-selects\.js\?v=20260727-card-picker"/);
+  assert.match(html, /src="js\/custom-selects\.js\?v=20260820-custom-spread-window-final"/);
   assert.match(css, /\.custom-select-native\s*\{\s*display:\s*none\s*!important/);
   assert.match(css, /\.themed-select-trigger/);
   assert.match(css, /\.choice-option\.selected/);
   assert.match(picker, /document\.querySelectorAll\("select"\)/);
+  assert.match(picker, /function refresh\(/);
+  assert.match(picker, /function pruneControls\(/);
+  assert.match(picker, /DivinationCustomSelects = \{[^}]*refresh: refresh/);
+  assert.match(read("js/custom-spread-ui.js"), /DivinationCustomSelects\.refresh\(elements\.positions\)/);
   assert.match(picker, /select\.dispatchEvent\(new Event\("change"/);
   assert.match(i18n, /"choice\.kicker": "纸牌选择"/);
   assert.match(i18n, /"choice\.kicker": "CARD PICKER"/);

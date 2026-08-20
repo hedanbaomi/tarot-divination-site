@@ -18,9 +18,9 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="css/styles.css?v=20260814-empty-spread">
+  <link rel="stylesheet" href="css/styles.css?v=20260820-custom-spread-window-final">
   <link rel="stylesheet" href="css/free-board.css?v=20260813-parchment-panels">
-  <link rel="stylesheet" href="css/custom-spreads.css?v=20260820-custom-spreads">
+  <link rel="stylesheet" href="css/custom-spreads.css?v=20260820-custom-spread-window-final">
 </head>
 <body>
   <div class="sky-moon" aria-hidden="true">
@@ -308,15 +308,31 @@
     </dialog>
 
     <dialog class="custom-spread-dialog" id="customSpreadDialog" aria-labelledby="customSpreadDialogTitle"
-      aria-describedby="customSpreadPrivacy" aria-hidden="true">
+      aria-describedby="customSpreadPrivacy" aria-hidden="true" data-window-mode="center">
       <div class="custom-spread-shell">
         <header class="custom-spread-header">
           <div>
             <p class="custom-spread-kicker" data-i18n="customSpread.kicker">SPREAD STUDIO</p>
             <h2 id="customSpreadDialogTitle" data-i18n="customSpread.title">自定义牌阵工作室</h2>
           </div>
-          <button class="history-icon-btn" id="customSpreadCloseBtn" type="button"
-            aria-label="关闭自定义牌阵工作室" data-i18n-aria-label="customSpread.closeLabel">×</button>
+          <div class="custom-spread-header-actions">
+            <div class="custom-spread-window-controls" id="customSpreadWindowControls" role="group"
+              aria-label="工作室窗口位置" data-i18n-aria-label="customSpread.windowControls">
+              <button class="custom-spread-window-btn" type="button" data-studio-window-mode="left"
+                aria-pressed="false" data-i18n="customSpread.windowLeft"
+                aria-label="靠左" data-i18n-aria-label="customSpread.windowLeftLabel">左</button>
+              <button class="custom-spread-window-btn" type="button" data-studio-window-mode="center"
+                aria-pressed="true" data-i18n="customSpread.windowCenter"
+                aria-label="居中" data-i18n-aria-label="customSpread.windowCenterLabel">居中</button>
+              <button class="custom-spread-window-btn" type="button" data-studio-window-mode="right"
+                aria-pressed="false" data-i18n="customSpread.windowRight"
+                aria-label="靠右" data-i18n-aria-label="customSpread.windowRightLabel">右</button>
+              <button class="custom-spread-window-btn custom-spread-fullscreen-btn" id="customSpreadFullscreenBtn"
+                type="button" aria-pressed="false">全屏</button>
+            </div>
+            <button class="history-icon-btn" id="customSpreadCloseBtn" type="button"
+              aria-label="关闭自定义牌阵工作室" data-i18n-aria-label="customSpread.closeLabel">×</button>
+          </div>
         </header>
         <p class="custom-spread-privacy" id="customSpreadPrivacy"></p>
         <div class="custom-spread-tabs" role="tablist" aria-label="自定义牌阵功能"
@@ -398,7 +414,7 @@
                   aria-label="自定义牌阵布局预览" data-i18n-aria-label="customSpread.previewAria"></div>
               </div>
               <p class="custom-spread-drag-hint" id="customSpreadDragHint" data-i18n="customSpread.dragHint">
-                拖动牌位到网格单元格；点击或键盘仍可编辑字段。
+                拖动牌位到网格单元格；十列会完整缩放显示，坐标也可手动输入。
               </p>
             </div>
             <div class="custom-spread-effect-preview" id="customSpreadEffectPreview" role="dialog"
@@ -515,20 +531,20 @@
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js?v=20260727-spread-labels"></script>
   <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js?v=20260814-empty-spread"></script>
+  <script src="js/i18n.js?v=20260820-custom-spread-window-final"></script>
   <script src="js/theme.js?v=20260813-themes"></script>
   <script src="js/announcements.js?v=1"></script>
   <script src="js/dialogs.js?v=20260727-card-picker"></script>
-  <script src="js/custom-selects.js?v=20260727-card-picker"></script>
-  <script src="js/custom-spreads.js?v=20260820-custom-spreads"></script>
-  <script src="js/custom-spread-ui.js?v=20260820-custom-spreads"></script>
+  <script src="js/custom-selects.js?v=20260820-custom-spread-window-final"></script>
+  <script src="js/custom-spreads.js?v=20260820-custom-spread-window-final"></script>
+  <script src="js/custom-spread-ui.js?v=20260820-custom-spread-window-final"></script>
   <script src="js/free-board-model.js?v=20260809-free-board-v1"></script>
   <script src="js/free-board-draft.js?v=20260809-free-board-v1"></script>
   <script src="js/history-records.js?v=20260809-free-board-v1"></script>
   <script src="js/history-store.js"></script>
   <script src="js/history-ui.js?v=20260809-free-board-v1"></script>
   <script src="js/free-board-ui.js?v=20260809-free-board-v1"></script>
-  <script src="js/app.js?v=20260814-empty-spread"></script>
+  <script src="js/app.js?v=20260820-custom-spread-window-final"></script>
   <script src="js/celestial-sky.js?v=20260813-sun-blank" defer></script>
   <script src="js/web-analytics.js"></script>
 </body>

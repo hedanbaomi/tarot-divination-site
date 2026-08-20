@@ -612,6 +612,7 @@
       (stacking ? (entry.layer === "major" ? -8 : 8) : (position.offsetX || 0)) + "%");
     cardEl.style.setProperty("--position-offset-y",
       (stacking ? (entry.layer === "major" ? -10 : 12) : (position.offsetY || 0)) + "%");
+    cardEl.style.setProperty("--position-rotation", (position.rotation || 0) + "deg");
     cardEl.style.zIndex = String(position.number + (stacking && entry.layer === "minor" ? 100 : 0));
 
     var flipButton = document.createElement("button");
@@ -753,6 +754,8 @@
     var previousScrollLeft = el.spreadBoardScroll.scrollLeft;
     el.spreadGrid.innerHTML = "";
     el.spreadGrid.classList.toggle("overview-stacking", stacking);
+    el.spreadGrid.classList.toggle("custom-spread-layout", Boolean(spreadDefinition.isCustom));
+    el.spreadBoardScroll.classList.toggle("custom-spread-board", Boolean(spreadDefinition.isCustom));
     el.spreadGrid.style.setProperty("--spread-columns", spreadDefinition.columns);
     el.spreadGrid.style.setProperty("--spread-rows", spreadDefinition.rows);
     el.spreadGrid.style.setProperty("--spread-min-width", Math.max(280, spreadDefinition.columns * 76) + "px");
@@ -772,6 +775,7 @@
         (stacking ? (currentPhase === "major" ? -8 : 8) : (position.offsetX || 0)) + "%");
       slot.style.setProperty("--position-offset-y",
         (stacking ? (currentPhase === "major" ? -10 : 12) : (position.offsetY || 0)) + "%");
+      slot.style.setProperty("--position-rotation", (position.rotation || 0) + "deg");
       if (stacking) {
         slot.style.zIndex = String(position.number + (currentPhase === "minor" ? 100 : 0));
       }

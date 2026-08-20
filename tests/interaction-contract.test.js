@@ -44,13 +44,13 @@ test("website uses the branded dialog for spread and history confirmations", fun
   assert.match(html, /id="confirmProceedBtn"/);
   assert.match(html, /src="js\/dialogs\.js\?v=20260727-card-picker"/);
   assert.match(html, /src="js\/spreads\.js\?v=20260727-spread-labels"/);
-  assert.match(html, /src="js\/app\.js\?v=20260814-empty-spread"/);
+  assert.match(html, /src="js\/app\.js\?v=20260820-custom-spread-window-final"/);
 });
 
 test("root page pins the web-announcement resource cache versions", function () {
   var html = read(surface.html);
-  assert.match(html, /src="js\/i18n\.js\?v=20260814-empty-spread"/);
-  assert.match(html, /href="css\/styles\.css\?v=20260814-empty-spread"/);
+  assert.match(html, /src="js\/i18n\.js\?v=20260820-custom-spread-window-final"/);
+  assert.match(html, /href="css\/styles\.css\?v=20260820-custom-spread-window-final"/);
   assert.match(html, /src="js\/announcements\.js\?v=1"/);
 });
 

@@ -46,6 +46,37 @@ test("custom spread scripts load before app startup on both surfaces", function 
   });
 });
 
+test("studio supports desktop placement and fullscreen without clipping its tabs", function () {
+  var ui = read("js/custom-spread-ui.js");
+  var androidUi = read("android-demo/app/src/main/assets/www/js/custom-spread-ui.js");
+  var css = read("css/custom-spreads.css");
+  var androidCss = read("android-demo/app/src/main/assets/www/css/custom-spreads.css");
+
+  [webHtml, androidHtml].forEach(function (html) {
+    assert.match(html, /id="customSpreadWindowControls"/);
+    assert.match(html, /data-studio-window-mode="left"/);
+    assert.match(html, /data-studio-window-mode="center"/);
+    assert.match(html, /data-studio-window-mode="right"/);
+    assert.match(html, /id="customSpreadFullscreenBtn"/);
+    assert.match(html, /class="custom-spread-dialog"[^>]*data-window-mode="center"/);
+  });
+  [ui, androidUi].forEach(function (source) {
+    assert.match(source, /function setWindowMode/);
+    assert.match(source, /data\.windowMode|dataset\.windowMode/);
+    assert.match(source, /addEventListener\("pointerdown"/);
+    assert.match(source, /elements\.content\.scrollTop\s*=\s*0/);
+    assert.match(source, /function clampCustomWindow\(\)\s*\{[\s\S]*?if \(!elements\.dialog\.open\) return;/);
+  });
+  [css, androidCss].forEach(function (source) {
+    assert.match(source, /\.custom-spread-dialog\s*\{[^}]*margin:\s*auto/);
+    assert.match(source, /\.custom-spread-tabs\s*\{[^}]*flex-shrink:\s*0/);
+    assert.match(source, /\.custom-spread-tabs\s*\{[^}]*overflow-y:\s*hidden/);
+    assert.match(source, /\.custom-spread-dialog\[data-window-mode="fullscreen"\]/);
+    assert.match(source, /\.custom-spread-dialog\[data-window-mode="custom"\]/);
+    assert.match(source, /@media\s*\(min-width:\s*601px\)\s*\{[\s\S]*?data-platform="web"[\s\S]*?touch-action:\s*none/);
+  });
+});
+
 test("app resolves custom spreads into the preset drawing pipeline", function () {
   [webApp, androidApp].forEach(function (app) {
     assert.match(app, /function selectedSpread\(\)[\s\S]*customSpreadsUi\.getById/);
@@ -187,6 +218,46 @@ test("v2 designer protects stack references, uses the ten-column grid, and keeps
   assert.match(css, /aspect-ratio:\s*0\.62/);
 });
 
+test("designer compresses all ten columns onto one page, themes dynamic selectors, and rotates by 45 degrees", function () {
+  var ui = read("js/custom-spread-ui.js");
+  var css = read("css/custom-spreads.css");
+  var runtimeCss = read("css/styles.css");
+  var app = read("js/app.js");
+  var androidUi = read("android-demo/app/src/main/assets/www/js/custom-spread-ui.js");
+  var androidCss = read("android-demo/app/src/main/assets/www/css/custom-spreads.css");
+  var androidRuntimeCss = read("android-demo/app/src/main/assets/www/css/styles.css");
+  var androidApp = read("android-demo/app/src/main/assets/www/js/app.js");
+
+  [webHtml, androidHtml].forEach(function (html) {
+    assert.doesNotMatch(html, /customSpreadPreview(?:Left|Right)Btn/);
+  });
+  [ui, androidUi].forEach(function (source) {
+    assert.match(source, /DivinationCustomSelects\.refresh\(elements\.positions\)/);
+    assert.match(source, /customSpreadPosition.*DrawRule/);
+    assert.match(source, /customSpreadPosition.*StackOn/);
+    assert.match(source, /function rotatePosition/);
+    assert.match(source, /ROTATION_STEP\s*=\s*45/);
+    assert.match(source, /rotation/);
+    assert.match(source, /--position-rotation/);
+  });
+  [css, androidCss].forEach(function (source) {
+    assert.match(source, /\.custom-spread-preview-scroll\s*\{[^}]*overflow-x:\s*hidden/);
+    assert.match(source, /grid-template-columns:\s*repeat\(var\(--custom-columns\),\s*minmax\(0,\s*1fr\)\)/);
+    assert.match(source, /\.custom-spread-preview\s*\{[^}]*min-width:\s*0/);
+    assert.match(source, /rotate\(var\(--position-rotation/);
+  });
+  [app, androidApp].forEach(function (source) {
+    assert.match(source, /--position-rotation/);
+    assert.match(source, /classList\.toggle\("custom-spread-layout",\s*Boolean\(spreadDefinition\.isCustom\)\)/);
+  });
+  [runtimeCss, androidRuntimeCss].forEach(function (source) {
+    assert.match(source, /\.spread-grid\.custom-spread-layout\s*\{[^}]*min-width:\s*0/);
+    assert.match(source, /\.spread-grid\.custom-spread-layout\s*\{[^}]*width:\s*100%/);
+    assert.match(source, /grid-template-columns:\s*repeat\(var\(--spread-columns,\s*3\),\s*minmax\(0,\s*1fr\)\)/);
+    assert.match(source, /\.custom-spread-layout\s+\.spread-(?:card|slot)/);
+  });
+});
+
 test("v2 designer localization covers both locales", function () {
   var i18n = read("js/i18n.js");
   var androidI18n = read("android-demo/app/src/main/assets/www/js/i18n.js");
@@ -220,7 +291,20 @@ test("v2 designer localization covers both locales", function () {
       "customSpread.stackOnPrevious",
       "customSpread.dragHint",
       "customSpread.previewEffect",
-      "customSpread.previewEffectClose"
+      "customSpread.previewEffectClose",
+      "customSpread.rotation",
+      "customSpread.rotateLeft",
+      "customSpread.rotateRight",
+      "customSpread.windowControls",
+      "customSpread.windowLeft",
+      "customSpread.windowCenter",
+      "customSpread.windowRight",
+      "customSpread.windowLeftLabel",
+      "customSpread.windowCenterLabel",
+      "customSpread.windowRightLabel",
+      "customSpread.enterFullscreen",
+      "customSpread.exitFullscreen",
+      "customSpread.dragWindow"
       ].forEach(function (key) {
         assert.ok(block.indexOf('"' + key + '"') !== -1, locale + " missing " + key);
       });

@@ -26,7 +26,7 @@
   var STACK_OFFSET_Y = 32;
   var CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F]/;
   var TOP_FIELDS = ["name", "nameEn", "description", "columns", "rows", "deckScope", "tarotMode", "stackingMode", "positions"];
-  var POSITION_FIELDS = ["number", "name", "nameEn", "meaning", "meaningEn", "column", "row", "drawRule", "stackOn"];
+  var POSITION_FIELDS = ["number", "name", "nameEn", "meaning", "meaningEn", "column", "row", "drawRule", "stackOn", "rotation"];
   var LEGACY_COMPACT_FIELDS = ["v", "n", "d", "c", "r", "p"];
   var COMPACT_FIELDS = ["v", "n", "d", "c", "r", "s", "t", "m", "p"];
   var BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -35,6 +35,9 @@
   var STACKING_MODES = ["single", "major-minor"];
   var ARCANA_RULES = ["major", "minor"];
   var SUIT_RULES = ["wands", "cups", "swords", "pentacles"];
+  var MIN_ROTATION = -180;
+  var MAX_ROTATION = 180;
+  var ROTATION_STEP = 45;
   var RUNTIME_SUITS = {
     wands: "权杖",
     cups: "圣杯",
@@ -138,6 +141,12 @@
     return { suit: normalizeEnum(value.suit, SUIT_RULES, path + ".suit") };
   }
 
+  function normalizeRotation(value, path) {
+    var rotation = normalizeInteger(value, MIN_ROTATION, MAX_ROTATION, path);
+    if (rotation % ROTATION_STEP !== 0) fail(path + " must use 45-degree steps");
+    return rotation === MIN_ROTATION ? MAX_ROTATION : rotation;
+  }
+
   function normalizePosition(value, index, columns, rows, previousPositions) {
     var path = "positions[" + index + "]";
     if (!isPlainObject(value)) fail(path + " must be a plain object");
@@ -155,6 +164,9 @@
       ? normalizeDrawRule(value.drawRule, path + ".drawRule")
       : null;
     var stackOn = hasOwn(value, "stackOn") ? value.stackOn : null;
+    var rotation = hasOwn(value, "rotation")
+      ? normalizeRotation(value.rotation, path + ".rotation")
+      : 0;
     if (stackOn !== null) {
       stackOn = normalizeInteger(stackOn, 1, index, path + ".stackOn");
       if (!previousPositions || !previousPositions[stackOn - 1]) {
@@ -189,7 +201,8 @@
       column: column,
       row: row,
       drawRule: drawRule,
-      stackOn: stackOn
+      stackOn: stackOn,
+      rotation: rotation
     };
   }
 
@@ -470,8 +483,10 @@
       t: normalized.tarotMode,
       m: normalized.stackingMode,
       p: normalized.positions.map(function (position) {
-        return [position.name, position.meaning, position.column, position.row,
+        var compact = [position.name, position.meaning, position.column, position.row,
           position.drawRule, position.stackOn];
+        if (position.rotation !== 0) compact.push(position.rotation);
+        return compact;
       })
     };
   }
@@ -501,7 +516,8 @@
         column: item[2],
         row: item[3],
         drawRule: null,
-        stackOn: null
+        stackOn: null,
+        rotation: 0
       });
     }
     return normalizeDefinition({
@@ -524,9 +540,11 @@
     var positions = [];
     for (var index = 0; index < input.p.length; index++) {
       var item = input.p[index];
-      if (!Array.isArray(item) || item.length !== 6) fail("payload position must have six fields");
+      if (!Array.isArray(item) || (item.length !== 6 && item.length !== 7)) {
+        fail("payload position must have six or seven fields");
+      }
       assertArrayProperties(item, "payload.p[" + index + "]");
-      for (var itemIndex = 0; itemIndex < 6; itemIndex++) {
+      for (var itemIndex = 0; itemIndex < item.length; itemIndex++) {
         if (!hasOwn(item, itemIndex)) fail("payload position must not contain holes");
       }
       positions.push({
@@ -535,7 +553,8 @@
         column: item[2],
         row: item[3],
         drawRule: item[4],
-        stackOn: item[5]
+        stackOn: item[5],
+        rotation: item.length === 7 ? item[6] : 0
       });
     }
     return normalizeDefinition({
@@ -653,6 +672,7 @@
         row: position.row,
         drawRule: runtimeDrawRule(position.drawRule),
         stackOn: position.stackOn,
+        rotation: position.rotation,
         offsetX: offsetX,
         offsetY: offsetY
       });
@@ -905,6 +925,9 @@
     MAX_LIBRARY_SIZE: MAX_LIBRARY_SIZE,
     STACK_OFFSET_X: STACK_OFFSET_X,
     STACK_OFFSET_Y: STACK_OFFSET_Y,
+    MIN_ROTATION: MIN_ROTATION,
+    MAX_ROTATION: MAX_ROTATION,
+    ROTATION_STEP: ROTATION_STEP,
     normalizeDefinition: normalizeDefinition,
     encode: encode,
     decode: decode,

@@ -107,6 +107,50 @@ test("v2 defaults, canonical compact ordering, and strict legacy QSP1 import", f
   assert.throws(function () { customSpreads.decode(shareCode("QSP1.", legacyTooWide)); });
 });
 
+test("45-degree position rotation extends QSP2 while existing unrotated codes stay canonical", function () {
+  var existingCompact = {
+    v: 2,
+    n: "既有 V2 牌阵",
+    d: "",
+    c: 1,
+    r: 1,
+    s: "any",
+    t: "mixed",
+    m: "single",
+    p: [["牌位", "", 1, 1, null, null]]
+  };
+  var existingCode = shareCode("QSP2.", existingCompact);
+  var existing = customSpreads.decode(existingCode);
+  assert.equal(existing.positions[0].rotation, 0);
+  assert.equal(customSpreads.encode(existing), existingCode);
+  var redundantZero = JSON.parse(JSON.stringify(existingCompact));
+  redundantZero.p[0].push(0);
+  assert.throws(function () { customSpreads.decode(shareCode("QSP2.", redundantZero)); });
+
+  var rotated = definition();
+  rotated.positions[0].rotation = 45;
+  rotated.positions[1].rotation = -90;
+  var normalized = customSpreads.normalizeDefinition(rotated);
+  assert.deepEqual(normalized.positions.map(function (position) { return position.rotation; }), [45, -90]);
+
+  var code = customSpreads.encode(rotated);
+  assert.match(code, /^QSP2\.[A-Za-z0-9_-]+\.[0-9a-f]{8}$/);
+  assert.deepEqual(customSpreads.decode(code), normalized);
+  assert.deepEqual(
+    customSpreads.toRuntimeSpread(rotated).positions.map(function (position) { return position.rotation; }),
+    [45, -90]
+  );
+
+  [30, -181, 181, "45"].forEach(function (rotation) {
+    var invalid = definition();
+    invalid.positions[0].rotation = rotation;
+    assert.throws(function () { customSpreads.normalizeDefinition(invalid); });
+  });
+  var halfTurn = definition();
+  halfTurn.positions[0].rotation = -180;
+  assert.equal(customSpreads.normalizeDefinition(halfTurn).positions[0].rotation, 180);
+});
+
 test("v2 validates deck scope, Tarot modes, draw rules, and capacities", function () {
   function tarotDefinition(changes) {
     return Object.assign({

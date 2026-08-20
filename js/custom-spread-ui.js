@@ -2,6 +2,7 @@
   "use strict";
 
   var activeController = null;
+  var ROTATION_STEP = 45;
   var DRAW_RULE_KEYS = ["following", "major-only", "minor-only", "wands", "cups", "swords", "pentacles"];
   var DRAW_RULE_LABELS = {
     following: "customSpread.drawRuleFollowing",
@@ -30,6 +31,13 @@
 
   function clamp(value, minimum, maximum) {
     return Math.max(minimum, Math.min(maximum, value));
+  }
+
+  function canonicalRotation(value) {
+    var rotation = Math.round(numberOr(value, 0) / ROTATION_STEP) * ROTATION_STEP;
+    while (rotation > 180) rotation -= 360;
+    while (rotation <= -180) rotation += 360;
+    return rotation;
   }
 
   function canonicalDeckScope(value) {
@@ -98,12 +106,19 @@
     var currentCode = "";
     var draft = emptyDraft();
     var dragging = null;
+    var windowDrag = null;
+    var windowModeBeforeFullscreen = "center";
     var effectNormalized = null;
     var effectRuntime = null;
 
     var elements = {
       open: document.getElementById("customSpreadOpenBtn"),
       dialog: document.getElementById("customSpreadDialog"),
+      header: document.querySelector("#customSpreadDialog .custom-spread-header"),
+      content: document.querySelector("#customSpreadDialog .custom-spread-content"),
+      windowControls: document.getElementById("customSpreadWindowControls"),
+      windowButtons: Array.prototype.slice.call(document.querySelectorAll("[data-studio-window-mode]")),
+      fullscreen: document.getElementById("customSpreadFullscreenBtn"),
       close: document.getElementById("customSpreadCloseBtn"),
       privacy: document.getElementById("customSpreadPrivacy"),
       tabs: Array.prototype.slice.call(document.querySelectorAll("[data-custom-spread-tab]")),
@@ -136,9 +151,125 @@
       status: document.getElementById("customSpreadStatus")
     };
     if (!elements.open || !elements.dialog) return null;
+    elements.dialog.dataset.platform = platform;
 
     function t(key, values) {
       return global.DivinationI18n ? global.DivinationI18n.t(key, values) : key;
+    }
+
+    function desktopWindowControlsAvailable() {
+      return platform === "web" && (!global.matchMedia || !global.matchMedia("(max-width: 600px)").matches);
+    }
+
+    function refreshWindowControls() {
+      var mode = elements.dialog.dataset.windowMode || "center";
+      var fullscreen = mode === "fullscreen";
+      if (elements.windowControls) elements.windowControls.hidden = !desktopWindowControlsAvailable();
+      elements.windowButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", button.dataset.studioWindowMode === mode ? "true" : "false");
+      });
+      if (elements.fullscreen) {
+        var labelKey = fullscreen ? "customSpread.exitFullscreen" : "customSpread.enterFullscreen";
+        elements.fullscreen.dataset.i18n = labelKey;
+        elements.fullscreen.textContent = t(labelKey);
+        elements.fullscreen.setAttribute("aria-label", t(labelKey));
+        elements.fullscreen.setAttribute("aria-pressed", fullscreen ? "true" : "false");
+      }
+      if (elements.header) {
+        if (desktopWindowControlsAvailable() && !fullscreen) {
+          elements.header.setAttribute("title", t("customSpread.dragWindow"));
+        } else {
+          elements.header.removeAttribute("title");
+        }
+      }
+    }
+
+    function setWindowMode(mode, coordinates) {
+      if (platform !== "web") return;
+      if (["left", "center", "right", "fullscreen", "custom"].indexOf(mode) === -1) mode = "center";
+      var currentMode = elements.dialog.dataset.windowMode || "center";
+      if (mode === "fullscreen" && currentMode !== "fullscreen") {
+        windowModeBeforeFullscreen = currentMode;
+      }
+      if (mode === "custom" && coordinates) {
+        elements.dialog.style.setProperty("--custom-spread-window-left", Math.round(coordinates.left) + "px");
+        elements.dialog.style.setProperty("--custom-spread-window-top", Math.round(coordinates.top) + "px");
+      }
+      elements.dialog.dataset.windowMode = mode;
+      refreshWindowControls();
+    }
+
+    function toggleFullscreen() {
+      var mode = elements.dialog.dataset.windowMode || "center";
+      setWindowMode(mode === "fullscreen" ? (windowModeBeforeFullscreen || "center") : "fullscreen");
+    }
+
+    function viewportSize() {
+      var root = document.documentElement || {};
+      return {
+        width: Math.max(0, Number(global.innerWidth) || Number(root.clientWidth) || 0),
+        height: Math.max(0, Number(global.innerHeight) || Number(root.clientHeight) || 0)
+      };
+    }
+
+    function clampWindowPosition(left, top, width, height) {
+      var viewport = viewportSize();
+      var margin = 8;
+      var maxLeft = Math.max(margin, viewport.width - width - margin);
+      var maxTop = Math.max(margin, viewport.height - height - margin);
+      return {
+        left: clamp(left, margin, maxLeft),
+        top: clamp(top, margin, maxTop)
+      };
+    }
+
+    function clampCustomWindow() {
+      if (!elements.dialog.open) return;
+      if (platform !== "web" || elements.dialog.dataset.windowMode !== "custom") return;
+      var rect = elements.dialog.getBoundingClientRect();
+      var position = clampWindowPosition(rect.left, rect.top, rect.width, rect.height);
+      setWindowMode("custom", position);
+    }
+
+    function startWindowDrag(event) {
+      if (!desktopWindowControlsAvailable() || !elements.dialog.open ||
+          elements.dialog.dataset.windowMode === "fullscreen" || event.button !== 0) return;
+      if (event.target && event.target.closest && event.target.closest("button, input, textarea, select, a")) return;
+      var rect = elements.dialog.getBoundingClientRect();
+      var position = clampWindowPosition(rect.left, rect.top, rect.width, rect.height);
+      setWindowMode("custom", position);
+      windowDrag = {
+        pointerId: event.pointerId,
+        offsetX: event.clientX - position.left,
+        offsetY: event.clientY - position.top,
+        width: rect.width,
+        height: rect.height
+      };
+      if (elements.header.setPointerCapture) elements.header.setPointerCapture(event.pointerId);
+      elements.dialog.dataset.windowDragging = "true";
+      event.preventDefault();
+    }
+
+    function moveWindowDrag(event) {
+      if (!windowDrag || event.pointerId !== windowDrag.pointerId) return;
+      var position = clampWindowPosition(
+        event.clientX - windowDrag.offsetX,
+        event.clientY - windowDrag.offsetY,
+        windowDrag.width,
+        windowDrag.height
+      );
+      setWindowMode("custom", position);
+      event.preventDefault();
+    }
+
+    function endWindowDrag(event) {
+      if (!windowDrag || event.pointerId !== windowDrag.pointerId) return;
+      if (elements.header.releasePointerCapture && elements.header.hasPointerCapture &&
+          elements.header.hasPointerCapture(event.pointerId)) {
+        elements.header.releasePointerCapture(event.pointerId);
+      }
+      windowDrag = null;
+      delete elements.dialog.dataset.windowDragging;
     }
 
     function emptyPosition(index) {
@@ -148,7 +279,8 @@
         column: (index % 3) + 1,
         row: Math.floor(index / 3) + 1,
         drawRule: null,
-        stackOn: null
+        stackOn: null,
+        rotation: 0
       };
     }
 
@@ -183,7 +315,8 @@
             column: numberOr(position.column, (index % 3) + 1),
             row: numberOr(position.row, Math.floor(index / 3) + 1),
             drawRule: drawRuleForCore(position.drawRule),
-            stackOn: stackTargetNumber(position.stackOn)
+            stackOn: stackTargetNumber(position.stackOn),
+            rotation: canonicalRotation(position.rotation)
           };
         })
       };
@@ -280,6 +413,7 @@
       elements.panels.forEach(function (panel) {
         panel.hidden = panel.dataset.customSpreadPanel !== name;
       });
+      if (elements.content) elements.content.scrollTop = 0;
       setStatus("");
     }
 
@@ -289,6 +423,9 @@
       showPanel(panel || "library");
       elements.dialog.showModal();
       elements.dialog.setAttribute("aria-hidden", "false");
+      if (elements.dialog.dataset.windowMode === "custom") {
+        (global.requestAnimationFrame || global.setTimeout)(clampCustomWindow);
+      }
     }
 
     function closeDialog() {
@@ -326,6 +463,7 @@
         position.column = clamp(Math.round(numberOr(position.column, 1)), 1, draft.columns);
         position.row = clamp(Math.round(numberOr(position.row, 1)), 1, draft.rows);
         position.drawRule = canonicalDrawRule(position.drawRule);
+        position.rotation = canonicalRotation(position.rotation);
       });
       sanitizeStackReferences(draft.positions);
       syncStackedCoordinates();
@@ -441,12 +579,14 @@
       return { wrapper: wrapper, input: input };
     }
 
-    function positionSelect(labelKey, value, options, handler, disabled) {
-      var wrapper = document.createElement("label");
+    function positionSelect(labelKey, value, options, handler, disabled, fieldId) {
+      var wrapper = document.createElement("div");
       wrapper.className = "custom-spread-position-field";
-      var caption = document.createElement("span");
+      var caption = document.createElement("label");
       caption.textContent = t(labelKey);
       var select = document.createElement("select");
+      select.id = fieldId;
+      caption.htmlFor = fieldId;
       options.forEach(function (option) {
         var element = document.createElement("option");
         element.value = option.value;
@@ -459,6 +599,39 @@
       wrapper.appendChild(caption);
       wrapper.appendChild(select);
       return { wrapper: wrapper, input: select };
+    }
+
+    function rotatePosition(index, direction) {
+      var position = draft.positions[index];
+      if (!position) return;
+      position.rotation = canonicalRotation(canonicalRotation(position.rotation) + direction * ROTATION_STEP);
+      renderPositions();
+      renderPreview();
+    }
+
+    function rotationControl(position, index) {
+      var wrapper = document.createElement("div");
+      wrapper.className = "custom-spread-position-field custom-spread-rotation-field";
+      var caption = document.createElement("span");
+      caption.textContent = t("customSpread.rotation");
+      var controls = document.createElement("div");
+      controls.className = "custom-spread-rotation-controls";
+      var left = makeButton("customSpread.rotateLeft", "btn btn-secondary", function () {
+        rotatePosition(index, -1);
+      });
+      var value = document.createElement("output");
+      value.className = "custom-spread-rotation-value";
+      value.textContent = canonicalRotation(position.rotation) + "°";
+      value.setAttribute("aria-label", t("customSpread.rotation") + " " + value.textContent);
+      var right = makeButton("customSpread.rotateRight", "btn btn-secondary", function () {
+        rotatePosition(index, 1);
+      });
+      controls.appendChild(left);
+      controls.appendChild(value);
+      controls.appendChild(right);
+      wrapper.appendChild(caption);
+      wrapper.appendChild(controls);
+      return wrapper;
     }
 
     function drawRuleOptions() {
@@ -526,7 +699,8 @@
           if (draft.deckScope === "non-tarot-only") position.drawRule = "following";
           renderPositions();
           renderPreview();
-        }, draft.deckScope === "non-tarot-only" || draft.stackingMode === "major-minor");
+        }, draft.deckScope === "non-tarot-only" || draft.stackingMode === "major-minor",
+        "customSpreadPosition" + (index + 1) + "DrawRule");
         var stackField = positionSelect("customSpread.stackOn", position.stackOn, stackOptions(index), function (value) {
           var target = stackTargetNumber(value);
           position.stackOn = target && target <= index ? target : null;
@@ -539,7 +713,8 @@
           syncStackedCoordinates();
           renderPositions();
           renderPreview();
-        });
+        }, false, "customSpreadPosition" + (index + 1) + "StackOn");
+        var rotationField = rotationControl(position, index);
         var actions = document.createElement("div");
         actions.className = "custom-spread-position-actions";
         var up = makeButton("customSpread.moveUp", "btn btn-secondary", function () { movePosition(index, -1); });
@@ -560,10 +735,14 @@
         item.appendChild(coordinateFields);
         item.appendChild(ruleField.wrapper);
         item.appendChild(stackField.wrapper);
+        item.appendChild(rotationField);
         item.appendChild(actions);
         return item;
       });
       elements.positions.replaceChildren.apply(elements.positions, rows);
+      if (global.DivinationCustomSelects && typeof global.DivinationCustomSelects.refresh === "function") {
+        global.DivinationCustomSelects.refresh(elements.positions);
+      }
       elements.addPosition.disabled = draft.positions.length >= maxPositions;
     }
 
@@ -612,6 +791,7 @@
       if (!position) return;
       marker.style.gridColumn = String(position.column);
       marker.style.gridRow = String(position.row);
+      marker.style.setProperty("--position-rotation", canonicalRotation(position.rotation) + "deg");
       marker.textContent = String(index + 1);
       syncCoordinateFields(index);
     }
@@ -731,6 +911,7 @@
         marker.style.gridRow = String(clamp(Number(position.row) || 1, 1, rows));
         marker.style.setProperty("--preview-offset-x", Math.min(layer, 2) * 10 + "%");
         marker.style.setProperty("--preview-offset-y", Math.min(layer, 2) * 14 + "%");
+        marker.style.setProperty("--position-rotation", canonicalRotation(position.rotation) + "deg");
         marker.style.zIndex = String(index + 1);
         marker.textContent = String(index + 1);
         marker.setAttribute("aria-label", t("customSpread.previewPosition", {
@@ -777,6 +958,7 @@
       card.style.setProperty("--effect-offset-y", String(offsetY) + "%");
       card.style.setProperty("--position-offset-x", String(offsetX) + "%");
       card.style.setProperty("--position-offset-y", String(offsetY) + "%");
+      card.style.setProperty("--position-rotation", canonicalRotation(position.rotation) + "deg");
 
       var inner = document.createElement("div");
       inner.className = "spread-card-inner";
@@ -835,7 +1017,8 @@
             name: position.name || runtimePosition.name,
             column: clamp(numberOr(runtimePosition.column, numberOr(position.column, 1)), 1, columns),
             row: clamp(numberOr(runtimePosition.row, numberOr(position.row, 1)), 1, rows),
-            drawRule: position.drawRule
+            drawRule: position.drawRule,
+            rotation: canonicalRotation(numberOr(runtimePosition.rotation, position.rotation))
           }, index, layerName, offsetX, offsetY, zIndex);
           elements.effectContent.appendChild(card);
         });
@@ -995,6 +1178,7 @@
       renderPositions();
       renderPreview();
       if (effectNormalized && effectRuntime) renderEffectPreview(effectNormalized, effectRuntime);
+      refreshWindowControls();
     }
 
     elements.open.addEventListener("click", function () { openDialog("library"); });
@@ -1002,6 +1186,20 @@
     elements.dialog.addEventListener("cancel", function (event) { event.preventDefault(); handleBack(); });
     if (elements.effectClose) elements.effectClose.addEventListener("click", function () { closeEffectPreview(true); });
     if (elements.previewEffect) elements.previewEffect.addEventListener("click", openEffectPreview);
+    elements.windowButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setWindowMode(button.dataset.studioWindowMode); });
+    });
+    if (elements.fullscreen) elements.fullscreen.addEventListener("click", toggleFullscreen);
+    if (elements.header) {
+      elements.header.addEventListener("pointerdown", startWindowDrag);
+      elements.header.addEventListener("pointermove", moveWindowDrag);
+      elements.header.addEventListener("pointerup", endWindowDrag);
+      elements.header.addEventListener("pointercancel", endWindowDrag);
+    }
+    global.addEventListener("resize", function () {
+      refreshWindowControls();
+      clampCustomWindow();
+    });
     global.addEventListener("keydown", function (event) {
       if (event.key === "Escape" && elements.effectPanel && !elements.effectPanel.hidden) {
         event.preventDefault();
@@ -1066,6 +1264,8 @@
     elements.importUse.addEventListener("click", importAndUse);
     global.addEventListener("quareia:languagechange", refreshLanguage);
 
+    if (platform === "web") setWindowMode("center");
+    else refreshWindowControls();
     syncFieldsFromDraft();
     renderLibrary();
 

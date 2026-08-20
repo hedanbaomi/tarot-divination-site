@@ -28,11 +28,15 @@ test("Android demo replaces every native select surface with the themed picker",
   });
 
   assert.match(html, /id="choiceDialog"/);
-  assert.match(html, /src="js\/custom-selects\.js\?v=20260727-card-picker"/);
+  assert.match(html, /src="js\/custom-selects\.js\?v=20260820-custom-spread-window-final"/);
   assert.match(css, /\.custom-select-native\s*\{\s*display:\s*none\s*!important/);
   assert.match(css, /\.themed-select-trigger/);
   assert.match(css, /\.choice-option\.selected/);
   assert.match(picker, /document\.querySelectorAll\("select"\)/);
+  assert.match(picker, /function refresh\(/);
+  assert.match(picker, /function pruneControls\(/);
+  assert.match(picker, /DivinationCustomSelects = \{[^}]*refresh: refresh/);
+  assert.match(read("app/src/main/assets/www/js/custom-spread-ui.js"), /DivinationCustomSelects\.refresh\(elements\.positions\)/);
   assert.match(picker, /select\.dispatchEvent\(new Event\("change"/);
   assert.doesNotMatch(html, /星图选择|CELESTIAL PICKER/);
   assert.doesNotMatch(picker, /\b(?:alert|confirm|prompt)\s*\(/);
@@ -132,7 +136,7 @@ test("Android parchment reading and history panels use theme tokens, not night n
   var css = read("app/src/main/assets/www/css/styles.css");
   var freeBoard = read("app/src/main/assets/www/css/free-board.css");
   var html = read("app/src/main/assets/www/index.html");
-  assert.match(html, /href="css\/styles\.css\?v=20260814-empty-spread"/);
+  assert.match(html, /href="css\/styles\.css\?v=20260820-custom-spread-window-final"/);
   assert.match(css, /\.position-guide\s*\{[^}]*background:\s*var\(--panel-bg\)/);
   assert.match(css, /\.result-card\s*\{[^}]*background:\s*var\(--panel-bg\)/);
   assert.match(css, /\.history-list-item\s*\{[^}]*background:\s*var\(--bg-card\)/);
@@ -188,8 +192,8 @@ test("preset mode shows an empty spread preview and a settings-adjacent position
   assert.match(app, /el\.spreadArea\.classList\.toggle\("is-empty", spread\.length === 0\)/);
   assert.match(app, /t\("app\.emptySpreadHint"\)/);
   assert.doesNotMatch(app, /if \(spread\.length === 0\) \{\s*el\.spreadArea\.style\.display = "none"/);
-  assert.match(html, /src="js\/app\.js\?v=20260814-empty-spread"/);
-  assert.match(html, /src="js\/i18n\.js\?v=20260814-empty-spread"/);
+  assert.match(html, /src="js\/app\.js\?v=20260820-custom-spread-window-final"/);
+  assert.match(html, /src="js\/i18n\.js\?v=20260820-custom-spread-window-final"/);
   ["zh-CN", "en"].forEach(function (locale) {
     var block = i18n.match(new RegExp('"' + locale + '": \\{[\\s\\S]*?\\n    \\}'))[0];
     assert.ok(block.indexOf('"app.emptySpreadHint"') !== -1, locale + " missing app.emptySpreadHint");

@@ -2,6 +2,7 @@
   "use strict";
 
   var controls = [];
+  var generatedId = 0;
   var activeControl = null;
   var previousFocus = null;
   var choiceDialog = document.getElementById("choiceDialog");
@@ -19,9 +20,32 @@
   }
 
   function controlLabel(select) {
-    return select.id
+    var explicit = select.id
       ? document.querySelector('label[for="' + select.id + '"]')
       : null;
+    return explicit || (typeof select.closest === "function" ? select.closest("label") : null);
+  }
+
+  function connected(element) {
+    if (!element) return false;
+    if (typeof element.isConnected === "boolean") return element.isConnected;
+    return Boolean(document.documentElement && document.documentElement.contains(element));
+  }
+
+  function pruneControls() {
+    var remaining = [];
+    controls.forEach(function (control) {
+      if (connected(control.select) && connected(control.trigger)) {
+        remaining.push(control);
+        return;
+      }
+      if (control.observer) control.observer.disconnect();
+      if (activeControl === control) {
+        if (choiceDialog && choiceDialog.open) closeChoice(false);
+        else activeControl = null;
+      }
+    });
+    controls = remaining;
   }
 
   function syncControl(control) {
@@ -38,6 +62,7 @@
   }
 
   function syncAll() {
+    pruneControls();
     controls.forEach(syncControl);
   }
 
@@ -134,6 +159,7 @@
 
   function enhanceSelect(select, index) {
     if (select.dataset.customSelectReady === "true") return;
+    if (!select.id) select.id = "customSelectDynamic" + (++generatedId);
     select.dataset.customSelectReady = "true";
     select.classList.add("custom-select-native");
     select.setAttribute("aria-hidden", "true");
@@ -162,17 +188,27 @@
       label.htmlFor = trigger.id;
     }
 
-    var control = { select: select, trigger: trigger, value: value, label: label };
+    var control = { select: select, trigger: trigger, value: value, label: label, observer: null };
     controls.push(control);
     trigger.addEventListener("click", function () { openChoice(control); });
     select.addEventListener("change", function () { syncControl(control); });
-    new MutationObserver(function () { syncControl(control); }).observe(select, {
+    control.observer = new MutationObserver(function () { syncControl(control); });
+    control.observer.observe(select, {
       attributes: true,
       childList: true,
       subtree: true,
       characterData: true
     });
     syncControl(control);
+  }
+
+  function refresh(scope) {
+    if (!choiceDialog) return;
+    pruneControls();
+    scope = scope || document;
+    var selects = scope.tagName === "SELECT" ? [scope] : scope.querySelectorAll("select");
+    Array.prototype.forEach.call(selects, enhanceSelect);
+    syncAll();
   }
 
   function init() {
@@ -197,5 +233,5 @@
   }
 
   init();
-  root.DivinationCustomSelects = { sync: syncAll, handleBack: handleBack };
+  root.DivinationCustomSelects = { sync: syncAll, refresh: refresh, handleBack: handleBack };
 })(typeof globalThis !== "undefined" ? globalThis : this);

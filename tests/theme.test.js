@@ -25,7 +25,7 @@ function i18nSourceBlock(source, locale) {
 test("theme boot script applies a closed allow-list before styles load", function () {
   var bootStart = html.indexOf("<script>");
   var bootEnd = html.indexOf("</script>");
-  var cssLink = html.indexOf('href="css/styles.css?v=20260814-empty-spread"');
+  var cssLink = html.indexOf('href="css/styles.css?v=20260820-custom-spread-window-final"');
   assert.ok(bootStart > 0 && bootEnd > bootStart);
   assert.ok(cssLink > bootEnd, "FOUC boot must run before styles.css");
   var boot = html.slice(bootStart, bootEnd);

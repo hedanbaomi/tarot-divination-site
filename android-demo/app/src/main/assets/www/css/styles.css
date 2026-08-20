@@ -1229,6 +1229,18 @@ html[data-theme="parchment"] .setting-group select {
   grid-template-rows: repeat(var(--spread-rows, 1), 164px);
   gap: 16px 14px;
 }
+.spread-board-scroll.custom-spread-board { overflow-x: hidden; }
+.spread-grid.custom-spread-layout {
+  grid-template-columns: repeat(var(--spread-columns, 3), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--spread-rows, 1), minmax(clamp(58px, 18vw, 128px), auto));
+  gap: clamp(2px, 1.5vw, 12px);
+  justify-content: stretch;
+  padding-inline: clamp(14px, 4vw, 32px);
+  min-width: 0;
+  width: 100%;
+}
+.custom-spread-layout .spread-card,
+.custom-spread-layout .spread-slot { width: min(84px, 100%); }
 
 /* Flip card */
 .spread-card {
@@ -1237,14 +1249,16 @@ html[data-theme="parchment"] .setting-group select {
   aspect-ratio: 0.62;
   perspective: 900px;
   cursor: pointer;
-  transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0));
+  transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0))
+    rotate(var(--position-rotation, 0deg));
   transition: transform 0.28s ease, filter 0.28s ease;
 }
 .spread-card.revealed,
 .spread-card.revealed .spread-card-flip { cursor: pointer; }
 .spread-card.revealed.meaning-visible {
   z-index: 500 !important;
-  transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0)) scale(1.55);
+  transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0))
+    rotate(var(--position-rotation, 0deg)) scale(1.55);
   filter: none;
 }
 .overview-stack-card.stack-layer-major {
@@ -1279,7 +1293,8 @@ html[data-theme="parchment"] .setting-group select {
   gap: 4px;
   opacity: 0.45;
   pointer-events: none;
-  transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0));
+  transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0))
+    rotate(var(--position-rotation, 0deg));
   animation: slotBreathe 4.5s ease-in-out infinite;
 }
 .overview-stack-slot {
@@ -1338,8 +1353,8 @@ html[data-theme="parchment"] .setting-group select {
 }
 .spread-card.is-new { animation: dealIn 0.45s cubic-bezier(0.3, 1.25, 0.42, 1) both; }
 @keyframes dealIn {
-  from { opacity: 0; transform: translate(var(--position-offset-x, 0), calc(var(--position-offset-y, 0%) - 14px)) scale(0.9); }
-  to { opacity: 1; transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0)); }
+  from { opacity: 0; transform: translate(var(--position-offset-x, 0), calc(var(--position-offset-y, 0%) - 14px)) rotate(var(--position-rotation, 0deg)) scale(0.9); }
+  to { opacity: 1; transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0)) rotate(var(--position-rotation, 0deg)); }
 }
 .spread-card-inner {
   position: absolute;
