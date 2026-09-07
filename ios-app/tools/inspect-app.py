@@ -17,18 +17,31 @@ assert not info.get('NSAppTransportSecurity',{}).get('NSAllowsArbitraryLoads',Fa
 for key in ['UIBackgroundModes','UIFileSharingEnabled','LSSupportsOpeningDocumentsInPlace']:
     assert not info.get(key), f'Unexpected capability: {key}'
 binary=a.app/info['CFBundleExecutable']
-build=subprocess.check_output(['xcrun','vtool','-show-build',str(binary)],text=True)
-platforms=[line.split()[-1] for line in build.splitlines() if line.strip().startswith('platform ')]
-assert platforms and set(platforms)=={a.platform}, build
-architectures=subprocess.check_output(['lipo','-archs',str(binary)],text=True).strip()
-if a.platform=='IOS': assert architectures=='arm64'
-for item in a.app.rglob('*'):
+assert info['CFBundleSupportedPlatforms']==(['iPhoneOS'] if a.platform=='IOS' else ['iPhoneSimulator'])
+machos=[]
+tree=hashlib.sha256()
+total_bytes=0
+for item in sorted(a.app.rglob('*')):
     assert not item.is_symlink(), 'Unexpected symlink'
     assert item.suffix.lower() not in ['.swift','.kt','.key','.pem','.p12','.mobileprovision','.qv'], 'Forbidden public payload file'
     assert item.name not in ['.private','PrivateInputs','VaultMaterial','PlugIns'], 'Forbidden payload directory'
+    if not item.is_file(): continue
+    data=item.read_bytes()
+    total_bytes+=len(data)
+    name=item.relative_to(a.app).as_posix()
+    digest=hashlib.sha256(data).hexdigest()
+    tree.update((name+'\0'+digest+'\n').encode())
+    if data[:4] not in [b'\xcf\xfa\xed\xfe',b'\xfe\xed\xfa\xcf',b'\xca\xfe\xba\xbe',b'\xbe\xba\xfe\xca',b'\xca\xfe\xba\xbf',b'\xbf\xba\xfe\xca']: continue
+    build=subprocess.check_output(['xcrun','vtool','-show-build',str(item)],text=True)
+    platforms=[line.split()[-1] for line in build.splitlines() if line.strip().startswith('platform ')]
+    assert platforms and set(platforms)=={a.platform}, f'Incorrect Mach-O platform: {name}'
+    architectures=subprocess.check_output(['lipo','-archs',str(item)],text=True).strip()
+    if a.platform=='IOS': assert architectures=='arm64', f'Incorrect device architecture: {name}'
+    machos.append({'path':name,'architectures':architectures,'bytes':len(data),'sha256':digest})
+assert any(entry['path']==info['CFBundleExecutable'] for entry in machos), 'Missing Mach-O executable'
 ent=subprocess.run(['codesign','-d','--entitlements',':-',str(a.app)],capture_output=True)
 if ent.stdout.strip():
     rights=plistlib.loads(ent.stdout)
     assert set(rights).issubset({'get-task-allow'}), 'Unexpected entitlements'
     assert a.platform=='IOSSIMULATOR' or not rights, 'Device build should be unsigned'
-print(json.dumps({'status':'PUBLIC_TEST_ONLY','flavor':info['QuareiaBuildFlavor'],'bundleID':info['CFBundleIdentifier'],'version':info['CFBundleShortVersionString'],'build':info['CFBundleVersion'],'platform':a.platform,'architectures':architectures,'binaryBytes':binary.stat().st_size,'binarySHA256':hashlib.sha256(binary.read_bytes()).hexdigest(),'files':sum(x.is_file() for x in a.app.rglob('*'))},sort_keys=True))
+print(json.dumps({'status':'PUBLIC_TEST_ONLY','flavor':info['QuareiaBuildFlavor'],'bundleID':info['CFBundleIdentifier'],'version':info['CFBundleShortVersionString'],'build':info['CFBundleVersion'],'platform':a.platform,'sdk':info.get('DTSDKName'),'minimumOS':info['MinimumOSVersion'],'bundleBytes':total_bytes,'bundleTreeSHA256':tree.hexdigest(),'machOBinaries':machos,'files':sum(x.is_file() for x in a.app.rglob('*'))},sort_keys=True))

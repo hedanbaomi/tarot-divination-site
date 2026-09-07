@@ -28,5 +28,6 @@ jobs:
           test ! -e ios-app/PrivateInputs
           node ios-app/tools/sync-web-assets.mjs
           node ios-app/tools/sync-web-assets.mjs --check
+          python3 ios-app/tools/test_inspect_app.py
           bash ios-app/tools/cloud-test.sh
       # No IPA, .app, DerivedData, xcresult, private material, cache, or artifact upload.
