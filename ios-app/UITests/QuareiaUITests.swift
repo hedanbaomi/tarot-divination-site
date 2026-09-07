@@ -177,6 +177,7 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertTrue(webView.waitForExistence(timeout: 5))
     }
 
+    @MainActor
     func testCustomSpreadQSPRoundTripUsesTheRealStudio() throws {
         let (app, webView) = launchRealApp()
         ensureEnglish(in: app, webView: webView)
@@ -263,14 +264,14 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertTrue(undo.isEnabled)
         // Exercise actual accessible zoom controls. Native WebView pinch can
         // target page zoom; two-finger board acceptance remains a device gate.
-        let beforeZoom = placedCard.frame
         let zoomIn = waitForElement(labels: ["Zoom in on the Free Board"], in: app)
         tapWhenVisible(zoomIn, in: webView, scrolling: .towardUpperPage)
-        XCTAssertGreaterThan(placedCard.frame.width, beforeZoom.width * 1.15)
+        XCTAssertTrue(waitForElement(labels: ["Board zoom: 125%"], in: app).exists)
         let zoomOut = waitForElement(labels: ["Zoom out on the Free Board"], in: app)
         zoomOut.tap()
-        XCTAssertEqual(placedCard.frame.width, beforeZoom.width, accuracy: 3)
+        XCTAssertTrue(waitForElement(labels: ["Board zoom: 100%"], in: app).exists)
         zoomIn.tap()
+        XCTAssertTrue(waitForElement(labels: ["Board zoom: 125%"], in: app).exists)
         makeVisible(placedCard, in: webView, scrolling: .towardLowerPage)
         let beforePan = placedCard.frame
         let panStart = placedCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
@@ -280,7 +281,7 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertGreaterThan(abs(placedCard.frame.midY - beforePan.midY), 10)
         let resetView = waitForElement(labels: ["Reset Free Board pan and zoom"], in: app)
         tapWhenVisible(resetView, in: webView, scrolling: .towardUpperPage)
-        XCTAssertEqual(placedCard.frame.width, beforeZoom.width, accuracy: 3, "Reset must reverse board zoom")
+        XCTAssertTrue(waitForElement(labels: ["Board zoom: 100%"], in: app).exists)
 
         RunLoop.current.run(until: Date().addingTimeInterval(2))
         app.terminate()
@@ -370,7 +371,7 @@ final class QuareiaUITests: XCTestCase {
         _ = try postFixture("/__fixture/update-mode", json: ["mode": "normal"])
         openNativeMenuAction(identifier: "host.update", label: "Check for updates", in: app)
         waitForElement(identifier: "host.update.download", labels: ["Download"], in: app).tap()
-        let syntheticFile = app.staticTexts.matching(NSPredicate(
+        let syntheticFile = app.descendants(matching: .any).matching(NSPredicate(
             format: "label BEGINSWITH 'Quareia-1.0.1-2-'"
         )).firstMatch
         XCTAssertTrue(syntheticFile.waitForExistence(timeout: 30), "Expected the downloaded synthetic file in the system share sheet")
@@ -498,6 +499,7 @@ final class QuareiaUITests: XCTestCase {
         return field
     }
 
+    @MainActor
     private func enterSyntheticText(
         _ text: String,
         into element: XCUIElement,
@@ -516,7 +518,23 @@ final class QuareiaUITests: XCTestCase {
         // Avoid XCTest's implicit ancestor scrolling moving this field under
         // the studio header after the explicit visibility check.
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        element.typeText(text)
+        if text.count > 80, let app {
+            // This simulator clipboard contains only this test's synthetic QSP.
+            UIPasteboard.general.string = text
+            defer { UIPasteboard.general.items = [] }
+            element.press(forDuration: 1.1)
+            let paste = waitForElement(labels: ["Paste", "粘贴"], in: app)
+            paste.tap()
+            let allowPaste = app.buttons.matching(NSPredicate(
+                format: "label == 'Allow Paste' OR label == '允许粘贴'"
+            )).firstMatch
+            if allowPaste.waitForExistence(timeout: 1), allowPaste.isHittable { allowPaste.tap() }
+            let inserted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", text), object: element)
+            XCTAssertEqual(XCTWaiter.wait(for: [inserted], timeout: 5), .completed,
+                "The real Paste action must insert the complete synthetic code")
+        } else {
+            element.typeText(text)
+        }
         if let app, app.keyboards.firstMatch.exists {
             let dismiss = waitForHittableButton(labels: ["Done", "完成", "Hide keyboard", "隐藏键盘"], in: app)
             dismiss.tap()

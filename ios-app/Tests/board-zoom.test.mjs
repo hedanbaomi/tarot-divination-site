@@ -15,6 +15,7 @@ test('accessible board zoom changes the bounded viewport, supports undo and rese
     };
   }
   const controls = {
+    freeBoardZoomStatus: { textContent: '', setAttribute() {} },
     freeBoardZoomInBtn: button(),
     freeBoardZoomOutBtn: button(),
     freeBoardResetViewBtn: button()
@@ -36,6 +37,7 @@ test('accessible board zoom changes the bounded viewport, supports undo and rese
   const initial = ui.getState().viewport;
   controls.freeBoardZoomInBtn.click();
   assert.equal(ui.getState().viewport.zoom, 1.25);
+  assert.equal(controls.freeBoardZoomStatus.textContent, '125%');
   assert.equal(ui.getState().viewport.panX, 0);
   assert.equal(ui.getState().viewport.panY, 0);
   ui.undo();
@@ -52,6 +54,7 @@ test('accessible board zoom changes the bounded viewport, supports undo and rese
   assert.equal(ui.getState().viewport.zoom, ui.clampZoom(0));
   controls.freeBoardResetViewBtn.click();
   assert.deepEqual(ui.getState().viewport, initial);
+  assert.equal(controls.freeBoardZoomStatus.textContent, '100%');
   assert.equal(controls.freeBoardZoomInBtn.disabled, false);
   assert.equal(controls.freeBoardZoomOutBtn.disabled, false);
   const previousBackup = globalThis.DivinationBackup;

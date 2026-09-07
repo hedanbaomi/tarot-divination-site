@@ -38,6 +38,44 @@ final class WebBackupIntegrationTests: XCTestCase {
         window = nil
     }
 
+    func testAccessibleBoardZoomChangesRenderedCardGeometry() async throws {
+        let result = try await script("""
+        const area=document.getElementById('freeBoardArea').cloneNode(true);
+        area.style.position='fixed';area.style.inset='0';area.style.width='400px';
+        document.body.appendChild(area);
+        const scopedDocument={
+          getElementById(id){return id==='freeBoardArea'?area:area.querySelector('#'+id)},
+          createElement(tag){return document.createElement(tag)}
+        };
+        const values=new Map();
+        const ui=DivinationFreeBoardUi.createController({document:scopedDocument,platform:'ios',
+          storage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)}});
+        try {
+          ui.enter({deckType:'tarot',deckName:'Synthetic',mode:'upright-only',filterMode:'mixed',
+            cards:[{id:'major-0',deck:'tarot',name:'Synthetic',image:''}]},{restoreDraft:false});
+          ui.draw('major-0');
+          const width=()=>area.querySelector('.free-board-card').getBoundingClientRect().width;
+          const before=width();
+          scopedDocument.getElementById('freeBoardZoomInBtn').click();
+          const enlarged=width();
+          scopedDocument.getElementById('freeBoardZoomOutBtn').click();
+          const reduced=width();
+          scopedDocument.getElementById('freeBoardZoomInBtn').click();
+          scopedDocument.getElementById('freeBoardResetViewBtn').click();
+          return {before,enlarged,reduced,reset:width(),zoom:ui.getState().viewport.zoom};
+        } finally {ui.exit();area.remove();}
+        """)
+        let before = try XCTUnwrap(result["before"] as? Double)
+        let enlarged = try XCTUnwrap(result["enlarged"] as? Double)
+        let reduced = try XCTUnwrap(result["reduced"] as? Double)
+        let reset = try XCTUnwrap(result["reset"] as? Double)
+        XCTAssertGreaterThan(before, 0)
+        XCTAssertEqual(enlarged, before * 1.25, accuracy: 1)
+        XCTAssertEqual(reduced, before, accuracy: 1)
+        XCTAssertEqual(reset, before, accuracy: 1)
+        XCTAssertEqual(result["zoom"] as? Double, 1)
+    }
+
     func testNativeAndWebLocaleStayAlignedAtStartupAndAfterChange() async throws {
         let result = try await script("""
         const initial=DivinationI18n.getLocale();
