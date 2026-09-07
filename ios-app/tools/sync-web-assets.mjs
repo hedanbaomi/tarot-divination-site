@@ -136,7 +136,7 @@ function transformSource(assetPath, sourceText) {
         var state = getState();
         var first = state && state.cards[0];
         var view = state && state.viewport;
-        var renderedCard = elements.world && elements.world.firstElementChild;
+        var renderedCard = !boardDiagnostic.native && elements.world && elements.world.firstElementChild;
         var cardRect = renderedCard ? renderedCard.getBoundingClientRect() : null;
         function numeric(value) {
           return Number.isFinite(value) ? Math.round(Math.max(-1000000, Math.min(1000000, value)) * 1000) / 1000 : 0;
@@ -147,6 +147,7 @@ function transformSource(assetPath, sourceText) {
         });
         var snapshot = Object.assign({}, boardDiagnostic.counts, {
           pointerType: boardDiagnostic.pointerType,
+          lastPointerX: numeric(boardDiagnostic.pointerX), lastPointerY: numeric(boardDiagnostic.pointerY),
           errorKind: boardDiagnostic.errorKind,
           domX: numeric(cardRect && cardRect.x), domY: numeric(cardRect && cardRect.y),
           domWidth: numeric(cardRect && cardRect.width), domHeight: numeric(cardRect && cardRect.height),
@@ -163,20 +164,31 @@ function transformSource(assetPath, sourceText) {
           rendered: numeric(elements.world ? elements.world.childElementCount : 0),
           capture: capture ? 1 : 0
         });
-        var text = "Board diagnostic " + JSON.stringify(snapshot);
-        if (boardDiagnostic.output.textContent !== text) boardDiagnostic.output.textContent = text;
+        var text = JSON.stringify(snapshot);
+        if (boardDiagnostic.lastText === text) return;
+        boardDiagnostic.lastText = text;
+        if (boardDiagnostic.native) {
+          var handler = root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.boardDiagnostics;
+          if (handler && typeof handler.postMessage === "function") handler.postMessage(snapshot);
+        } else {
+          boardDiagnostic.output.textContent = "Board diagnostic " + text;
+        }
       }, 0);
     }
     function bindBoardDiagnostic() {
       if (boardDiagnostic || !root || root.__quareiaBoardDiagnostics !== true || !document.body) return;
-      var output = document.createElement("span");
-      output.id = "boardEventDiagnostics";
-      output.setAttribute("role", "status");
-      output.setAttribute("aria-live", "polite");
-      output.setAttribute("aria-atomic", "true");
-      output.style.cssText = "position:fixed;left:2px;bottom:2px;width:260px;max-height:32px;overflow:hidden;font-size:4px;line-height:5px;pointer-events:none;z-index:2147483647";
-      document.body.appendChild(output);
-      boardDiagnostic = { output: output, counts: { down:0, move:0, up:0, cancel:0, lost:0, dragStart:0, dragEnd:0, undoClick:0, redoClick:0, zoomClick:0, errors:0 }, pointerType:"none", errorKind:"none", surface:"other", mutation:"none" };
+      var native = root.__quareiaBoardDiagnosticsNative === true;
+      var output = null;
+      if (!native) {
+        output = document.createElement("span");
+        output.id = "boardEventDiagnostics";
+        output.setAttribute("role", "status");
+        output.setAttribute("aria-live", "polite");
+        output.setAttribute("aria-atomic", "true");
+        output.style.cssText = "position:fixed;left:2px;bottom:2px;width:260px;max-height:32px;overflow:hidden;font-size:4px;line-height:5px;pointer-events:none;z-index:2147483647";
+        document.body.appendChild(output);
+      }
+      boardDiagnostic = { output: output, native: native, lastText: null, counts: { down:0, move:0, up:0, cancel:0, lost:0, dragStart:0, dragEnd:0, undoClick:0, redoClick:0, zoomClick:0, errors:0 }, pointerX:0, pointerY:0, pointerType:"none", errorKind:"none", surface:"other", mutation:"none" };
       function count(key) {
         boardDiagnostic.counts[key] = Math.min(9999, boardDiagnostic.counts[key] + 1);
         scheduleBoardDiagnostic();
@@ -192,6 +204,8 @@ function transformSource(assetPath, sourceText) {
         document.addEventListener(pair[0], function (event) {
           boardDiagnostic.pointerType = ["touch","mouse","pen"].indexOf(event.pointerType) >= 0 ? event.pointerType : "none";
           boardDiagnostic.surface = surface(event.target);
+          if (Number.isFinite(event.clientX)) boardDiagnostic.pointerX = event.clientX;
+          if (Number.isFinite(event.clientY)) boardDiagnostic.pointerY = event.clientY;
           count(pair[1]);
         }, true);
       });

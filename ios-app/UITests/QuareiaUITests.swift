@@ -170,8 +170,16 @@ final class QuareiaUITests: XCTestCase {
 
         let restore = waitForElement(labels: ["Restore"], in: app, timeout: 8)
         restore.tap()
-        let cancelPoint = waitForFilesCancel(in: app)
+        let cancelFrame = waitForFilesCancel(in: app)
         captureFilesNavigation(in: app)
+        var cancelPoint = CGPoint(x: cancelFrame.midX, y: cancelFrame.midY)
+        if UIDevice.current.userInterfaceIdiom == .pad && cancelFrame.width < 2 {
+            // The current portrait iPad runtime exposes a 1-point Cancel frame
+            // over the grid control. The captured native navigation strip shows
+            // its actual close affordance at the upper-left (36, 84).
+            cancelPoint = CGPoint(x: app.frame.minX + 36, y: app.frame.minY + 84)
+        }
+        print("FILES_CANCEL_TAP point=\(cancelPoint)")
         app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(
             dx: cancelPoint.x - app.frame.minX, dy: cancelPoint.y - app.frame.minY
         )).tap()
@@ -229,7 +237,7 @@ final class QuareiaUITests: XCTestCase {
     }
 
     func testFreeBoardGesturesHistoryAndDraftRestore() {
-        let (app, webView) = launchRealApp()
+        let (app, webView) = launchRealApp(arguments: ["-board-event-diagnostics"])
         ensureEnglish(in: app, webView: webView)
         chooseOption("Free Board", controlLabel: "Layout", in: app, webView: webView)
 
@@ -685,7 +693,7 @@ final class QuareiaUITests: XCTestCase {
         }
     }
 
-    private func waitForFilesCancel(in app: XCUIApplication) -> CGPoint {
+    private func waitForFilesCancel(in app: XCUIApplication) -> CGRect {
         var resolvedFrame = CGRect.null
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             // A remote Files snapshot can change its candidate count between
@@ -704,7 +712,7 @@ final class QuareiaUITests: XCTestCase {
         let result = XCTWaiter.wait(for: [ready], timeout: 60)
         XCTAssertEqual(result, .completed, "Expected the Files navigation cancellation control")
         print("FILES_CANCEL_CONTROL frame=\(resolvedFrame)")
-        return CGPoint(x: resolvedFrame.midX, y: resolvedFrame.midY)
+        return resolvedFrame
     }
 
     private func printSystemPanelGeometry(in app: XCUIApplication, phase: String, fileElement: XCUIElement) {

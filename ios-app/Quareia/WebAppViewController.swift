@@ -1,5 +1,55 @@
 import UIKit
 import WebKit
+#if PUBLIC_TESTING
+import CoreFoundation
+
+@MainActor
+private final class BoardDiagnosticMessageHandler: NSObject, WKScriptMessageHandler {
+    static let name = "boardDiagnostics"
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        let origin = message.frameInfo.securityOrigin
+        guard message.name == Self.name, message.frameInfo.isMainFrame,
+              origin.protocol == AppRoute.scheme, origin.host == AppRoute.host, origin.port == 0,
+              let url = message.frameInfo.request.url, url.path == "/index.html",
+              BridgeContext.isTrustedDocumentURL(url),
+              let body = message.body as? [String: Any] else { return }
+        let countKeys: Set<String> = ["down", "move", "up", "cancel", "lost", "dragStart", "dragEnd", "undoClick", "redoClick", "zoomClick", "errors", "active", "visual", "cards", "rendered"]
+        let coordinateKeys: Set<String> = ["x", "y", "zoom", "panX", "panY", "domX", "domY", "domWidth", "domHeight", "lastPointerX", "lastPointerY"]
+        let toggleKeys: Set<String> = ["undo", "redo", "capture"]
+        let enums: [String: Set<String>] = [
+            "pointerType": ["none", "touch", "mouse", "pen"],
+            "errorKind": ["none", "TypeError", "ReferenceError", "RangeError", "Error", "SyntaxError", "other"],
+            "surface": ["viewport", "undo", "redo", "zoom", "other"],
+            "mutation": ["none", "move", "undo", "redo", "button-zoom", "viewport", "wheel-zoom", "draw", "reset-view", "other"],
+            "gesture": ["none", "card", "pan", "pinch"]
+        ]
+        let numericKeys = countKeys.union(coordinateKeys).union(toggleKeys)
+        guard Set(body.keys) == numericKeys.union(enums.keys) else { return }
+        var safe: [String: Any] = [:]
+        for key in numericKeys {
+            guard let number = body[key] as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return }
+            let value = number.doubleValue
+            guard value.isFinite else { return }
+            if countKeys.contains(key) {
+                guard value >= 0, value <= 9999, value.rounded() == value else { return }
+            } else if toggleKeys.contains(key) {
+                guard value == 0 || value == 1 else { return }
+            } else {
+                guard abs(value) <= 1000000 else { return }
+            }
+            safe[key] = value
+        }
+        for (key, allowed) in enums {
+            guard let value = body[key] as? String, allowed.contains(value) else { return }
+            safe[key] = value
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: safe, options: [.sortedKeys]),
+              data.count <= 4096, let text = String(data: data, encoding: .utf8) else { return }
+        NSLog("IOS_BOARD_DIAGNOSTIC %@", text)
+    }
+}
+#endif
 
 struct NavigationRequestContext {
     let url: URL?
@@ -110,10 +160,11 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         #if PUBLIC_TESTING
         if boardEventDiagnostics {
             userContentController.addUserScript(WKUserScript(
-                source: "window.__quareiaBoardDiagnostics = true;",
+                source: "window.__quareiaBoardDiagnostics = true; window.__quareiaBoardDiagnosticsNative = true;",
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: true
             ))
+            userContentController.add(BoardDiagnosticMessageHandler(), name: BoardDiagnosticMessageHandler.name)
         }
         #endif
         let configuration = WKWebViewConfiguration()
@@ -188,6 +239,9 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         nativeHost?.stop()
         bridge?.stop()
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: NativeBridgeHandler.name)
+        #if PUBLIC_TESTING
+        webView?.configuration.userContentController.removeScriptMessageHandler(forName: BoardDiagnosticMessageHandler.name)
+        #endif
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {

@@ -9,8 +9,8 @@ FIXTURE_PID=$!
 cleanup() {
   local cleanup_status=$?
   if [ -n "${SIMULATOR_ID:-}" ]; then
-    python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log show --last 30m \
-      --predicate 'process == "Quareia" AND eventMessage BEGINSWITH "IOS_UI_STATE "' --style compact | tail -150 || true
+    python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log show --last 45m \
+      --predicate 'process == "Quareia" AND (eventMessage BEGINSWITH "IOS_UI_STATE " OR eventMessage BEGINSWITH "IOS_BOARD_DIAGNOSTIC ")' --style compact | tail -250 || true
   fi
   kill "$FIXTURE_PID" 2>/dev/null || true
   wait "$FIXTURE_PID" 2>/dev/null || true
