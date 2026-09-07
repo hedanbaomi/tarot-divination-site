@@ -21,7 +21,7 @@ final class BridgeTests: XCTestCase {
             BridgeContext(isMainFrame: true, scheme: AppRoute.scheme, host: "other", port: 0),
             BridgeContext(isMainFrame: true, scheme: AppRoute.scheme, host: AppRoute.host, port: 444)
         ]
-        contexts.forEach { context in
+        for context in contexts {
             XCTAssertThrowsError(try BridgeValidator.validate(body: validBody(), context: context)) {
                 XCTAssertEqual($0 as? BridgeValidationError, .invalidContext)
             }
@@ -38,7 +38,7 @@ final class BridgeTests: XCTestCase {
             (["id": "request_1", "method": "hostInfo", "params": ["unexpected": true]] as [String: Any], .invalidParameters),
             (["id": "request_1", "method": "hostInfo", "params": []] as [String: Any], .invalidParameters)
         ]
-        rejected.forEach { body, expected in
+        for (body, expected) in rejected {
             XCTAssertThrowsError(try BridgeValidator.validate(body: body, context: allowedContext)) {
                 XCTAssertEqual($0 as? BridgeValidationError, expected)
             }
@@ -102,6 +102,30 @@ final class BridgeTests: XCTestCase {
         wait(for: [noDelivery], timeout: 0.75)
     }
 
+    func testInvalidationCancelsPendingRequestAndSessionAcceptsNextRequest() {
+        let firstStarted = expectation(description: "first operation started")
+        let firstNotDelivered = expectation(description: "first reply not delivered")
+        firstNotDelivered.isInverted = true
+        let secondDelivered = expectation(description: "second reply delivered")
+        let session = BridgeSession(operation: { request in
+            if request.id == "first" {
+                firstStarted.fulfill()
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+            return ["requestID": request.id]
+        }) { reply in
+            if reply.id == "first" { firstNotDelivered.fulfill() }
+            if reply.id == "second" { secondDelivered.fulfill() }
+        }
+
+        session.handle(body: validBody(id: "first"), context: allowedContext)
+        wait(for: [firstStarted], timeout: 1)
+        session.invalidatePendingOperations()
+        session.handle(body: validBody(id: "second"), context: allowedContext)
+
+        wait(for: [secondDelivered, firstNotDelivered], timeout: 0.75)
+    }
+
     func testIframeRequestIsDroppedWithoutAnyDelivery() {
         let noDelivery = expectation(description: "iframe has no callback")
         noDelivery.isInverted = true
@@ -113,7 +137,7 @@ final class BridgeTests: XCTestCase {
         wait(for: [noDelivery], timeout: 0.25)
     }
 
-    private func validBody() -> [String: Any] {
-        ["id": "request_1", "method": "hostInfo", "params": [:]]
+    private func validBody(id: String = "request_1") -> [String: Any] {
+        ["id": id, "method": "hostInfo", "params": [:]]
     }
 }

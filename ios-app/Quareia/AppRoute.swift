@@ -28,7 +28,11 @@ protocol LxxxiImageProviding {
 final class BundledPublicResourceStore: PublicResourceLoading {
     private let bundle: Bundle
     private let allowedWWWPaths: Set<String>
+    #if PUBLIC_TESTING
     private let probePaths: Set<String> = ["probe/index.html", "probe/frame.html"]
+    #else
+    private let probePaths: Set<String> = []
+    #endif
 
     init(bundle: Bundle = .main) {
         self.bundle = bundle

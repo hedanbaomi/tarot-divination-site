@@ -17,22 +17,35 @@ if xcodebuild -version | grep -Eiq 'beta|release candidate'; then
   echo 'A stable Xcode is required'; exit 1
 fi
 xcrun simctl list devices available -j > ios-app/build/devices.json
-SIMULATOR_ID=$(python3 - <<'PY'
-import json
+SDK_VERSION=$(xcrun --sdk iphonesimulator --show-sdk-version)
+SIMULATOR_ID=$(python3 - "$SDK_VERSION" <<'PY'
+import json, re, sys
 data=json.load(open('ios-app/build/devices.json'))
-choices=[(runtime,d) for runtime, devices in data['devices'].items() if '.iOS-' in runtime for d in devices if d.get('isAvailable') and d['name'].startswith('iPhone')]
-if not choices: raise SystemExit('No installed available iPhone simulator runtime')
-runtime,device=sorted(choices, key=lambda x:(x[0],x[1]['name']),reverse=True)[0]
+sdk=tuple(int(n) for n in sys.argv[1].split('.')[:2])
+choices=[]
+for runtime,devices in data['devices'].items():
+    match=re.search(r'\.iOS-(\d+)-(\d+)',runtime)
+    if not match: continue
+    version=tuple(map(int,match.groups()))
+    if version>sdk: continue
+    for device in devices:
+        if device.get('isAvailable') and device['name'].startswith('iPhone'):
+            model=re.search(r'iPhone (\d+)',device['name'])
+            choices.append((version,int(model[1]) if model else 0,device['name'],runtime,device))
+if not choices: raise SystemExit('No installed available iPhone runtime supported by the selected Xcode SDK')
+_,_,_,runtime,device=max(choices,key=lambda x:x[:3])
+json.dump({'runtime':runtime,'name':device['name'],'udid':device['udid'],'sdk':sys.argv[1]},open('ios-app/build/selected-simulator.json','w'))
 print(device['udid'])
 PY
 )
+cat ios-app/build/selected-simulator.json
 echo "SIMULATOR_ID=$SIMULATOR_ID"
 xcrun simctl boot "$SIMULATOR_ID" || test "$(xcrun simctl list devices booted -j | grep -c "$SIMULATOR_ID")" -gt 0
 xcrun simctl bootstatus "$SIMULATOR_ID" -b
 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
-  -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+  -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
   -derivedDataPath ios-app/build/simulator -resultBundlePath ios-app/build/public-tests.xcresult \
-  -parallel-testing-enabled NO test | tee ios-app/build/xcode-test.log
+  -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES test | tee ios-app/build/xcode-test.log
 # Device build is deliberately separate. No archive, signing, IPA or upload.
 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -configuration PublicTesting -sdk iphoneos -destination 'generic/platform=iOS' \

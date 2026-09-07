@@ -4,6 +4,10 @@
   "license": "Android-distributed software: MPL-2.0; third-party text retains existing notices; no card artwork is copied.",
   "files": [
     {
+      "path": "LICENSE.md",
+      "sha256": "2e42d90cc953ff8ed00ddb95e4c88dd1a6f5996f30369c7c2be528a531e8947f"
+    },
+    {
       "path": "css/android-shell.css",
       "sha256": "496e38f94929f1859c2c4ad7e205950842c9dd86c466f0a30c856c024f5fda14"
     },

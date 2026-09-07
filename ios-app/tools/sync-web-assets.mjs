@@ -13,7 +13,7 @@ const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 if (!/^[a-f0-9]{40}$/.test(manifest.sourceCommit)) throw Error('Invalid source commit');
 const expected = new Map(), provenance = [];
 for (const entry of manifest.files) {
-  if (!/^(index\.html|(?:js|css)\/[a-z0-9-]+\.(?:js|css))$/.test(entry.path)) throw Error('Non-public path');
+  if (!/^(LICENSE\.md|index\.html|(?:js|css)\/[a-z0-9-]+\.(?:js|css))$/.test(entry.path)) throw Error('Non-public path');
   if (expected.has(entry.path)) throw Error('Duplicate path');
   const source = `android-demo/app/src/main/assets/www/${entry.path}`;
   const bytes = execFileSync('git', ['show', `${manifest.sourceCommit}:${source}`], { cwd: root, maxBuffer: 8 * 1024 * 1024 });

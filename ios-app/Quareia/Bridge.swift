@@ -80,9 +80,10 @@ final class BridgeSession {
     typealias Operation = (ValidatedBridgeRequest) async -> [String: Any]
     typealias Delivery = (BridgeReply) -> Void
 
-    private let lock = NSLock()
+    private let lock = NSRecursiveLock()
     private var isRunning = true
     private var generation = UUID()
+    private var inFlight = Set<UUID>()
     private var tasks: [UUID: Task<Void, Never>] = [:]
     private let operation: Operation
     private let delivery: Delivery
@@ -111,10 +112,12 @@ final class BridgeSession {
         }
         let expectedGeneration = generation
         let taskID = UUID()
+        inFlight.insert(taskID)
         let operation = self.operation
         lock.unlock()
 
         let task = Task { [weak self] in
+            guard !Task.isCancelled else { return }
             let result = await operation(request)
             guard !Task.isCancelled else { return }
             self?.complete(
@@ -125,7 +128,7 @@ final class BridgeSession {
         }
 
         lock.lock()
-        if isRunning && generation == expectedGeneration {
+        if isRunning && generation == expectedGeneration && inFlight.contains(taskID) {
             tasks[taskID] = task
         } else {
             task.cancel()
@@ -138,6 +141,7 @@ final class BridgeSession {
         isRunning = false
         generation = UUID()
         let pending = Array(tasks.values)
+        inFlight.removeAll()
         tasks.removeAll()
         lock.unlock()
         pending.forEach { $0.cancel() }
@@ -151,6 +155,7 @@ final class BridgeSession {
         }
         generation = UUID()
         let pending = Array(tasks.values)
+        inFlight.removeAll()
         tasks.removeAll()
         lock.unlock()
         pending.forEach { $0.cancel() }
@@ -158,17 +163,17 @@ final class BridgeSession {
 
     private func complete(taskID: UUID, expectedGeneration: UUID, reply: BridgeReply) {
         lock.lock()
-        let shouldDeliver = isRunning && generation == expectedGeneration
+        defer { lock.unlock() }
+        let wasInFlight = inFlight.remove(taskID) != nil
+        let shouldDeliver = wasInFlight && isRunning && generation == expectedGeneration
         tasks.removeValue(forKey: taskID)
-        lock.unlock()
         if shouldDeliver { delivery(reply) }
     }
 
     private func deliverIfRunning(_ reply: BridgeReply) {
         lock.lock()
-        let shouldDeliver = isRunning
-        lock.unlock()
-        if shouldDeliver { delivery(reply) }
+        defer { lock.unlock() }
+        if isRunning { delivery(reply) }
     }
 
     private static func code(for error: Error) -> String {

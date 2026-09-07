@@ -1,6 +1,42 @@
 import UIKit
 import WebKit
 
+struct NavigationRequestContext {
+    let url: URL?
+    let method: String?
+    let hasTargetFrame: Bool
+    let sourceIsMainFrame: Bool
+    let isLinkActivated: Bool
+}
+
+enum AppNavigationDecision: Equatable {
+    case allowLocal
+    case openExternal(URL)
+    case cancel
+}
+
+enum AppNavigationPolicy {
+    static func decide(_ context: NavigationRequestContext) -> AppNavigationDecision {
+        guard context.hasTargetFrame, let url = context.url else { return .cancel }
+        let isLocal = url.scheme == AppRoute.scheme
+            && url.host == AppRoute.host
+            && url.port == nil
+            && url.user == nil
+            && url.password == nil
+            && context.method == "GET"
+        if isLocal { return .allowLocal }
+
+        let isUserActivatedSafeHTTPS = context.isLinkActivated
+            && context.sourceIsMainFrame
+            && url.scheme == "https"
+            && url.host?.isEmpty == false
+            && (url.port == nil || url.port == 443)
+            && url.user == nil
+            && url.password == nil
+        return isUserActivatedSafeHTTPS ? .openExternal(url) : .cancel
+    }
+}
+
 final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDelegate {
     private var webView: WKWebView!
     private var bridge: NativeBridgeHandler!
@@ -79,33 +115,26 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
-        guard navigationAction.targetFrame != nil, let url = navigationAction.request.url else {
-            decisionHandler(.cancel)
-            return
-        }
-
-        let isLocal = url.scheme == AppRoute.scheme
-            && url.host == AppRoute.host
-            && url.port == nil
-            && url.user == nil
-            && url.password == nil
-            && navigationAction.request.httpMethod == "GET"
-        if isLocal {
+        let context = NavigationRequestContext(
+            url: navigationAction.request.url,
+            method: navigationAction.request.httpMethod,
+            hasTargetFrame: navigationAction.targetFrame != nil,
+            sourceIsMainFrame: navigationAction.sourceFrame.isMainFrame,
+            isLinkActivated: navigationAction.navigationType == .linkActivated
+        )
+        switch AppNavigationPolicy.decide(context) {
+        case .allowLocal:
+            guard let url = context.url else {
+                decisionHandler(.cancel)
+                return
+            }
             pendingLocalNavigationURL = url
             decisionHandler(.allow)
-            return
-        }
-
-        let isUserActivatedSafeHTTPS = navigationAction.navigationType == .linkActivated
-            && navigationAction.sourceFrame.isMainFrame
-            && url.scheme == "https"
-            && url.host?.isEmpty == false
-            && (url.port == nil || url.port == 443)
-            && url.user == nil
-            && url.password == nil
-        decisionHandler(.cancel)
-        if isUserActivatedSafeHTTPS {
+        case .openExternal(let url):
+            decisionHandler(.cancel)
             UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        case .cancel:
+            decisionHandler(.cancel)
         }
     }
 
