@@ -15,8 +15,12 @@ private final class BoardDiagnosticMessageHandler: NSObject, WKScriptMessageHand
               BridgeContext.isTrustedDocumentURL(url),
               let body = message.body as? [String: Any] else { return }
         let countKeys: Set<String> = ["down", "move", "up", "cancel", "lost", "dragStart", "dragEnd", "undoClick", "redoClick", "zoomClick", "errors", "active", "visual", "cards", "rendered"]
-        let coordinateKeys: Set<String> = ["x", "y", "zoom", "panX", "panY", "domX", "domY", "domWidth", "domHeight", "lastPointerX", "lastPointerY"]
-        let toggleKeys: Set<String> = ["undo", "redo", "capture"]
+        var coordinateKeys: Set<String> = ["x", "y", "zoom", "panX", "panY", "domX", "domY", "domWidth", "domHeight", "lastPointerX", "lastPointerY"]
+        var toggleKeys: Set<String> = ["undo", "redo", "capture"]
+        if body["mutation"] as? String == "snapshot" {
+            coordinateKeys.formUnion(["undoDomX", "undoDomY", "undoDomWidth", "undoDomHeight", "redoDomX", "redoDomY", "redoDomWidth", "redoDomHeight"])
+            toggleKeys.formUnion(["undoDisabled", "redoDisabled"])
+        }
         let enums: [String: Set<String>] = [
             "pointerType": ["none", "touch", "mouse", "pen"],
             "errorKind": ["none", "TypeError", "ReferenceError", "RangeError", "Error", "SyntaxError", "other"],

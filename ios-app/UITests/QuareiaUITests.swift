@@ -290,10 +290,10 @@ final class QuareiaUITests: XCTestCase {
         let committedDragX = beforeDrag.midX + 42
         waitForPlacedCard(midX: committedDragX, in: app)
         XCTAssertTrue(undo.isEnabled)
-        tapWhenVisible(undo, in: webView, scrolling: .towardUpperPage)
+        tapBoardControl(undo, action: "undo", in: app, webView: webView)
         waitForCommittedCardX(beforeCommittedX, in: app)
         waitForPlacedCard(midX: beforeDrag.midX, in: app)
-        redo.tap()
+        tapBoardControl(redo, action: "redo", in: app, webView: webView)
         waitForCommittedCardX(beforeCommittedX + 42, in: app)
         waitForPlacedCard(midX: committedDragX, in: app)
         tapWhenVisible(zoomIn, in: webView, scrolling: .towardUpperPage)
@@ -832,6 +832,20 @@ final class QuareiaUITests: XCTestCase {
         }
         XCTAssertEqual(result, .completed,
                        "Expected the committed card geometry", file: file, line: line)
+    }
+
+    private func tapBoardControl(_ control: XCUIElement, action: String,
+                                 in app: XCUIApplication, webView: XCUIElement,
+                                 file: StaticString = #filePath, line: UInt = #line) {
+        makeVisible(control, in: webView, scrolling: .towardUpperPage, file: file, line: line)
+        let frame = control.frame
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        XCTAssertTrue(!frame.isNull && !frame.isEmpty && app.frame.contains(center),
+                      "Expected a visible board action", file: file, line: line)
+        print("BOARD_CONTROL action=\(action) frame=\(frame) webView=\(webView.frame)")
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(
+            dx: center.x - app.frame.minX, dy: center.y - app.frame.minY
+        )).tap()
     }
 
     private func waitForCommittedCardX(_ expected: Int, in app: XCUIApplication,

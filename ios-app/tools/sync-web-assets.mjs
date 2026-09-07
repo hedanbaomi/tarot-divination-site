@@ -135,6 +135,8 @@ function transformSource(assetPath, sourceText) {
         var view = state && state.viewport;
         var renderedCard = !boardDiagnostic.native && elements.world && elements.world.firstElementChild;
         var cardRect = renderedCard ? renderedCard.getBoundingClientRect() : null;
+        var undoRect = elements.undo ? elements.undo.getBoundingClientRect() : null;
+        var redoRect = elements.redo ? elements.redo.getBoundingClientRect() : null;
         function numeric(value) {
           return Number.isFinite(value) ? Math.round(Math.max(-1000000, Math.min(1000000, value)) * 1000) / 1000 : 0;
         }
@@ -148,6 +150,12 @@ function transformSource(assetPath, sourceText) {
           errorKind: boardDiagnostic.errorKind,
           domX: numeric(cardRect && cardRect.x), domY: numeric(cardRect && cardRect.y),
           domWidth: numeric(cardRect && cardRect.width), domHeight: numeric(cardRect && cardRect.height),
+          undoDomX: numeric(undoRect && undoRect.x), undoDomY: numeric(undoRect && undoRect.y),
+          undoDomWidth: numeric(undoRect && undoRect.width), undoDomHeight: numeric(undoRect && undoRect.height),
+          redoDomX: numeric(redoRect && redoRect.x), redoDomY: numeric(redoRect && redoRect.y),
+          redoDomWidth: numeric(redoRect && redoRect.width), redoDomHeight: numeric(redoRect && redoRect.height),
+          undoDisabled: !elements.undo || elements.undo.disabled ? 1 : 0,
+          redoDisabled: !elements.redo || elements.redo.disabled ? 1 : 0,
           surface: boardDiagnostic.surface,
           mutation: boardDiagnostic.mutation,
           active: Math.min(9999, Object.keys(pointers).length),
