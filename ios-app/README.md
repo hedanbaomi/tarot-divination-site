@@ -32,13 +32,19 @@ On a Mac with a stable Xcode and an installed iOS simulator:
 bash ios-app/tools/cloud-test.sh
 ```
 
-The public GitHub Actions workflow runs on a standard `macos-15` runner, records
+The public GitHub Actions workflow runs on a standard `macos-15` runner with
+stable Xcode 26.3 (or the explicit `IOS_DEVELOPER_DIR` override), records
 the actual Xcode, SDK, architecture and available runtimes, selects an available
 iPhone simulator, runs XCTest/XCUITest, and builds a separate unsigned `iphoneos`
 app. Mach-O platform checks distinguish device from simulator even on arm64.
 It does not produce or upload an IPA. Build metadata and a synthetic probe
 screenshot are retained in the workflow log; no artifact or cache is uploaded.
 Runner labels are not a promise that any particular old simulator is installed.
+
+Xcode 16.4/iOS 18.5 failed before app startup with the Apple-tracked
+[missing Swift WebKit library issue](https://developer.apple.com/forums/thread/785964).
+The workflow selects the newer installed toolchain; it does not alter security
+settings, raise the app deployment target, or patch simulator system libraries.
 
 The public main page currently provides a source-integration smoke surface;
 the dedicated `-probe` page tests storage and bridge foundations. Neither is a

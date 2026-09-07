@@ -44,6 +44,9 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
     private var pendingLocalNavigationURL: URL?
 
     override func loadView() {
+        #if PUBLIC_TESTING
+        NSLog("P0 web loadView begin")
+        #endif
         let token = UUID().uuidString.lowercased() + UUID().uuidString.lowercased()
         let route = AppRoute(
             token: token,
@@ -64,7 +67,13 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         configuration.userContentController = userContentController
         configuration.setURLSchemeHandler(schemeHandler, forURLScheme: AppRoute.scheme)
 
+        #if PUBLIC_TESTING
+        NSLog("P0 web WKWebView init begin")
+        #endif
         webView = WKWebView(frame: .zero, configuration: configuration)
+        #if PUBLIC_TESTING
+        NSLog("P0 web WKWebView init complete")
+        #endif
         bridge = NativeBridgeHandler(webView: webView, protectedBaseURL: route.protectedBaseURL)
         userContentController.add(bridge, name: NativeBridgeHandler.name)
         webView.navigationDelegate = self
@@ -73,10 +82,16 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         webView.isOpaque = false
         webView.accessibilityIdentifier = "QuareiaWebView"
         view = webView
+        #if PUBLIC_TESTING
+        NSLog("P0 web loadView complete")
+        #endif
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        #if PUBLIC_TESTING
+        NSLog("P0 web viewDidLoad begin")
+        #endif
         let path = ProcessInfo.processInfo.arguments.contains("-probe") ? "/probe/index.html" : "/index.html"
         guard let url = URL(string: "\(AppRoute.scheme)://\(AppRoute.host)\(path)") else {
             assertionFailure("The fixed application URL must be valid")
@@ -87,15 +102,24 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         pendingLocalNavigationURL = url
         bridge.beginNavigation(to: url)
         webView.load(request)
+        #if PUBLIC_TESTING
+        NSLog("P0 web load submitted")
+        #endif
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        #if PUBLIC_TESTING
+        NSLog("P0 web navigation started")
+        #endif
         bridge.beginNavigation(to: webView.url ?? pendingLocalNavigationURL)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         let path = URLComponents(url: webView.url ?? URL(fileURLWithPath: "/"), resolvingAgainstBaseURL: false)?.percentEncodedPath
         webView.accessibilityValue = path == "/index.html" ? "main-ready" : "probe-ready"
+        #if PUBLIC_TESTING
+        NSLog("P0 web navigation finished")
+        #endif
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {

@@ -3,6 +3,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 mkdir -p ios-app/build
+# Verified standard runner image includes this stable Xcode. Fail if removed;
+# do not silently fall back to the broken 16.4/iOS 18.5 WebKit simulator pair.
+export DEVELOPER_DIR="${IOS_DEVELOPER_DIR:-/Applications/Xcode_26.3.app/Contents/Developer}"
+test -x "$DEVELOPER_DIR/usr/bin/xcodebuild"
 {
   echo "SOURCE_SHA=$(git rev-parse HEAD)"
   echo "RUNNER_IMAGE=${ImageOS:-unknown}/${ImageVersion:-unknown}"
@@ -41,11 +45,26 @@ PY
 cat ios-app/build/selected-simulator.json
 echo "SIMULATOR_ID=$SIMULATOR_ID"
 xcrun simctl boot "$SIMULATOR_ID" || test "$(xcrun simctl list devices booted -j | grep -c "$SIMULATOR_ID")" -gt 0
-xcrun simctl bootstatus "$SIMULATOR_ID" -b
+python3 ios-app/tools/run-bounded.py 240 xcrun simctl bootstatus "$SIMULATOR_ID" -b
 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
+  -derivedDataPath ios-app/build/simulator \
+  -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES build-for-testing | tee ios-app/build/xcode-build.log
+python3 ios-app/tools/run-bounded.py 90 xcrun simctl install "$SIMULATOR_ID" ios-app/build/simulator/Build/Products/PublicTesting-iphonesimulator/Quareia.app
+python3 ios-app/tools/run-bounded.py 90 xcrun simctl launch --terminate-running-process "$SIMULATOR_ID" com.hedanbaomi.quareia.ios -probe
+sleep 3
+python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log show --last 1m --predicate 'process == "Quareia" AND eventMessage CONTAINS "P0"' --style compact | tail -50
+python3 ios-app/tools/run-bounded.py 30 xcrun simctl io "$SIMULATOR_ID" screenshot ios-app/build/public-launch.png
+python3 - <<'PY'
+import base64
+print('PUBLIC_LAUNCH_SCREENSHOT_BASE64_BEGIN')
+print(base64.b64encode(open('ios-app/build/public-launch.png','rb').read()).decode())
+print('PUBLIC_LAUNCH_SCREENSHOT_BASE64_END')
+PY
+python3 ios-app/tools/run-bounded.py 300 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
+  -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
   -derivedDataPath ios-app/build/simulator -resultBundlePath ios-app/build/public-tests.xcresult \
-  -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES test | tee ios-app/build/xcode-test.log
+  -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES test-without-building | tee ios-app/build/xcode-test.log
 # Device build is deliberately separate. No archive, signing, IPA or upload.
 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -configuration PublicTesting -sdk iphoneos -destination 'generic/platform=iOS' \
