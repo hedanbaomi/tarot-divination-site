@@ -122,6 +122,53 @@ function transformSource(assetPath, sourceText) {
   }
 
   if (assetPath === 'js/free-board-ui.js') {
+    const historyActionSource = `    function bindBoardHistoryAction(button, method) {
+      if (!button) return;
+      var touch = null;
+      var suppressTouchClick = false;
+      if (platform === "ios") {
+        button.addEventListener("pointerdown", function (event) {
+          touch = null;
+          suppressTouchClick = event.pointerType === "touch";
+          if (!suppressTouchClick || event.isPrimary === false || button.disabled ||
+              (event.button != null && event.button !== 0) ||
+              !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return;
+          touch = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        });
+        button.addEventListener("pointermove", function (event) {
+          if (touch && touch.id === event.pointerId &&
+              (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY) ||
+               Math.hypot(event.clientX - touch.x, event.clientY - touch.y) > DRAG_THRESHOLD)) touch = null;
+        });
+        button.addEventListener("pointercancel", function () { touch = null; });
+        button.addEventListener("pointerup", function (event) {
+          if (!touch || touch.id !== event.pointerId) return;
+          var started = touch;
+          touch = null;
+          if (event.pointerType !== "touch" || event.isPrimary === false || button.disabled ||
+              !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY) ||
+              Math.hypot(event.clientX - started.x, event.clientY - started.y) > DRAG_THRESHOLD) return;
+          var rect = button.getBoundingClientRect();
+          if (event.clientX < rect.left || event.clientX > rect.right ||
+              event.clientY < rect.top || event.clientY > rect.bottom) return;
+          mutate(method, [], method);
+        });
+      }
+      button.addEventListener("click", function (event) {
+        event = event || { detail: 0 };
+        if (suppressTouchClick && event.detail !== 0) {
+          if (event.preventDefault) event.preventDefault();
+          return;
+        }
+        suppressTouchClick = false;
+        if (!button.disabled) mutate(method, [], method);
+      });
+    }
+
+`;
+    apply('    function bind() {', historyActionSource + '    function bind() {', 'activate iOS history touch taps once without preventing page scrolling');
+    apply('      if (elements.undo) elements.undo.addEventListener("click", function () { mutate("undo", [], "undo"); });', '      bindBoardHistoryAction(elements.undo, "undo");', 'bind bounded iOS undo touch activation');
+    apply('      if (elements.redo) elements.redo.addEventListener("click", function () { mutate("redo", [], "redo"); });', '      bindBoardHistoryAction(elements.redo, "redo");', 'bind bounded iOS redo touch activation');
     apply('      selected: options.selected || byId(document, "freeBoardSelectedControls"),', '      selectionStatus: options.selectionStatus || byId(document, "freeBoardSelectionStatus"),\n      selected: options.selected || byId(document, "freeBoardSelectedControls"),', 'resolve selected card live status');
     apply('      elements.selected.hidden = !selected;', '      if (elements.selectionStatus) {\n        var positionText = selected ? t("freeBoard.selectionPosition", {\n          x: Math.round(selected.x), y: Math.round(selected.y), rotation: Math.round(selected.boardRotation)\n        }) : "";\n        if (elements.selectionStatus.textContent !== positionText) elements.selectionStatus.textContent = positionText;\n      }\n      elements.selected.hidden = !selected;', 'announce committed coordinates without card identity or preview movement');
     apply('    function exit() {', '    function exit() {\n      if (elements.selectionStatus) elements.selectionStatus.textContent = "";', 'clear selected card position when leaving board');

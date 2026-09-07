@@ -143,3 +143,67 @@ test('iOS touch drag commits before toolbar undo redo and zoom without cancellin
   assert.equal(selected.hidden, true);
   ui.exit();
 });
+
+test('iOS history controls activate a primary touch once and preserve keyboard mouse and pen clicks', () => {
+  function control() {
+    const listeners = new Map();
+    return { disabled: false, listeners,
+      addEventListener(type, callback) { listeners.set(type, callback); },
+      getBoundingClientRect: () => ({left: 0, top: 0, right: 100, bottom: 50}),
+      emit(type, options = {}) {
+        let prevented = false;
+        listeners.get(type)?.({pointerType: 'touch', pointerId: 7, isPrimary: true, button: 0,
+          clientX: 20, clientY: 20, detail: 1, preventDefault() { prevented = true; }, ...options});
+        return prevented;
+      }
+    };
+  }
+  const undo = control();
+  const redo = control();
+  const ui = board.createController({platform: 'ios', draftApi: {},
+    document: {getElementById: id => ({freeBoardUndoBtn: undo, freeBoardRedoBtn: redo})[id] || null}});
+  ui.enter({deckType: 'tarot', deckName: 'Synthetic', mode: 'upright-only', filterMode: 'mixed',
+    cards: ['major-0', 'major-1', 'major-2'].map(id => ({id, deck: 'tarot', name: 'Synthetic'}))}, {restoreDraft: false});
+  for (const id of ['major-0', 'major-1', 'major-2']) ui.draw(id);
+  const count = () => ui.getState().cards.length;
+  assert.equal(undo.emit('pointerdown'), false, 'touch down must not block scrolling');
+  assert.equal(undo.emit('pointerup'), false);
+  assert.equal(count(), 2);
+  undo.emit('pointerup');
+  assert.equal(count(), 2, 'duplicate pointerup cannot repeat Undo');
+  assert.equal(undo.emit('click'), true);
+  assert.equal(count(), 2, 'compatibility click cannot repeat Undo');
+  undo.emit('click');
+  assert.equal(count(), 2, 'duplicate compatibility clicks from the same touch remain suppressed');
+  redo.emit('pointerdown'); redo.emit('pointerup'); redo.emit('click');
+  assert.equal(count(), 3, 'Redo also activates exactly once');
+  undo.emit('click', {detail: 0});
+  assert.equal(count(), 2, 'keyboard and VoiceOver detail-zero activation remains usable');
+  undo.emit('pointerdown', {pointerType: 'mouse'}); undo.emit('pointerup', {pointerType: 'mouse'});
+  assert.equal(count(), 2, 'mouse activation remains click-driven');
+  undo.emit('click', {pointerType: 'mouse'});
+  assert.equal(count(), 1);
+  redo.emit('pointerdown', {pointerType: 'pen'}); redo.emit('pointerup', {pointerType: 'pen'});
+  assert.equal(count(), 1, 'pen activation remains click-driven');
+  redo.emit('click', {pointerType: 'pen'}); redo.emit('click', {detail: 0});
+  assert.equal(count(), 3);
+  undo.emit('pointerdown'); undo.emit('pointercancel'); undo.emit('pointerup'); undo.emit('click');
+  assert.equal(count(), 3, 'cancelled touch cannot activate via a later compatibility click');
+  assert.equal(undo.emit('pointerdown'), false);
+  assert.equal(undo.emit('pointermove', {clientX: 40}), false, 'scrolling movement is not cancelled');
+  undo.emit('pointerup'); undo.emit('click');
+  assert.equal(count(), 3, 'moving away and returning cannot activate');
+  undo.emit('pointerdown', {clientX: 98}); undo.emit('pointerup', {clientX: 102}); undo.emit('click');
+  assert.equal(count(), 3, 'release outside the control cannot activate even below movement threshold');
+  undo.emit('pointerdown', {isPrimary: false}); undo.emit('pointerup', {isPrimary: false}); undo.emit('click');
+  assert.equal(count(), 3, 'secondary touch cannot activate');
+  undo.disabled = true;
+  undo.emit('pointerdown'); undo.emit('pointerup'); undo.emit('click', {detail: 0});
+  assert.equal(count(), 3, 'disabled controls cannot activate');
+  undo.disabled = false;
+  undo.emit('pointerdown'); undo.emit('pointerup');
+  assert.equal(count(), 2);
+  undo.emit('click', {detail: 0});
+  assert.equal(count(), 1, 'VoiceOver activation is not consumed when a touch emitted no compatibility click');
+  ui.exit();
+});
