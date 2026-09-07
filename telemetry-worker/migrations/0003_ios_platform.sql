@@ -37,6 +37,19 @@ SELECT
     max_version_code, starts_at, ends_at, created_at, updated_at
 FROM announcements_pre_ios;
 
+-- Preserve the historical high-water mark, including deleted announcement ids.
+-- Explicit row copying alone would only retain MAX(id) of surviving rows.
+UPDATE sqlite_sequence
+SET seq = MAX(seq, COALESCE(
+    (SELECT seq FROM sqlite_sequence WHERE name = 'announcements_pre_ios'), 0
+))
+WHERE name = 'announcements';
+
+INSERT INTO sqlite_sequence (name, seq)
+SELECT 'announcements', seq FROM sqlite_sequence
+WHERE name = 'announcements_pre_ios'
+  AND NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'announcements');
+
 DROP TABLE announcements_pre_ios;
 
 CREATE INDEX idx_announcements_public

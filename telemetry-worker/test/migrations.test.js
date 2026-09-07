@@ -111,3 +111,26 @@ test("iOS migration preserves rows, ids, revisions and indexes while accepting n
   assert.equal(db.prepare("SELECT id FROM announcements WHERE platform = 'ios'").get().id, 8);
   assert.equal(db.prepare("SELECT version_code FROM install_state WHERE platform = 'ios'").get().version_code, 42);
 });
+
+for (const scenario of ['surviving-row', 'all-deleted', 'never-inserted']) {
+  test('iOS migration preserves announcement allocation history: ' + scenario, () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      for (const file of ['0001_init.sql', '0002_miniprogram_platform.sql']) {
+        db.exec(readFileSync(path.join(migrations, file), 'utf8'));
+      }
+      if (scenario !== 'never-inserted') {
+        db.exec('INSERT INTO announcements (id, created_at, updated_at) VALUES (7, 1, 1), (91, 2, 2)');
+        db.exec('DELETE FROM announcements WHERE id = 91');
+        if (scenario === 'all-deleted') db.exec('DELETE FROM announcements');
+      }
+      db.exec(readFileSync(path.join(migrations, '0003_ios_platform.sql'), 'utf8'));
+      db.exec('INSERT INTO announcements (created_at, updated_at) VALUES (3, 3)');
+      assert.equal(db.prepare('SELECT id FROM announcements WHERE created_at = 3').get().id,
+        scenario === 'never-inserted' ? 1 : 92);
+      assert.equal(db.prepare("SELECT count(*) AS count FROM sqlite_sequence WHERE name = 'announcements_pre_ios'").get().count, 0);
+    } finally {
+      db.close();
+    }
+  });
+}

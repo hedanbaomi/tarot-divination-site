@@ -74,6 +74,8 @@ function verifyMigrationPreservation() {
     INSERT INTO announcements
       (id, revision, status, severity, title_zh, body_en, platform, created_at, updated_at)
     VALUES (7, 9, 'published', 'important', 'fixture-preserved', 'fixture-preserved', 'android', 10, 11);
+    INSERT INTO announcements (id, created_at, updated_at) VALUES (91, 12, 12);
+    DELETE FROM announcements WHERE id = 91;
     INSERT INTO install_state
       (install_hash, app_version, version_code, locale, android_major, platform, env_version,
        first_seen_at, last_seen_at)
@@ -81,11 +83,16 @@ function verifyMigrationPreservation() {
            ('${"b".repeat(64)}', '1.3.0', 0, 'zh-CN', 0, 'miniprogram', 'release', 12, 13);
   `);
 
+  assert.equal(firstResult(runD1(preConfig, migrationPersist,
+    "SELECT seq FROM sqlite_sequence WHERE name = 'announcements'")).seq, 91);
+
   runWrangler([
     "d1", "migrations", "apply", databaseName,
     "--local", "--config", config, "--persist-to", migrationPersist
   ]);
 
+  assert.equal(firstResult(runD1(config, migrationPersist,
+    "SELECT seq FROM sqlite_sequence WHERE name = 'announcements'")).seq, 91);
   const announcement = firstResult(runD1(config, migrationPersist,
     "SELECT id, revision, title_zh, platform, created_at, updated_at FROM announcements WHERE id = 7"));
   assert.deepEqual(announcement, {
@@ -130,13 +137,14 @@ function verifyMigrationPreservation() {
     VALUES ('${"c".repeat(64)}', '1.0.0', 42, 'en-US', 0, 17, 'ios', '', 20, 20);
   `);
   assert.equal(firstResult(runD1(config, migrationPersist,
-    "SELECT id FROM announcements WHERE platform = 'ios'")).id, 8);
+    "SELECT id FROM announcements WHERE platform = 'ios'")).id, 92);
   return {
     status: "PASS",
     preserved_announcements: 1,
     preserved_install_rows: 2,
     preserved_indexes: indexes.map((row) => row.name),
-    ios_insert_id: 8
+    preserved_sequence: 91,
+    ios_insert_id: 92
   };
 }
 
