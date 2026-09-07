@@ -5,10 +5,18 @@ import argparse
 import json
 import re
 
+# This installed runtime crashes before app startup for deployment targets below
+# 18.4 when Swift WebKit overlays are used. Reproduced with Xcode 16.4 and 26.3;
+# https://bugs.webkit.org/show_bug.cgi?id=293831 . Do not raise the app target or
+# patch system libraries to conceal it. Test the next installed older runtime.
+UNUSABLE_RUNTIMES = {(18, 5): 'WebKit 293831: missing libswiftWebKit.dylib at app load'}
+
 
 def select(data, sdk, family, policy):
     supported = tuple(int(n) for n in sdk.split('.')[:2])
     choices = []
+    installed = set()
+    excluded = {}
     for runtime, devices in data.get('devices', {}).items():
         match = re.search(r'\.iOS-(\d+)-(\d+)$', runtime)
         if not match:
@@ -18,6 +26,10 @@ def select(data, sdk, family, policy):
             continue
         for device in devices:
             if device.get('isAvailable') and device.get('name', '').startswith(family):
+                installed.add(version)
+                if version in UNUSABLE_RUNTIMES:
+                    excluded['.'.join(map(str, version))] = UNUSABLE_RUNTIMES[version]
+                    continue
                 numbers = tuple(map(int, re.findall(r'\d+', device['name'])))
                 choices.append((version, numbers, device['name'], runtime, device))
     if not choices:
@@ -30,7 +42,9 @@ def select(data, sdk, family, policy):
     return {
         'runtime': runtime, 'name': device['name'], 'udid': device['udid'],
         'sdk': sdk, 'policy': policy, 'family': family,
-        'availableVersions': ['.'.join(map(str, version)) for version in versions],
+        'availableVersions': ['.'.join(map(str, version)) for version in sorted(installed)],
+        'eligibleVersions': ['.'.join(map(str, version)) for version in versions],
+        'excludedRuntimes': excluded,
         'minimumOSAcceptancePending': not any(version[0] == 16 for version in versions),
         'olderRuntimeAvailable': len(versions) > 1,
     }

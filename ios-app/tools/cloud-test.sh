@@ -50,8 +50,11 @@ python3 ios-app/tools/run-bounded.py 600 xcodebuild -project ios-app/Quareia.xco
   -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
   -derivedDataPath ios-app/build/simulator \
   -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES build-for-testing | tee ios-app/build/xcode-build.log
-python3 ios-app/tools/run-bounded.py 90 xcrun simctl install "$SIMULATOR_ID" ios-app/build/simulator/Build/Products/PublicTesting-iphonesimulator/Quareia.app
+echo 'SIMULATOR_INSTALL_BEGIN'
+python3 ios-app/tools/run-bounded.py 240 xcrun simctl install "$SIMULATOR_ID" ios-app/build/simulator/Build/Products/PublicTesting-iphonesimulator/Quareia.app
+echo 'SIMULATOR_INSTALL_PASS_LAUNCH_BEGIN'
 python3 ios-app/tools/run-bounded.py 90 xcrun simctl launch --terminate-running-process "$SIMULATOR_ID" com.hedanbaomi.quareia.ios -probe
+echo 'SIMULATOR_LAUNCH_PASS'
 sleep 3
 python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log show --last 1m --predicate 'process == "Quareia" AND eventMessage CONTAINS "P0"' --style compact | tail -50
 python3 ios-app/tools/run-bounded.py 1200 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \

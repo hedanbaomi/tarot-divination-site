@@ -12,6 +12,8 @@ class SimulatorSelectionTests(unittest.TestCase):
     def devices(self):
         return {'devices': {
             'com.apple.CoreSimulator.SimRuntime.iOS-18-5': [
+                {'name': 'iPhone 16', 'udid': 'broken-webkit', 'isAvailable': True}],
+            'com.apple.CoreSimulator.SimRuntime.iOS-18-6': [
                 {'name': 'iPhone 16', 'udid': 'old', 'isAvailable': True},
                 {'name': 'iPad Pro 13-inch', 'udid': 'pad', 'isAvailable': True}],
             'com.apple.CoreSimulator.SimRuntime.iOS-26-2': [
@@ -34,6 +36,15 @@ class SimulatorSelectionTests(unittest.TestCase):
     def test_missing_compatible_runtime_fails_instead_of_fabricating_one(self):
         with self.assertRaises(ValueError):
             selection.select(self.devices(), '16.0', 'iPhone', 'latest')
+
+    def test_broken_runtime_is_reported_and_never_counted_as_tested(self):
+        result = selection.select(self.devices(), '26.2', 'iPhone', 'oldest')
+        self.assertEqual(result['udid'], 'old')
+        self.assertIn('18.5', result['availableVersions'])
+        self.assertNotIn('18.5', result['eligibleVersions'])
+        self.assertIn('libswiftWebKit', result['excludedRuntimes']['18.5'])
+        with self.assertRaises(ValueError):
+            selection.select(self.devices(), '18.5', 'iPhone', 'oldest')
 
 
 if __name__ == '__main__':

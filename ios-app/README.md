@@ -65,9 +65,11 @@ created and reopened for inspection on the runner, then discarded with the job.
 No package, artifact or cache is uploaded. Only public test evidence is logged.
 Runner labels are not a promise that any particular old simulator is installed.
 
-Xcode 16.4/iOS 18.5 failed before app startup with the Apple-tracked
+The installed iOS 18.5 runtime failed before app startup under both Xcode 16.4
+and 26.3 with the Apple-tracked
 [missing Swift WebKit library issue](https://developer.apple.com/forums/thread/785964).
-The workflow selects the newer installed toolchain; it does not alter security
+The selector reports this excluded runtime and chooses the next installed
+eligible runtime for compatibility tests. It does not alter security
 settings, raise the app deployment target, or patch simulator system libraries.
 
 The dedicated `-probe` page remains a foundation test alongside the real app.

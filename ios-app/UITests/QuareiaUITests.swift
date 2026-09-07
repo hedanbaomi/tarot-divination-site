@@ -80,7 +80,7 @@ final class QuareiaUITests: XCTestCase {
         ensureEnglish(in: app, webView: webView)
 
         openWebMenu(in: app, webView: webView)
-        let parchment = waitForElement(labels: ["Parchment Dawn"], in: app)
+        let parchment = element(label: "Parchment Dawn", in: app)
         tapWhenVisible(parchment, in: webView, scrolling: .towardLowerPage)
         XCTAssertTrue(parchment.isSelected || parchment.value as? String == "1")
 
@@ -121,8 +121,8 @@ final class QuareiaUITests: XCTestCase {
             ].waitForExistence(timeout: 8))
 
             openWebMenu(in: app, webView: webView)
-            let history = waitForElement(labels: ["Reading History"], in: app)
-            history.tap()
+            let history = element(label: "Reading History", in: app)
+            tapWhenVisible(history, in: webView, scrolling: .towardUpperPage)
             XCTAssertTrue(app.staticTexts["Reading History"].waitForExistence(timeout: 5))
             let records = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'View '"))
             XCTAssertGreaterThanOrEqual(records.count, 1, "Expected a saved reading without inspecting its card content")
@@ -162,10 +162,7 @@ final class QuareiaUITests: XCTestCase {
         let (app, webView) = launchRealApp()
         ensureEnglish(in: app, webView: webView)
 
-        let menu = waitForElement(identifier: "host.menu", labels: ["App menu"], in: app)
-        menu.tap()
-        let importBackup = waitForElement(identifier: "host.import", labels: ["Import backup"], in: app)
-        importBackup.tap()
+        openNativeMenuAction(identifier: "host.import", label: "Import backup", in: app)
 
         let restore = waitForElement(labels: ["Restore"], in: app, timeout: 8)
         restore.tap()
@@ -185,21 +182,23 @@ final class QuareiaUITests: XCTestCase {
         let openStudio = waitForElement(labels: ["Design or import a spread"], in: app)
         tapWhenVisible(openStudio, in: webView, scrolling: .towardUpperPage)
         XCTAssertTrue(app.staticTexts["Custom Spread Studio"].waitForExistence(timeout: 5))
+        let studio = element(label: "Custom Spread Studio, web dialog", in: app)
+        XCTAssertTrue(studio.waitForExistence(timeout: 5))
 
         let newDesign = waitForElement(labels: ["New design"], in: app)
         newDesign.tap()
         let spreadName = waitForTextField(label: "Spread name", in: app)
-        enterSyntheticText("UI Test QSP", into: spreadName, in: webView)
+        enterSyntheticText("UI Test QSP", into: spreadName, in: studio)
 
         let positionNames = app.textFields.matching(NSPredicate(format: "label == 'Position name'"))
         XCTAssertTrue(positionNames.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(positionNames.count, 3, "Expected the default custom spread to contain three positions")
         for index in 0..<3 {
-            enterSyntheticText("UI position \(index + 1)", into: positionNames.element(boundBy: index), in: webView)
+            enterSyntheticText("UI position \(index + 1)", into: positionNames.element(boundBy: index), in: studio)
         }
 
         let generate = waitForElement(labels: ["Generate share code"], in: app)
-        tapWhenVisible(generate, in: webView, scrolling: .towardLowerPage)
+        tapWhenVisible(generate, in: studio, scrolling: .towardLowerPage)
         XCTAssertTrue(app.staticTexts[
             "Share code generated. Copy it or save it as a text file."
         ].waitForExistence(timeout: 5))
@@ -208,11 +207,11 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertTrue(code.hasPrefix("QSP1.") || code.hasPrefix("QSP2."), "Expected a versioned QSP share code")
 
         let importTab = waitForElement(labels: ["Import code"], in: app)
-        tapWhenVisible(importTab, in: webView, scrolling: .towardUpperPage)
+        tapWhenVisible(importTab, in: studio, scrolling: .towardUpperPage)
         let importCode = waitForTextView(label: "Paste a share code", in: app)
-        enterSyntheticText(code, into: importCode, in: webView)
+        enterSyntheticText(code, into: importCode, in: studio)
         let importAndUse = waitForElement(labels: ["Import and use"], in: app)
-        tapWhenVisible(importAndUse, in: webView, scrolling: .towardLowerPage)
+        tapWhenVisible(importAndUse, in: studio, scrolling: .towardLowerPage)
 
         XCTAssertTrue(waitForElement(
             labelPrefix: "Spread, currently UI Test QSP",
@@ -227,10 +226,12 @@ final class QuareiaUITests: XCTestCase {
         chooseOption("Free Board", controlLabel: "Layout", in: app, webView: webView)
 
         discardFreeBoardDraft(in: app, webView: webView)
-        let viewport = waitForElement(labels: [
-            "Free Board. Drag the board or cards; pinch or wheel to zoom."
-        ], in: app)
+        let viewport = element(
+            label: "Free Board. Drag the board or cards; pinch or wheel to zoom.",
+            in: app
+        )
         makeVisible(viewport, in: webView, scrolling: .towardLowerPage)
+        XCTAssertTrue(viewport.exists)
         XCTAssertGreaterThan(viewport.frame.width, 250)
         XCTAssertGreaterThan(viewport.frame.height, 250)
         let pileCard = waitForElement(labelPrefix: "Face-down pile card ", in: app)
@@ -279,6 +280,7 @@ final class QuareiaUITests: XCTestCase {
         ].waitForExistence(timeout: 5))
     }
 
+    @MainActor
     func testLoopbackAnnouncementRevisionAndPrivacyToggle() async throws {
         _ = try await postFixture("/__fixture/seed", json: ["version_code": 1])
 
@@ -327,6 +329,7 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertEqual(app.state, .runningForeground)
     }
 
+    @MainActor
     func testLoopbackUpdateDownloadCancelAndHandoff() async throws {
         _ = try await postFixture("/__fixture/update-mode", json: ["mode": "blocked"])
         addTeardownBlock { Self.restoreUpdateFixtureNormal() }
@@ -456,6 +459,7 @@ final class QuareiaUITests: XCTestCase {
 
     private func enterSyntheticText(_ text: String, into element: XCUIElement, in webView: XCUIElement) {
         makeVisible(element, in: webView, scrolling: .towardLowerPage)
+        XCTAssertTrue(element.isHittable, "Expected the synthetic-data field to be visible")
         element.tap()
         element.typeText(text)
     }
@@ -475,7 +479,22 @@ final class QuareiaUITests: XCTestCase {
         in app: XCUIApplication
     ) {
         waitForElement(identifier: "host.menu", labels: ["App menu"], in: app).tap()
-        waitForElement(identifier: identifier, labels: [label], in: app).tap()
+        let localizedLabels: [String: String] = [
+            "host.announcements": "公告",
+            "host.import": "导入备份",
+            "host.privacy": "隐私",
+            "host.update": "检查更新"
+        ]
+        for candidate in [label, localizedLabels[identifier]].compactMap({ $0 }) {
+            let action = element(label: candidate, in: app)
+            if action.waitForExistence(timeout: 2) {
+                action.tap()
+                return
+            }
+        }
+        let identified = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+        XCTAssertTrue(identified.waitForExistence(timeout: 2), "Expected a native app-menu action")
+        if identified.exists { identified.tap() }
     }
 
     private func dismissFixtureAnnouncementIfPresent(in app: XCUIApplication) {
@@ -543,6 +562,12 @@ final class QuareiaUITests: XCTestCase {
         return all.matching(NSPredicate(format: "label == %@", labels.first ?? "<missing>")).firstMatch
     }
 
+    private func element(label: String, in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", label))
+            .firstMatch
+    }
+
     private enum ScrollDirection: Equatable { case towardUpperPage, towardLowerPage }
 
     private func tapWhenVisible(
@@ -559,19 +584,24 @@ final class QuareiaUITests: XCTestCase {
         in scrollable: XCUIElement,
         scrolling direction: ScrollDirection
     ) {
-        for _ in 0..<5 {
-            if element.exists && element.isHittable {
-                return
+        for _ in 0..<12 {
+            var next = direction
+            if element.exists {
+                let target = element.frame
+                let viewport = scrollable.frame.insetBy(dx: 8, dy: 20)
+                if !target.isNull && !target.isEmpty && !viewport.isNull && !viewport.isEmpty {
+                    let centerIsVisible = viewport.contains(CGPoint(x: target.midX, y: target.midY))
+                    let targetFits = target.width <= viewport.width && target.height <= viewport.height
+                    let safelyVisible = centerIsVisible && (!targetFits || viewport.contains(target))
+                    if element.isHittable && safelyVisible { return }
+                    if target.maxY > viewport.maxY - 20 {
+                        next = .towardLowerPage
+                    } else if target.minY < viewport.minY + 20 {
+                        next = .towardUpperPage
+                    }
+                }
             }
-            scroll(scrollable, toward: direction)
-        }
-        let opposite: ScrollDirection = direction == .towardUpperPage
-            ? .towardLowerPage : .towardUpperPage
-        for _ in 0..<8 {
-            if element.exists && element.isHittable {
-                return
-            }
-            scroll(scrollable, toward: opposite)
+            scroll(scrollable, toward: next)
         }
         XCTFail("Expected a known public control to become hittable")
     }
