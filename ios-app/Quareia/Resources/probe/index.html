@@ -5,9 +5,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Quareia public probe</title>
   <style>
-    body { font: 17px -apple-system, sans-serif; padding: 24px; }
+    :root { color-scheme: light dark; background: #f7f3ea; color: #1b1a17; }
+    body { min-height: 100vh; margin: 0; padding: 24px; background: inherit; color: inherit;
+      font: 17px -apple-system, sans-serif; box-sizing: border-box; }
     p { margin: 8px 0; }
     img { width: 24px; height: 24px; }
+    @media (prefers-color-scheme: dark) {
+      :root { background: #171717; color: #f2eadb; }
+    }
   </style>
 </head>
 <body>

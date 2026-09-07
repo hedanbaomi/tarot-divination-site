@@ -63,7 +63,13 @@ xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -configuration PublicTesting -sdk iphoneos -destination 'generic/platform=iOS' \
   -derivedDataPath ios-app/build/device CODE_SIGNING_ALLOWED=NO build | tee ios-app/build/xcode-device.log
 python3 ios-app/tools/inspect-app.py ios-app/build/device/Build/Products/PublicTesting-iphoneos/Quareia.app --platform IOS
-python3 ios-app/tools/inspect-app.py ios-app/build/simulator/Build/Products/PublicTesting-iphonesimulator/Quareia.app --platform IOSSIMULATOR
+# The test host contains an injected XCTest PlugIns bundle. Inspect a separate
+# app-only simulator build so the no-extensions gate stays strict for both apps.
+xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
+  -configuration PublicTesting -sdk iphonesimulator \
+  -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
+  -derivedDataPath ios-app/build/simulator-app ONLY_ACTIVE_ARCH=YES build | tee ios-app/build/xcode-simulator-app.log
+python3 ios-app/tools/inspect-app.py ios-app/build/simulator-app/Build/Products/PublicTesting-iphonesimulator/Quareia.app --platform IOSSIMULATOR
 # Prove a public checkout cannot silently emit a complete distribution build.
 if xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
