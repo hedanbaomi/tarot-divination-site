@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Quareia public probe</title>
+  <style>
+    body { font: 17px -apple-system, sans-serif; padding: 24px; }
+    p { margin: 8px 0; }
+    img { width: 24px; height: 24px; }
+  </style>
+</head>
+<body>
+  <h1>Quareia public probe</h1>
+  <p id="host">host-pending</p>
+  <p id="storage">storage-pending</p>
+  <p id="image">image-pending</p>
+  <p id="method">method-pending</p>
+  <p id="frame">iframe-pending</p>
+  <img id="protected-image" alt="synthetic protected route probe">
+  <iframe id="bridge-frame" src="/probe/frame.html" title="bridge rejection probe"></iframe>
+  <script>
+    'use strict';
+    const text = (id, value) => { document.getElementById(id).textContent = value; };
+
+    async function openProbeDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open('quareia-public-probe', 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('state');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+    }
+
+    async function updateStorage() {
+      const localCount = Number(localStorage.getItem('probe-launch-count') || '0') + 1;
+      localStorage.setItem('probe-launch-count', String(localCount));
+      const db = await openProbeDB();
+      const oldDatabaseCount = await new Promise((resolve, reject) => {
+        const tx = db.transaction('state', 'readonly');
+        const request = tx.objectStore('state').get('launch-count');
+        request.onsuccess = () => resolve(Number(request.result || 0));
+        request.onerror = () => reject(request.error);
+      });
+      const databaseCount = oldDatabaseCount + 1;
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('state', 'readwrite');
+        tx.objectStore('state').put(databaseCount, 'launch-count');
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+      text('storage', `storage-ready:${localCount}:${databaseCount}`);
+    }
+
+    async function run() {
+      await updateStorage();
+      const host = await QuareiaNative.request({ id: `host_${Date.now()}`, method: 'hostInfo', params: {} });
+      text('host', host.platform === 'iOS' ? 'host-ready' : 'host-invalid');
+      const image = document.getElementById('protected-image');
+      image.onload = () => text('image', 'image-ready');
+      image.onerror = () => text('image', 'image-failed');
+      image.src = `${host.protectedAssetBaseURL}/lxxxi-01`;
+
+      try {
+        await QuareiaNative.request({ id: `bad_${Date.now()}`, method: 'unsupported', params: {} });
+        text('method', 'method-accepted');
+      } catch (error) {
+        text('method', `method-rejected:${error.message}`);
+      }
+    }
+
+    window.addEventListener('message', event => {
+      const frameWindow = document.getElementById('bridge-frame').contentWindow;
+      if (event.source === frameWindow && event.data === 'iframe-rejected') {
+        text('frame', 'iframe-rejected');
+      }
+    });
+    run().catch(error => text('host', `host-failed:${error.message}`));
+  </script>
+</body>
+</html>

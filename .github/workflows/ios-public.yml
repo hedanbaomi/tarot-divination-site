@@ -1,0 +1,32 @@
+name: iOS public feasibility
+on:
+  push:
+    branches: [feature/ios-self-sign-v1]
+    paths: ['ios-app/**', '.github/workflows/ios-public.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ios-public-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  simulator-and-device:
+    if: github.repository == 'hedanbaomi/tarot-divination-site' && github.event.repository.private == false
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: false
+          lfs: false
+      - name: Public inputs, source hashes and environment
+        run: |
+          set -euo pipefail
+          test ! -e .private
+          test ! -e ios-app/PrivateInputs
+          node ios-app/tools/sync-web-assets.mjs
+          node ios-app/tools/sync-web-assets.mjs --check
+          bash ios-app/tools/cloud-test.sh
+      # No IPA, .app, DerivedData, xcresult, private material, cache, or artifact upload.

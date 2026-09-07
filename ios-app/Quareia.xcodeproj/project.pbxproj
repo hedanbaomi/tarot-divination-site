@@ -1,0 +1,240 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		010000000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000001 /* AppDelegate.swift */; };
+		010000000000000000000002 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000002 /* AppRoute.swift */; };
+		010000000000000000000003 /* Bridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000003 /* Bridge.swift */; };
+		010000000000000000000004 /* WebAppViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000004 /* WebAppViewController.swift */; };
+		010000000000000000000005 /* www in Resources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000006 /* www */; };
+		010000000000000000000006 /* probe in Resources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000007 /* probe */; };
+		010000000000000000000007 /* AppRouteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000008 /* AppRouteTests.swift */; };
+		010000000000000000000008 /* BridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000009 /* BridgeTests.swift */; };
+		010000000000000000000009 /* QuareiaUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000000000000000000000A /* QuareiaUITests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		030000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0A0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 080000000000000000000001;
+			remoteInfo = Quareia;
+		};
+		030000000000000000000002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0A0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 080000000000000000000001;
+			remoteInfo = Quareia;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		020000000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		020000000000000000000002 /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
+		020000000000000000000003 /* Bridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bridge.swift; sourceTree = "<group>"; };
+		020000000000000000000004 /* WebAppViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebAppViewController.swift; sourceTree = "<group>"; };
+		020000000000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		020000000000000000000006 /* www */ = {isa = PBXFileReference; lastKnownFileType = folder; path = www; sourceTree = "<group>"; };
+		020000000000000000000007 /* probe */ = {isa = PBXFileReference; lastKnownFileType = folder; path = probe; sourceTree = "<group>"; };
+		020000000000000000000008 /* AppRouteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouteTests.swift; sourceTree = "<group>"; };
+		020000000000000000000009 /* BridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeTests.swift; sourceTree = "<group>"; };
+		02000000000000000000000A /* QuareiaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuareiaUITests.swift; sourceTree = "<group>"; };
+		02000000000000000000000B /* Quareia.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quareia.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		02000000000000000000000C /* QuareiaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = QuareiaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		02000000000000000000000D /* QuareiaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = QuareiaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		040000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		040000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		040000000000000000000003 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		050000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				050000000000000000000002 /* Quareia */,
+				050000000000000000000004 /* Tests */,
+				050000000000000000000005 /* UITests */,
+				050000000000000000000006 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		050000000000000000000002 /* Quareia */ = {
+			isa = PBXGroup;
+			children = (
+				020000000000000000000001 /* AppDelegate.swift */,
+				020000000000000000000002 /* AppRoute.swift */,
+				020000000000000000000003 /* Bridge.swift */,
+				020000000000000000000004 /* WebAppViewController.swift */,
+				020000000000000000000005 /* Info.plist */,
+				050000000000000000000003 /* Resources */,
+			);
+			path = Quareia;
+			sourceTree = "<group>";
+		};
+		050000000000000000000003 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				020000000000000000000006 /* www */,
+				020000000000000000000007 /* probe */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		050000000000000000000004 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				020000000000000000000008 /* AppRouteTests.swift */,
+				020000000000000000000009 /* BridgeTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		050000000000000000000005 /* UITests */ = {
+			isa = PBXGroup;
+			children = (02000000000000000000000A /* QuareiaUITests.swift */,);
+			path = UITests;
+			sourceTree = "<group>";
+		};
+		050000000000000000000006 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				02000000000000000000000B /* Quareia.app */,
+				02000000000000000000000C /* QuareiaTests.xctest */,
+				02000000000000000000000D /* QuareiaUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		080000000000000000000001 /* Quareia */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0B000000000000000000000002 /* Build configuration list for PBXNativeTarget "Quareia" */;
+			buildPhases = (
+				060000000000000000000001 /* Sources */,
+				040000000000000000000001 /* Frameworks */,
+				070000000000000000000001 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = Quareia;
+			productName = Quareia;
+			productReference = 02000000000000000000000B /* Quareia.app */;
+			productType = "com.apple.product-type.application";
+		};
+		080000000000000000000002 /* QuareiaTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0B000000000000000000000003 /* Build configuration list for PBXNativeTarget "QuareiaTests" */;
+			buildPhases = (
+				060000000000000000000002 /* Sources */,
+				040000000000000000000002 /* Frameworks */,
+				070000000000000000000002 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = (090000000000000000000001 /* PBXTargetDependency */,);
+			name = QuareiaTests;
+			productName = QuareiaTests;
+			productReference = 02000000000000000000000C /* QuareiaTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		080000000000000000000003 /* QuareiaUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0B000000000000000000000004 /* Build configuration list for PBXNativeTarget "QuareiaUITests" */;
+			buildPhases = (
+				060000000000000000000003 /* Sources */,
+				040000000000000000000003 /* Frameworks */,
+				070000000000000000000003 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = (090000000000000000000002 /* PBXTargetDependency */,);
+			name = QuareiaUITests;
+			productName = QuareiaUITests;
+			productReference = 02000000000000000000000D /* QuareiaUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0A0000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					080000000000000000000001 = {CreatedOnToolsVersion = 16.0; };
+					080000000000000000000002 = {CreatedOnToolsVersion = 16.0; TestTargetID = 080000000000000000000001; };
+					080000000000000000000003 = {CreatedOnToolsVersion = 16.0; TestTargetID = 080000000000000000000001; };
+				};
+			};
+			buildConfigurationList = 0B000000000000000000000001 /* Build configuration list for PBXProject "Quareia" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base);
+			mainGroup = 050000000000000000000001;
+			productRefGroup = 050000000000000000000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				080000000000000000000001 /* Quareia */,
+				080000000000000000000002 /* QuareiaTests */,
+				080000000000000000000003 /* QuareiaUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		070000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (010000000000000000000005 /* www in Resources */, 010000000000000000000006 /* probe in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
+		070000000000000000000002 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		070000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		060000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (010000000000000000000001, 010000000000000000000002, 010000000000000000000003, 010000000000000000000004,); runOnlyForDeploymentPostprocessing = 0; };
+		060000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (010000000000000000000007, 010000000000000000000008,); runOnlyForDeploymentPostprocessing = 0; };
+		060000000000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (010000000000000000000009,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		090000000000000000000001 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 080000000000000000000001 /* Quareia */; targetProxy = 030000000000000000000001 /* PBXContainerItemProxy */; };
+		090000000000000000000002 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 080000000000000000000001 /* Quareia */; targetProxy = 030000000000000000000002 /* PBXContainerItemProxy */; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0C000000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Debug; };
+		0C000000000000000000000002 /* PublicTesting */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = PublicTesting; };
+		0C000000000000000000000003 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; VALIDATE_PRODUCT = YES; }; name = Release; };
+
+		0C000000000000000000000011 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_ASSET_PATHS = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Quareia/Info.plist; MARKETING_VERSION = 1.0.0; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		0C000000000000000000000012 /* PublicTesting */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Quareia/Info.plist; MARKETING_VERSION = 1.0.0; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG PUBLIC_TESTING $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; TARGETED_DEVICE_FAMILY = "1,2"; }; name = PublicTesting; };
+		0C000000000000000000000013 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Quareia/Info.plist; MARKETING_VERSION = 1.0.0; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DISTRIBUTION $(inherited)"; SWIFT_COMPILATION_MODE = wholemodule; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+
+		0C000000000000000000000021 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Quareia.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Quareia"; }; name = Debug; };
+		0C000000000000000000000022 /* PublicTesting */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG PUBLIC_TESTING $(inherited)"; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Quareia.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Quareia"; }; name = PublicTesting; };
+		0C000000000000000000000023 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Quareia.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Quareia"; }; name = Release; };
+
+		0C000000000000000000000031 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = Quareia; }; name = Debug; };
+		0C000000000000000000000032 /* PublicTesting */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG PUBLIC_TESTING $(inherited)"; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = Quareia; }; name = PublicTesting; };
+		0C000000000000000000000033 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = Quareia; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0B000000000000000000000001 /* Build configuration list for PBXProject "Quareia" */ = {isa = XCConfigurationList; buildConfigurations = (0C000000000000000000000001, 0C000000000000000000000002, 0C000000000000000000000003,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		0B000000000000000000000002 /* Build configuration list for PBXNativeTarget "Quareia" */ = {isa = XCConfigurationList; buildConfigurations = (0C000000000000000000000011, 0C000000000000000000000012, 0C000000000000000000000013,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		0B000000000000000000000003 /* Build configuration list for PBXNativeTarget "QuareiaTests" */ = {isa = XCConfigurationList; buildConfigurations = (0C000000000000000000000021, 0C000000000000000000000022, 0C000000000000000000000023,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		0B000000000000000000000004 /* Build configuration list for PBXNativeTarget "QuareiaUITests" */ = {isa = XCConfigurationList; buildConfigurations = (0C000000000000000000000031, 0C000000000000000000000032, 0C000000000000000000000033,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+/* End XCConfigurationList section */
+	};
+	rootObject = 0A0000000000000000000001 /* Project object */;
+}

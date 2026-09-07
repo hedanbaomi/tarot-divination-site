@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Frame bridge probe</title></head>
+<body>
+  <script>
+    'use strict';
+    window.webkit.messageHandlers.quareia.postMessage({
+      id: `frame_${Date.now()}`, method: 'hostInfo', params: {}
+    });
+    setTimeout(() => parent.postMessage('iframe-rejected', '*'), 750);
+  </script>
+</body>
+</html>

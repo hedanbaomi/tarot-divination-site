@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "sourceCommit": "c04e86f19eab2a5240b4109e11f18911fd043274",
+  "license": "Android-distributed software: MPL-2.0; third-party text retains existing notices; no card artwork is copied.",
+  "files": [
+    {
+      "path": "css/android-shell.css",
+      "sha256": "496e38f94929f1859c2c4ad7e205950842c9dd86c466f0a30c856c024f5fda14"
+    },
+    {
+      "path": "css/custom-spreads.css",
+      "sha256": "976723b3cc429c3dbfd18811592af3dd1fdcadc5abffa2eb8eb738292deed52e"
+    },
+    {
+      "path": "css/free-board.css",
+      "sha256": "1df82a4f6ccf02c04ce7c90389578856bf5654fd8489999e82d67543af3e8957"
+    },
+    {
+      "path": "css/styles.css",
+      "sha256": "1b7e384343382221c33396e4bff156bd14c6b19e4647bc0f945a4bc381088a55"
+    },
+    {
+      "path": "index.html",
+      "sha256": "3f6a9932ac8c3b92e759e4b59dfea677f49a8160b0d3685fcbdfce96d4a90a56"
+    },
+    {
+      "path": "js/announcements.js",
+      "sha256": "b50d452ac4a77d13c4c25dfb5562a14bb944bd13a77a24368e1e835ffca22928"
+    },
+    {
+      "path": "js/app.js",
+      "sha256": "efb15713a19c57f6eb27c6972da1c58e578d02e1e40646996b4b3912cdd2f3c0"
+    },
+    {
+      "path": "js/back-handler.js",
+      "sha256": "a56930a11370fa6880159cc45c2031f2d37c71532f38241aadeaf7f99b5c1160"
+    },
+    {
+      "path": "js/celestial-sky.js",
+      "sha256": "9b6cc7be5ee35bae6b44ed12ee6a0b7d69b31d00e8b168c3dbe2d365e5671930"
+    },
+    {
+      "path": "js/custom-selects.js",
+      "sha256": "00602ed5a6f47b1d49cdc2070b430d245f41250b6b426b8fcef6d49a9105eb11"
+    },
+    {
+      "path": "js/custom-spread-ui.js",
+      "sha256": "41c89bcaba678eddf4e105227ba595909919eb41d2e9e8b30a7dd288b6163099"
+    },
+    {
+      "path": "js/custom-spreads.js",
+      "sha256": "4d01a929e62f81c33c8c05cc4309f7253909f7e0b393bf4654a5fcd1992c1e60"
+    },
+    {
+      "path": "js/dialogs.js",
+      "sha256": "662f01fb0654970e3bf33e9bc00a00a56ece26e32d4675485bca8d09080f1d26"
+    },
+    {
+      "path": "js/free-board-draft.js",
+      "sha256": "07b7c5cc79748df21ed1ca2c7476cdde618187d9fab7939310d00d23b24859e4"
+    },
+    {
+      "path": "js/free-board-model.js",
+      "sha256": "80b90606c84ebb6e1863816549b9ba7d6ee35ac03ee7b9f23433ca80653aac9d"
+    },
+    {
+      "path": "js/free-board-ui.js",
+      "sha256": "a7042c6ce50c86592b967411b66367a36917b54bdfc7f2a854f6f85268ae4064"
+    },
+    {
+      "path": "js/history-records.js",
+      "sha256": "aa91554ebb5993d6a92853279a067965c89646a2f3a5406e3e56683c63c51ca8"
+    },
+    {
+      "path": "js/history-store.js",
+      "sha256": "17779936345ade0ed7e441cfb4148efa5c08e2e58f05b8d6f049d15f121df45b"
+    },
+    {
+      "path": "js/history-ui.js",
+      "sha256": "967b4503fd7695a5f766d11dfdef11bc68f0608e2b5849bb2793bb832ee82d15"
+    },
+    {
+      "path": "js/i18n-data-en.js",
+      "sha256": "d6a2ccc16be311c5e63632964af61bc1fdb10d7ceb18dbcbe74b67ba7eb96984"
+    },
+    {
+      "path": "js/i18n.js",
+      "sha256": "dbc21cd5696311bd70008fb6ab0964278cba97ffe9636da2b3905acbabb574ad"
+    },
+    {
+      "path": "js/lxxxi-data.js",
+      "sha256": "adcbe48917d14f5874c14f29f2ee54997a224a842d27093d9cda4ae68515a642"
+    },
+    {
+      "path": "js/menu.js",
+      "sha256": "c634a364cdb6c4a63470812ab8e6edcc8ab70f8ddd9c825481b1f598db749547"
+    },
+    {
+      "path": "js/mystagogus-data.js",
+      "sha256": "e37a06a567fd290c814fe7a1bceca2ef3ed063c7327c880ebd002d6fa464fffd"
+    },
+    {
+      "path": "js/spreads.js",
+      "sha256": "ce79364ac95b9ed256f317b5f568c341176d3fccd531ce2bb4f74cb260678bcc"
+    },
+    {
+      "path": "js/tarot-data.js",
+      "sha256": "348d03fbb84486ce9c56eb8ea8a6f350f331a2f773b16877139e5f6aa588f5aa"
+    },
+    {
+      "path": "js/telemetry-notice.js",
+      "sha256": "2e6caa67a3be5c274d72d39e847b8e90a555fc82952c93969e63e03a6626765b"
+    },
+    {
+      "path": "js/theme.js",
+      "sha256": "9b919caac6b61c3724bba614a0affe7bbbb5ff3f649d42b4863f94b7d6e5c0ef"
+    }
+  ]
+}
