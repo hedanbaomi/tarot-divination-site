@@ -119,6 +119,51 @@ function transformSource(assetPath, sourceText) {
   }
 
   if (assetPath === 'js/free-board-ui.js') {
+    const pointerStart = output.indexOf('    function handlePointerDown(event) {');
+    const pointerEnd = output.indexOf('    function handleWheel(event) {', pointerStart);
+    if (pointerStart < 0 || pointerEnd < 0) throw Error('Missing pointer event boundaries');
+    const pointerSource = output.slice(pointerStart, pointerEnd);
+    const touchSafePointerSource = replaceExact(pointerSource,
+      'if (event.preventDefault) event.preventDefault();',
+      'if (!(platform === "ios" && event.pointerType === "touch") && event.preventDefault) event.preventDefault();',
+      'iOS touch-action handles gestures without cancelling later native clicks', 6);
+    apply(pointerSource, touchSafePointerSource, 'preserve iOS touch compatibility click delivery');
+    const finishStart = output.indexOf('    function finishPointer(event) {');
+    const finishEnd = output.indexOf('    function handleWheel(event) {', finishStart);
+    const oldFinish = output.slice(finishStart, finishEnd);
+    const newFinish = `    function finishPointer(event) {
+      var id = pointerId(event);
+      var target = event.currentTarget || elements.viewport;
+      var finishedGesture = gesture;
+      if (pointers[id]) delete pointers[id];
+      releasePointerCapture(target, id);
+      if (finishedGesture && finishedGesture.kind === "pinch") {
+        if (pointerCount() === 0) {
+          gesture = null;
+          commitVisualViewport();
+        }
+        return;
+      }
+      if (!finishedGesture || !stateController) return;
+      var finishedCards = visualCards;
+      gesture = null;
+      visualCards = Object.create(null);
+      if (finishedGesture.kind === "card" && finishedGesture.pointerId === id) {
+        if (finishedGesture.moved) {
+          var moved = finishedCards[finishedGesture.cardId];
+          if (moved) mutate("move", [finishedGesture.cardId, moved.x, moved.y], "move");
+        } else if (cardState(finishedGesture.cardId)) {
+          selectedCardId = finishedGesture.cardId;
+          renderSelectedControls(getState());
+        }
+      } else if (finishedGesture.kind === "pan" && finishedGesture.pointerId === id) {
+        if (finishedGesture.moved) commitVisualViewport();
+      }
+      if (!(platform === "ios" && event.pointerType === "touch") && event.preventDefault) event.preventDefault();
+    }
+
+`;
+    apply(oldFinish, newFinish, 'clear completed pointer state before replacing rendered card nodes');
     apply('      resetView: options.resetView || byId(document, "freeBoardResetViewBtn"),', '      zoomStatus: options.zoomStatus || byId(document, "freeBoardZoomStatus"),\n      zoomIn: options.zoomIn || byId(document, "freeBoardZoomInBtn"),\n      zoomOut: options.zoomOut || byId(document, "freeBoardZoomOutBtn"),\n      resetView: options.resetView || byId(document, "freeBoardResetViewBtn"),', 'resolve iOS board zoom buttons');
     apply('      if (elements.undo) elements.undo.disabled = !stateController.canUndo();', '      if (elements.zoomStatus) {\n        var percent = Math.round(state.viewport.zoom * 100);\n        elements.zoomStatus.textContent = t("freeBoard.zoomLevel", { percent: percent });\n      }\n      if (elements.zoomIn) elements.zoomIn.disabled = state.viewport.zoom >= clampZoom(Number.MAX_VALUE, modelApi);\n      if (elements.zoomOut) elements.zoomOut.disabled = state.viewport.zoom <= clampZoom(0, modelApi);\n      if (elements.undo) elements.undo.disabled = !stateController.canUndo();', 'reflect bounded board zoom availability');
     apply('    function resetView() {', '    function zoomBoard(factor) {\n      var state = getState();\n      if (!state || (root.DivinationBackup && root.DivinationBackup.isMutating())) return null;\n      var rect = viewportRect(elements.viewport && elements.viewport.getBoundingClientRect());\n      var next = zoomAroundPoint(state.viewport, rect, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, state.viewport.zoom * factor, modelApi);\n      visualViewport = null;\n      return mutate("setViewport", [next], "button-zoom");\n    }\n\n    function resetView() {', 'zoom board around its center through the normal draft mutation path');

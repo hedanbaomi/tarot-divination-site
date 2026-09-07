@@ -170,7 +170,7 @@ final class QuareiaUITests: XCTestCase {
 
         let restore = waitForElement(labels: ["Restore"], in: app, timeout: 8)
         restore.tap()
-        let cancel = waitForHittableButton(labels: ["Cancel", "取消", "Close", "关闭"], in: app, timeout: 30)
+        let cancel = waitForHittableControl(labels: ["Cancel", "取消", "Close", "关闭"], in: app, timeout: 60)
         cancel.tap()
         XCTAssertTrue(app.staticTexts["Backup restore cancelled"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.state, .runningForeground)
@@ -271,7 +271,12 @@ final class QuareiaUITests: XCTestCase {
         let movedCardPoint = dragStart.withOffset(CGVector(dx: 42, dy: 54))
         dragStart.press(forDuration: 0.2, thenDragTo: movedCardPoint)
         XCTAssertGreaterThan(abs(placedCard.frame.midX - beforeDrag.midX), 15)
+        let committedDragX = placedCard.frame.midX
         XCTAssertTrue(undo.isEnabled)
+        tapWhenVisible(undo, in: webView, scrolling: .towardUpperPage)
+        XCTAssertEqual(placedCard.frame.midX, beforeDrag.midX, accuracy: 3, "Undo must restore the committed drag")
+        redo.tap()
+        XCTAssertEqual(placedCard.frame.midX, committedDragX, accuracy: 3, "Redo must restore the committed drag")
         tapWhenVisible(zoomIn, in: webView, scrolling: .towardUpperPage)
         assertBoardZoom(125, in: app)
         makeVisible(placedCard, in: webView, scrolling: .towardLowerPage)
@@ -377,17 +382,20 @@ final class QuareiaUITests: XCTestCase {
             format: "label BEGINSWITH 'Quareia-1.0.1-2-'"
         )).firstMatch
         XCTAssertTrue(syntheticFile.waitForExistence(timeout: 30), "Expected the downloaded synthetic file in the system share sheet")
-        let close = app.buttons.matching(NSPredicate(format: "label == 'Close' OR label == '关闭' OR label == 'Cancel' OR label == '取消'")).allElementsBoundByIndex.first { $0.isHittable }
+        let close = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Close' OR label == '关闭' OR label == 'Cancel' OR label == '取消'")).allElementsBoundByIndex.first { $0.isHittable }
         if let close {
             close.tap()
         } else if UIDevice.current.userInterfaceIdiom == .pad {
             // The native menu is outside the centered iPad activity popover.
             app.buttons["host.menu"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         } else {
-            // Dismiss the iPhone sheet from its visible file header, rather
-            // than tapping the status bar outside a modal presentation.
-            let header = syntheticFile.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            header.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
+            // The file caption itself starts a file drag. Use the sheet's
+            // top grabber region above that caption for modal dismissal.
+            let sheet = app.descendants(matching: .any).matching(identifier: "host.update.handoff").firstMatch
+            let grabberY = sheet.exists && sheet.frame.minY > app.frame.minY + 40
+                ? sheet.frame.minY + 12 : syntheticFile.frame.minY - 24
+            let grabber = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: app.frame.width / 2, dy: max(12, grabberY - app.frame.minY)))
+            grabber.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
         }
         XCTAssertTrue(waitForDisappearance(syntheticFile, timeout: 10))
         XCTAssertEqual(app.state, .runningForeground)
@@ -544,7 +552,7 @@ final class QuareiaUITests: XCTestCase {
             element.typeText(text)
         }
         if let app, app.keyboards.firstMatch.exists {
-            let dismiss = waitForHittableButton(labels: ["Done", "完成", "Hide keyboard", "隐藏键盘"], in: app)
+            let dismiss = waitForHittableControl(labels: ["Done", "完成", "Hide keyboard", "隐藏键盘"], in: app)
             dismiss.tap()
             XCTAssertTrue(waitForDisappearance(app.keyboards.firstMatch))
         }
@@ -647,24 +655,24 @@ final class QuareiaUITests: XCTestCase {
         if completion.wait(timeout: .now() + 20) == .timedOut { task.cancel() }
     }
 
-    private func waitForHittableButton(
+    private func waitForHittableControl(
         labels: [String],
         in app: XCUIApplication,
         timeout: TimeInterval = 5,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> XCUIElement {
-        let query = app.buttons.matching(NSPredicate(format: "label IN %@", labels))
+        let query = app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", labels))
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
             if let visible = query.allElementsBoundByIndex.first(where: { $0.isHittable }) { return visible }
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         } while Date() < deadline
         let knownState = ["Cancel", "Close", "Done", "Browse", "Recents", "Restore"].map { label in
-            let control = app.buttons[label]
+            let control = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
             return "\(label)=\(control.exists)/\(control.isHittable)"
         }.joined(separator: "; ")
-        XCTFail("Expected a hittable button with a known public label: \(labels); " +
+        XCTFail("Expected a hittable control with a known public label: \(labels); " +
             "app=\(app.state.rawValue); \(knownState); " +
             "restoreFailed=\(app.staticTexts["Backup restore failed"].exists); " +
             "restoreCancelled=\(app.staticTexts["Backup restore cancelled"].exists)", file: file, line: line)

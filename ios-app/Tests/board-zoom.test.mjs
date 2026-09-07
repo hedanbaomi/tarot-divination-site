@@ -73,3 +73,48 @@ test('accessible board zoom changes the bounded viewport, supports undo and rese
     else globalThis.DivinationBackup = previousBackup;
   }
 });
+
+test('iOS touch drag commits before toolbar undo redo and zoom without cancelling touch defaults', () => {
+  const listeners = new Map();
+  let zoomClick;
+  const viewport = {
+    addEventListener: (type, callback) => listeners.set(type, callback),
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 400 }),
+    setPointerCapture() {}, releasePointerCapture() {}
+  };
+  const zoomIn = { disabled: false, addEventListener: (_, callback) => { zoomClick = callback; } };
+  const storage = new Map();
+  const ui = board.createController({
+    document: { getElementById: id => ({ freeBoardViewport: viewport, freeBoardZoomInBtn: zoomIn })[id] || null },
+    storage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
+    platform: 'ios'
+  });
+  ui.enter({ deckType: 'tarot', deckName: 'Synthetic', mode: 'upright-only', filterMode: 'mixed',
+    cards: [{ id: 'major-0', deck: 'tarot', name: 'Synthetic' }] }, { restoreDraft: false });
+  ui.draw('major-0');
+  const original = ui.getState().cards[0];
+  const target = { getAttribute: name => name === 'data-card-id' ? 'major-0' : null };
+  let cancelledDefaults = 0;
+  const event = (x, y, pointerType = 'touch') => ({
+    pointerId: 1, pointerType, button: 0, clientX: x, clientY: y, target, currentTarget: viewport,
+    preventDefault: () => { cancelledDefaults++; }
+  });
+  listeners.get('pointerdown')(event(200, 200));
+  listeners.get('pointermove')(event(242, 254));
+  assert.equal(ui.getState().cards[0].x, original.x, 'drag preview is not committed yet');
+  listeners.get('pointerup')(event(242, 254));
+  const moved = ui.getState().cards[0];
+  assert.equal(moved.x, original.x + 42);
+  assert.equal(moved.y, original.y + 54);
+  assert.equal(cancelledDefaults, 0);
+  ui.undo();
+  assert.equal(ui.getState().cards[0].x, original.x);
+  ui.redo();
+  assert.equal(ui.getState().cards[0].x, moved.x);
+  zoomClick();
+  assert.equal(ui.getState().viewport.zoom, 1.25);
+  listeners.get('pointerdown')(event(200, 200, 'mouse'));
+  listeners.get('pointerup')(event(200, 200, 'mouse'));
+  assert.ok(cancelledDefaults > 0, 'mouse defaults keep the existing behavior');
+  ui.exit();
+});

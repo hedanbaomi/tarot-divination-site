@@ -335,6 +335,7 @@ final class HostPresentationCoordinator: NSObject, HostPresentationCoordinating,
         return await withTaskCancellationHandler(operation: {
             await withCheckedContinuation { continuation in
                 let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                activity.sheetPresentationController?.prefersGrabberVisible = true
                 activity.view.accessibilityIdentifier = accessibilityIdentifier
                 activity.popoverPresentationController?.sourceView = presenter.view
                 activity.popoverPresentationController?.sourceRect = CGRect(
