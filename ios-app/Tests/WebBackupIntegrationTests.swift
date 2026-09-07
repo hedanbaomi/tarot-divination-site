@@ -231,7 +231,7 @@ final class WebBackupIntegrationTests: XCTestCase {
             return {native:state.native,backup:state.backup,document:document.readyState,
               oldDocument:!!window.iosOldDocument,bridge:!!window.QuareiaNative,
               initializationAlert:!!document.getElementById('iosHostInitializationAlert')};
-            """, arguments: [:], in: nil, contentWorld: .page, completionHandler: finish)
+            """, arguments: [:], in: nil, in: .page, completionHandler: finish)
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 finish(.failure(NSError(domain: "WebBackupReadinessProbeTimeout", code: 1)))
             }
