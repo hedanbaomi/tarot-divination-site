@@ -122,15 +122,16 @@ function transformSource(assetPath, sourceText) {
   }
 
   if (assetPath === 'js/free-board-ui.js') {
-    const historyActionSource = `    function bindBoardHistoryAction(button, method) {
+    const controlActionSource = `    var suppressBoardTouchClick = false;
+
+    function bindBoardControlAction(button, action) {
       if (!button) return;
       var touch = null;
-      var suppressTouchClick = false;
       if (platform === "ios") {
         button.addEventListener("pointerdown", function (event) {
           touch = null;
-          suppressTouchClick = event.pointerType === "touch";
-          if (!suppressTouchClick || event.isPrimary === false || button.disabled ||
+          suppressBoardTouchClick = event.pointerType === "touch";
+          if (!suppressBoardTouchClick || event.isPrimary === false || button.disabled ||
               (event.button != null && event.button !== 0) ||
               !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return;
           touch = { id: event.pointerId, x: event.clientX, y: event.clientY };
@@ -151,24 +152,29 @@ function transformSource(assetPath, sourceText) {
           var rect = button.getBoundingClientRect();
           if (event.clientX < rect.left || event.clientX > rect.right ||
               event.clientY < rect.top || event.clientY > rect.bottom) return;
-          mutate(method, [], method);
+          action(event);
         });
       }
       button.addEventListener("click", function (event) {
         event = event || { detail: 0 };
-        if (suppressTouchClick && event.detail !== 0) {
+        if (suppressBoardTouchClick && event.detail !== 0) {
           if (event.preventDefault) event.preventDefault();
           return;
         }
-        suppressTouchClick = false;
-        if (!button.disabled) mutate(method, [], method);
+        suppressBoardTouchClick = false;
+        if (!button.disabled) action(event);
       });
     }
 
 `;
-    apply('    function bind() {', historyActionSource + '    function bind() {', 'activate iOS history touch taps once without preventing page scrolling');
-    apply('      if (elements.undo) elements.undo.addEventListener("click", function () { mutate("undo", [], "undo"); });', '      bindBoardHistoryAction(elements.undo, "undo");', 'bind bounded iOS undo touch activation');
-    apply('      if (elements.redo) elements.redo.addEventListener("click", function () { mutate("redo", [], "redo"); });', '      bindBoardHistoryAction(elements.redo, "redo");', 'bind bounded iOS redo touch activation');
+    apply('    function bind() {', controlActionSource + '    function bind() {', 'activate iOS board controls once without preventing page scrolling');
+    apply('      if (elements.undo) elements.undo.addEventListener("click", function () { mutate("undo", [], "undo"); });', '      bindBoardControlAction(elements.undo, function () { mutate("undo", [], "undo"); });', 'bind bounded iOS undo touch activation');
+    apply('      if (elements.redo) elements.redo.addEventListener("click", function () { mutate("redo", [], "redo"); });', '      bindBoardControlAction(elements.redo, function () { mutate("redo", [], "redo"); });', 'bind bounded iOS redo touch activation');
+    apply('      if (elements.selected) elements.selected.addEventListener("click", handleSelectedAction);', '      if (elements.selected) Array.prototype.forEach.call(elements.selected.querySelectorAll("[data-card-control-action]"), function (button) { bindBoardControlAction(button, handleSelectedAction); });', 'bind selected-card controls through the same iOS touch activation');
+    apply('        button.addEventListener("click", function () { draw(cardId); });', '        bindBoardControlAction(button, function () { draw(cardId); });', 'suppress retargeted compatibility clicks after drawing replaces the pile');
+    apply('      if (elements.revealAll) elements.revealAll.addEventListener("click", revealAll);', '      bindBoardControlAction(elements.revealAll, revealAll);', 'bind reveal-all touch activation');
+    apply('      if (elements.shuffle) elements.shuffle.addEventListener("click", shuffleBoard);', '      bindBoardControlAction(elements.shuffle, shuffleBoard);', 'bind shuffle touch activation');
+    apply('      if (elements.discard) elements.discard.addEventListener("click", discardDraft);', '      bindBoardControlAction(elements.discard, discardDraft);', 'bind discard touch activation');
     apply('      selected: options.selected || byId(document, "freeBoardSelectedControls"),', '      selectionStatus: options.selectionStatus || byId(document, "freeBoardSelectionStatus"),\n      selected: options.selected || byId(document, "freeBoardSelectedControls"),', 'resolve selected card live status');
     apply('      elements.selected.hidden = !selected;', '      if (elements.selectionStatus) {\n        var positionText = selected ? t("freeBoard.selectionPosition", {\n          x: Math.round(selected.x), y: Math.round(selected.y), rotation: Math.round(selected.boardRotation)\n        }) : "";\n        if (elements.selectionStatus.textContent !== positionText) elements.selectionStatus.textContent = positionText;\n      }\n      elements.selected.hidden = !selected;', 'announce committed coordinates without card identity or preview movement');
     apply('    function exit() {', '    function exit() {\n      if (elements.selectionStatus) elements.selectionStatus.textContent = "";', 'clear selected card position when leaving board');
@@ -367,7 +373,7 @@ function transformSource(assetPath, sourceText) {
     apply('      resetView: options.resetView || byId(document, "freeBoardResetViewBtn"),', '      zoomStatus: options.zoomStatus || byId(document, "freeBoardZoomStatus"),\n      zoomIn: options.zoomIn || byId(document, "freeBoardZoomInBtn"),\n      zoomOut: options.zoomOut || byId(document, "freeBoardZoomOutBtn"),\n      resetView: options.resetView || byId(document, "freeBoardResetViewBtn"),', 'resolve iOS board zoom buttons');
     apply('      if (elements.undo) elements.undo.disabled = !stateController.canUndo();', '      if (elements.zoomStatus) {\n        var percent = Math.round(state.viewport.zoom * 100);\n        elements.zoomStatus.textContent = t("freeBoard.zoomLevel", { percent: percent });\n      }\n      if (elements.zoomIn) elements.zoomIn.disabled = state.viewport.zoom >= clampZoom(Number.MAX_VALUE, modelApi);\n      if (elements.zoomOut) elements.zoomOut.disabled = state.viewport.zoom <= clampZoom(0, modelApi);\n      if (elements.undo) elements.undo.disabled = !stateController.canUndo();', 'reflect bounded board zoom availability');
     apply('    function resetView() {', '    function zoomBoard(factor) {\n      var state = getState();\n      if (!state || (root.DivinationBackup && root.DivinationBackup.isMutating())) return null;\n      var rect = viewportRect(elements.viewport && elements.viewport.getBoundingClientRect());\n      var next = zoomAroundPoint(state.viewport, rect, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, state.viewport.zoom * factor, modelApi);\n      visualViewport = null;\n      return mutate("setViewport", [next], "button-zoom");\n    }\n\n    function resetView() {', 'zoom board around its center through the normal draft mutation path');
-    apply('      if (elements.resetView) elements.resetView.addEventListener("click", resetView);', '      if (elements.zoomIn) elements.zoomIn.addEventListener("click", function () { zoomBoard(1.25); });\n      if (elements.zoomOut) elements.zoomOut.addEventListener("click", function () { zoomBoard(0.8); });\n      if (elements.resetView) elements.resetView.addEventListener("click", resetView);', 'bind accessible iOS zoom controls');
+    apply('      if (elements.resetView) elements.resetView.addEventListener("click", resetView);', '      bindBoardControlAction(elements.zoomIn, function () { zoomBoard(1.25); });\n      bindBoardControlAction(elements.zoomOut, function () { zoomBoard(0.8); });\n      bindBoardControlAction(elements.resetView, resetView);', 'bind accessible iOS zoom controls');
     apply('    if (platform === "android") {', '    if (platform === "android" || platform === "ios") {', 'use mobile board placement on iOS');
     apply('    var platform = options.platform === "android" ? "android" : "web";', '    var platform = options.platform === "android" || options.platform === "ios" ? options.platform : "web";', 'recognize iOS Free Board UI');
   }

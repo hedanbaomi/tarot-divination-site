@@ -83,9 +83,17 @@ test('iOS touch drag commits before toolbar undo redo and zoom without cancellin
     else globalThis.DivinationI18n = previousI18n;
   });
   const selectionStatus = { textContent: '' };
-  let selectedAction;
-  const selected = { hidden: true, setAttribute() {}, querySelectorAll: () => [],
-    addEventListener: (_, callback) => { selectedAction = callback; } };
+  const selectedButtons = ['rotate-plus-15', 'remove'].map(action => {
+    const attributes = new Map([['data-card-control-action', action]]);
+    const handlers = new Map();
+    return {
+      getAttribute: key => attributes.get(key),
+      setAttribute: (key, value) => attributes.set(key, value),
+      addEventListener: (type, callback) => handlers.set(type, callback),
+      click() { handlers.get('click')({target: this, detail: 0}); }
+    };
+  });
+  const selected = { hidden: true, setAttribute() {}, querySelectorAll: () => selectedButtons };
   const listeners = new Map();
   let zoomClick;
   const viewport = {
@@ -131,14 +139,14 @@ test('iOS touch drag commits before toolbar undo redo and zoom without cancellin
   ui.redo();
   assert.equal(ui.getState().cards[0].x, moved.x);
   assert.equal(selectionStatus.textContent, movedPosition);
-  selectedAction({target: {getAttribute: key => key === 'data-card-control-action' ? 'rotate-plus-15' : null}});
+  selectedButtons[0].click();
   assert.equal(selectionStatus.textContent, movedPosition.replace('Rotation: 0', 'Rotation: 15'));
   zoomClick();
   assert.equal(ui.getState().viewport.zoom, 1.25);
   listeners.get('pointerdown')(event(200, 200, 'mouse'));
   listeners.get('pointerup')(event(200, 200, 'mouse'));
   assert.ok(cancelledDefaults > 0, 'mouse defaults keep the existing behavior');
-  selectedAction({target: {getAttribute: key => key === 'data-card-control-action' ? 'remove' : null}});
+  selectedButtons[1].click();
   assert.equal(selectionStatus.textContent, '', 'clear status when no card is selected');
   assert.equal(selected.hidden, true);
   ui.exit();
@@ -205,5 +213,67 @@ test('iOS history controls activate a primary touch once and preserve keyboard m
   assert.equal(count(), 2);
   undo.emit('click', {detail: 0});
   assert.equal(count(), 1, 'VoiceOver activation is not consumed when a touch emitted no compatibility click');
+  ui.exit();
+});
+
+test('iOS touch controls reset a panned viewport and suppress clicks retargeted to a newly rendered pile', () => {
+  function element() {
+    const listeners = new Map();
+    const attributes = new Map();
+    return {children: [], style: {}, disabled: false,
+      setAttribute: (key, value) => attributes.set(key, value),
+      getAttribute: key => attributes.get(key),
+      addEventListener: (type, callback) => listeners.set(type, callback),
+      appendChild(child) { this.children.push(child); child.parentNode = this; },
+      replaceChildren() { this.children = []; },
+      getBoundingClientRect: () => ({left: 0, top: 0, right: 400, bottom: 400, width: 400, height: 400}),
+      setPointerCapture() {}, releasePointerCapture() {},
+      emit(type, options = {}) {
+        let prevented = false;
+        listeners.get(type)?.({target: this, currentTarget: this, pointerType: 'touch',
+          pointerId: 1, isPrimary: true, button: 0, clientX: 200, clientY: 200,
+          detail: 1, preventDefault() { prevented = true; }, ...options});
+        return prevented;
+      }
+    };
+  }
+  const controls = Object.fromEntries(['freeBoardPile', 'freeBoardViewport', 'freeBoardZoomInBtn',
+    'freeBoardZoomOutBtn', 'freeBoardResetViewBtn'].map(id => [id, element()]));
+  const ui = board.createController({platform: 'ios', draftApi: {},
+    document: {getElementById: id => controls[id] || null, createElement: element}});
+  ui.enter({deckType: 'tarot', deckName: 'Synthetic', mode: 'upright-only', filterMode: 'mixed',
+    cards: ['major-0', 'major-1', 'major-2', 'major-3'].map(id => ({id, deck: 'tarot', name: 'Synthetic'}))},
+    {restoreDraft: false});
+  function touch(button) {
+    assert.equal(button.emit('pointerdown'), false);
+    assert.equal(button.emit('pointerup'), false);
+  }
+  const pile = controls.freeBoardPile;
+  const first = pile.children[0];
+  touch(first);
+  assert.equal(ui.getState().cards.length, 1);
+  assert.notEqual(pile.children[0], first, 'drawing replaces pile DOM nodes');
+  assert.equal(pile.children[0].emit('click'), true);
+  assert.equal(ui.getState().cards.length, 1, 'retargeted compatibility click must not draw another card');
+  pile.children[0].emit('click', {detail: 0});
+  assert.equal(ui.getState().cards.length, 2, 'keyboard and VoiceOver still draw after touch');
+  touch(pile.children[0]);
+  pile.children[0].emit('click');
+  assert.equal(ui.getState().cards.length, 3, 'the next genuine touch draws exactly one card');
+  touch(controls.freeBoardZoomInBtn);
+  controls.freeBoardZoomInBtn.emit('click');
+  assert.equal(ui.getState().viewport.zoom, 1.25);
+  touch(controls.freeBoardZoomOutBtn);
+  controls.freeBoardZoomOutBtn.emit('click');
+  assert.equal(ui.getState().viewport.zoom, 1);
+  touch(controls.freeBoardZoomInBtn);
+  const viewport = controls.freeBoardViewport;
+  viewport.emit('pointerdown');
+  viewport.emit('pointermove', {clientX: 250, clientY: 240});
+  viewport.emit('pointerup', {clientX: 250, clientY: 240});
+  assert.notEqual(ui.getState().viewport.panX, 0);
+  touch(controls.freeBoardResetViewBtn);
+  controls.freeBoardResetViewBtn.emit('click');
+  assert.deepEqual(ui.getState().viewport, {zoom: 1, panX: 0, panY: 0});
   ui.exit();
 });
