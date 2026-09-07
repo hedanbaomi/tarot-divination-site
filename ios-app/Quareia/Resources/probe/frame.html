@@ -4,10 +4,9 @@
 <body>
   <script>
     'use strict';
-    window.webkit.messageHandlers.quareia.postMessage({
-      id: `frame_${Date.now()}`, method: 'hostInfo', params: {}
-    });
-    setTimeout(() => parent.postMessage('iframe-rejected', '*'), 750);
+    const id = 'iframe_probe_request';
+    window.webkit.messageHandlers.quareia.postMessage({ id, method: 'hostInfo', params: {} });
+    parent.postMessage({ type: 'iframe-posted', id }, '*');
   </script>
 </body>
 </html>

@@ -18,7 +18,7 @@
   <p id="method">method-pending</p>
   <p id="frame">iframe-pending</p>
   <img id="protected-image" alt="synthetic protected route probe">
-  <iframe id="bridge-frame" src="/probe/frame.html" title="bridge rejection probe"></iframe>
+  <iframe id="bridge-frame" title="bridge rejection probe"></iframe>
   <script>
     'use strict';
     const text = (id, value) => { document.getElementById(id).textContent = value; };
@@ -70,12 +70,24 @@
       }
     }
 
-    window.addEventListener('message', event => {
-      const frameWindow = document.getElementById('bridge-frame').contentWindow;
-      if (event.source === frameWindow && event.data === 'iframe-rejected') {
-        text('frame', 'iframe-rejected');
+    const frameRequestID = 'iframe_probe_request';
+    let frameReceivedNativeReply = false;
+    window.addEventListener('quareia-native-reply', event => {
+      if (event.detail && event.detail.id === frameRequestID) {
+        frameReceivedNativeReply = true;
+        text('frame', 'iframe-accepted');
       }
     });
+    window.addEventListener('message', event => {
+      const frameWindow = document.getElementById('bridge-frame').contentWindow;
+      if (event.source === frameWindow && event.data
+          && event.data.type === 'iframe-posted' && event.data.id === frameRequestID) {
+        setTimeout(() => {
+          if (!frameReceivedNativeReply) text('frame', 'iframe-rejected');
+        }, 750);
+      }
+    });
+    document.getElementById('bridge-frame').src = '/probe/frame.html';
     run().catch(error => text('host', `host-failed:${error.message}`));
   </script>
 </body>

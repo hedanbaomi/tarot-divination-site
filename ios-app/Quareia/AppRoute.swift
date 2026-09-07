@@ -244,11 +244,11 @@ final class AppSchemeHandler: NSObject, WKURLSchemeHandler {
         onMain {
             self.activeTasks.insert(identifier)
         }
-        queue.async { [weak self, weak urlSchemeTask] in
-            guard let self, let urlSchemeTask else { return }
+        queue.async { [weak self, urlSchemeTask] in
+            guard let self else { return }
             let routeResponse = self.route.response(for: urlSchemeTask.request)
-            DispatchQueue.main.async { [weak self, weak urlSchemeTask] in
-                guard let self, let urlSchemeTask, self.isActive(identifier) else { return }
+            DispatchQueue.main.async { [weak self, urlSchemeTask] in
+                guard let self, self.isActive(identifier) else { return }
                 guard let url = urlSchemeTask.request.url else {
                     self.activeTasks.remove(identifier)
                     return

@@ -38,6 +38,8 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertTrue(webView.waitForExistence(timeout: 10))
         let loaded = expectation(for: NSPredicate(format: "value == 'main-ready'"), evaluatedWith: webView)
         wait(for: [loaded], timeout: 10)
+        let heading = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'Quareia'")).firstMatch
+        XCTAssertTrue(heading.waitForExistence(timeout: 10), "Expected the generated main-page DOM heading")
         XCTAssertEqual(app.state, .runningForeground)
     }
 

@@ -150,6 +150,7 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
           });
         },
         _receive(id, reply) {
+          window.dispatchEvent(new CustomEvent('quareia-native-reply', { detail: { id } }));
           const entry = pending.get(id);
           if (!entry) return;
           pending.delete(id);

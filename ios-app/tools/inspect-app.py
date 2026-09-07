@@ -7,6 +7,8 @@ p.add_argument('app',type=pathlib.Path)
 p.add_argument('--platform', choices=['IOS','IOSSIMULATOR'],required=True)
 a=p.parse_args()
 info=plistlib.loads((a.app/'Info.plist').read_bytes())
+assert info.get('QuareiaBuildFlavor')=='public-prototype', 'Missing public prototype build marker'
+assert info.get('CFBundleDisplayName')=='Quareia Prototype', 'Public build must identify itself'
 assert info['CFBundleShortVersionString']=='1.0.0'
 assert info['CFBundleVersion']=='1'
 assert info.get('MinimumOSVersion')=='16.0'
@@ -29,4 +31,4 @@ if ent.stdout.strip():
     rights=plistlib.loads(ent.stdout)
     assert set(rights).issubset({'get-task-allow'}), 'Unexpected entitlements'
     assert a.platform=='IOSSIMULATOR' or not rights, 'Device build should be unsigned'
-print(json.dumps({'status':'PUBLIC_TEST_ONLY','bundleID':info['CFBundleIdentifier'],'version':info['CFBundleShortVersionString'],'build':info['CFBundleVersion'],'platform':a.platform,'architectures':architectures,'binaryBytes':binary.stat().st_size,'binarySHA256':hashlib.sha256(binary.read_bytes()).hexdigest(),'files':sum(x.is_file() for x in a.app.rglob('*'))},sort_keys=True))
+print(json.dumps({'status':'PUBLIC_TEST_ONLY','flavor':info['QuareiaBuildFlavor'],'bundleID':info['CFBundleIdentifier'],'version':info['CFBundleShortVersionString'],'build':info['CFBundleVersion'],'platform':a.platform,'architectures':architectures,'binaryBytes':binary.stat().st_size,'binarySHA256':hashlib.sha256(binary.read_bytes()).hexdigest(),'files':sum(x.is_file() for x in a.app.rglob('*'))},sort_keys=True))
