@@ -5,7 +5,13 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const board = require('../Quareia/Resources/www/js/free-board-ui.js');
 
-test('accessible board zoom changes the bounded viewport, supports undo and reset, and respects backup ownership', () => {
+test('accessible board zoom changes the bounded viewport, supports undo and reset, and respects backup ownership', context => {
+  const previousI18n = globalThis.DivinationI18n;
+  globalThis.DivinationI18n = { t: (key, values) => key === 'freeBoard.zoomLevel' ? `Board zoom: ${values.percent}%` : key };
+  context.after(() => {
+    if (previousI18n === undefined) delete globalThis.DivinationI18n;
+    else globalThis.DivinationI18n = previousI18n;
+  });
   function button() {
     const listeners = new Map();
     return {
@@ -37,7 +43,7 @@ test('accessible board zoom changes the bounded viewport, supports undo and rese
   const initial = ui.getState().viewport;
   controls.freeBoardZoomInBtn.click();
   assert.equal(ui.getState().viewport.zoom, 1.25);
-  assert.equal(controls.freeBoardZoomStatus.textContent, '125%');
+  assert.equal(controls.freeBoardZoomStatus.textContent, 'Board zoom: 125%');
   assert.equal(ui.getState().viewport.panX, 0);
   assert.equal(ui.getState().viewport.panY, 0);
   ui.undo();
@@ -54,7 +60,7 @@ test('accessible board zoom changes the bounded viewport, supports undo and rese
   assert.equal(ui.getState().viewport.zoom, ui.clampZoom(0));
   controls.freeBoardResetViewBtn.click();
   assert.deepEqual(ui.getState().viewport, initial);
-  assert.equal(controls.freeBoardZoomStatus.textContent, '100%');
+  assert.equal(controls.freeBoardZoomStatus.textContent, 'Board zoom: 100%');
   assert.equal(controls.freeBoardZoomInBtn.disabled, false);
   assert.equal(controls.freeBoardZoomOutBtn.disabled, false);
   const previousBackup = globalThis.DivinationBackup;

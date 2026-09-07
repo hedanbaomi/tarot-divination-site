@@ -375,13 +375,19 @@ final class QuareiaUITests: XCTestCase {
             format: "label BEGINSWITH 'Quareia-1.0.1-2-'"
         )).firstMatch
         XCTAssertTrue(syntheticFile.waitForExistence(timeout: 30), "Expected the downloaded synthetic file in the system share sheet")
-        let close = app.buttons.matching(NSPredicate(format: "label == 'Close' OR label == '关闭'")).allElementsBoundByIndex.first { $0.isHittable }
+        let close = app.buttons.matching(NSPredicate(format: "label == 'Close' OR label == '关闭' OR label == 'Cancel' OR label == '取消'")).allElementsBoundByIndex.first { $0.isHittable }
         if let close {
             close.tap()
+        } else if UIDevice.current.userInterfaceIdiom == .pad {
+            // The native menu is outside the centered iPad activity popover.
+            app.buttons["host.menu"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         } else {
-            app.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.04)).tap()
+            // Dismiss the iPhone sheet from its visible file header, rather
+            // than tapping the status bar outside a modal presentation.
+            let header = syntheticFile.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            header.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
         }
-        XCTAssertTrue(waitForDisappearance(syntheticFile))
+        XCTAssertTrue(waitForDisappearance(syntheticFile, timeout: 10))
         XCTAssertEqual(app.state, .runningForeground)
     }
 

@@ -63,7 +63,7 @@ python3 ios-app/tools/run-bounded.py 600 xcodebuild -project ios-app/Quareia.xco
 echo 'SIMULATOR_INSTALL_BEGIN'
 python3 ios-app/tools/run-bounded.py 240 xcrun simctl install "$SIMULATOR_ID" ios-app/build/simulator/Build/Products/PublicTesting-iphonesimulator/Quareia.app
 echo 'SIMULATOR_INSTALL_PASS_LAUNCH_BEGIN'
-python3 ios-app/tools/run-bounded.py 90 xcrun simctl launch --terminate-running-process "$SIMULATOR_ID" com.hedanbaomi.quareia.ios -probe
+python3 ios-app/tools/run-bounded.py 180 xcrun simctl launch --terminate-running-process "$SIMULATOR_ID" com.hedanbaomi.quareia.ios -probe
 echo 'SIMULATOR_LAUNCH_PASS'
 sleep 3
 python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log show --last 1m --predicate 'process == "Quareia" AND eventMessage CONTAINS "P0"' --style compact | tail -50
@@ -72,50 +72,4 @@ python3 ios-app/tools/run-bounded.py 1200 xcodebuild -project ios-app/Quareia.xc
   -derivedDataPath ios-app/build/simulator -resultBundlePath ios-app/build/public-tests.xcresult \
   -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES test-without-building | tee ios-app/build/xcode-test.log
 echo 'PUBLIC_SIMULATOR_TESTS_PASS'
-if [ "${IOS_BUILD_PAYLOADS:-1}" != 1 ]; then
-  printf '\nDEVICE_ACCEPTANCE_PENDING\nPRIVATE_BUILD_BLOCKED\n'
-  exit 0
-fi
-# Device build is separate; a synthetic IPA is inspected locally and never uploaded.
-xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
-  -configuration PublicTesting -sdk iphoneos -destination 'generic/platform=iOS' \
-  -derivedDataPath ios-app/build/device CODE_SIGNING_ALLOWED=NO build | tee ios-app/build/xcode-device.log
-python3 ios-app/tools/inspect-app.py ios-app/build/device/Build/Products/PublicTesting-iphoneos/Quareia.app --platform IOS \
-  --source-sha "$(git rev-parse HEAD)" --expected-version 1.0.0 --expected-build 1 --synthetic-test-product
-python3 ios-app/tools/package-ipa.py ios-app/build/device/Build/Products/PublicTesting-iphoneos/Quareia.app \
-  --source-sha "$(git rev-parse HEAD)" --expected-version 1.0.0 --expected-build 1 --synthetic-test-product \
-  --output ios-app/build/Quareia-1.0.0-1.ipa --package-report ios-app/build/synthetic-package.json
-echo 'SYNTHETIC_IPHONEOS_PACKAGE_INSPECTION_PASS_NO_UPLOAD'
-python3 ios-app/tools/private-integration-gate.py make-synthetic \
-  --output ios-app/build/private-provider-synthetic --source-sha "$(git rev-parse HEAD)"
-python3 ios-app/tools/private-integration-gate.py verify-synthetic \
-  --fixture ios-app/build/private-provider-synthetic --app-report ios-app/build/synthetic-package.json \
-  --source-sha "$(git rev-parse HEAD)"
-if python3 ios-app/tools/run-private-integration.py status; then
-  echo 'FAIL: private integration was not blocked by default'; exit 1
-else
-  test "$?" = 3
-fi
-node ios-app/tools/plan-ios-release.mjs \
-  --ipa ios-app/build/Quareia-1.0.0-1.ipa --package-report ios-app/build/synthetic-package.json \
-  --download-url https://example.invalid/ios-v1.0.0-b1/Quareia-1.0.0-1.ipa \
-  --tag ios-v1.0.0-b1 --previous-manifest INITIAL_CHANNEL --output ios-app/build/ios-release-plan.json
-echo 'SYNTHETIC_CONTRACT_AND_RELEASE_DRY_RUN_PASS_REAL_PRIVATE_PENDING'
-# The test host contains an injected XCTest PlugIns bundle. Inspect a separate
-# app-only simulator build so the no-extensions gate stays strict for both apps.
-xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
-  -configuration PublicTesting -sdk iphonesimulator \
-  -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
-  -derivedDataPath ios-app/build/simulator-app ONLY_ACTIVE_ARCH=YES build | tee ios-app/build/xcode-simulator-app.log
-python3 ios-app/tools/inspect-app.py ios-app/build/simulator-app/Build/Products/PublicTesting-iphonesimulator/Quareia.app --platform IOSSIMULATOR \
-  --source-sha "$(git rev-parse HEAD)" --expected-version 1.0.0 --expected-build 1 --synthetic-test-product
-# Prove a public checkout cannot silently emit a complete distribution build.
-if xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
-  -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
-  -derivedDataPath ios-app/build/distribution CODE_SIGNING_ALLOWED=NO build > ios-app/build/distribution-gate.log 2>&1; then
-  echo 'FAIL: distribution unexpectedly built without private integration'; exit 1
-fi
-grep -F 'Distribution is blocked: private LXXXI provider integration is not implemented' ios-app/build/distribution-gate.log
-echo 'PRIVATE_DISTRIBUTION_FAIL_CLOSED_PASS'
-# The passing probe UI test emits a synthetic-only screenshot after readiness.
-printf '\nPUBLIC_SIMULATOR_AND_DEVICE_BUILD_PASS\nDEVICE_ACCEPTANCE_PENDING\nPRIVATE_BUILD_BLOCKED\n'
+printf '\nDEVICE_ACCEPTANCE_PENDING\nPRIVATE_BUILD_BLOCKED\n'

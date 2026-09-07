@@ -9,30 +9,21 @@ final class WebBackupIntegrationTests: XCTestCase {
     private var controller: WebAppViewController!
     private var window: UIWindow!
     private var web: WKWebView!
-    private var previousRoot: UIViewController?
-    private var previousHidden = false
-    private var previousKey = false
-
     override func setUp() async throws {
-        controller = WebAppViewController(arguments: [])
+        // Exercise the real app-host WebView throughout this suite. Replacing
+        // the root for each method churns WebContent processes while the
+        // original app controller remains alive in the background.
         window = try XCTUnwrap((UIApplication.shared.delegate as? AppDelegate)?.window)
-        previousRoot = window.rootViewController
-        previousHidden = window.isHidden
-        previousKey = window.isKeyWindow
-        window.rootViewController = UINavigationController(rootViewController: controller)
-        window.makeKeyAndVisible()
+        let navigation = try XCTUnwrap(window.rootViewController as? UINavigationController)
+        controller = try XCTUnwrap(navigation.viewControllers.first as? WebAppViewController)
         controller.loadViewIfNeeded()
         web = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? WKWebView }.first)
         try await ready()
     }
 
     override func tearDown() async throws {
-        web?.stopLoading()
-        controller?.shutdown()
-        window?.rootViewController = previousRoot
-        window?.isHidden = previousHidden
-        if previousKey { window?.makeKeyAndVisible() }
-        previousRoot = nil
+        // Each method restores its synthetic data; the app retains ownership
+        // of its window and WebView until XCTest terminates the host.
         web = nil
         controller = nil
         window = nil
