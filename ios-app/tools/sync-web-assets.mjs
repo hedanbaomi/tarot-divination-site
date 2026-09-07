@@ -58,6 +58,7 @@ function transformSource(assetPath, sourceText) {
   }
 
   if (assetPath === 'js/i18n.js') {
+    apply('  function syncNativeLocale() {\n    if (!hasStoredLocale()) return;', '  function syncNativeLocale() {', 'sync first-launch system locale to iOS native surfaces');
     apply(
       '    if (global.androidAbout && typeof global.androidAbout.setLocale === "function") {\n      global.androidAbout.setLocale(locale);\n    }',
       '    if (global.QuareiaIOS && typeof global.QuareiaIOS.setLocale === "function") {\n      global.QuareiaIOS.setLocale(locale);\n    }',

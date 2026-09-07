@@ -1,6 +1,14 @@
 import Foundation
 import UIKit
 
+enum HostLocale {
+    // Match the frozen Web bundle: Chinese languages use zh-CN, other system
+    // languages use English; absence of a language keeps the Chinese default.
+    static func systemDefault(_ language: String? = Locale.preferredLanguages.first) -> String {
+        (language ?? "zh-CN").lowercased().hasPrefix("zh") ? "zh-CN" : "en"
+    }
+}
+
 enum NativeHostError: BridgeCodedError {
     case unavailable
     case privacyRequired
@@ -82,7 +90,7 @@ final class LocalHostServiceFacade: HostServiceFacading {
         return HostInfoValue(
             version: bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0",
             build: bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0",
-            locale: defaults.string(forKey: Keys.locale) ?? "zh-CN",
+            locale: defaults.string(forKey: Keys.locale) ?? HostLocale.systemDefault(),
             theme: defaults.string(forKey: Keys.theme) ?? "celestial",
             telemetryEnabled: telemetry,
             privacyDisclosureShown: shown

@@ -29,6 +29,32 @@ final class WebBackupIntegrationTests: XCTestCase {
         window = nil
     }
 
+    func testNativeAndWebLocaleStayAlignedAtStartupAndAfterChange() async throws {
+        let result = try await script("""
+        const initial=DivinationI18n.getLocale();
+        const stored=localStorage.getItem(DivinationI18n.STORAGE_KEY);
+        async function matches(expected) {
+          for(let attempt=0;attempt<20;attempt++) {
+            if((await QuareiaIOS.hostInfo()).locale===expected) return true;
+            await new Promise(resolve=>setTimeout(resolve,25));
+          }
+          return false;
+        }
+        try {
+          const startup=await matches(initial);
+          const changed=initial==='en'?'zh-CN':'en';
+          DivinationI18n.setLocale(changed);
+          return {startup,changed:await matches(changed)};
+        } finally {
+          DivinationI18n.setLocale(initial);
+          await matches(initial);
+          if(stored===null) localStorage.removeItem(DivinationI18n.STORAGE_KEY);
+        }
+        """)
+        XCTAssertEqual(result["startup"] as? Bool, true)
+        XCTAssertEqual(result["changed"] as? Bool, true)
+    }
+
     func testNormalDeckImagesAndProtectedProviderAreReachable() async throws {
         let result = try await script("""
         await QuareiaIOS.ready;

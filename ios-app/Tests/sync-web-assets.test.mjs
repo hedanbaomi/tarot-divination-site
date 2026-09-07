@@ -15,6 +15,33 @@ const provenance = JSON.parse(fs.readFileSync(path.join(generated, 'provenance.j
 const resources = JSON.parse(fs.readFileSync(path.join(generated, 'public-resources.json')));
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
+test('first-launch system language and stored overrides synchronize native iOS surfaces', () => {
+  for (const [language, stored, expected] of [
+    ['en-US', null, 'en'], ['zh-TW', null, 'zh-CN'],
+    ['fr-FR', null, 'en'], ['en-US', 'zh-CN', 'zh-CN']
+  ]) {
+    const calls = [];
+    const writes = [];
+    const context = vm.createContext({
+      navigator: { language },
+      localStorage: { getItem: () => stored, setItem: (...args) => writes.push(args) },
+      QuareiaIOS: { setLocale: value => calls.push(value) },
+      document: {
+        documentElement: { setAttribute() {} },
+        querySelector: () => null, querySelectorAll: () => [], getElementById: () => null
+      }
+    });
+    vm.runInContext(readGenerated('js/i18n.js'), context);
+    assert.equal(context.DivinationI18n.getLocale(), expected);
+    assert.deepEqual(calls, [expected]);
+    assert.deepEqual(writes, [], 'System language synchronization must not create a manual preference');
+    const next = expected === 'en' ? 'zh-CN' : 'en';
+    context.DivinationI18n.setLocale(next);
+    assert.deepEqual(calls, [expected, next]);
+    assert.deepEqual(writes, [['quareia-divination-locale', next]]);
+  }
+});
+
 test('generated bundle pins Android behavior and attributes the exact iOS build source', () => {
   const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   assert.deepEqual(Object.keys(provenance).sort(), ['buildSourceCommit', 'files', 'mode', 'schema', 'sourceCommit', 'transformations']);

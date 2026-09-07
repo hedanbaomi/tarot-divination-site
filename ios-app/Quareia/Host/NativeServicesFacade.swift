@@ -8,7 +8,7 @@ private final class HostPreferenceStore {
 
     var locale: String {
         lock.lock(); defer { lock.unlock() }
-        return defaults.string(forKey: Keys.locale) ?? "zh-CN"
+        return defaults.string(forKey: Keys.locale) ?? HostLocale.systemDefault()
     }
 
     var theme: String {

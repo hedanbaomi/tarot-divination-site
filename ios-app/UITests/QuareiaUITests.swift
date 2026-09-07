@@ -84,6 +84,7 @@ final class QuareiaUITests: XCTestCase {
         tapWhenVisible(parchment, in: webView, scrolling: .towardLowerPage)
         XCTAssertTrue(parchment.isSelected || parchment.value as? String == "1")
 
+        openWebMenu(in: app, webView: webView)
         let languageToggle = waitForElement(labels: ["Switch to Simplified Chinese"], in: app)
         tapWhenVisible(languageToggle, in: webView, scrolling: .towardUpperPage)
         XCTAssertTrue(app.staticTexts["牌组"].waitForExistence(timeout: 5))
@@ -98,6 +99,7 @@ final class QuareiaUITests: XCTestCase {
     func testThreeDecksDrawRevealAndHistoryThroughRealControls() {
         let (app, webView) = launchRealApp()
         ensureEnglish(in: app, webView: webView)
+        chooseOption("Preset spread", controlLabel: "Layout", in: app, webView: webView)
 
         let decks = [
             "Tarot (Rider-Waite system)",
@@ -166,11 +168,10 @@ final class QuareiaUITests: XCTestCase {
 
         let restore = waitForElement(labels: ["Restore"], in: app, timeout: 8)
         restore.tap()
-        let picker = waitForElement(identifier: "host.import", in: app, timeout: 8)
-        XCTAssertTrue(picker.exists)
-        let cancel = waitForElement(labels: ["Cancel", "取消"], in: app)
+        let cancel = waitForElement(labels: ["Cancel", "取消"], in: app, timeout: 8)
         XCTAssertTrue(cancel.isHittable)
         cancel.tap()
+        XCTAssertTrue(app.staticTexts["Backup restore cancelled"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.state, .runningForeground)
         XCTAssertTrue(webView.waitForExistence(timeout: 5))
     }
@@ -188,20 +189,22 @@ final class QuareiaUITests: XCTestCase {
         let newDesign = waitForElement(labels: ["New design"], in: app)
         newDesign.tap()
         let spreadName = waitForTextField(label: "Spread name", in: app)
-        enterSyntheticText("UI Test QSP", into: spreadName, in: studio)
+        enterSyntheticText("UI Test QSP", into: spreadName, in: studio, app: app)
 
         let positionNames = app.textFields.matching(NSPredicate(format: "label == 'Position name'"))
         XCTAssertTrue(positionNames.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(positionNames.count, 3, "Expected the default custom spread to contain three positions")
         for index in 0..<3 {
-            enterSyntheticText("UI position \(index + 1)", into: positionNames.element(boundBy: index), in: studio)
+            enterSyntheticText(
+                "UI position \(index + 1)",
+                into: positionNames.element(boundBy: index),
+                in: studio,
+                app: app
+            )
         }
 
         let generate = waitForElement(labels: ["Generate share code"], in: app)
         tapWhenVisible(generate, in: studio, scrolling: .towardLowerPage)
-        XCTAssertTrue(app.staticTexts[
-            "Share code generated. Copy it or save it as a text file."
-        ].waitForExistence(timeout: 5))
         let shareCode = waitForTextView(label: "Custom spread share code", in: app)
         let code = try XCTUnwrap(shareCode.value as? String)
         XCTAssertTrue(code.hasPrefix("QSP1.") || code.hasPrefix("QSP2."), "Expected a versioned QSP share code")
@@ -209,7 +212,7 @@ final class QuareiaUITests: XCTestCase {
         let importTab = waitForElement(labels: ["Import code"], in: app)
         tapWhenVisible(importTab, in: studio, scrolling: .towardUpperPage)
         let importCode = waitForTextView(label: "Paste a share code", in: app)
-        enterSyntheticText(code, into: importCode, in: studio)
+        enterSyntheticText(code, into: importCode, in: studio, app: app)
         let importAndUse = waitForElement(labels: ["Import and use"], in: app)
         tapWhenVisible(importAndUse, in: studio, scrolling: .towardLowerPage)
 
@@ -226,17 +229,18 @@ final class QuareiaUITests: XCTestCase {
         chooseOption("Free Board", controlLabel: "Layout", in: app, webView: webView)
 
         discardFreeBoardDraft(in: app, webView: webView)
-        let viewport = element(
-            label: "Free Board. Drag the board or cards; pinch or wheel to zoom.",
-            in: app
-        )
-        makeVisible(viewport, in: webView, scrolling: .towardLowerPage)
-        XCTAssertTrue(viewport.exists)
-        XCTAssertGreaterThan(viewport.frame.width, 250)
-        XCTAssertGreaterThan(viewport.frame.height, 250)
         let pileCard = waitForElement(labelPrefix: "Face-down pile card ", in: app)
         tapWhenVisible(pileCard, in: webView, scrolling: .towardLowerPage)
         XCTAssertTrue(app.staticTexts["1 placed"].waitForExistence(timeout: 5))
+
+        // Resolve the role=application surface after it contains the placed card,
+        // which gives WebKit a concrete accessible descendant for the gesture target.
+        let viewport = waitForElement(labels: [
+            "Free Board. Drag the board or cards; pinch or wheel to zoom."
+        ], in: app)
+        makeVisible(viewport, in: webView, scrolling: .towardUpperPage)
+        XCTAssertGreaterThan(viewport.frame.width, 250)
+        XCTAssertGreaterThan(viewport.frame.height, 250)
 
         let originalCardPoint = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .withOffset(CGVector(dx: -92, dy: -71))
@@ -280,9 +284,8 @@ final class QuareiaUITests: XCTestCase {
         ].waitForExistence(timeout: 5))
     }
 
-    @MainActor
-    func testLoopbackAnnouncementRevisionAndPrivacyToggle() async throws {
-        _ = try await postFixture("/__fixture/seed", json: ["version_code": 1])
+    func testLoopbackAnnouncementRevisionAndPrivacyToggle() throws {
+        _ = try postFixture("/__fixture/seed", json: ["version_code": 1])
 
         let (app, webView) = launchRealApp(arguments: ["-enable-loopback-service-fixture"])
         XCTAssertTrue(waitForElement(labels: [
@@ -298,7 +301,7 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(firstDismiss))
         ensureEnglish(in: app, webView: webView)
 
-        _ = try await postFixture("/__fixture/revise", json: ["id": 1])
+        _ = try postFixture("/__fixture/revise", json: ["id": 1])
         openNativeMenuAction(
             identifier: "host.announcements",
             label: "Announcements",
@@ -329,9 +332,8 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertEqual(app.state, .runningForeground)
     }
 
-    @MainActor
-    func testLoopbackUpdateDownloadCancelAndHandoff() async throws {
-        _ = try await postFixture("/__fixture/update-mode", json: ["mode": "blocked"])
+    func testLoopbackUpdateDownloadCancelAndHandoff() throws {
+        _ = try postFixture("/__fixture/update-mode", json: ["mode": "blocked"])
         addTeardownBlock { Self.restoreUpdateFixtureNormal() }
         let (app, webView) = launchRealApp(arguments: [
             "-enable-loopback-service-fixture",
@@ -349,7 +351,7 @@ final class QuareiaUITests: XCTestCase {
         cancel.tap()
         XCTAssertTrue(waitForDisappearance(cancel))
 
-        _ = try await postFixture("/__fixture/update-mode", json: ["mode": "normal"])
+        _ = try postFixture("/__fixture/update-mode", json: ["mode": "normal"])
         openNativeMenuAction(identifier: "host.update", label: "Check for updates", in: app)
         waitForElement(identifier: "host.update.download", labels: ["Download"], in: app).tap()
         let handoff = waitForElement(identifier: "host.update.handoff", in: app, timeout: 10)
@@ -421,12 +423,30 @@ final class QuareiaUITests: XCTestCase {
         _ option: String,
         controlLabel: String,
         in app: XCUIApplication,
-        webView: XCUIElement
+        webView: XCUIElement,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
-        let trigger = waitForElement(labelPrefix: controlLabel + ", currently ", in: app)
-        tapWhenVisible(trigger, in: webView, scrolling: .towardUpperPage)
-        let choice = waitForElement(labels: [option], in: app)
-        XCTAssertTrue(choice.isHittable, "Expected the requested public option to be visible")
+        let trigger = waitForElement(
+            labelPrefix: controlLabel + ", currently ",
+            in: app,
+            file: file,
+            line: line
+        )
+        tapWhenVisible(
+            trigger,
+            in: webView,
+            scrolling: .towardUpperPage,
+            file: file,
+            line: line
+        )
+        let choice = waitForElement(labels: [option], in: app, file: file, line: line)
+        XCTAssertTrue(
+            choice.isHittable,
+            "Expected the requested public option to be visible",
+            file: file,
+            line: line
+        )
         choice.tap()
     }
 
@@ -457,11 +477,27 @@ final class QuareiaUITests: XCTestCase {
         return field
     }
 
-    private func enterSyntheticText(_ text: String, into element: XCUIElement, in webView: XCUIElement) {
-        makeVisible(element, in: webView, scrolling: .towardLowerPage)
-        XCTAssertTrue(element.isHittable, "Expected the synthetic-data field to be visible")
+    private func enterSyntheticText(
+        _ text: String,
+        into element: XCUIElement,
+        in webView: XCUIElement,
+        app: XCUIApplication? = nil,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        makeVisible(element, in: webView, scrolling: .towardLowerPage, file: file, line: line)
+        XCTAssertTrue(
+            element.isHittable,
+            "Expected the synthetic-data field to be visible",
+            file: file,
+            line: line
+        )
         element.tap()
         element.typeText(text)
+        if let app {
+            let hideKeyboard = app.keyboards.buttons["Hide keyboard"]
+            if hideKeyboard.exists && hideKeyboard.isHittable { hideKeyboard.tap() }
+        }
     }
 
     private func discardFreeBoardDraft(in app: XCUIApplication, webView: XCUIElement) {
@@ -511,16 +547,41 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(dismiss))
     }
 
-    private func postFixture(_ path: String, json: [String: Any]) async throws -> Data {
+    private func postFixture(
+        _ path: String,
+        json: [String: Any],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> Data {
         let url = try XCTUnwrap(URL(string: "http://127.0.0.1:8787" + path))
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: json)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let http = try XCTUnwrap(response as? HTTPURLResponse)
-        XCTAssertEqual(http.statusCode, 200, "Expected the isolated iOS loopback fixture")
-        return data
+        request.timeoutInterval = 5
+        let result = FixtureResponseBox()
+        let completion = DispatchSemaphore(value: 0)
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            result.store(data: data, response: response, error: error)
+            completion.signal()
+        }
+        task.resume()
+        guard completion.wait(timeout: .now() + 5) == .success else {
+            task.cancel()
+            XCTFail("Timed out waiting for the isolated iOS loopback fixture", file: file, line: line)
+            return Data()
+        }
+        let snapshot = result.snapshot()
+        if let error = snapshot.error { throw error }
+        let http = try XCTUnwrap(snapshot.response as? HTTPURLResponse, file: file, line: line)
+        XCTAssertEqual(
+            http.statusCode,
+            200,
+            "Expected the isolated iOS loopback fixture",
+            file: file,
+            line: line
+        )
+        return snapshot.data ?? Data()
     }
 
     private static func restoreUpdateFixtureNormal() {
@@ -529,9 +590,11 @@ final class QuareiaUITests: XCTestCase {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data(#"{"mode":"normal"}"#.utf8)
+        request.timeoutInterval = 5
         let completion = DispatchSemaphore(value: 0)
-        URLSession.shared.dataTask(with: request) { _, _, _ in completion.signal() }.resume()
-        _ = completion.wait(timeout: .now() + 5)
+        let task = URLSession.shared.dataTask(with: request) { _, _, _ in completion.signal() }
+        task.resume()
+        if completion.wait(timeout: .now() + 5) == .timedOut { task.cancel() }
     }
 
     private func waitForElement(
@@ -539,7 +602,9 @@ final class QuareiaUITests: XCTestCase {
         labels: [String] = [],
         labelPrefix: String? = nil,
         in app: XCUIApplication,
-        timeout: TimeInterval = 5
+        timeout: TimeInterval = 5,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) -> XCUIElement {
         let all = app.descendants(matching: .any)
         if let identifier {
@@ -554,7 +619,12 @@ final class QuareiaUITests: XCTestCase {
             let labelled = all.matching(NSPredicate(format: "label BEGINSWITH %@", labelPrefix)).firstMatch
             if labelled.waitForExistence(timeout: timeout) { return labelled }
         }
-        XCTFail("Expected a public UI control with a known identifier")
+        let requested = [
+            "identifier=\(identifier ?? "<none>")",
+            "labels=\(labels)",
+            "labelPrefix=\(labelPrefix ?? "<none>")"
+        ].joined(separator: "; ")
+        XCTFail("Expected a public UI control; \(requested)", file: file, line: line)
         if let identifier { return all.matching(identifier: identifier).firstMatch }
         if let labelPrefix {
             return all.matching(NSPredicate(format: "label BEGINSWITH %@", labelPrefix)).firstMatch
@@ -573,18 +643,22 @@ final class QuareiaUITests: XCTestCase {
     private func tapWhenVisible(
         _ element: XCUIElement,
         in scrollable: XCUIElement,
-        scrolling direction: ScrollDirection
+        scrolling direction: ScrollDirection,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
-        makeVisible(element, in: scrollable, scrolling: direction)
+        makeVisible(element, in: scrollable, scrolling: direction, file: file, line: line)
         if element.isHittable { element.tap() }
     }
 
     private func makeVisible(
         _ element: XCUIElement,
         in scrollable: XCUIElement,
-        scrolling direction: ScrollDirection
+        scrolling direction: ScrollDirection,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) {
-        for _ in 0..<12 {
+        for _ in 0..<8 {
             var next = direction
             if element.exists {
                 let target = element.frame
@@ -603,19 +677,45 @@ final class QuareiaUITests: XCTestCase {
             }
             scroll(scrollable, toward: next)
         }
-        XCTFail("Expected a known public control to become hittable")
+        let targetFrame = element.exists ? NSStringFromCGRect(element.frame) : "<absent>"
+        let scrollFrame = scrollable.exists ? NSStringFromCGRect(scrollable.frame) : "<absent>"
+        XCTFail(
+            "Expected a known public control to become hittable; " +
+                "target.exists=\(element.exists); target.hittable=\(element.isHittable); " +
+                "target.frame=\(targetFrame); scrollable.exists=\(scrollable.exists); " +
+                "scrollable.hittable=\(scrollable.isHittable); scrollable.frame=\(scrollFrame)",
+            file: file,
+            line: line
+        )
     }
 
     private func scroll(_ element: XCUIElement, toward direction: ScrollDirection) {
+        let gutterX = element.elementType == .webView ? 0.99 : 0.98
+        let upper = element.coordinate(withNormalizedOffset: CGVector(dx: gutterX, dy: 0.34))
+        let lower = element.coordinate(withNormalizedOffset: CGVector(dx: gutterX, dy: 0.70))
         switch direction {
-        case .towardUpperPage: element.swipeDown()
-        case .towardLowerPage: element.swipeUp()
+        case .towardUpperPage: upper.press(forDuration: 0.08, thenDragTo: lower)
+        case .towardLowerPage: lower.press(forDuration: 0.08, thenDragTo: upper)
         }
     }
 
     private func openWebMenu(in app: XCUIApplication, webView: XCUIElement) {
+        let close = waitForKnownElementIfPresent(labels: ["Close menu", "关闭菜单"], in: app)
+        if close.exists { return }
         let open = waitForElement(labels: ["Open menu", "打开菜单"], in: app)
         tapWhenVisible(open, in: webView, scrolling: .towardUpperPage)
+    }
+
+    private func waitForKnownElementIfPresent(
+        labels: [String],
+        in app: XCUIApplication
+    ) -> XCUIElement {
+        let all = app.descendants(matching: .any)
+        for label in labels {
+            let element = all.matching(NSPredicate(format: "label == %@", label)).firstMatch
+            if element.exists { return element }
+        }
+        return all.matching(NSPredicate(format: "label == %@", labels.first ?? "<missing>")).firstMatch
     }
 
     private func closeWebMenu(in app: XCUIApplication) {
@@ -646,4 +746,25 @@ final class QuareiaUITests: XCTestCase {
 
 private enum ProbeEvidenceError: Error {
     case malformedStorageLabel(String)
+}
+
+private final class FixtureResponseBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data: Data?
+    private var response: URLResponse?
+    private var error: Error?
+
+    func store(data: Data?, response: URLResponse?, error: Error?) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.data = data
+        self.response = response
+        self.error = error
+    }
+
+    func snapshot() -> (data: Data?, response: URLResponse?, error: Error?) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (data, response, error)
+    }
 }

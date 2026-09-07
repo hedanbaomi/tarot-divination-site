@@ -3,6 +3,14 @@ import XCTest
 
 @MainActor
 final class HostLifecycleTests: XCTestCase {
+    func testFirstLaunchNativeLocaleMatchesWebSystemLanguageRules() {
+        XCTAssertEqual(HostLocale.systemDefault("en-US"), "en")
+        XCTAssertEqual(HostLocale.systemDefault("zh-TW"), "zh-CN")
+        XCTAssertEqual(HostLocale.systemDefault("ZH-hans"), "zh-CN")
+        XCTAssertEqual(HostLocale.systemDefault("fr-FR"), "en")
+        XCTAssertEqual(HostLocale.systemDefault(nil), "zh-CN")
+    }
+
     func testMissingBundleServiceConfigurationStaysUnconfiguredWithoutNetwork() {
         XCTAssertEqual(NativeHostServiceFactory.configuration(from: nil), .unconfigured)
     }
