@@ -701,7 +701,7 @@ final class QuareiaUITests: XCTestCase {
 
     private func openWebMenu(in app: XCUIApplication, webView: XCUIElement) {
         let close = waitForKnownElementIfPresent(labels: ["Close menu", "关闭菜单"], in: app)
-        if close.exists { return }
+        if close.exists && close.isHittable { return }
         let open = waitForElement(labels: ["Open menu", "打开菜单"], in: app)
         tapWhenVisible(open, in: webView, scrolling: .towardUpperPage)
     }
