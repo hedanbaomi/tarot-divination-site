@@ -2,10 +2,10 @@
 
 This Swift/UIKit/WKWebView application targets iOS/iPadOS 16+, iPhone and iPad,
 version 1.0.0/build 1. The public testing build is named **Quareia Test** and
-uses synthetic artwork. It is not a signed release or a complete private package.
+uses synthetic LXXXI artwork. It is not a signed release or a complete private package.
 
 `QuareiaPublic` uses synthetic images for its protected-resource tests. The
-public build has no private provider or protected card artwork. Release builds
+public build has no private provider or private LXXXI artwork. Release builds
 must fail until the separate private integration has been implemented and
 approved. Simulator success does not establish device or re-signing acceptance.
 
@@ -21,7 +21,9 @@ node ios-app/tools/sync-web-assets.mjs --check
 The explicit manifest reads Android-distributed public files from Git objects
 at a fixed SHA, verifies source hashes, and writes generated resources and their
 provenance. It does not copy directories from the working tree. Generated files
-are ignored. No card artwork is copied. Reviewed iOS overlays provide the native
+are ignored. The 157 Tarot/Mystagogus JPEGs and five theme PNGs already present
+in the locked public Android Git tree are copied byte-for-byte against individual hashes; no private
+LXXXI artwork is copied. Reviewed iOS overlays provide the native
 bridge, Files transfer, persistent mobile template library, and aggregate backup.
 The fixed local origin keeps persistent IndexedDB and localStorage. Web network
 requests, Web announcements and Web telemetry are disabled; native URLSession
@@ -115,6 +117,14 @@ or signing operation. Run it with `--help` for the required local output paths.
 manifest. Its output is never publishable, and it tests the Android latest
 release parser. The original download hash is verified before sharing; app
 startup does not bind execution to that hash or an author's signing identity.
+
+`tools/private-integration-gate.py` supplies synthetic contract exercises;
+`tools/run-private-integration.py status` returns `PRIVATE_BUILD_BLOCKED` and
+exit code 3 by default. Its separately approved real mode requires reviewed
+source, owner-only external inputs, isolated temporary/output directories, and
+provider runtime acceptance tests. It copies no input into this checkout and
+removes its disposable test simulator and temporary inputs. Synthetic checks
+are not evidence that the real private format decoded successfully.
 
 iOS updates must use an independent manifest/channel. Any future `ios-v*` Release
 must set `make_latest=false` and pass the existing Android latest-release parser

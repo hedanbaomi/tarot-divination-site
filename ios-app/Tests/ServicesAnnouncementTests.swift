@@ -101,7 +101,7 @@ final class ServicesAnnouncementTests: XCTestCase {
         XCTAssertEqual(staleCache, [])
     }
 
-    func testPresentationAcknowledgementIsForegroundOnlyRevisionScopedAndSerialized() async {
+    func testPresentationAcknowledgementIsForegroundOnlyRevisionScopedAndSerialized() async throws {
         let fake = FakeServiceHTTPClient()
         var revision = 1
         var returnsEmpty = false

@@ -17,6 +17,18 @@ const wranglerBin = path.join(root, "node_modules", "wrangler", "bin", "wrangler
 const config = path.join(root, "wrangler.local.toml");
 const databaseName = "quareia-ios-local";
 const fixtureToken = "local-fixture-token-not-a-secret";
+const updateFixtureOrigin = "http://127.0.0.1:8787";
+const updateArtifactName = "Quareia-1.0.1-2.ipa";
+const updateArtifactPath = `/fixtures/${updateArtifactName}`;
+const updateArtifact = Buffer.from(
+  "QUAREIA PUBLIC_TESTING SYNTHETIC IPA\n" +
+    "This is not an installable application archive.\n",
+  "utf8"
+);
+const updateArtifactSha256 = "1148e3aae6c847d29f11873cb73f848322fc825ff975c9bd73c182df97fff66b";
+const updateArtifactDelayMs = 1_200;
+let updateDownloadMode = "normal";
+let activeUpdateDownloads = 0;
 
 const options = readOptions(process.argv.slice(2));
 mkdirSync(localRoot, { recursive: true });
@@ -73,8 +85,46 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 
 async function handleRequest(request, response, workerOrigin) {
   const url = new URL(request.url || "/", publicOrigin);
+  if (url.pathname === "/v1/ios-update") {
+    if (request.method !== "GET") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    if (publicOrigin !== updateFixtureOrigin || url.search !== "") {
+      sendJson(response, 400, { error: "update_fixture_requires_exact_origin" });
+      return;
+    }
+    sendJson(response, 200, {
+      schema_version: 1,
+      platform: "ios",
+      display_version: "1.0.1",
+      build: 2,
+      download_url: updateFixtureOrigin + updateArtifactPath,
+      size_bytes: updateArtifact.length,
+      sha256: updateArtifactSha256
+    });
+    return;
+  }
+  if (url.pathname === updateArtifactPath) {
+    if (request.method !== "GET") {
+      sendJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+    if (publicOrigin !== updateFixtureOrigin || url.search !== "") {
+      sendJson(response, 400, { error: "update_fixture_requires_exact_origin" });
+      return;
+    }
+    activeUpdateDownloads += 1;
+    try { await sendSyntheticUpdateArtifact(response); }
+    finally { activeUpdateDownloads -= 1; }
+    return;
+  }
   if (url.pathname === "/__fixture/health" && request.method === "GET") {
     sendJson(response, 200, { ok: true, worker_origin: workerOrigin });
+    return;
+  }
+  if (url.pathname === "/__fixture/update-state" && request.method === "GET") {
+    sendJson(response, 200, { activeDownloads: activeUpdateDownloads });
     return;
   }
   if (url.pathname === "/__fixture/stats" && request.method === "GET") {
@@ -89,6 +139,15 @@ async function handleRequest(request, response, workerOrigin) {
       return;
     }
     const body = await readJson(request, 8192);
+    if (url.pathname === "/__fixture/update-mode") {
+      if (Object.keys(body).length !== 1 || !["normal", "blocked"].includes(body.mode)) {
+        sendJson(response, 400, { error: "invalid_update_mode" });
+        return;
+      }
+      updateDownloadMode = body.mode;
+      sendJson(response, 200, { mode: updateDownloadMode });
+      return;
+    }
     if (url.pathname === "/__fixture/stop") {
       sendJson(response, 200, { ok: true });
       setTimeout(() => { void shutdown(0); }, 0);
@@ -304,6 +363,39 @@ function sendJson(response, status, value) {
     "cache-control": "no-store"
   });
   response.end(JSON.stringify(value));
+}
+
+async function sendSyntheticUpdateArtifact(response) {
+  const blocked = updateDownloadMode === "blocked";
+  await new Promise((resolve) => {
+    let settled = false;
+    let timer;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve();
+    };
+    response.once("close", finish);
+    response.writeHead(200, {
+      "content-type": "application/octet-stream",
+      "content-length": String(updateArtifact.length),
+      "content-disposition": `attachment; filename="${updateArtifactName}"`,
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "x-quareia-fixture": "public-testing-synthetic-not-installable"
+    });
+    response.flushHeaders();
+    // Cancellation tests explicitly hold the body, avoiding a race with the UI.
+    // Even a broken test cannot leave an unbounded request on the fixture.
+    timer = setTimeout(() => {
+      if (!response.destroyed && !response.writableEnded) {
+        if (blocked) response.destroy();
+        else response.end(updateArtifact);
+      }
+      finish();
+    }, blocked ? 20_000 : updateArtifactDelayMs);
+  });
 }
 
 function safeError(error) {

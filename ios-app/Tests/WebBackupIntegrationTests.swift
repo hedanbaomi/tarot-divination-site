@@ -29,6 +29,23 @@ final class WebBackupIntegrationTests: XCTestCase {
         window = nil
     }
 
+    func testNormalDeckImagesAndProtectedProviderAreReachable() async throws {
+        let result = try await script("""
+        await QuareiaIOS.ready;
+        const urls=[tarotDeckFull[0].image,mystagogusDeckFull[0].image,getLxxxiBackImage(),lxxxiDeckFull[0].image];
+        const protectedURLs=urls.slice(2);
+        for(const name of ['parchment-sun-blank','parchment-sun','sky-face-celestial','sky-face-ember','sky-face-grove']) urls.push('assets/icons/'+name+'.png');
+        const loaded=await Promise.all(urls.map(src=>new Promise(resolve=>{
+          const image=new Image(); const timeout=setTimeout(()=>resolve(false),5000);
+          image.onload=()=>{clearTimeout(timeout);resolve(image.naturalWidth>0&&image.naturalHeight>0)};
+          image.onerror=()=>{clearTimeout(timeout);resolve(false)};image.src=src;
+        })));
+        return {loaded,protected:protectedURLs.every(url=>url.startsWith(__qMediaBase+'/lxxxi-'))};
+        """)
+        XCTAssertEqual(result["loaded"] as? [Bool], Array(repeating: true, count: 9))
+        XCTAssertEqual(result["protected"] as? Bool, true)
+    }
+
     func testRealIndexedDBBackupRoundtripRejectsCorruptionAndDuplicates() async throws {
         let result = try await script("""
         const api = window.DivinationBackup;

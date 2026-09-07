@@ -256,6 +256,47 @@ class PackageIpaTests(unittest.TestCase):
                     synthetic_test_product=True,
                 )
 
+    def test_package_report_inside_source_app_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            app, report = self.make_app_and_report(root)
+            nested_report = app / "new" / "package.json"
+            with patch.object(TOOL, "run_inspector", return_value=report), self.assertRaisesRegex(
+                TOOL.PackageError,
+                "report must not be inside",
+            ):
+                TOOL.package_ipa(
+                    app,
+                    root / "Quareia-1.0.0-1.ipa",
+                    nested_report,
+                    source_sha=SOURCE_SHA,
+                    expected_version="1.0.0",
+                    expected_build=1,
+                    synthetic_test_product=True,
+                )
+            self.assertFalse((app / "new").exists())
+
+    def test_output_and_report_ancestor_paths_are_rejected_before_mkdir(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            app, report = self.make_app_and_report(root)
+            output = root / "Quareia-1.0.0-1.ipa"
+            nested_report = output / "report.json"
+            with patch.object(TOOL, "run_inspector", return_value=report), self.assertRaisesRegex(
+                TOOL.PackageError,
+                "must not overlap",
+            ):
+                TOOL.package_ipa(
+                    app,
+                    output,
+                    nested_report,
+                    source_sha=SOURCE_SHA,
+                    expected_version="1.0.0",
+                    expected_build=1,
+                    synthetic_test_product=True,
+                )
+            self.assertFalse(output.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

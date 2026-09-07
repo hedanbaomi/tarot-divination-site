@@ -227,7 +227,7 @@ export function buildDryRunPlan({ ipaPath, packageReport, downloadUrl, tag, prev
     reviewedSourceSHA: packageReport.reviewedSourceSHA,
     release: {
       tagName: tag,
-      makeLatest: false,
+      make_latest: false,
       artifactFilename: canonicalName,
       baseline:
         previousManifest === null

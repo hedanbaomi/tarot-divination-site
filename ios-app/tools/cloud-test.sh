@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 mkdir -p ios-app/build
 export CLOUDFLARE_TELEMETRY_DISABLED=1 WRANGLER_SEND_METRICS=false
-node telemetry-worker/tools/ios-local-fixture.mjs > ios-app/build/local-fixture.log 2>&1 &
+(cd telemetry-worker && exec node tools/ios-local-fixture.mjs) > ios-app/build/local-fixture.log 2>&1 &
 FIXTURE_PID=$!
 trap 'kill "$FIXTURE_PID" 2>/dev/null || true; wait "$FIXTURE_PID" 2>/dev/null || true' EXIT
 python3 - <<'PY'
@@ -17,6 +17,7 @@ for _ in range(120):
 else: raise SystemExit('Local Worker fixture failed to start')
 print('ISOLATED_LOOPBACK_FIXTURE_READY')
 PY
+node ios-app/tools/verify-fixture.mjs
 # Verified standard runner image includes this stable Xcode. Fail if removed;
 # do not silently fall back to the broken 16.4/iOS 18.5 WebKit simulator pair.
 export DEVELOPER_DIR="${IOS_DEVELOPER_DIR:-/Applications/Xcode_26.3.app/Contents/Developer}"
@@ -70,8 +71,23 @@ python3 ios-app/tools/inspect-app.py ios-app/build/device/Build/Products/PublicT
   --source-sha "$(git rev-parse HEAD)" --expected-version 1.0.0 --expected-build 1 --synthetic-test-product
 python3 ios-app/tools/package-ipa.py ios-app/build/device/Build/Products/PublicTesting-iphoneos/Quareia.app \
   --source-sha "$(git rev-parse HEAD)" --expected-version 1.0.0 --expected-build 1 --synthetic-test-product \
-  --output ios-app/build/Quareia-1.0.0-1-synthetic.ipa --package-report ios-app/build/synthetic-package.json
+  --output ios-app/build/Quareia-1.0.0-1.ipa --package-report ios-app/build/synthetic-package.json
 echo 'SYNTHETIC_IPHONEOS_PACKAGE_INSPECTION_PASS_NO_UPLOAD'
+python3 ios-app/tools/private-integration-gate.py make-synthetic \
+  --output ios-app/build/private-provider-synthetic --source-sha "$(git rev-parse HEAD)"
+python3 ios-app/tools/private-integration-gate.py verify-synthetic \
+  --fixture ios-app/build/private-provider-synthetic --app-report ios-app/build/synthetic-package.json \
+  --source-sha "$(git rev-parse HEAD)"
+if python3 ios-app/tools/run-private-integration.py status; then
+  echo 'FAIL: private integration was not blocked by default'; exit 1
+else
+  test "$?" = 3
+fi
+node ios-app/tools/plan-ios-release.mjs \
+  --ipa ios-app/build/Quareia-1.0.0-1.ipa --package-report ios-app/build/synthetic-package.json \
+  --download-url https://example.invalid/ios-v1.0.0-b1/Quareia-1.0.0-1.ipa \
+  --tag ios-v1.0.0-b1 --previous-manifest INITIAL_CHANNEL --output ios-app/build/ios-release-plan.json
+echo 'SYNTHETIC_CONTRACT_AND_RELEASE_DRY_RUN_PASS_REAL_PRIVATE_PENDING'
 # The test host contains an injected XCTest PlugIns bundle. Inspect a separate
 # app-only simulator build so the no-extensions gate stays strict for both apps.
 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \

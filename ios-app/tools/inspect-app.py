@@ -61,12 +61,52 @@ FORBIDDEN_NAMES = {
     "PlugIns",
 }
 FORBIDDEN_NAME_CASEFOLD = {name.casefold() for name in FORBIDDEN_NAMES}
+PUBLIC_CARD_PATHS = tuple(
+    [f"assets/cards/major-{index:02d}.jpeg" for index in range(22)]
+    + [
+        f"assets/cards/minor-{suit}-{rank}.jpeg"
+        for suit in ("cups", "pentacles", "swords", "wands")
+        for rank in (
+            "ace",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "page",
+            "knight",
+            "queen",
+            "king",
+        )
+    ]
+    + ["assets/cards/m/m-back.jpeg"]
+    + [f"assets/cards/m/m-{index:02d}.jpeg" for index in range(1, 79)]
+)
+EXPECTED_PUBLIC_CARD_PATHS = frozenset(PUBLIC_CARD_PATHS)
+PUBLIC_CARD_PATH_PATTERN = "(?:" + "|".join(re.escape(path) for path in PUBLIC_CARD_PATHS) + ")"
+PUBLIC_ICON_PATHS = tuple(
+    f"assets/icons/{name}.png"
+    for name in (
+        "parchment-sun-blank",
+        "parchment-sun",
+        "sky-face-celestial",
+        "sky-face-ember",
+        "sky-face-grove",
+    )
+)
+EXPECTED_PUBLIC_ICON_PATHS = frozenset(PUBLIC_ICON_PATHS)
+PUBLIC_ICON_PATH_PATTERN = "(?:" + "|".join(re.escape(path) for path in PUBLIC_ICON_PATHS) + ")"
+EXPECTED_PUBLIC_BINARY_PATHS = EXPECTED_PUBLIC_CARD_PATHS | EXPECTED_PUBLIC_ICON_PATHS
 PUBLIC_RUNTIME_PATH_RE = re.compile(
-    r"^(?:LICENSE\.md|index\.html|(?:js|css)/[a-z0-9-]+\.(?:js|css))$"
+    rf"^(?:LICENSE\.md|index\.html|(?:js|css)/[a-z0-9-]+\.(?:js|css)|{PUBLIC_CARD_PATH_PATTERN}|{PUBLIC_ICON_PATH_PATTERN})$"
 )
 PUBLIC_SOURCE_PATH_RE = re.compile(
     r"^(?:android-demo/app/src/main/assets/www/"
-    r"(?:LICENSE\.md|index\.html|(?:js|css)/[a-z0-9-]+\.(?:js|css))|"
+    rf"(?:LICENSE\.md|index\.html|(?:js|css)/[a-z0-9-]+\.(?:js|css)|{PUBLIC_CARD_PATH_PATTERN}|{PUBLIC_ICON_PATH_PATTERN})|"
     r"ios-app/web/[a-z0-9-]+\.(?:js|css))$"
 )
 
@@ -189,6 +229,16 @@ def _validate_public_resources(
     require(all(type(item) is str for item in allowlist), "Public resource allowlist paths must be strings")
     require(len(allowlist) == len(set(allowlist)), "Duplicate public resource allowlist path")
     require(all(PUBLIC_RUNTIME_PATH_RE.fullmatch(item) for item in allowlist), "Unsafe public resource allowlist path")
+    listed_card_paths = {item for item in allowlist if item.startswith("assets/cards/")}
+    require(
+        listed_card_paths == EXPECTED_PUBLIC_CARD_PATHS,
+        "Public card image allowlist must contain the exact 157-file set",
+    )
+    listed_icon_paths = {item for item in allowlist if item.startswith("assets/icons/")}
+    require(
+        listed_icon_paths == EXPECTED_PUBLIC_ICON_PATHS,
+        "Public theme icon allowlist must contain the exact 5-file set",
+    )
 
     actual_www = {
         entry["path"][len("www/") :]
@@ -270,6 +320,15 @@ def _validate_public_resources(
             by_path[f"www/{path}"]["sha256"] == entry["outputSha256"],
             f"Public output hash mismatch: {path}",
         )
+        if path in EXPECTED_PUBLIC_BINARY_PATHS:
+            require(
+                source == f"android-demo/app/src/main/assets/www/{path}",
+                "Public binary image source/output path mismatch",
+            )
+            require(
+                entry["sourceSha256"] == entry["outputSha256"],
+                f"Public binary image was not copied byte-for-byte: {path}",
+            )
     require(seen == set(allowlist), "Public provenance paths do not exactly match allowlist")
     transformation_paths: set[str] = set()
     require(
@@ -290,6 +349,11 @@ def _validate_public_resources(
             and all(type(step) is str and step for step in transformation["steps"]),
             "Invalid public transformation steps",
         )
+        if path in EXPECTED_PUBLIC_BINARY_PATHS:
+            require(
+                transformation["steps"] == ["exact binary copy"],
+                f"Public binary image transformation is not an exact binary copy: {path}",
+            )
         transformation_paths.add(path)
     require(
         transformation_paths == set(allowlist),

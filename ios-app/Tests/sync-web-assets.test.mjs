@@ -22,6 +22,7 @@ test('generated bundle pins Android behavior and attributes the exact iOS build 
   assert.equal(provenance.mode, 'public-ios-port');
   assert.equal(provenance.sourceCommit, 'c04e86f19eab2a5240b4109e11f18911fd043274');
   assert.equal(provenance.sourceCommit, manifest.sourceCommit);
+  assert.equal(manifest.schema, 3);
   assert.equal(provenance.buildSourceCommit, head);
   assert.deepEqual(provenance.files.map(entry => entry.path), resources);
   assert.deepEqual(provenance.transformations.map(entry => entry.path), resources);
@@ -31,12 +32,70 @@ test('generated bundle pins Android behavior and attributes the exact iOS build 
   });
 });
 
-test('public allowlist contains only manifest assets and the two reviewed overlays', () => {
-  const expected = manifest.files.map(entry => entry.path).concat(manifest.overlays.map(entry => entry.path));
+test('public allowlist contains only the explicit text, binary, and overlay manifests', () => {
+  const expected = manifest.files.map(entry => entry.path)
+    .concat(manifest.binaryFiles.map(entry => entry.path), manifest.overlays.map(entry => entry.path));
   assert.deepEqual(resources, expected);
   assert.equal(resources.includes('public-resources.json'), false);
   assert.equal(resources.includes('provenance.json'), false);
-  assert.ok(resources.every(resource => /^(LICENSE\.md|index\.html|(?:js|css)\/[a-z0-9-]+\.(?:js|css))$/.test(resource)));
+  assert.ok(resources.every(resource => /^(?:LICENSE\.md|index\.html|(?:js|css)\/[a-z0-9-]+\.(?:js|css)|assets\/cards\/(?:major-(?:0[0-9]|1[0-9]|2[01])|minor-(?:cups|pentacles|swords|wands)-(?:ace|two|three|four|five|six|seven|eight|nine|ten|page|knight|queen|king)|m\/m-(?:back|0[1-9]|[1-6][0-9]|7[0-8]))\.jpeg|assets\/icons\/(?:parchment-sun(?:-blank)?|sky-face-(?:celestial|ember|grove))\.png)$/.test(resource)));
+});
+
+test('the complete frozen public card and theme icon inventory is copied byte-for-byte without LXXXI artwork', () => {
+  const binaryPaths = manifest.binaryFiles.map(entry => entry.path);
+  const cardPaths = binaryPaths.filter(item => item.startsWith('assets/cards/'));
+  const iconPaths = binaryPaths.filter(item => item.startsWith('assets/icons/'));
+  const tarot = cardPaths.filter(item => !item.startsWith('assets/cards/m/'));
+  const mystagogus = cardPaths.filter(item => item.startsWith('assets/cards/m/'));
+  assert.equal(binaryPaths.length, 162);
+  assert.equal(new Set(binaryPaths).size, 162);
+  assert.equal(cardPaths.length, 157);
+  assert.equal(iconPaths.length, 5);
+  assert.equal(tarot.length, 78);
+  assert.equal(mystagogus.length, 79);
+  assert.equal(mystagogus.includes('assets/cards/m/m-back.jpeg'), true);
+  assert.equal(binaryPaths.some(item => /lxxxi/i.test(item)), false);
+  assert.equal(resources.filter(item => item.endsWith('.jpeg')).length, 157);
+  assert.deepEqual(iconPaths.slice().sort(), [
+    'assets/icons/parchment-sun-blank.png',
+    'assets/icons/parchment-sun.png',
+    'assets/icons/sky-face-celestial.png',
+    'assets/icons/sky-face-ember.png',
+    'assets/icons/sky-face-grove.png'
+  ]);
+
+  for (const entry of manifest.binaryFiles) {
+    const source = `android-demo/app/src/main/assets/www/${entry.path}`;
+    const sourceBytes = execFileSync('git', ['show', `${manifest.sourceCommit}:${source}`], {
+      cwd: root,
+      maxBuffer: 8 * 1024 * 1024
+    });
+    const generatedBytes = fs.readFileSync(path.join(generated, entry.path));
+    assert.equal(sha(sourceBytes), entry.sha256);
+    assert.equal(sha(generatedBytes), entry.sha256);
+    assert.equal(sourceBytes.equals(generatedBytes), true);
+    const provenanceIndex = resources.indexOf(entry.path);
+    assert.equal(provenance.files[provenanceIndex].sourceSha256, entry.sha256);
+    assert.equal(provenance.files[provenanceIndex].outputSha256, entry.sha256);
+    assert.deepEqual(provenance.transformations[provenanceIndex], {
+      path: entry.path,
+      steps: ['exact binary copy']
+    });
+  }
+});
+
+test('generated Tarot and Mystagogus getters retain the exact bundled JPEG paths', () => {
+  const context = vm.createContext({});
+  vm.runInContext(readGenerated('js/tarot-data.js'), context);
+  vm.runInContext(readGenerated('js/mystagogus-data.js'), context);
+  const actual = JSON.parse(vm.runInContext(
+    'JSON.stringify(tarotDeckFull.map(card => card.image).concat(mystagogusDeckFull.map(card => card.image)))',
+    context
+  ));
+  const expected = manifest.binaryFiles.map(entry => entry.path)
+    .filter(item => item.startsWith('assets/cards/') && item !== 'assets/cards/m/m-back.jpeg');
+  assert.equal(actual.length, 156);
+  assert.deepEqual(actual.slice().sort(), expected.slice().sort());
 });
 
 test('exact iOS transforms use QuareiaNative adapters without Android bridge spoofing', () => {
@@ -53,6 +112,9 @@ test('exact iOS transforms use QuareiaNative adapters without Android bridge spo
   assert.match(read('js/menu.js'), /QuareiaIOS\.presentAbout\(\)/);
   assert.match(read('js/app.js'), /platform: "ios"/);
   assert.match(read('js/app.js'), /QuareiaIOSBackup/);
+  assert.match(read('js/app.js'), /Promise\.all\(\[nativeAdapter\.ready, backup\.ready\]\)/);
+  assert.match(read('js/app.js'), /无法初始化 iOS 宿主服务/);
+  assert.match(read('js/app.js'), /iOS host initialization failed/);
   assert.match(read('js/app.js'), /backup\.showRecoveryNotice\(\)/);
   assert.equal(read('js/app.js').includes('Local backup recovery failed'), false);
   assert.match(read('js/custom-spreads.js'), /platform !== "ios"/);
@@ -70,6 +132,31 @@ test('exact iOS transforms use QuareiaNative adapters without Android bridge spo
   assert.equal(read('js/app.js').includes('androidTelemetry'), false);
   assert.equal(read('js/history-ui.js').includes('androidHistoryExport'), false);
   assert.equal(read('js/ios-native-adapter.js').includes('androidHistoryExport'), false);
+});
+
+test('generated LXXXI getters resolve only through the validated per-document host token', async () => {
+  const protectedAssetBaseURL = 'quareia-app://app/_m/123e4567-e89b-42d3-a456-426614174000123e4567-e89b-42d3-a456-426614174001';
+  const context = vm.createContext({ console, TextEncoder, TextDecoder, Buffer });
+  context.protectedAssetBaseURL = protectedAssetBaseURL;
+  vm.runInContext(`
+    window = globalThis;
+    QuareiaNative = {
+      request: function (envelope) {
+        if (envelope.method !== "hostInfo") throw new Error("unexpected method " + envelope.method);
+        return { protectedAssetBaseURL: protectedAssetBaseURL };
+      }
+    };
+  `, context);
+  vm.runInContext(readGenerated('js/lxxxi-data.js'), context);
+  vm.runInContext(readGenerated('js/ios-native-adapter.js'), context);
+  await context.QuareiaIOS.ready;
+
+  const values = vm.runInContext('JSON.stringify([getLxxxiBackImage(), lxxxiDeckFull[0].image, lxxxiDeckFull[80].image])', context);
+  assert.deepEqual(JSON.parse(values), [
+    `${protectedAssetBaseURL}/lxxxi-back`,
+    `${protectedAssetBaseURL}/lxxxi-01`,
+    `${protectedAssetBaseURL}/lxxxi-81`
+  ]);
 });
 
 test('generated persistence modules reject writes while backup restore owns local state', async () => {

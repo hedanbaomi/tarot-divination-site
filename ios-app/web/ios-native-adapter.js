@@ -21,6 +21,7 @@
   var DECK_TYPES = ["tarot", "mystagogus", "lxxxi"];
   var FILE_KINDS = ["history", "qsp", "backup"];
   var FILE_ACTIONS = ["save", "share"];
+  var PROTECTED_BASE_PATTERN = /^quareia-app:\/\/app\/_m\/(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}){2}$/;
 
   function fail(code) {
     var error = new Error(code);
@@ -127,10 +128,18 @@
     return value;
   }
 
+  function validateProtectedAssetBaseURL(value) {
+    if (typeof value !== "string" || !PROTECTED_BASE_PATTERN.test(value)) {
+      throw fail("INVALID_HOST_INFO");
+    }
+    return value;
+  }
+
   function createAdapter(options) {
     options = options || {};
     var sequence = 0;
-    var nativeProvider = options.native || function () { return root && root.QuareiaNative; };
+    var environment = options.root || root;
+    var nativeProvider = options.native || function () { return environment && environment.QuareiaNative; };
 
     function request(method, params) {
       var nativeApi = typeof nativeProvider === "function" ? nativeProvider() : nativeProvider;
@@ -165,6 +174,26 @@
     function setTelemetryEnabled(enabled) {
       if (typeof enabled !== "boolean") return Promise.reject(fail("INVALID_ENABLED"));
       return request("setTelemetryEnabled", { enabled: enabled });
+    }
+
+    async function initialize() {
+      var info = await request("hostInfo", {});
+      if (!isPlainObject(info)) throw fail("INVALID_HOST_INFO");
+      var protectedBase = validateProtectedAssetBaseURL(info.protectedAssetBaseURL);
+      if (!environment || Object.prototype.hasOwnProperty.call(environment, "__qMediaBase")) {
+        throw fail("INVALID_HOST_INFO");
+      }
+      try {
+        Object.defineProperty(environment, "__qMediaBase", {
+          value: protectedBase,
+          writable: false,
+          configurable: false,
+          enumerable: false
+        });
+      } catch (_error) {
+        throw fail("INVALID_HOST_INFO");
+      }
+      return info;
     }
 
     async function exportBytes(kind, name, bytes, action) {
@@ -278,7 +307,11 @@
       return { outcome: "success", name: result.name, text: decodeUtf8(result.bytes) };
     }
 
+    var ready = initialize();
+    ready.catch(function () {});
+
     return Object.freeze({
+      ready: ready,
       request: request,
       hostInfo: function () { return request("hostInfo", {}); },
       setTheme: setTheme,

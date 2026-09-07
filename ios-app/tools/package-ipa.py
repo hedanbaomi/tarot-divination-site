@@ -47,6 +47,13 @@ def require(condition: bool, message: str) -> None:
         raise PackageError(message)
 
 
+def path_is_within(path: pathlib.Path, directory: pathlib.Path) -> bool:
+    try:
+        return os.path.commonpath([str(path), str(directory)]) == str(directory)
+    except ValueError:
+        return False
+
+
 def sha256_file(path: pathlib.Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -283,14 +290,24 @@ def package_ipa(
     require(package_report_path.suffix == ".json", "Package report must have .json suffix")
     require(not output.exists(), "Refusing to overwrite an existing IPA")
     require(not package_report_path.exists(), "Refusing to overwrite an existing package report")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    package_report_path.parent.mkdir(parents=True, exist_ok=True)
     app_resolved = app.resolve(strict=True)
     output_resolved = output.resolve(strict=False)
+    report_resolved = package_report_path.resolve(strict=False)
     require(
-        os.path.commonpath([str(app_resolved), str(output_resolved)]) != str(app_resolved),
+        not path_is_within(output_resolved, app_resolved),
         "Output must not be inside the app bundle",
     )
+    require(
+        not path_is_within(report_resolved, app_resolved),
+        "Package report must not be inside the app bundle",
+    )
+    require(
+        not path_is_within(output_resolved, report_resolved)
+        and not path_is_within(report_resolved, output_resolved),
+        "IPA output and package report paths must not overlap",
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    package_report_path.parent.mkdir(parents=True, exist_ok=True)
 
     inspection = run_inspector(
         app,
@@ -318,10 +335,16 @@ def package_ipa(
         validate_candidate(temporary, files, directories)
         artifact_bytes = temporary.stat().st_size
         artifact_sha = sha256_file(temporary)
-        with temporary.open("rb") as source, output.open("xb") as target:
-            shutil.copyfileobj(source, target, length=1024 * 1024)
-        require(output.stat().st_size == artifact_bytes, "Published local IPA size mismatch")
-        require(sha256_file(output) == artifact_sha, "Published local IPA hash mismatch")
+        try:
+            with temporary.open("rb") as source, output.open("xb") as target:
+                shutil.copyfileobj(source, target, length=1024 * 1024)
+            require(output.stat().st_size == artifact_bytes, "Published local IPA size mismatch")
+            require(sha256_file(output) == artifact_sha, "Published local IPA hash mismatch")
+        except BaseException:
+            # This path was created by this invocation and has never been
+            # exposed as a verified output, so remove a partial copy.
+            output.unlink(missing_ok=True)
+            raise
     finally:
         temporary.unlink(missing_ok=True)
 

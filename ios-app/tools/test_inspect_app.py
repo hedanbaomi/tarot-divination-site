@@ -64,6 +64,18 @@ class PayloadGateTests(unittest.TestCase):
         os.chmod(app / "Quareia", 0o755)
         os.chmod(app / "Linked.dylib", 0o755)
         runtime = {"index.html": b"<p>synthetic</p>", "js/app.js": b"synthetic();\n"}
+        runtime.update(
+            {
+                path: b"synthetic-public-jpeg:" + path.encode("ascii")
+                for path in INSPECTOR.PUBLIC_CARD_PATHS
+            }
+        )
+        runtime.update(
+            {
+                path: b"synthetic-public-png:" + path.encode("ascii")
+                for path in INSPECTOR.PUBLIC_ICON_PATHS
+            }
+        )
         for name, data in runtime.items():
             path = www / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -77,7 +89,9 @@ class PayloadGateTests(unittest.TestCase):
                 {
                     "path": name,
                     "source": f"android-demo/app/src/main/assets/www/{name}",
-                    "sourceSha256": hashlib.sha256(b"source:" + data).hexdigest(),
+                    "sourceSha256": hashlib.sha256(
+                        data if name in INSPECTOR.EXPECTED_PUBLIC_BINARY_PATHS else b"source:" + data
+                    ).hexdigest(),
                     "outputSha256": hashlib.sha256(data).hexdigest(),
                 }
             )
@@ -89,7 +103,15 @@ class PayloadGateTests(unittest.TestCase):
                     "sourceCommit": INSPECTOR.FROZEN_ANDROID_SOURCE_SHA,
                     "buildSourceCommit": build_source_sha,
                     "transformations": [
-                        {"path": name, "steps": ["synthetic fixture"]} for name in runtime
+                        {
+                            "path": name,
+                            "steps": (
+                                ["exact binary copy"]
+                                if name in INSPECTOR.EXPECTED_PUBLIC_BINARY_PATHS
+                                else ["synthetic fixture"]
+                            ),
+                        }
+                        for name in runtime
                     ],
                     "files": provenance_files,
                 },
@@ -200,7 +222,78 @@ class PayloadGateTests(unittest.TestCase):
             provenance["files"][1]["source"] = "ios-app/web/app.js"
             provenance_path.write_text(json.dumps(provenance), encoding="utf-8")
             report = self.inspect(app)
-        self.assertEqual(report["provenance"]["runtimeFiles"], 2)
+            self.assertEqual(
+                report["provenance"]["runtimeFiles"],
+                2
+                + len(INSPECTOR.PUBLIC_CARD_PATHS)
+                + len(INSPECTOR.PUBLIC_ICON_PATHS),
+            )
+
+    def test_public_card_manifest_requires_exact_complete_path_set(self):
+        self.assertEqual(len(INSPECTOR.PUBLIC_CARD_PATHS), 157)
+        self.assertEqual(len(INSPECTOR.EXPECTED_PUBLIC_CARD_PATHS), 157)
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            app = self.make_app(root)
+            allowlist_path = app / "www" / "public-resources.json"
+            allowlist = json.loads(allowlist_path.read_text(encoding="utf-8"))
+            allowlist.remove("assets/cards/major-00.jpeg")
+            allowlist_path.write_text(json.dumps(allowlist), encoding="utf-8")
+            with self.assertRaisesRegex(INSPECTOR.InspectionError, "exact 157-file set"):
+                self.inspect(app)
+
+            app = self.make_app(root / "second")
+            allowlist_path = app / "www" / "public-resources.json"
+            allowlist = json.loads(allowlist_path.read_text(encoding="utf-8"))
+            allowlist.append("assets/cards/lxxxi-01.jpeg")
+            allowlist_path.write_text(json.dumps(allowlist), encoding="utf-8")
+            with self.assertRaisesRegex(INSPECTOR.InspectionError, "Unsafe public resource"):
+                self.inspect(app)
+
+    def test_public_card_provenance_requires_exact_source_hash_and_binary_step(self):
+        card_path = "assets/cards/m/m-back.jpeg"
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            app = self.make_app(root)
+            provenance_path = app / "www" / "provenance.json"
+            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+            entry = next(value for value in provenance["files"] if value["path"] == card_path)
+            entry["sourceSha256"] = "0" * 64
+            provenance_path.write_text(json.dumps(provenance), encoding="utf-8")
+            with self.assertRaisesRegex(INSPECTOR.InspectionError, "byte-for-byte"):
+                self.inspect(app)
+
+            app = self.make_app(root / "second")
+            provenance_path = app / "www" / "provenance.json"
+            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+            transformation = next(
+                value for value in provenance["transformations"] if value["path"] == card_path
+            )
+            transformation["steps"] = ["LF normalization"]
+            provenance_path.write_text(json.dumps(provenance), encoding="utf-8")
+            with self.assertRaisesRegex(INSPECTOR.InspectionError, "exact binary copy"):
+                self.inspect(app)
+
+    def test_public_theme_icons_require_exact_set_and_binary_hash(self):
+        icon_path = "assets/icons/parchment-sun.png"
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            app = self.make_app(root)
+            allowlist_path = app / "www" / "public-resources.json"
+            allowlist = json.loads(allowlist_path.read_text(encoding="utf-8"))
+            allowlist.remove(icon_path)
+            allowlist_path.write_text(json.dumps(allowlist), encoding="utf-8")
+            with self.assertRaisesRegex(INSPECTOR.InspectionError, "exact 5-file set"):
+                self.inspect(app)
+
+            app = self.make_app(root / "second")
+            provenance_path = app / "www" / "provenance.json"
+            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+            entry = next(value for value in provenance["files"] if value["path"] == icon_path)
+            entry["sourceSha256"] = "0" * 64
+            provenance_path.write_text(json.dumps(provenance), encoding="utf-8")
+            with self.assertRaisesRegex(INSPECTOR.InspectionError, "byte-for-byte"):
+                self.inspect(app)
 
     def test_forbidden_resource_is_rejected_by_name(self):
         with tempfile.TemporaryDirectory() as directory:

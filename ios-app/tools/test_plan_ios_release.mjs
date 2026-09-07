@@ -66,7 +66,7 @@ test("dry-run plan matches UpdateManifest v1 and can never publish or become lat
     assert.equal(result.uploadPerformed, false);
     assert.equal(result.syntheticTestProduct, true);
     assert.equal(result.release.tagName, "ios-v1.2.3-b42");
-    assert.equal(result.release.makeLatest, false);
+    assert.equal(result.release.make_latest, false);
     assert.deepEqual(Object.keys(result.updateManifestPreview).sort(), [
       "build",
       "display_version",
@@ -112,7 +112,7 @@ test("CLI writes one local dry-run plan with an explicit initial-channel baselin
     const written = JSON.parse(fs.readFileSync(outputPath, "utf8"));
     assert.equal(written.status, "DRY_RUN_ONLY");
     assert.equal(written.release.baseline, "INITIAL_CHANNEL");
-    assert.equal(written.release.makeLatest, false);
+    assert.equal(written.release.make_latest, false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

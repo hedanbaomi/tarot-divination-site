@@ -1,7 +1,7 @@
 {
-  "schema": 2,
+  "schema": 3,
   "sourceCommit": "c04e86f19eab2a5240b4109e11f18911fd043274",
-  "license": "Android-distributed software: MPL-2.0; third-party text retains existing notices; no card artwork is copied.",
+  "license": "Software: MPL-2.0; 157 public card JPEGs and 5 public theme PNGs are copied exactly from the frozen Android-distributed source with existing rights and notices unchanged; no LXXXI artwork or private inputs are copied.",
   "files": [
     {
       "path": "LICENSE.md",
@@ -124,12 +124,662 @@
     {
       "path": "js/ios-native-adapter.js",
       "source": "ios-app/web/ios-native-adapter.js",
-      "sha256": "4c4f1618441d61a7e07c83332521ded8d57484c9834fe63bbaf0cd895dc31d5b"
+      "sha256": "dfba739ba4ccf438bdcc72a80caf41086d77ddf50a10bb228275eaa303a65bf8"
     },
     {
       "path": "js/ios-backup.js",
       "source": "ios-app/web/ios-backup.js",
       "sha256": "77e0abb18aa63a4618ea00204031f607b29f8a770c82f1411b1a69ff4ecb318b"
+    }
+  ],
+  "binaryFiles": [
+    {
+      "path": "assets/cards/major-00.jpeg",
+      "sha256": "a6bfe1bda280d7bfb4decbb49cbd94848676d9b385bb3001d03a79b675208112"
+    },
+    {
+      "path": "assets/cards/major-01.jpeg",
+      "sha256": "c2ca1a5350dc62da8bbb26e9ac64a518efc8534e63842a89ab756b9b84b255ff"
+    },
+    {
+      "path": "assets/cards/major-02.jpeg",
+      "sha256": "29e7368893bc98a18f3342006ab655139b4b522b9086f4631a90b7b79e5f5f79"
+    },
+    {
+      "path": "assets/cards/major-03.jpeg",
+      "sha256": "9845e33ae2b9da460720f244c3109b67348bd874b3f27a39245921465a9571bd"
+    },
+    {
+      "path": "assets/cards/major-04.jpeg",
+      "sha256": "c92e31d341e9cdbe25a9fd208e5da19f705d309adf9bdd8cc0f1dbef457a2b07"
+    },
+    {
+      "path": "assets/cards/major-05.jpeg",
+      "sha256": "51ea221b42e10dd9a4a45d62b06d2244356ce5c24d2079441d0672806f8d7231"
+    },
+    {
+      "path": "assets/cards/major-06.jpeg",
+      "sha256": "1e3147359eafee3d85c9a90ace84b575d07c545741094f7d94d2b74949c9a043"
+    },
+    {
+      "path": "assets/cards/major-07.jpeg",
+      "sha256": "f17e2c80deac183236de2ca6a1df7ee85f493ecf082232ef0291374bc20b8663"
+    },
+    {
+      "path": "assets/cards/major-08.jpeg",
+      "sha256": "d0ffc6290cc14376f898384c3c46f5f9d8648d5eaf80d2a9ee33265929030a3f"
+    },
+    {
+      "path": "assets/cards/major-09.jpeg",
+      "sha256": "1f7701eafa2622ec10c07ad087cc0cf127904ed7d214255e165355141c3e7a13"
+    },
+    {
+      "path": "assets/cards/major-10.jpeg",
+      "sha256": "caa7b663ef9a52015318268d4d050920f762e4b7455186c6916efb9c82afe7c1"
+    },
+    {
+      "path": "assets/cards/major-11.jpeg",
+      "sha256": "98534ce0772145b342148e959610592a5aadb7d729c6a44010a916a674049c7b"
+    },
+    {
+      "path": "assets/cards/major-12.jpeg",
+      "sha256": "d125c72f3247d7e0b03d47ba29f3f71f51727a27f9c77d7788646301cf3b66b6"
+    },
+    {
+      "path": "assets/cards/major-13.jpeg",
+      "sha256": "f740c5d11714f730f7d73592831b0fade1c805973407363bb225cf9c1a9a8a11"
+    },
+    {
+      "path": "assets/cards/major-14.jpeg",
+      "sha256": "0c341e64388ce385e4ba50ec9e6d4d895f43544c04f610cc23d1a08732219861"
+    },
+    {
+      "path": "assets/cards/major-15.jpeg",
+      "sha256": "936b0ed7b95e33a8c64e7a93b09de61a3fd47fccd61a436b3317c26d3a53d5e7"
+    },
+    {
+      "path": "assets/cards/major-16.jpeg",
+      "sha256": "f16bb691be2f01108fe94c81ad78543bb3c0328e2041c7d6f9d0328db4a88766"
+    },
+    {
+      "path": "assets/cards/major-17.jpeg",
+      "sha256": "168253182e1051527a6016582e116384d45db38964b453e8b8578076cff7317c"
+    },
+    {
+      "path": "assets/cards/major-18.jpeg",
+      "sha256": "4bdea1bf1a0eaa786b76a8541acc9c412eb474af50ada8fdba9cc12a8c7b115e"
+    },
+    {
+      "path": "assets/cards/major-19.jpeg",
+      "sha256": "e1841d187439715133c73d256d17e0d9e643bcf70e9a4101d2437246c1e750bf"
+    },
+    {
+      "path": "assets/cards/major-20.jpeg",
+      "sha256": "c7f7d20b54c731b96506de981d99506cfba9bd86a7435856bf8389feb968b398"
+    },
+    {
+      "path": "assets/cards/major-21.jpeg",
+      "sha256": "8d880cb9130e641b9f7b2aa9ba47d8319104e200ffc86b7c763896017ea2aa43"
+    },
+    {
+      "path": "assets/cards/minor-cups-ace.jpeg",
+      "sha256": "d53105b9009b858392b49855b298765773c5c6877645bea0528278f7a840c88c"
+    },
+    {
+      "path": "assets/cards/minor-cups-eight.jpeg",
+      "sha256": "4649355640bedf250f3afe000c05803c3523d66a84d4a6f9e63dd1fde661b1fb"
+    },
+    {
+      "path": "assets/cards/minor-cups-five.jpeg",
+      "sha256": "a89035d6a09aa7ad8e3798554284d1714ee5e296795156641a32f08d16b42d54"
+    },
+    {
+      "path": "assets/cards/minor-cups-four.jpeg",
+      "sha256": "390f2871473156e35f6962dd08e4b1410ec414b4e754dbef776b6e4c0e541939"
+    },
+    {
+      "path": "assets/cards/minor-cups-king.jpeg",
+      "sha256": "32cb02dee02bcf4517a083de4503356536710241912c51a58eb70c743368e16f"
+    },
+    {
+      "path": "assets/cards/minor-cups-knight.jpeg",
+      "sha256": "0969e0093e45afc5628e41a2dbf5ea44b0b0d21a3015a42b506443b34942fde2"
+    },
+    {
+      "path": "assets/cards/minor-cups-nine.jpeg",
+      "sha256": "a7ff309e98f9ca0b769989fadac164b3c84dc9478630978f297eff3806a9a972"
+    },
+    {
+      "path": "assets/cards/minor-cups-page.jpeg",
+      "sha256": "c62b0c56030c6e5844d359ec47115a84ef686dfe75242bd4f8ceb00213c37aae"
+    },
+    {
+      "path": "assets/cards/minor-cups-queen.jpeg",
+      "sha256": "130ac9dfe2eaf22c0697f8ab7a3d049ec5a9fe23ccf7ed35a31013e90b919a1f"
+    },
+    {
+      "path": "assets/cards/minor-cups-seven.jpeg",
+      "sha256": "90f5041e80d131cff5524656723222125b9cb66834852b195a0706a0f1383d54"
+    },
+    {
+      "path": "assets/cards/minor-cups-six.jpeg",
+      "sha256": "a216acd53a2fd22d54a6e2dea76ff49446907c2ea741ce76026673beddde081c"
+    },
+    {
+      "path": "assets/cards/minor-cups-ten.jpeg",
+      "sha256": "026a21a549318e94b8eed4acb05d7349e71e6a4e5318de9ff1cdb499e8f1c9d5"
+    },
+    {
+      "path": "assets/cards/minor-cups-three.jpeg",
+      "sha256": "0fcd2a720d90d9a7a3992b837257bc9c5cd20262eda5efd92e7c4b01965b070e"
+    },
+    {
+      "path": "assets/cards/minor-cups-two.jpeg",
+      "sha256": "364cf5a8562d2366c39b7684e73d0b9be50b71090863610badf06a751a6f7cb8"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-ace.jpeg",
+      "sha256": "02b1ef2a95e9b5ebdc4743ac33932dda0a73dc603679e6e739ccd51b3f8bf51b"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-eight.jpeg",
+      "sha256": "73eebe795a0aa2d5143d2135f22b7f0fa2782cc5f365ef08c2e666a25e9ea3dc"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-five.jpeg",
+      "sha256": "752e63763a9b8a4050b33919c19bd3db807ee47f46d6d14cfef901fe856422e4"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-four.jpeg",
+      "sha256": "adc738c71d71f42d8c94e1207050d1ab6a1a0269a46084d8ff4b4c1657cb4aa3"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-king.jpeg",
+      "sha256": "b9cfaa04bbe44ebdc519cabe4049fd6f31af9d721824a5cd851ea0a7f5957b5a"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-knight.jpeg",
+      "sha256": "4f859a6b81f1c18b7dd62f0e92820ddb33ec027af99ae32f71f9e3efbf68a891"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-nine.jpeg",
+      "sha256": "56c66259db80ce3e54d31e03303b53100c7391aaa172503201f6c7d7c2d2a430"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-page.jpeg",
+      "sha256": "07bb26ddd2ec9732850a81878c4a5dc1269dcd2ab4457191f02f3440f056aa5f"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-queen.jpeg",
+      "sha256": "57be33cb458a4a6674814a616ede8e5294d2805554eb1f82c85bb8d8362ec015"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-seven.jpeg",
+      "sha256": "d5ea037ec4560727a56424a78409356dfc305caa3bbe2e785d2d4d167f1a22b4"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-six.jpeg",
+      "sha256": "e17bd2915047d00d16dc2b4f23bcf9b6470c75434adceb4978501fcc4c547557"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-ten.jpeg",
+      "sha256": "045e902fed410cf75dd3960349746d5ddf5c110f55c84360bded751f8aed32b4"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-three.jpeg",
+      "sha256": "595e8ee443aa2393a90ba8f6f96542f2276034b21dd96ac784a5c6282b28f96b"
+    },
+    {
+      "path": "assets/cards/minor-pentacles-two.jpeg",
+      "sha256": "f07ee4dacf554f8ca5e95b51ebab3052fea6e962fac5c6a416c10e64c438604a"
+    },
+    {
+      "path": "assets/cards/minor-swords-ace.jpeg",
+      "sha256": "7011882dbfab72edd85eb0468d73a613da099dd933eff58246140529c231b1e9"
+    },
+    {
+      "path": "assets/cards/minor-swords-eight.jpeg",
+      "sha256": "aabc3c8eb89d24edc1ecfca0c5f6b05f4fec7c2d10e3a17e480cb1f9a565349e"
+    },
+    {
+      "path": "assets/cards/minor-swords-five.jpeg",
+      "sha256": "7a5837912f28fbaef4287e48d21b08e62f91809f1249e1a140770621b54cad78"
+    },
+    {
+      "path": "assets/cards/minor-swords-four.jpeg",
+      "sha256": "baf0dace4e840adadc906a35687d4fe2a8ca5a6145f014a56513e2d02dc1f88e"
+    },
+    {
+      "path": "assets/cards/minor-swords-king.jpeg",
+      "sha256": "f5110b5e1561b583cdde2b0824abcfb09bdc41a99901eaf7dfcb002773c91694"
+    },
+    {
+      "path": "assets/cards/minor-swords-knight.jpeg",
+      "sha256": "5077914ca03d97c00df18ce8569fd994f0a5cde8ec9401b6eced06a45a62d7dc"
+    },
+    {
+      "path": "assets/cards/minor-swords-nine.jpeg",
+      "sha256": "d094717b4f40efe4eac24fa8e3a75213c9d865d642f19f21389616fb42e94709"
+    },
+    {
+      "path": "assets/cards/minor-swords-page.jpeg",
+      "sha256": "8928b65b0176235aed365378cf82246db94bfa9ecc66f81d1c6dd9bdbf55eb86"
+    },
+    {
+      "path": "assets/cards/minor-swords-queen.jpeg",
+      "sha256": "935effea2964add683f0140b16bed63c819688d4e765d1daaf7d51122a5d170b"
+    },
+    {
+      "path": "assets/cards/minor-swords-seven.jpeg",
+      "sha256": "c812f910b5e606c4285fecbd89a911f0039ce3e0ca4428374a80f0c2891a66e8"
+    },
+    {
+      "path": "assets/cards/minor-swords-six.jpeg",
+      "sha256": "02fe0e4fb719a39c53ecadd52f3c04cc6f5187b7f034a82cdf5a35e7348657fa"
+    },
+    {
+      "path": "assets/cards/minor-swords-ten.jpeg",
+      "sha256": "987cf1dcce00356acc9aa320e7118d6d58b3e0e103bd2f38820d7543c2c09e27"
+    },
+    {
+      "path": "assets/cards/minor-swords-three.jpeg",
+      "sha256": "06e79441f5fb94239694f9d985e171d324c786a84cbf768c29d30674f0a96ed9"
+    },
+    {
+      "path": "assets/cards/minor-swords-two.jpeg",
+      "sha256": "820d75e18c139b5638cd1052b40e58c96606d83781abc425a6cd282b7fe9c6c5"
+    },
+    {
+      "path": "assets/cards/minor-wands-ace.jpeg",
+      "sha256": "d90771a307ed54bdb821b5b76603420d1241012a57f6386e632c408e669dee65"
+    },
+    {
+      "path": "assets/cards/minor-wands-eight.jpeg",
+      "sha256": "c1ebe41180aa3e412ba2cfebcc167292a6b7fff087de36ad91f28e8c88bcc215"
+    },
+    {
+      "path": "assets/cards/minor-wands-five.jpeg",
+      "sha256": "c28c1f2990d876cd3b99e9e0e2b550fc2676aa5a48557a73cc8e161c81b8b3be"
+    },
+    {
+      "path": "assets/cards/minor-wands-four.jpeg",
+      "sha256": "58a5e82890abcde4fdef329ed4b91a0e0616b53846badbcd0a6bed1012a3c478"
+    },
+    {
+      "path": "assets/cards/minor-wands-king.jpeg",
+      "sha256": "a5774955d13cbc1af56460585e46beeaf2a9a7cb7f18e6121d6218ea2f71c636"
+    },
+    {
+      "path": "assets/cards/minor-wands-knight.jpeg",
+      "sha256": "f6d80fb4ee07df36780c18bffd5be3f02d332267f2bed04efb22ceed6bbd1bf0"
+    },
+    {
+      "path": "assets/cards/minor-wands-nine.jpeg",
+      "sha256": "1e8c39562d54d93a5ef95249733703ba4331fa1f82f1cc40f157ae82e2bbc825"
+    },
+    {
+      "path": "assets/cards/minor-wands-page.jpeg",
+      "sha256": "077edfb24f69751f706d3d0840b865c9069fc8487f74fb6a0b49f09d08514f1c"
+    },
+    {
+      "path": "assets/cards/minor-wands-queen.jpeg",
+      "sha256": "1eae6bcddf7c1151fe1679f3fcf5d13323b4f77ab5afc17bcfbbc040d75deeff"
+    },
+    {
+      "path": "assets/cards/minor-wands-seven.jpeg",
+      "sha256": "50364d3eabda0efa0044835133bbd1c75c896c32acaea3576a36f1c2ccc8b988"
+    },
+    {
+      "path": "assets/cards/minor-wands-six.jpeg",
+      "sha256": "bc0761fb1a0b7834f6720d055fb86ea40152e7990ce5c6832590f1c05263870a"
+    },
+    {
+      "path": "assets/cards/minor-wands-ten.jpeg",
+      "sha256": "b5130d1bd887120c74d3de71433ddc4af18f0b68d5eebd6912f45ee96e18009d"
+    },
+    {
+      "path": "assets/cards/minor-wands-three.jpeg",
+      "sha256": "66f916aaeb4319b2b472dd416e63d223694207d13b291c16cb81201ac93d7b70"
+    },
+    {
+      "path": "assets/cards/minor-wands-two.jpeg",
+      "sha256": "61401c8682666d7d28b1883522c249ef8edaba7a02aba88e87da21001ed04d83"
+    },
+    {
+      "path": "assets/cards/m/m-01.jpeg",
+      "sha256": "902c043d19dd7f02f07138bcec69d502374aac0f31ba833a175d3f13789630cd"
+    },
+    {
+      "path": "assets/cards/m/m-02.jpeg",
+      "sha256": "794dfd8f727de0481e2bef176037829f87d53eb2cb112de27a3542460b237f76"
+    },
+    {
+      "path": "assets/cards/m/m-03.jpeg",
+      "sha256": "eb00f7fc3ebd4c44d851e0f48ec9331e9e874a15f637f448d13f084a8440e088"
+    },
+    {
+      "path": "assets/cards/m/m-04.jpeg",
+      "sha256": "cf0a06b70af19b16604c3fb5fdfd6c9264a9a418ca9330dfc4afe4c8d385e98a"
+    },
+    {
+      "path": "assets/cards/m/m-05.jpeg",
+      "sha256": "bbbbf5165cb04407abf95936f5f898aa918382641ea1e1eb4405d14a548e26ca"
+    },
+    {
+      "path": "assets/cards/m/m-06.jpeg",
+      "sha256": "f0a32b32511d01e0a3f026cc15c0761b7aa66026dd3686a770aaa95272df915d"
+    },
+    {
+      "path": "assets/cards/m/m-07.jpeg",
+      "sha256": "f57603b3c6c582a087a35c9384909e5a004690a3250e87a75130a3d8ee7869a6"
+    },
+    {
+      "path": "assets/cards/m/m-08.jpeg",
+      "sha256": "481d6b973256555427d146208cf4605f2dc5bdba451674aafb5fafeeef51c7e0"
+    },
+    {
+      "path": "assets/cards/m/m-09.jpeg",
+      "sha256": "95445eb05abdeaee051b9f1b369241f0a34940f1d2a110afa8016a9b4868b94f"
+    },
+    {
+      "path": "assets/cards/m/m-10.jpeg",
+      "sha256": "9b9a16bff4e6b3ee26ed09151e84474b62d2a862a87b976e5ec50ecfd0c0a9ac"
+    },
+    {
+      "path": "assets/cards/m/m-11.jpeg",
+      "sha256": "4cecf1f1dd1cf5b018dd1b4ef3fefae39023e6adf4e39d6f39ebe79296bdf0da"
+    },
+    {
+      "path": "assets/cards/m/m-12.jpeg",
+      "sha256": "b4d5502300918ce6ccfe91dc266f30701f79f6a126f4d3ebea3073a1c991d390"
+    },
+    {
+      "path": "assets/cards/m/m-13.jpeg",
+      "sha256": "6c5ca23e34eb262888dcc878823d9d398de9ac69977fc77cb4e6b2399ab6797d"
+    },
+    {
+      "path": "assets/cards/m/m-14.jpeg",
+      "sha256": "6eee3fd7b41c3ef9489e1e45b0a235296e12633ebc7e158ee1bfe29387ae07f2"
+    },
+    {
+      "path": "assets/cards/m/m-15.jpeg",
+      "sha256": "3ca1252f0f2bff7ed8d238c37e56c4f06a984c1f980a5dad647dedd6d432c133"
+    },
+    {
+      "path": "assets/cards/m/m-16.jpeg",
+      "sha256": "5ac7e2ce946adbf5bf2ec0bd1175f69ea4add5552273a2104102302ef3ad58a6"
+    },
+    {
+      "path": "assets/cards/m/m-17.jpeg",
+      "sha256": "2200b4ad9442fb0cbfffa6b99f6ff61bff187d7017b67aba25c0071b5341af16"
+    },
+    {
+      "path": "assets/cards/m/m-18.jpeg",
+      "sha256": "78b3823971d6742ba4d9aac70daef1c0f73479de0cd839b825e93cb0216fc28d"
+    },
+    {
+      "path": "assets/cards/m/m-19.jpeg",
+      "sha256": "2ed5beea3458e9048be8d3c178aec76265b003cc38701e85a3338f2cb0f57c21"
+    },
+    {
+      "path": "assets/cards/m/m-20.jpeg",
+      "sha256": "2327448d9e3ee117ead004467056cbeb1a1a3e0211b84e67ee127014c63f2c5f"
+    },
+    {
+      "path": "assets/cards/m/m-21.jpeg",
+      "sha256": "e8b4fc10a27bb2b04aebfeb97e476bc15fca46d019e9f40bae2821472a208afb"
+    },
+    {
+      "path": "assets/cards/m/m-22.jpeg",
+      "sha256": "9334d5101eb3a2cf91ef02912304db739303a0dcfbe2811b97840c3d0e98f8f0"
+    },
+    {
+      "path": "assets/cards/m/m-23.jpeg",
+      "sha256": "7da2710e8ccc2a47d33adf9eee707630fec1039d8deed88272086d33bfec31ef"
+    },
+    {
+      "path": "assets/cards/m/m-24.jpeg",
+      "sha256": "3c732cd62380112c151dfa4ff7945287cedb4b8141988cbb16cee968eb37aa2e"
+    },
+    {
+      "path": "assets/cards/m/m-25.jpeg",
+      "sha256": "94027cacb827987e3a175c626fbd45c06c4fae178e55a684da66ee5d9350b514"
+    },
+    {
+      "path": "assets/cards/m/m-26.jpeg",
+      "sha256": "3ff5ff49257554cef40b3d5cd3c0daec04bd8579b789c544c6ca8c0589f734ad"
+    },
+    {
+      "path": "assets/cards/m/m-27.jpeg",
+      "sha256": "d1296bf40ccd587fca4e423a2f66a0d1d70a5ad0841f7480190313211158225d"
+    },
+    {
+      "path": "assets/cards/m/m-28.jpeg",
+      "sha256": "ecd781cf7db32c968f1ee7b89a955f4edf0cd4df3be9439bc5e80b63553f1d73"
+    },
+    {
+      "path": "assets/cards/m/m-29.jpeg",
+      "sha256": "b79fa1f993cba1760e11f385de929daa8d447e6dd12d48c02d1014d63f2f2908"
+    },
+    {
+      "path": "assets/cards/m/m-30.jpeg",
+      "sha256": "91489f56c2ecbc77dc2f0a18523348129394356ffab98b54041711c765c7cc13"
+    },
+    {
+      "path": "assets/cards/m/m-31.jpeg",
+      "sha256": "af95ade7db5c5be709aa2d9142a9744d4745d1e3b95fbee28776d33534d16870"
+    },
+    {
+      "path": "assets/cards/m/m-32.jpeg",
+      "sha256": "8c14e97d03105d3a4c547dc9cb4bb7152a4c9895b5ce38b2f6daa803f658f291"
+    },
+    {
+      "path": "assets/cards/m/m-33.jpeg",
+      "sha256": "501405884d20d171715f4d90b45702fdd948ff2bda282152d50eb2332c2a8803"
+    },
+    {
+      "path": "assets/cards/m/m-34.jpeg",
+      "sha256": "eec9cac7d0f1764012f86e5be8c6caba3e9bf205ad132f1d4b7e005e5dc0fa58"
+    },
+    {
+      "path": "assets/cards/m/m-35.jpeg",
+      "sha256": "490e0fe856604c7d6274c00321ba3035a6fde60c20d7d5b1907f8b0cd271c733"
+    },
+    {
+      "path": "assets/cards/m/m-36.jpeg",
+      "sha256": "cbaf272f06ec8220639ed8918013af0a493527f640eb67824b6bef7e03aa253f"
+    },
+    {
+      "path": "assets/cards/m/m-37.jpeg",
+      "sha256": "445ce5836e7189378d593660da5e9ce6bb8bd59593775358162e631c28286295"
+    },
+    {
+      "path": "assets/cards/m/m-38.jpeg",
+      "sha256": "ac603b06d5daaaff0f637796ef410d3a4b4f3d24deb61881376066afbe3c3cea"
+    },
+    {
+      "path": "assets/cards/m/m-39.jpeg",
+      "sha256": "fa2bbd7edb04a4ee8ce6d1ceff89391f0444355b809365d56bc8eaef528bab08"
+    },
+    {
+      "path": "assets/cards/m/m-40.jpeg",
+      "sha256": "fc70b949ded95363f87494de90b75093e3cc2bfae60d5780038713aa13bbd2a1"
+    },
+    {
+      "path": "assets/cards/m/m-41.jpeg",
+      "sha256": "cc7f5ffb36b7577773a0599060ed26e3308a176e45a31d332bf386f90459cfbd"
+    },
+    {
+      "path": "assets/cards/m/m-42.jpeg",
+      "sha256": "f1dba92567db244c66c1da07516dc62601aa4fe508b863a2e69890b22d8b549d"
+    },
+    {
+      "path": "assets/cards/m/m-43.jpeg",
+      "sha256": "3dfd4302f0b408cc347de3df3c2e2befe674435cca432bb9fff6cc0500d68844"
+    },
+    {
+      "path": "assets/cards/m/m-44.jpeg",
+      "sha256": "d9e976c655a53f9806acfe0e0c02967f5c8fbb77abcd115954d2e809c6318f0b"
+    },
+    {
+      "path": "assets/cards/m/m-45.jpeg",
+      "sha256": "20a99915bd32724202c43cd6561a7c5b5457a32ef4ac5156284e651740f28f96"
+    },
+    {
+      "path": "assets/cards/m/m-46.jpeg",
+      "sha256": "9c1b8ed7838a26869a92e4bfcfa7edac300947ebae11fcef1c81f417a8d9aeb7"
+    },
+    {
+      "path": "assets/cards/m/m-47.jpeg",
+      "sha256": "ff542209262a5fcabbd3bd25e5601d691dd91abcf94b8da927c36138a3c79eec"
+    },
+    {
+      "path": "assets/cards/m/m-48.jpeg",
+      "sha256": "65de4f1bca713ee09e808d97252bfcc70823efc152394ebfcd9c86eb5b35d6b0"
+    },
+    {
+      "path": "assets/cards/m/m-49.jpeg",
+      "sha256": "adfa56092ddeb1a98e2d97e6af31b38d9f87a0f618bff2deaa96d87f81d9fb6e"
+    },
+    {
+      "path": "assets/cards/m/m-50.jpeg",
+      "sha256": "eaf0438f9c373e10d253c2b935c7b20d915c0999775332d7371864a87ca9f18f"
+    },
+    {
+      "path": "assets/cards/m/m-51.jpeg",
+      "sha256": "6c9c448265fbab48389d9139ef3110beafc29a54473da8bfab1c44bbdaa6671f"
+    },
+    {
+      "path": "assets/cards/m/m-52.jpeg",
+      "sha256": "376b1951bdf74948c8feeddba90b1cb04dedc6d3839333ba90e2c6f4152a2050"
+    },
+    {
+      "path": "assets/cards/m/m-53.jpeg",
+      "sha256": "6c983fda057e22500ff59d88080c2eb1203cefc8a01805fbd1e95b5606ab8599"
+    },
+    {
+      "path": "assets/cards/m/m-54.jpeg",
+      "sha256": "050314a1112b7a1e796233630d8b63a2a40ce492b2c10461b1d141a034970862"
+    },
+    {
+      "path": "assets/cards/m/m-55.jpeg",
+      "sha256": "4cdbb11146d81431595f41cd66e52ba1c9de02dd870d9110e6dfd6958515d2b9"
+    },
+    {
+      "path": "assets/cards/m/m-56.jpeg",
+      "sha256": "94b26fe68d1d0ba175b6f2591cb9e758bce37b11fcd8adcc8ae41b78a154a24d"
+    },
+    {
+      "path": "assets/cards/m/m-57.jpeg",
+      "sha256": "7d09d1f3de7ec6bef7a59f06bc720c4ad216b08042f6a1ad55cac83c5e56403f"
+    },
+    {
+      "path": "assets/cards/m/m-58.jpeg",
+      "sha256": "30c28a938010d8ede6002f6b8e84adfc23f5ce2323a1714e55215d2cd60566fd"
+    },
+    {
+      "path": "assets/cards/m/m-59.jpeg",
+      "sha256": "788e1d847a43092c3024e33f414f25ca0444694ac4fe69b2437ddc7ff81cc43b"
+    },
+    {
+      "path": "assets/cards/m/m-60.jpeg",
+      "sha256": "38539a5abb451daa913fcaedf534204d4de771b355f4b5b926ee7952b5a4afdc"
+    },
+    {
+      "path": "assets/cards/m/m-61.jpeg",
+      "sha256": "0659554c9593c701fc40c65810c1902aff9ad8a082af029462003915a6d66cc0"
+    },
+    {
+      "path": "assets/cards/m/m-62.jpeg",
+      "sha256": "ebb351988d9941ceba1b77222bb802278d82ce931843597955ff2cb9ba7efdbe"
+    },
+    {
+      "path": "assets/cards/m/m-63.jpeg",
+      "sha256": "18e40ffe05adb0461a9586651bd3a7a772ed18e3cc1429c2aa1064d21ffe934b"
+    },
+    {
+      "path": "assets/cards/m/m-64.jpeg",
+      "sha256": "69d950e52274b330acd6f742f2f0fb85a27832bb0bd614fb5b16816d4cef5a1a"
+    },
+    {
+      "path": "assets/cards/m/m-65.jpeg",
+      "sha256": "60079e0ef0926f1fc9485e82cae1c7552713e7a4e7d9d13121eb29c623817148"
+    },
+    {
+      "path": "assets/cards/m/m-66.jpeg",
+      "sha256": "ec765ae44f9ea8b9baffc270d33666ce0b4cec26f6b893a90cf6e4daf077c5b8"
+    },
+    {
+      "path": "assets/cards/m/m-67.jpeg",
+      "sha256": "57e69feea9e247db4e8f33aa82ede3b2597eb66400c83e21403fe7e8c49f54e6"
+    },
+    {
+      "path": "assets/cards/m/m-68.jpeg",
+      "sha256": "acc034381f96c809f492432815d60a415b9d06fe2865b33b58a0d8b9e9980589"
+    },
+    {
+      "path": "assets/cards/m/m-69.jpeg",
+      "sha256": "4ed3bc1ec3079b0a5e1826f76cc230354d34cb315793f7f4832d3267c9e17262"
+    },
+    {
+      "path": "assets/cards/m/m-70.jpeg",
+      "sha256": "dd2d3a0a1ceca5d7efcee17053970aa19325f85990aba9f2904c4fcab952dc0e"
+    },
+    {
+      "path": "assets/cards/m/m-71.jpeg",
+      "sha256": "f77b568b1d1d2899241b82f872253a1af1307d033db315a9e9a66f6cc7c5125e"
+    },
+    {
+      "path": "assets/cards/m/m-72.jpeg",
+      "sha256": "5a30e1db8c25cefb5ad04148df58e6ce77d050e425ed6cb7a120bb201597b168"
+    },
+    {
+      "path": "assets/cards/m/m-73.jpeg",
+      "sha256": "35cfd7909c82ef53d054a2ba3328f128edc7ce4bea7752c505676a4abfc95537"
+    },
+    {
+      "path": "assets/cards/m/m-74.jpeg",
+      "sha256": "6ef9dca7d9a339f3d921e1249d02542861ea5715f39e6d6b9039e2aecae59e9c"
+    },
+    {
+      "path": "assets/cards/m/m-75.jpeg",
+      "sha256": "d8147bec80083e5142277c6b43b9cc844534c734e422c58b3ec43035668cc9d2"
+    },
+    {
+      "path": "assets/cards/m/m-76.jpeg",
+      "sha256": "ab848c8f5a40246005329972c33a6f1150dfee8ff1fe74be57591ff47f44cf19"
+    },
+    {
+      "path": "assets/cards/m/m-77.jpeg",
+      "sha256": "a2085747389591dde054ff9e81a62f95b29d1a5bb2ed942a59aa42fcfe9b23af"
+    },
+    {
+      "path": "assets/cards/m/m-78.jpeg",
+      "sha256": "63360f7c1f35bdda259232aa1543777547e67529de6676184a1d8286d80fcbca"
+    },
+    {
+      "path": "assets/cards/m/m-back.jpeg",
+      "sha256": "de1991e26af1df7c8f264304ce862a34b159ad297f85bc9946521ec0fd049bc3"
+    },
+    {
+      "path": "assets/icons/parchment-sun-blank.png",
+      "sha256": "9cd48fe85827804ca09e9c26929857b659b7bbf3e86ef010d4ff9c339ef524cc"
+    },
+    {
+      "path": "assets/icons/parchment-sun.png",
+      "sha256": "af881579c9ab8cdf84062f4616cd5321eb9e2334b9eaf0aa76eb8f912d07339f"
+    },
+    {
+      "path": "assets/icons/sky-face-celestial.png",
+      "sha256": "4c78d9a01e51c9d509e7496c8c3f2534fb1855868e02a56779c72cef76f340fd"
+    },
+    {
+      "path": "assets/icons/sky-face-ember.png",
+      "sha256": "74b8980e6cf7f4e107f646dca424a67150400f08548a0becdded2f44ea9fe5c5"
+    },
+    {
+      "path": "assets/icons/sky-face-grove.png",
+      "sha256": "8512690c760dfcc88009e80c11c20eed030e287cd385ff94d13e8529ba47247e"
     }
   ]
 }

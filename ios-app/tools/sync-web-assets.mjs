@@ -13,7 +13,7 @@ const check = process.argv.includes('--check');
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 
-if (manifest.schema !== 2) throw Error('Unsupported web asset manifest schema');
+if (manifest.schema !== 3) throw Error('Unsupported web asset manifest schema');
 if (!/^[a-f0-9]{40}$/.test(manifest.sourceCommit)) throw Error('Invalid source commit');
 const buildSourceCommit = git(['rev-parse', 'HEAD']);
 if (!/^[a-f0-9]{40}$/.test(buildSourceCommit)) throw Error('Invalid build source commit');
@@ -83,8 +83,8 @@ function transformSource(assetPath, sourceText) {
     );
     apply(
       '  if (document.readyState === "loading") {\n    document.addEventListener("DOMContentLoaded", init);\n  } else {\n    init();\n  }',
-      '  function startAfterBackupRecovery() {\n    var backup = globalThis.QuareiaIOSBackup;\n    if (!backup || !backup.ready || typeof backup.ready.then !== "function") { init(); return; }\n    backup.ready.then(function (result) {\n      if (result && result.recovered && globalThis.location && typeof globalThis.location.reload === "function") {\n        globalThis.location.reload();\n        return;\n      }\n      init();\n    }).catch(function () {\n      if (typeof backup.showRecoveryNotice === "function") backup.showRecoveryNotice();\n    });\n  }\n\n  if (document.readyState === "loading") {\n    document.addEventListener("DOMContentLoaded", startAfterBackupRecovery);\n  } else {\n    startAfterBackupRecovery();\n  }',
-      'gate app initialization on backup journal recovery'
+      '  function showHostInitializationFailure() {\n    var alert = document.getElementById("iosHostInitializationAlert");\n    if (!alert) {\n      alert = document.createElement("div");\n      alert.id = "iosHostInitializationAlert";\n      alert.setAttribute("role", "alert");\n      alert.setAttribute("aria-live", "assertive");\n      alert.style.cssText = "position:fixed;z-index:2147483647;inset:1rem;margin:auto;padding:1rem;max-width:42rem;height:fit-content;background:#fff4d6;color:#341f00;border:2px solid #9a5b00;border-radius:.75rem;box-shadow:0 1rem 3rem rgba(0,0,0,.45);font:600 1rem/1.5 system-ui,sans-serif";\n      document.body.prepend(alert);\n    }\n    alert.hidden = false;\n    alert.textContent = "无法初始化 iOS 宿主服务。为保护本机资源，本页面已停止启动。请完全退出并重新打开应用。 / iOS host initialization failed. This page did not start, to protect local resources. Fully quit and reopen the app.";\n  }\n\n  function startAfterHostAndBackupRecovery() {\n    var nativeAdapter = globalThis.QuareiaIOS;\n    var backup = globalThis.QuareiaIOSBackup;\n    if (!nativeAdapter || !nativeAdapter.ready || typeof nativeAdapter.ready.then !== "function") {\n      showHostInitializationFailure();\n      return;\n    }\n    if (!backup || !backup.ready || typeof backup.ready.then !== "function") {\n      showHostInitializationFailure();\n      return;\n    }\n    Promise.all([nativeAdapter.ready, backup.ready]).then(function (results) {\n      var backupResult = results[1];\n      if (backupResult && backupResult.recovered && globalThis.location && typeof globalThis.location.reload === "function") {\n        globalThis.location.reload();\n        return;\n      }\n      init();\n    }).catch(function () {\n      if (backup && typeof backup.isRecoveryRequired === "function" && backup.isRecoveryRequired()) {\n        if (typeof backup.showRecoveryNotice === "function") backup.showRecoveryNotice();\n        return;\n      }\n      showHostInitializationFailure();\n    });\n  }\n\n  if (document.readyState === "loading") {\n    document.addEventListener("DOMContentLoaded", startAfterHostAndBackupRecovery);\n  } else {\n    startAfterHostAndBackupRecovery();\n  }',
+      'gate app initialization on native host handshake and backup journal recovery'
     );
   }
 
@@ -179,6 +179,32 @@ for (const entry of manifest.files) {
   provenanceTransformations.push({ path: entry.path, steps: transformed.transformations });
 }
 
+const PUBLIC_BINARY_PATH = /^(?:assets\/cards\/(?:major-(?:0[0-9]|1[0-9]|2[01])|minor-(?:cups|pentacles|swords|wands)-(?:ace|two|three|four|five|six|seven|eight|nine|ten|page|knight|queen|king)|m\/m-(?:back|0[1-9]|[1-6][0-9]|7[0-8]))\.jpeg|assets\/icons\/(?:parchment-sun(?:-blank)?|sky-face-(?:celestial|ember|grove))\.png)$/;
+if (!Array.isArray(manifest.binaryFiles) || manifest.binaryFiles.length !== 162) {
+  throw Error('Public binary manifest must contain the exact 157-card and 5-theme-icon set');
+}
+for (const entry of manifest.binaryFiles) {
+  if (!entry || Object.keys(entry).sort().join(',') !== 'path,sha256' || !PUBLIC_BINARY_PATH.test(entry.path)) {
+    throw Error('Non-public binary path');
+  }
+  if (!/^[a-f0-9]{64}$/.test(entry.sha256)) throw Error('Invalid public binary hash');
+  if (expected.has(entry.path)) throw Error(`Duplicate output path: ${entry.path}`);
+  const source = `android-demo/app/src/main/assets/www/${entry.path}`;
+  const bytes = execFileSync('git', ['show', `${manifest.sourceCommit}:${source}`], {
+    cwd: root,
+    maxBuffer: 8 * 1024 * 1024
+  });
+  if (sha(bytes) !== entry.sha256) throw Error(`Source hash mismatch: ${entry.path}`);
+  expected.set(entry.path, bytes);
+  provenanceFiles.push({
+    path: entry.path,
+    source,
+    sourceSha256: entry.sha256,
+    outputSha256: entry.sha256
+  });
+  provenanceTransformations.push({ path: entry.path, steps: ['exact binary copy'] });
+}
+
 for (const entry of manifest.overlays) {
   if (!/^(?:js|css)\/[a-z0-9-]+\.(?:js|css)$/.test(entry.path)) throw Error('Non-public overlay path');
   if (!/^ios-app\/web\/[a-z0-9-]+\.(?:js|css)$/.test(entry.source)) throw Error('Invalid overlay source');
@@ -220,4 +246,4 @@ for (const [name, bytes] of expected) {
     fs.writeFileSync(target, bytes);
   }
 }
-console.log(`iOS public bundle ${check ? 'CHECK' : 'GENERATED'}: ${expected.size} files; Android source ${manifest.sourceCommit}; build source ${buildSourceCommit}; no artwork/private inputs`);
+console.log(`iOS public bundle ${check ? 'CHECK' : 'GENERATED'}: ${expected.size} files; Android source ${manifest.sourceCommit}; build source ${buildSourceCommit}; 157 public card JPEGs and 5 public theme PNGs exact-copied; no LXXXI/private inputs`);
