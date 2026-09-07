@@ -277,3 +277,36 @@ test('iOS touch controls reset a panned viewport and suppress clicks retargeted 
   assert.deepEqual(ui.getState().viewport, {zoom: 1, panX: 0, panY: 0});
   ui.exit();
 });
+
+test('confirmation controls open only from click, after the initiating touch completes', async context => {
+  const previous = globalThis.DivinationDialog;
+  let requests = 0;
+  globalThis.DivinationDialog = {request() { requests++; return Promise.resolve(false); }};
+  context.after(() => {
+    if (previous === undefined) delete globalThis.DivinationDialog;
+    else globalThis.DivinationDialog = previous;
+  });
+  function button() {
+    const handlers = new Map();
+    return {disabled: false, addEventListener: (type, callback) => handlers.set(type, callback),
+      emit(type) { handlers.get(type)?.({pointerType: 'touch', pointerId: 1, isPrimary: true,
+        button: 0, clientX: 20, clientY: 20, detail: 1}); },
+      getBoundingClientRect: () => ({left: 0, top: 0, right: 100, bottom: 100})};
+  }
+  const discard = button(), shuffle = button();
+  const ui = board.createController({platform: 'ios', draftApi: {},
+    document: {getElementById: id => ({freeBoardDiscardDraftBtn: discard, freeBoardShuffleBtn: shuffle})[id] || null}});
+  ui.enter({deckType: 'tarot', deckName: 'Synthetic', mode: 'upright-only', filterMode: 'mixed',
+    cards: [{id: 'major-0', deck: 'tarot', name: 'Synthetic'}]}, {restoreDraft: false});
+  ui.draw('major-0');
+  for (const control of [discard, shuffle]) {
+    const before = requests;
+    control.emit('pointerdown'); control.emit('pointerup');
+    assert.equal(requests, before, 'do not open modal early and retarget the following click onto its backdrop');
+    control.emit('click');
+    assert.equal(requests, before + 1);
+    await Promise.resolve();
+    assert.equal(ui.getState().cards.length, 1, 'cancelling confirmation preserves the board');
+  }
+  ui.exit();
+});
