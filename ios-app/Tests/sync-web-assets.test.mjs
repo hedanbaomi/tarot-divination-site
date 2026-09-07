@@ -53,6 +53,8 @@ test('exact iOS transforms use QuareiaNative adapters without Android bridge spo
   assert.match(read('js/menu.js'), /QuareiaIOS\.presentAbout\(\)/);
   assert.match(read('js/app.js'), /platform: "ios"/);
   assert.match(read('js/app.js'), /QuareiaIOSBackup/);
+  assert.match(read('js/app.js'), /backup\.showRecoveryNotice\(\)/);
+  assert.equal(read('js/app.js').includes('Local backup recovery failed'), false);
   assert.match(read('js/custom-spreads.js'), /platform !== "ios"/);
   assert.match(read('js/history-ui.js'), /exportText\("history"/);
   assert.match(read('js/history-ui.js'), /importText\("history"\)/);

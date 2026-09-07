@@ -44,7 +44,15 @@ final class WebBackupIntegrationTests: XCTestCase {
             entries: [{slotIndex: 0, layer: null, orientation: 'upright',
               card: {id: 'major-00', number: '00', name: 'Synthetic', arcana: 'major', suit: ''}}]
           });
-          target.history = DivinationHistoryRecords.createExportEnvelope([record], target.exportedAt);
+          const spatialInput = {id:'ios-backup-spatial',createdAt:record.createdAt,
+            deckType:'tarot',deckMode:'tarot',deckName:'Synthetic deck',orientationMode:'mixed',
+            filterMode:'mixed',overviewMethod:'not-applicable',cards:[{
+              cardId:'major-01',cardNumber:'01',cardName:'Synthetic',arcana:'major',suit:'',
+              orientation:'reversed',revealed:true,x:24,y:-18,boardRotation:90,z:1,drawOrder:1
+            }]};
+          const spatial = DivinationHistoryRecords.buildFreeformLayoutRecord(spatialInput);
+          const ordered = DivinationHistoryRecords.buildFreeformRecord({...spatialInput,id:'ios-backup-ordered'});
+          target.history = DivinationHistoryRecords.createExportEnvelope([record,spatial,ordered], target.exportedAt);
           target.settings = {theme: 'grove', locale: 'en'};
           let raw;
           const library = DivinationCustomSpreads.createLibrary({platform:'android', storage:{
@@ -70,12 +78,14 @@ final class WebBackupIntegrationTests: XCTestCase {
             try { await api.importBackup(broken); } catch (_) { rejected++; }
           }
           const after = await api.createSnapshot();
-          const equalPayload = value => JSON.stringify([value.history.records,value.customSpreads,value.draft,value.settings]);
+          const equalPayload = value => JSON.stringify([value.history.records.slice().sort((a,b)=>a.id.localeCompare(b.id)),value.customSpreads,value.draft,value.settings]);
           return {exact:equalPayload(target)===equalPayload(second),count:second.history.records.length, templates:second.customSpreads.items.length,
+            schemas:second.history.records.map(r=>r.schemaVersion).sort().join(','),
             draft:second.draft!==null, rejected, stable:equalPayload(first)===equalPayload(second)&&equalPayload(second)===equalPayload(after)};
         } finally { await api.importBackup(original); }
         """)
-        XCTAssertEqual(result["count"] as? Int, 1)
+        XCTAssertEqual(result["count"] as? Int, 3)
+        XCTAssertEqual(result["schemas"] as? String, "1,2,3")
         XCTAssertEqual(result["templates"] as? Int, 1)
         XCTAssertEqual(result["draft"] as? Bool, true)
         XCTAssertEqual(result["rejected"] as? Int, 4)

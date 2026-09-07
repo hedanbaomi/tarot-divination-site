@@ -188,14 +188,72 @@
     var journal = options.journal || createJournal(indexedDB);
     var history = options.history || createHistoryAccess(indexedDB, historyStoreApi, recordsApi);
     var activeOperation = null;
-    var mutating = false;
+    var operationMutating = false;
+    var recoveryRequired = false;
     var nativeMenuBound = false;
 
-    function setMutating(value) {
-      mutating = value;
+    function isMutating() {
+      return operationMutating || recoveryRequired;
+    }
+
+    function recoveryNoticeText() {
+      var english = environment.document && environment.document.documentElement &&
+        environment.document.documentElement.lang === "en";
+      if (!environment.document || !environment.document.documentElement ||
+          !environment.document.documentElement.lang) {
+        try { english = storage && storage.getItem(SETTINGS_KEYS.locale) === "en"; }
+        catch (_storageError) { english = false; }
+      }
+      return english
+        ? "Backup recovery is required. Local data is locked to prevent further changes. Restart the app to retry recovery; if this warning remains, stop using local data."
+        : "必须先恢复备份。为防止继续破坏本机数据，当前内容已锁定。请重新启动应用以重试恢复；如果此警告仍然存在，请停止使用本机数据。";
+    }
+
+    function showRecoveryNotice() {
+      var document = environment.document;
+      if (!document || !document.body || typeof document.createElement !== "function") return false;
+      var notice = typeof document.getElementById === "function"
+        ? document.getElementById("iosBackupRecoveryAlert") : null;
+      if (!notice) {
+        notice = document.createElement("dialog");
+        notice.id = "iosBackupRecoveryAlert";
+        notice.setAttribute("role", "alert");
+        notice.setAttribute("aria-live", "assertive");
+        notice.setAttribute("aria-atomic", "true");
+        if (notice.style) {
+          notice.style.position = "fixed";
+          notice.style.zIndex = "2147483647";
+          notice.style.inset = "1rem";
+          notice.style.margin = "auto";
+          notice.style.padding = "1rem";
+          notice.style.maxWidth = "42rem";
+          notice.style.height = "fit-content";
+          notice.style.background = "#fff4d6";
+          notice.style.color = "#341f00";
+          notice.style.border = "2px solid #9a5b00";
+          notice.style.borderRadius = "0.75rem";
+          notice.style.boxShadow = "0 1rem 3rem rgba(0,0,0,.45)";
+          notice.style.font = "600 1rem/1.5 system-ui, sans-serif";
+        }
+        if (typeof document.body.prepend === "function") document.body.prepend(notice);
+        else document.body.appendChild(notice);
+      }
+      notice.hidden = false;
+      notice.textContent = recoveryNoticeText();
+      if (typeof notice.showModal === "function" && !notice.open) {
+        try { notice.showModal(); } catch (_dialogError) {}
+      }
+      return true;
+    }
+
+    function updateMutationState() {
+      var value = isMutating();
+      if (recoveryRequired) showRecoveryNotice();
       if (environment.document && environment.document.documentElement) {
         if (value) environment.document.documentElement.setAttribute("data-backup-busy", "true");
         else environment.document.documentElement.removeAttribute("data-backup-busy");
+        if (recoveryRequired) environment.document.documentElement.setAttribute("data-backup-recovery-required", "true");
+        else environment.document.documentElement.removeAttribute("data-backup-recovery-required");
         if (environment.document.body) {
           if (value) {
             environment.document.body.setAttribute("aria-busy", "true");
@@ -211,6 +269,28 @@
       }
     }
 
+    function setMutating(value) {
+      operationMutating = value;
+      updateMutationState();
+    }
+
+    function requireRecovery() {
+      recoveryRequired = true;
+      updateMutationState();
+    }
+
+    function clearRecoveryRequired() {
+      recoveryRequired = false;
+      var document = environment.document;
+      var notice = document && typeof document.getElementById === "function"
+        ? document.getElementById("iosBackupRecoveryAlert") : null;
+      if (notice) {
+        if (typeof notice.close === "function" && notice.open) notice.close();
+        notice.hidden = true;
+      }
+      updateMutationState();
+    }
+
     async function withMutation(operation) {
       setMutating(true);
       try { return await operation(); }
@@ -219,6 +299,9 @@
 
     function exclusive(name, operation) {
       if (activeOperation !== null) return Promise.reject(fail("BACKUP_BUSY", "backup operation already in progress"));
+      if (recoveryRequired && name !== "recovery") {
+        return Promise.reject(fail("RECOVERY_REQUIRED", "backup recovery must complete before local data can be used"));
+      }
       activeOperation = name;
       return Promise.resolve()
         .then(operation)
@@ -343,16 +426,29 @@
     }
 
     async function recoverIfNeededUnsafe() {
-      dependenciesReady();
-      var pending = await journal.get();
-      if (!pending) return { recovered: false };
-      exactKeys(pending, ["key", "phase", "previous"], "journal");
-      if (pending.key !== JOURNAL_KEY || pending.phase !== "prepared") throw fail("INVALID_JOURNAL");
-      await withMutation(async function () {
-        await applySnapshot(pending.previous);
-        await journal.clear();
+      return withMutation(async function () {
+        try {
+          dependenciesReady();
+          var pending = await journal.get();
+          if (!pending) {
+            if (recoveryRequired) throw fail("RECOVERY_REQUIRED");
+            return { recovered: false };
+          }
+          try {
+            exactKeys(pending, ["key", "phase", "previous"], "journal");
+            if (pending.key !== JOURNAL_KEY || pending.phase !== "prepared") throw fail("INVALID_JOURNAL");
+          } catch (_journalError) {
+            throw fail("INVALID_JOURNAL");
+          }
+          await applySnapshot(pending.previous);
+          await journal.clear();
+          clearRecoveryRequired();
+          return { recovered: true };
+        } catch (error) {
+          requireRecovery();
+          throw error;
+        }
       });
-      return { recovered: true };
     }
 
     async function restoreUnsafe(input) {
@@ -368,6 +464,7 @@
             await applySnapshot(previous);
             await journal.clear();
           } catch (_rollbackError) {
+            requireRecovery();
             var rollbackFailure = fail("RESTORE_ROLLBACK_PENDING");
             rollbackFailure.cause = error;
             throw rollbackFailure;
@@ -519,7 +616,9 @@
     return Object.freeze({
       validate: validate,
       isBusy: function () { return activeOperation !== null; },
-      isMutating: function () { return mutating; },
+      isMutating: isMutating,
+      isRecoveryRequired: function () { return recoveryRequired; },
+      showRecoveryNotice: showRecoveryNotice,
       createSnapshot: function () { return exclusive("snapshot", function () { return withMutation(createSnapshotUnsafe); }); },
       serialize: function () { return exclusive("export", async function () { return JSON.stringify(await withMutation(createSnapshotUnsafe), null, 2); }); },
       restore: function (input) { return exclusive("restore", function () { return restoreUnsafe(input); }); },
@@ -531,7 +630,9 @@
   }
 
   var manager = createManager();
-  var ready = Promise.resolve().then(manager.recoverIfNeeded);
+  var ready = root && root.document
+    ? Promise.resolve().then(manager.recoverIfNeeded)
+    : Promise.resolve({ recovered: false });
   ready.catch(function () {});
   if (root && root.document) {
     var install = function () { ready.then(function () { manager.installUI(root.document); }).catch(function () {}); };
@@ -551,6 +652,8 @@
     validate: manager.validate,
     isBusy: manager.isBusy,
     isMutating: manager.isMutating,
+    isRecoveryRequired: manager.isRecoveryRequired,
+    showRecoveryNotice: manager.showRecoveryNotice,
     createSnapshot: manager.createSnapshot,
     serialize: manager.serialize,
     exportBackup: manager.serialize,

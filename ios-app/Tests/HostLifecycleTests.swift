@@ -3,6 +3,48 @@ import XCTest
 
 @MainActor
 final class HostLifecycleTests: XCTestCase {
+    func testMissingBundleServiceConfigurationStaysUnconfiguredWithoutNetwork() {
+        XCTAssertEqual(NativeHostServiceFactory.configuration(from: nil), .unconfigured)
+    }
+
+    func testValidExactBundleServiceConfigurationUsesOnlyTrustedHTTPSHosts() throws {
+        let configuration = NativeHostServiceFactory.configuration(from: [
+            "trustedHosts": ["api.example.test", "updates.example.test"],
+            "announcementsURL": "https://api.example.test/v1/announcements",
+            "telemetryURL": "https://api.example.test/v1/events",
+            "updateManifestURL": "https://updates.example.test/ios/manifest.json"
+        ] as [String: Any])
+        XCTAssertNotEqual(configuration, .unconfigured)
+        XCTAssertEqual(configuration.announcementsURL, URL(string: "https://api.example.test/v1/announcements"))
+        XCTAssertEqual(configuration.telemetryURL, URL(string: "https://api.example.test/v1/events"))
+        XCTAssertEqual(configuration.updateManifestURL, URL(string: "https://updates.example.test/ios/manifest.json"))
+        XCTAssertTrue(configuration.allowsServiceURL(try XCTUnwrap(configuration.announcementsURL)))
+        XCTAssertFalse(configuration.allowsServiceURL(URL(string: "https://untrusted.example.test/v1/events")!))
+    }
+
+    func testMalformedOrUnsafeBundleServiceConfigurationFailsClosed() {
+        let baseline: [String: Any] = [
+            "trustedHosts": ["api.example.test"],
+            "announcementsURL": "https://api.example.test/v1/announcements",
+            "telemetryURL": "https://api.example.test/v1/events",
+            "updateManifestURL": "https://api.example.test/ios/manifest.json"
+        ]
+        let rejected: [Any] = [
+            ["trustedHosts": ["api.example.test"]],
+            baseline.merging(["extra": true]) { _, new in new },
+            baseline.merging(["trustedHosts": "api.example.test"]) { _, new in new },
+            baseline.merging(["trustedHosts": ["API.example.test"]]) { _, new in new },
+            baseline.merging(["trustedHosts": ["api.example.test", "api.example.test"]]) { _, new in new },
+            baseline.merging(["announcementsURL": "http://api.example.test/v1/announcements"]) { _, new in new },
+            baseline.merging(["telemetryURL": "https://user@api.example.test/v1/events"]) { _, new in new },
+            baseline.merging(["updateManifestURL": "https://untrusted.example.test/manifest.json"]) { _, new in new },
+            baseline.merging(["updateManifestURL": 7]) { _, new in new }
+        ]
+        for value in rejected {
+            XCTAssertEqual(NativeHostServiceFactory.configuration(from: value), .unconfigured)
+        }
+    }
+
     func testHostInfoReportsCapabilitiesWithoutCreatingIdentityMetadata() async throws {
         let fixture = makeFixture()
         let result = try await fixture.host.handle(request(.hostInfo, .none))

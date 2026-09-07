@@ -69,6 +69,7 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
     private let services: HostServiceFacading
     private let isProbe: Bool
     private var selectedTheme = "celestial"
+    private var isShutdown = false
 
     init(
         services: HostServiceFacading = NativeHostServiceFactory.make(),
@@ -158,6 +159,14 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         nativeHost?.applicationWillResignActive()
     }
 
+    func shutdown() {
+        guard !isShutdown else { return }
+        isShutdown = true
+        nativeHost?.stop()
+        bridge?.stop()
+        webView?.configuration.userContentController.removeScriptMessageHandler(forName: NativeBridgeHandler.name)
+    }
+
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         bridge.beginNavigation(to: webView.url ?? pendingLocalNavigationURL)
     }
@@ -214,9 +223,12 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
     ) -> WKWebView? { nil }
 
     deinit {
-        nativeHost?.stop()
-        bridge?.stop()
-        webView?.configuration.userContentController.removeScriptMessageHandler(forName: NativeBridgeHandler.name)
+        let host = nativeHost
+        let bridgeHandler = bridge
+        Task { @MainActor in
+            host?.stop()
+            bridgeHandler?.stop()
+        }
     }
 
     private func loadLocalEntry() {

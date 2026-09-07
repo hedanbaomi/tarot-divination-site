@@ -299,7 +299,15 @@ final class NativeServicesFacade: HostServiceFacading {
 }
 
 enum NativeHostServiceFactory {
-    static func make(arguments: [String] = ProcessInfo.processInfo.arguments) -> HostServiceFacading {
+    static let bundleConfigurationKey = "QuareiaServices"
+    private static let bundleConfigurationKeys: Set<String> = [
+        "trustedHosts", "announcementsURL", "telemetryURL", "updateManifestURL"
+    ]
+
+    static func make(
+        arguments: [String] = ProcessInfo.processInfo.arguments,
+        bundle: Bundle = .main
+    ) -> HostServiceFacading {
         #if PUBLIC_TESTING
         if arguments.contains("-enable-loopback-service-fixture"),
            let baseURL = URL(string: "http://127.0.0.1:8787"),
@@ -308,9 +316,60 @@ enum NativeHostServiceFactory {
                explicitFixtureEnvironment: true,
                updateManifestPath: arguments.contains("-enable-loopback-update-fixture") ? "/v1/ios-update" : nil
            ) {
-            return NativeServicesFacade(configuration: configuration)
+            return NativeServicesFacade(configuration: configuration, bundle: bundle)
         }
         #endif
-        return NativeServicesFacade(configuration: .unconfigured)
+        return NativeServicesFacade(
+            configuration: configuration(from: bundle.object(forInfoDictionaryKey: bundleConfigurationKey)),
+            bundle: bundle
+        )
+    }
+
+    static func configuration(from value: Any?) -> ServiceConfiguration {
+        guard let object = value as? [String: Any],
+              Set(object.keys) == bundleConfigurationKeys,
+              let hosts = object["trustedHosts"] as? [String],
+              !hosts.isEmpty,
+              hosts.count <= 16,
+              Set(hosts).count == hosts.count,
+              hosts.allSatisfy(isValidTrustedHost),
+              let announcements = exactHTTPSURL(object["announcementsURL"]),
+              let telemetry = exactHTTPSURL(object["telemetryURL"]),
+              let updates = exactHTTPSURL(object["updateManifestURL"])
+        else { return .unconfigured }
+        return ServiceConfiguration.configured(
+            announcementsURL: announcements,
+            telemetryURL: telemetry,
+            updateManifestURL: updates,
+            trustedHosts: Set(hosts)
+        ) ?? .unconfigured
+    }
+
+    private static func exactHTTPSURL(_ value: Any?) -> URL? {
+        guard let raw = value as? String,
+              raw == raw.trimmingCharacters(in: .whitespacesAndNewlines),
+              (1...2_048).contains(raw.utf8.count),
+              let url = URL(string: raw),
+              url.scheme == "https",
+              url.host?.isEmpty == false,
+              (url.port == nil || url.port == 443),
+              url.user == nil,
+              url.password == nil,
+              url.fragment == nil else { return nil }
+        return url
+    }
+
+    private static func isValidTrustedHost(_ host: String) -> Bool {
+        guard host == host.lowercased(),
+              host == host.trimmingCharacters(in: .whitespacesAndNewlines),
+              (1...253).contains(host.utf8.count),
+              !host.hasSuffix(".") else { return false }
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-")
+        return labels.allSatisfy { label in
+            !label.isEmpty && label.utf8.count <= 63
+                && label.first != "-" && label.last != "-"
+                && label.unicodeScalars.allSatisfy(allowed.contains)
+        }
     }
 }

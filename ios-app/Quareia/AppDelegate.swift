@@ -28,4 +28,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     func applicationWillResignActive(_ application: UIApplication) {
         webViewController?.applicationWillResignActive()
     }
+
+    func applicationWillTerminate(_ application: UIApplication) {
+        webViewController?.shutdown()
+    }
 }
