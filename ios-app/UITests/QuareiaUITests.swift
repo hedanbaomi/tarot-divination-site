@@ -677,8 +677,8 @@ final class QuareiaUITests: XCTestCase {
             }
             scroll(scrollable, toward: next)
         }
-        let targetFrame = element.exists ? NSStringFromCGRect(element.frame) : "<absent>"
-        let scrollFrame = scrollable.exists ? NSStringFromCGRect(scrollable.frame) : "<absent>"
+        let targetFrame = element.exists ? String(describing: element.frame) : "<absent>"
+        let scrollFrame = scrollable.exists ? String(describing: scrollable.frame) : "<absent>"
         XCTFail(
             "Expected a known public control to become hittable; " +
                 "target.exists=\(element.exists); target.hittable=\(element.isHittable); " +
