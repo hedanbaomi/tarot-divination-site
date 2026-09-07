@@ -131,6 +131,7 @@ function transformSource(assetPath, sourceText) {
 
   if (assetPath === 'css/custom-spreads.css') {
     apply('.custom-spread-dialog[data-platform="android"] .custom-spread-window-controls', '.custom-spread-dialog:is([data-platform="android"], [data-platform="ios"]) .custom-spread-window-controls', 'apply mobile studio chrome on iOS');
+    apply('.custom-spread-code { min-height: 110px; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 0.75rem; }', '.custom-spread-code { min-height: 110px; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 0.75rem; }\n\n/* Keep editable text legible without iOS focus zoom shifting the modal. */\n.custom-spread-dialog[data-platform="ios"] input,\n.custom-spread-dialog[data-platform="ios"] textarea,\n.custom-spread-dialog[data-platform="ios"] select { font-size: max(16px, 1rem); }', 'prevent iOS studio input focus auto-zoom while preserving user zoom');
   }
 
   if (assetPath === 'css/free-board.css') {

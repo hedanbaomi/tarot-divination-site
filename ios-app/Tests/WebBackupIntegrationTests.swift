@@ -9,11 +9,17 @@ final class WebBackupIntegrationTests: XCTestCase {
     private var controller: WebAppViewController!
     private var window: UIWindow!
     private var web: WKWebView!
+    private var previousRoot: UIViewController?
+    private var previousHidden = false
+    private var previousKey = false
 
     override func setUp() async throws {
         controller = WebAppViewController(arguments: [])
-        window = UIWindow(frame: UIScreen.main.bounds)
-        window.rootViewController = controller
+        window = try XCTUnwrap((UIApplication.shared.delegate as? AppDelegate)?.window)
+        previousRoot = window.rootViewController
+        previousHidden = window.isHidden
+        previousKey = window.isKeyWindow
+        window.rootViewController = UINavigationController(rootViewController: controller)
         window.makeKeyAndVisible()
         controller.loadViewIfNeeded()
         web = try XCTUnwrap(controller.view as? WKWebView)
@@ -21,9 +27,12 @@ final class WebBackupIntegrationTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        web.stopLoading()
-        window.isHidden = true
-        window.rootViewController = nil
+        web?.stopLoading()
+        controller?.shutdown()
+        window?.rootViewController = previousRoot
+        window?.isHidden = previousHidden
+        if previousKey { window?.makeKeyAndVisible() }
+        previousRoot = nil
         web = nil
         controller = nil
         window = nil
@@ -178,15 +187,55 @@ final class WebBackupIntegrationTests: XCTestCase {
     }
 
     private func ready(requireNewDocument: Bool = false) async throws {
-        for _ in 0..<150 {
-            if !web.isLoading,
-               let result = try? await web.callAsyncJavaScript(
-                "if (!window.DivinationBackup || (requireNewDocument && window.iosOldDocument)) return false; await DivinationBackup.ready; return true;",
-                arguments: ["requireNewDocument": requireNewDocument], in: nil, contentWorld: .page), result as? Bool == true { return }
+        let started = ProcessInfo.processInfo.systemUptime
+        var lastState: [String: Any] = [:]
+        var lastError = "none"
+        while ProcessInfo.processInfo.systemUptime - started < 30 {
+            if !web.isLoading && web.accessibilityValue == "main-ready" {
+                let result = await readinessProbe()
+                switch result {
+                case .success(let value):
+                    lastState = value as? [String: Any] ?? [:]
+                    if lastState["backup"] as? String == "fulfilled",
+                       lastState["native"] as? String == "fulfilled",
+                       (!requireNewDocument || lastState["oldDocument"] as? Bool == false) { return }
+                case .failure(let error):
+                    let safeError = error as NSError
+                    lastError = "\(safeError.domain):\(safeError.code)"
+                }
+            }
             try await Task.sleep(nanoseconds: 100_000_000)
         }
-        XCTFail("Shipping WebKit backup API did not become ready")
+        XCTFail("WebKit readiness failed: elapsed=\(Int(ProcessInfo.processInfo.systemUptime - started)); loading=\(web.isLoading); progress=\(web.estimatedProgress); mainReady=\(web.accessibilityValue == "main-ready"); localEntry=\(web.url?.absoluteString == "quareia-app://app/index.html"); newDocumentRequired=\(requireNewDocument); phases=\(lastState); error=\(lastError)")
         throw NSError(domain: "WebBackupIntegrationTests", code: 1)
+    }
+
+    private func readinessProbe() async -> Result<Any, Error> {
+        await withCheckedContinuation { continuation in
+            var completed = false
+            let finish: (Result<Any, Error>) -> Void = { result in
+                guard !completed else { return }
+                completed = true
+                continuation.resume(returning: result)
+            }
+            web.callAsyncJavaScript("""
+            if (!window.iosReadinessState) window.iosReadinessState={native:'missing',backup:'missing'};
+            const state=window.iosReadinessState;
+            function watch(key,api) {
+              if(state[key]==='missing' && api && api.ready) {
+                state[key]='pending';
+                Promise.resolve(api.ready).then(()=>state[key]='fulfilled',()=>state[key]='rejected');
+              }
+            }
+            watch('native',window.QuareiaIOS);watch('backup',window.DivinationBackup);
+            return {native:state.native,backup:state.backup,document:document.readyState,
+              oldDocument:!!window.iosOldDocument,bridge:!!window.QuareiaNative,
+              initializationAlert:!!document.getElementById('iosHostInitializationAlert')};
+            """, arguments: [:], in: nil, contentWorld: .page, completionHandler: finish)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                finish(.failure(NSError(domain: "WebBackupReadinessProbeTimeout", code: 1)))
+            }
+        }
     }
 
     private func script(_ source: String) async throws -> [String: Any] {

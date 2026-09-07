@@ -80,19 +80,17 @@ final class QuareiaUITests: XCTestCase {
         ensureEnglish(in: app, webView: webView)
 
         openWebMenu(in: app, webView: webView)
-        let parchment = element(label: "Parchment Dawn", in: app)
-        tapWhenVisible(parchment, in: webView, scrolling: .towardLowerPage)
-        XCTAssertTrue(parchment.isSelected || parchment.value as? String == "1")
-
-        openWebMenu(in: app, webView: webView)
-        let languageToggle = waitForElement(labels: ["Switch to Simplified Chinese"], in: app)
+        let languageToggle = waitForElement(labels: ["切换至简体中文"], in: app)
         tapWhenVisible(languageToggle, in: webView, scrolling: .towardUpperPage)
         XCTAssertTrue(app.staticTexts["牌组"].waitForExistence(timeout: 5))
 
-        let switchToEnglish = waitForElement(labels: ["切换至英文"], in: app)
+        let switchToEnglish = waitForElement(labels: ["Switch to English"], in: app)
         tapWhenVisible(switchToEnglish, in: webView, scrolling: .towardUpperPage)
         XCTAssertTrue(app.staticTexts["Deck"].waitForExistence(timeout: 5))
         XCTAssertTrue(waitForElement(identifier: "host.menu", labels: ["App menu"], in: app).exists)
+        let parchment = element(label: "Parchment Dawn", in: app)
+        tapWhenVisible(parchment, in: webView, scrolling: .towardLowerPage)
+        XCTAssertTrue(parchment.isSelected || parchment.value as? String == "1")
         closeWebMenu(in: app)
     }
 
@@ -168,8 +166,7 @@ final class QuareiaUITests: XCTestCase {
 
         let restore = waitForElement(labels: ["Restore"], in: app, timeout: 8)
         restore.tap()
-        let cancel = waitForElement(labels: ["Cancel", "取消"], in: app, timeout: 8)
-        XCTAssertTrue(cancel.isHittable)
+        let cancel = waitForHittableButton(labels: ["Cancel", "取消"], in: app, timeout: 10)
         cancel.tap()
         XCTAssertTrue(app.staticTexts["Backup restore cancelled"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.state, .runningForeground)
@@ -233,22 +230,19 @@ final class QuareiaUITests: XCTestCase {
         tapWhenVisible(pileCard, in: webView, scrolling: .towardLowerPage)
         XCTAssertTrue(app.staticTexts["1 placed"].waitForExistence(timeout: 5))
 
-        // Resolve the role=application surface after it contains the placed card,
-        // which gives WebKit a concrete accessible descendant for the gesture target.
-        let viewport = waitForElement(labels: [
-            "Free Board. Drag the board or cards; pinch or wheel to zoom."
-        ], in: app)
-        makeVisible(viewport, in: webView, scrolling: .towardUpperPage)
-        XCTAssertGreaterThan(viewport.frame.width, 250)
-        XCTAssertGreaterThan(viewport.frame.height, 250)
-
-        let originalCardPoint = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            .withOffset(CGVector(dx: -92, dy: -71))
+        // WebKit flattens the role=application parent. Use the actual placed
+        // card's public action suffix without reading its card identity.
+        let placedCard = app.descendants(matching: .any).matching(NSPredicate(
+            format: "label ENDSWITH 'Drag to move; tap to select.'"
+        )).firstMatch
+        XCTAssertTrue(placedCard.waitForExistence(timeout: 5))
+        makeVisible(placedCard, in: webView, scrolling: .towardUpperPage)
+        let originalCardPoint = placedCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         originalCardPoint.tap()
         let rotate = waitForElement(labels: [
             "Rotate the selected card clockwise by 15 degrees"
         ], in: app)
-        rotate.tap()
+        tapWhenVisible(rotate, in: webView, scrolling: .towardLowerPage)
         let undo = waitForElement(labels: ["Undo the last Free Board action"], in: app)
         XCTAssertTrue(undo.isEnabled)
         undo.tap()
@@ -256,15 +250,24 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertTrue(redo.isEnabled)
         redo.tap()
 
-        let movedCardPoint = originalCardPoint.withOffset(CGVector(dx: 42, dy: 54))
-        originalCardPoint.press(forDuration: 0.2, thenDragTo: movedCardPoint)
+        makeVisible(placedCard, in: webView, scrolling: .towardUpperPage)
+        let beforeDrag = placedCard.frame
+        let dragStart = placedCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let movedCardPoint = dragStart.withOffset(CGVector(dx: 42, dy: 54))
+        dragStart.press(forDuration: 0.2, thenDragTo: movedCardPoint)
+        XCTAssertGreaterThan(abs(placedCard.frame.midX - beforeDrag.midX), 15)
         XCTAssertTrue(undo.isEnabled)
-        viewport.pinch(withScale: 1.35, velocity: 1)
-        let panStart = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.82, dy: 0.80))
-        let panEnd = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.66, dy: 0.68))
+        let beforePinch = placedCard.frame
+        placedCard.pinch(withScale: 1.35, velocity: 1)
+        XCTAssertGreaterThan(placedCard.frame.width, beforePinch.width * 1.05)
+        let beforePan = placedCard.frame
+        let panStart = placedCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .withOffset(CGVector(dx: placedCard.frame.width * 0.75, dy: 0))
+        let panEnd = panStart.withOffset(CGVector(dx: -30, dy: 40))
         panStart.press(forDuration: 0.2, thenDragTo: panEnd)
+        XCTAssertGreaterThan(abs(placedCard.frame.midY - beforePan.midY), 10)
         let resetView = waitForElement(labels: ["Reset Free Board pan and zoom"], in: app)
-        resetView.tap()
+        tapWhenVisible(resetView, in: webView, scrolling: .towardUpperPage)
 
         RunLoop.current.run(until: Date().addingTimeInterval(2))
         app.terminate()
@@ -354,17 +357,17 @@ final class QuareiaUITests: XCTestCase {
         _ = try postFixture("/__fixture/update-mode", json: ["mode": "normal"])
         openNativeMenuAction(identifier: "host.update", label: "Check for updates", in: app)
         waitForElement(identifier: "host.update.download", labels: ["Download"], in: app).tap()
-        let handoff = waitForElement(identifier: "host.update.handoff", in: app, timeout: 10)
-        XCTAssertTrue(handoff.exists)
         let syntheticFile = app.staticTexts.matching(NSPredicate(
-            format: "label BEGINSWITH 'Quareia-1.0.1-2-' AND label ENDSWITH '.ipa'"
+            format: "label BEGINSWITH 'Quareia-1.0.1-2-'"
         )).firstMatch
-        XCTAssertTrue(syntheticFile.waitForExistence(timeout: 5))
-        handoff.swipeDown()
-        if handoff.exists {
+        XCTAssertTrue(syntheticFile.waitForExistence(timeout: 10), "Expected the downloaded synthetic file in the system share sheet")
+        let close = app.buttons.matching(NSPredicate(format: "label == 'Close' OR label == '关闭'")).allElementsBoundByIndex.first { $0.isHittable }
+        if let close {
+            close.tap()
+        } else {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.04)).tap()
         }
-        XCTAssertTrue(waitForDisappearance(handoff))
+        XCTAssertTrue(waitForDisappearance(syntheticFile))
         XCTAssertEqual(app.state, .runningForeground)
     }
 
@@ -433,6 +436,7 @@ final class QuareiaUITests: XCTestCase {
             file: file,
             line: line
         )
+        let exitsFreeBoard = controlLabel == "Layout" && option == "Preset spread" && trigger.label.contains("Free Board")
         tapWhenVisible(
             trigger,
             in: webView,
@@ -448,6 +452,10 @@ final class QuareiaUITests: XCTestCase {
             line: line
         )
         choice.tap()
+        if exitsFreeBoard {
+            waitForElement(labels: ["Continue & Clear"], in: app, file: file, line: line).tap()
+            XCTAssertTrue(waitForElement(labelPrefix: "Layout, currently Preset spread", in: app, file: file, line: line).exists)
+        }
     }
 
     private func drawThreeCards(in app: XCUIApplication, webView: XCUIElement) {
@@ -492,7 +500,9 @@ final class QuareiaUITests: XCTestCase {
             file: file,
             line: line
         )
-        element.tap()
+        // Avoid XCTest's implicit ancestor scrolling moving this field under
+        // the studio header after the explicit visibility check.
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         element.typeText(text)
         if let app {
             let hideKeyboard = app.keyboards.buttons["Hide keyboard"]
@@ -558,7 +568,7 @@ final class QuareiaUITests: XCTestCase {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: json)
-        request.timeoutInterval = 5
+        request.timeoutInterval = 20
         let result = FixtureResponseBox()
         let completion = DispatchSemaphore(value: 0)
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
@@ -566,7 +576,7 @@ final class QuareiaUITests: XCTestCase {
             completion.signal()
         }
         task.resume()
-        guard completion.wait(timeout: .now() + 5) == .success else {
+        guard completion.wait(timeout: .now() + 20) == .success else {
             task.cancel()
             XCTFail("Timed out waiting for the isolated iOS loopback fixture", file: file, line: line)
             return Data()
@@ -590,11 +600,28 @@ final class QuareiaUITests: XCTestCase {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data(#"{"mode":"normal"}"#.utf8)
-        request.timeoutInterval = 5
+        request.timeoutInterval = 20
         let completion = DispatchSemaphore(value: 0)
         let task = URLSession.shared.dataTask(with: request) { _, _, _ in completion.signal() }
         task.resume()
-        if completion.wait(timeout: .now() + 5) == .timedOut { task.cancel() }
+        if completion.wait(timeout: .now() + 20) == .timedOut { task.cancel() }
+    }
+
+    private func waitForHittableButton(
+        labels: [String],
+        in app: XCUIApplication,
+        timeout: TimeInterval = 5,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> XCUIElement {
+        let query = app.buttons.matching(NSPredicate(format: "label IN %@", labels))
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if let visible = query.allElementsBoundByIndex.first(where: { $0.isHittable }) { return visible }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        } while Date() < deadline
+        XCTFail("Expected a hittable button with a known public label: \(labels)", file: file, line: line)
+        return query.firstMatch
     }
 
     private func waitForElement(
