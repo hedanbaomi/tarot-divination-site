@@ -170,6 +170,7 @@ final class HostPresentationCoordinator: NSObject, HostPresentationCoordinating,
         activeToken = token
         pickerIsImport = true
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: contentTypes(for: kind), asCopy: true)
+        picker.modalPresentationStyle = .fullScreen
         picker.delegate = self
         picker.allowsMultipleSelection = false
         picker.view.accessibilityIdentifier = accessibilityIdentifier

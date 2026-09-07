@@ -39,6 +39,7 @@ function transformSource(assetPath, sourceText) {
   };
 
   if (assetPath === 'index.html') {
+    apply('        <button class="btn btn-secondary" id="freeBoardResetViewBtn"', '        <button class="btn btn-secondary" id="freeBoardZoomOutBtn" type="button" data-i18n="freeBoard.zoomOut" data-i18n-aria-label="freeBoard.zoomOutAria">缩小</button>\n        <button class="btn btn-secondary" id="freeBoardZoomInBtn" type="button" data-i18n="freeBoard.zoomIn" data-i18n-aria-label="freeBoard.zoomInAria">放大</button>\n        <button class="btn btn-secondary" id="freeBoardResetViewBtn"', 'add accessible iOS board zoom controls');
     apply('  <script src="js/announcements.js?v=1"></script>\n', '', 'omit Android announcements bootstrap');
     apply('  <script src="js/telemetry-notice.js?v=20260731-system-locale"></script>\n', '', 'omit Android telemetry notice');
     apply('<head>', '<head>\n<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\' \'unsafe-inline\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' data:; connect-src \'none\'; frame-src \'none\'; object-src \'none\'; base-uri \'none\'; form-action \'none\'">', 'offline CSP');
@@ -58,6 +59,8 @@ function transformSource(assetPath, sourceText) {
   }
 
   if (assetPath === 'js/i18n.js') {
+    apply('      ,"freeBoard.resetView": "重置视图"', '      ,"freeBoard.zoomIn": "放大"\n      ,"freeBoard.zoomOut": "缩小"\n      ,"freeBoard.zoomInAria": "放大自由画板"\n      ,"freeBoard.zoomOutAria": "缩小自由画板"\n      ,"freeBoard.resetView": "重置视图"', 'localize iOS board zoom in Chinese');
+    apply('      "freeBoard.resetView": "Reset view",', '      "freeBoard.zoomIn": "Zoom in",\n      "freeBoard.zoomOut": "Zoom out",\n      "freeBoard.zoomInAria": "Zoom in on the Free Board",\n      "freeBoard.zoomOutAria": "Zoom out on the Free Board",\n      "freeBoard.resetView": "Reset view",', 'localize iOS board zoom in English');
     apply('  function syncNativeLocale() {\n    if (!hasStoredLocale()) return;', '  function syncNativeLocale() {', 'sync first-launch system locale to iOS native surfaces');
     apply(
       '    if (global.androidAbout && typeof global.androidAbout.setLocale === "function") {\n      global.androidAbout.setLocale(locale);\n    }',
@@ -116,6 +119,10 @@ function transformSource(assetPath, sourceText) {
   }
 
   if (assetPath === 'js/free-board-ui.js') {
+    apply('      resetView: options.resetView || byId(document, "freeBoardResetViewBtn"),', '      zoomIn: options.zoomIn || byId(document, "freeBoardZoomInBtn"),\n      zoomOut: options.zoomOut || byId(document, "freeBoardZoomOutBtn"),\n      resetView: options.resetView || byId(document, "freeBoardResetViewBtn"),', 'resolve iOS board zoom buttons');
+    apply('      if (elements.undo) elements.undo.disabled = !stateController.canUndo();', '      if (elements.zoomIn) elements.zoomIn.disabled = state.viewport.zoom >= clampZoom(Number.MAX_VALUE, modelApi);\n      if (elements.zoomOut) elements.zoomOut.disabled = state.viewport.zoom <= clampZoom(0, modelApi);\n      if (elements.undo) elements.undo.disabled = !stateController.canUndo();', 'reflect bounded board zoom availability');
+    apply('    function resetView() {', '    function zoomBoard(factor) {\n      var state = getState();\n      if (!state || (root.DivinationBackup && root.DivinationBackup.isMutating())) return null;\n      var rect = viewportRect(elements.viewport && elements.viewport.getBoundingClientRect());\n      var next = zoomAroundPoint(state.viewport, rect, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, state.viewport.zoom * factor, modelApi);\n      visualViewport = null;\n      return mutate("setViewport", [next], "button-zoom");\n    }\n\n    function resetView() {', 'zoom board around its center through the normal draft mutation path');
+    apply('      if (elements.resetView) elements.resetView.addEventListener("click", resetView);', '      if (elements.zoomIn) elements.zoomIn.addEventListener("click", function () { zoomBoard(1.25); });\n      if (elements.zoomOut) elements.zoomOut.addEventListener("click", function () { zoomBoard(0.8); });\n      if (elements.resetView) elements.resetView.addEventListener("click", resetView);', 'bind accessible iOS zoom controls');
     apply('    if (platform === "android") {', '    if (platform === "android" || platform === "ios") {', 'use mobile board placement on iOS');
     apply('    var platform = options.platform === "android" ? "android" : "web";', '    var platform = options.platform === "android" || options.platform === "ios" ? options.platform : "web";', 'recognize iOS Free Board UI');
   }

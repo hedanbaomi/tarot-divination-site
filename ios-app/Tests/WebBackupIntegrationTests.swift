@@ -22,7 +22,7 @@ final class WebBackupIntegrationTests: XCTestCase {
         window.rootViewController = UINavigationController(rootViewController: controller)
         window.makeKeyAndVisible()
         controller.loadViewIfNeeded()
-        web = try XCTUnwrap(controller.view as? WKWebView)
+        web = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? WKWebView }.first)
         try await ready()
     }
 

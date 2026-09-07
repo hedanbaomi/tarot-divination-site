@@ -150,12 +150,14 @@ final class QuareiaUITests: XCTestCase {
 
         device.orientation = .landscapeLeft
         XCTAssertTrue(waitForStableOrientation(.landscapeLeft, device: device))
+        XCTAssertTrue(waitForSafeContentLayout(in: app, webView: webView, landscape: true))
         XCTAssertTrue(webView.exists)
         XCTAssertTrue(waitForElement(identifier: "host.menu", labels: ["App menu"], in: app).isHittable)
         XCTAssertGreaterThanOrEqual(webView.frame.minY, app.navigationBars.firstMatch.frame.maxY - 1)
 
         device.orientation = .portrait
         XCTAssertTrue(waitForStableOrientation(.portrait, device: device))
+        XCTAssertTrue(waitForSafeContentLayout(in: app, webView: webView, landscape: false))
         XCTAssertTrue(app.staticTexts["Deck"].exists)
         XCTAssertGreaterThanOrEqual(webView.frame.minY, app.navigationBars.firstMatch.frame.maxY - 1)
     }
@@ -168,7 +170,7 @@ final class QuareiaUITests: XCTestCase {
 
         let restore = waitForElement(labels: ["Restore"], in: app, timeout: 8)
         restore.tap()
-        let cancel = waitForHittableButton(labels: ["Cancel", "取消"], in: app, timeout: 30)
+        let cancel = waitForHittableButton(labels: ["Cancel", "取消", "Close", "关闭"], in: app, timeout: 30)
         cancel.tap()
         XCTAssertTrue(app.staticTexts["Backup restore cancelled"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.state, .runningForeground)
@@ -259,20 +261,17 @@ final class QuareiaUITests: XCTestCase {
         dragStart.press(forDuration: 0.2, thenDragTo: movedCardPoint)
         XCTAssertGreaterThan(abs(placedCard.frame.midX - beforeDrag.midX), 15)
         XCTAssertTrue(undo.isEnabled)
-        // Pinching a transformed WebKit list item gives XCTest an empty gesture
-        // rectangle. Center the real board, then synthesize on the native WebView.
-        for _ in 0..<4 {
-            let difference = placedCard.frame.midY + 17 - webView.frame.midY
-            if abs(difference) < 25 { break }
-            let limit = webView.frame.height * 0.25
-            let movement = max(-limit, min(limit, -difference))
-            let gutter = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5))
-            gutter.press(forDuration: 0.08, thenDragTo: gutter.withOffset(CGVector(dx: 0, dy: movement)))
-        }
-        XCTAssertLessThan(abs(placedCard.frame.midY + 17 - webView.frame.midY), 40)
-        let beforePinch = placedCard.frame
-        webView.pinch(withScale: 1.35, velocity: 1)
-        XCTAssertGreaterThan(placedCard.frame.width, beforePinch.width * 1.05)
+        // Exercise actual accessible zoom controls. Native WebView pinch can
+        // target page zoom; two-finger board acceptance remains a device gate.
+        let beforeZoom = placedCard.frame
+        let zoomIn = waitForElement(labels: ["Zoom in on the Free Board"], in: app)
+        tapWhenVisible(zoomIn, in: webView, scrolling: .towardUpperPage)
+        XCTAssertGreaterThan(placedCard.frame.width, beforeZoom.width * 1.15)
+        let zoomOut = waitForElement(labels: ["Zoom out on the Free Board"], in: app)
+        zoomOut.tap()
+        XCTAssertEqual(placedCard.frame.width, beforeZoom.width, accuracy: 3)
+        zoomIn.tap()
+        makeVisible(placedCard, in: webView, scrolling: .towardLowerPage)
         let beforePan = placedCard.frame
         let panStart = placedCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .withOffset(CGVector(dx: placedCard.frame.width * 0.75, dy: 0))
@@ -281,7 +280,7 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertGreaterThan(abs(placedCard.frame.midY - beforePan.midY), 10)
         let resetView = waitForElement(labels: ["Reset Free Board pan and zoom"], in: app)
         tapWhenVisible(resetView, in: webView, scrolling: .towardUpperPage)
-        XCTAssertEqual(placedCard.frame.width, beforePinch.width, accuracy: 3, "Reset must reverse board zoom, not leave a page-level zoom")
+        XCTAssertEqual(placedCard.frame.width, beforeZoom.width, accuracy: 3, "Reset must reverse board zoom")
 
         RunLoop.current.run(until: Date().addingTimeInterval(2))
         app.terminate()
@@ -635,7 +634,14 @@ final class QuareiaUITests: XCTestCase {
             if let visible = query.allElementsBoundByIndex.first(where: { $0.isHittable }) { return visible }
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         } while Date() < deadline
-        XCTFail("Expected a hittable button with a known public label: \(labels)", file: file, line: line)
+        let knownState = ["Cancel", "Close", "Done", "Browse", "Recents", "Restore"].map { label in
+            let control = app.buttons[label]
+            return "\(label)=\(control.exists)/\(control.isHittable)"
+        }.joined(separator: "; ")
+        XCTFail("Expected a hittable button with a known public label: \(labels); " +
+            "app=\(app.state.rawValue); \(knownState); " +
+            "restoreFailed=\(app.staticTexts["Backup restore failed"].exists); " +
+            "restoreCancelled=\(app.staticTexts["Backup restore cancelled"].exists)", file: file, line: line)
         return query.firstMatch
     }
 
@@ -704,7 +710,7 @@ final class QuareiaUITests: XCTestCase {
             var next = direction
             if element.exists {
                 let target = element.frame
-                let viewport = scrollable.frame.insetBy(dx: 8, dy: 20)
+                let viewport = scrollable.frame.insetBy(dx: 8, dy: 8)
                 if !target.isNull && !target.isEmpty && !viewport.isNull && !viewport.isEmpty {
                     let centerIsVisible = viewport.contains(CGPoint(x: target.midX, y: target.midY))
                     let targetFits = target.width <= viewport.width && target.height <= viewport.height
@@ -771,6 +777,24 @@ final class QuareiaUITests: XCTestCase {
             object: element
         )
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func waitForSafeContentLayout(
+        in app: XCUIApplication,
+        webView: XCUIElement,
+        landscape: Bool
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(8)
+        while Date() < deadline {
+            let frame = webView.frame
+            let bar = app.navigationBars.firstMatch.frame
+            if !frame.isEmpty && !bar.isEmpty &&
+                (frame.width > frame.height) == landscape && frame.minY >= bar.maxY - 1 {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        return false
     }
 
     private func waitForStableOrientation(

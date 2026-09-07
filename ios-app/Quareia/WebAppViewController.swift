@@ -131,7 +131,16 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         webView.scrollView.keyboardDismissMode = .interactive
         webView.scrollView.contentInsetAdjustmentBehavior = .automatic
         webView.accessibilityIdentifier = "QuareiaWebView"
-        view = webView
+        let container = UIView()
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(webView)
+        NSLayoutConstraint.activate([
+            webView.topAnchor.constraint(equalTo: container.safeAreaLayoutGuide.topAnchor),
+            webView.leadingAnchor.constraint(equalTo: container.safeAreaLayoutGuide.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: container.safeAreaLayoutGuide.trailingAnchor),
+            webView.bottomAnchor.constraint(equalTo: container.safeAreaLayoutGuide.bottomAnchor)
+        ])
+        view = container
         configureMenu(locale: "zh-CN")
     }
 
