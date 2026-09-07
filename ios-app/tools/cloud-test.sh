@@ -67,19 +67,21 @@ python3 ios-app/tools/run-bounded.py 180 xcrun simctl launch --terminate-running
 echo 'SIMULATOR_LAUNCH_PASS'
 sleep 3
 python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log show --last 1m --predicate 'process == "Quareia" AND eventMessage CONTAINS "P0"' --style compact | tail -50
-# Run the gesture scenario first so a regression returns evidence promptly.
-# The remainder explicitly excludes only this already-executed test; no retry.
+# Run gesture and system-panel scenarios first for prompt failure evidence.
+# The remainder excludes exactly these already-executed tests; no retry.
 BOARD_TEST='QuareiaUITests/QuareiaUITests/testFreeBoardGesturesHistoryAndDraftRestore'
+UPDATE_TEST='QuareiaUITests/QuareiaUITests/testLoopbackUpdateDownloadCancelAndHandoff'
+FILES_TEST='QuareiaUITests/QuareiaUITests/testNativeFilesImportCanBeCancelled'
 python3 ios-app/tools/run-bounded.py 600 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
   -derivedDataPath ios-app/build/simulator -resultBundlePath ios-app/build/board-tests.xcresult \
-  -only-testing:"$BOARD_TEST" \
+  -only-testing:"$BOARD_TEST" -only-testing:"$UPDATE_TEST" -only-testing:"$FILES_TEST" \
   -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES test-without-building | tee ios-app/build/xcode-board-test.log
-echo 'PUBLIC_FREE_BOARD_UI_PASS'
+echo 'PUBLIC_CRITICAL_UI_PASS'
 python3 ios-app/tools/run-bounded.py 1200 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
   -derivedDataPath ios-app/build/simulator -resultBundlePath ios-app/build/public-tests.xcresult \
-  -skip-testing:"$BOARD_TEST" \
+  -skip-testing:"$BOARD_TEST" -skip-testing:"$UPDATE_TEST" -skip-testing:"$FILES_TEST" \
   -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES test-without-building | tee ios-app/build/xcode-test.log
 echo 'PUBLIC_SIMULATOR_TESTS_PASS'
 printf '\nDEVICE_ACCEPTANCE_PENDING\nPRIVATE_BUILD_BLOCKED\n'

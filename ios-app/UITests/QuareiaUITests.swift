@@ -170,8 +170,8 @@ final class QuareiaUITests: XCTestCase {
 
         let restore = waitForElement(labels: ["Restore"], in: app, timeout: 8)
         restore.tap()
-        let cancel = waitForHittableControl(labels: ["Cancel", "取消", "Close", "关闭"], in: app, timeout: 60)
-        cancel.tap()
+        let cancel = waitForFilesCancel(in: app)
+        cancel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.staticTexts["Backup restore cancelled"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.state, .runningForeground)
         XCTAssertTrue(webView.waitForExistence(timeout: 5))
@@ -226,7 +226,7 @@ final class QuareiaUITests: XCTestCase {
     }
 
     func testFreeBoardGesturesHistoryAndDraftRestore() {
-        let (app, webView) = launchRealApp(arguments: ["-board-event-diagnostics"])
+        let (app, webView) = launchRealApp()
         ensureEnglish(in: app, webView: webView)
         chooseOption("Free Board", controlLabel: "Layout", in: app, webView: webView)
 
@@ -267,23 +267,17 @@ final class QuareiaUITests: XCTestCase {
 
         makeVisible(placedCard, in: webView, scrolling: .towardUpperPage)
         let beforeDrag = placedCard.frame
-        printBoardDiagnostics(in: app, phase: "before-drag")
         let dragStart = placedCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let movedCardPoint = dragStart.withOffset(CGVector(dx: 42, dy: 54))
         dragStart.press(forDuration: 0.2, thenDragTo: movedCardPoint)
-        printBoardDiagnostics(in: app, phase: "after-drag")
-        XCTAssertGreaterThan(abs(placedCard.frame.midX - beforeDrag.midX), 15)
-        let committedDragX = placedCard.frame.midX
+        let committedDragX = beforeDrag.midX + 42
+        waitForPlacedCard(midX: committedDragX, in: app)
         XCTAssertTrue(undo.isEnabled)
         tapWhenVisible(undo, in: webView, scrolling: .towardUpperPage)
-        printBoardDiagnostics(in: app, phase: "after-undo")
-        XCTAssertTrue(placedCard.exists, "The placed card must still exist after undoing its drag")
-        XCTAssertEqual(placedCard.frame.midX, beforeDrag.midX, accuracy: 3, "Undo must restore the committed drag")
+        waitForPlacedCard(midX: beforeDrag.midX, in: app)
         redo.tap()
-        printBoardDiagnostics(in: app, phase: "after-redo")
-        XCTAssertEqual(placedCard.frame.midX, committedDragX, accuracy: 3, "Redo must restore the committed drag")
+        waitForPlacedCard(midX: committedDragX, in: app)
         tapWhenVisible(zoomIn, in: webView, scrolling: .towardUpperPage)
-        printBoardDiagnostics(in: app, phase: "after-zoom")
         assertBoardZoom(125, in: app)
         makeVisible(placedCard, in: webView, scrolling: .towardLowerPage)
         let beforePan = placedCard.frame
@@ -387,7 +381,9 @@ final class QuareiaUITests: XCTestCase {
         let syntheticFile = app.descendants(matching: .any).matching(NSPredicate(
             format: "label BEGINSWITH 'Quareia-1.0.1-2-'"
         )).firstMatch
-        XCTAssertTrue(syntheticFile.waitForExistence(timeout: 30), "Expected the downloaded synthetic file in the system share sheet")
+        let fileVisible = syntheticFile.waitForExistence(timeout: 60)
+        printSystemPanelGeometry(in: app, phase: "share-ready", fileElement: syntheticFile)
+        XCTAssertTrue(fileVisible, "Expected the downloaded synthetic file in the system share sheet")
         let close = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Close' OR label == '关闭' OR label == 'Cancel' OR label == '取消'")).allElementsBoundByIndex.first { $0.isHittable }
         if let close {
             close.tap()
@@ -395,15 +391,15 @@ final class QuareiaUITests: XCTestCase {
             // The native menu is outside the centered iPad activity popover.
             app.buttons["host.menu"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         } else {
-            // The file caption itself starts a file drag. Use the sheet's
-            // top grabber region above that caption for modal dismissal.
-            let sheet = app.descendants(matching: .any).matching(identifier: "host.update.handoff").firstMatch
-            let grabberY = sheet.exists && sheet.frame.minY > app.frame.minY + 40
-                ? sheet.frame.minY + 12 : syntheticFile.frame.minY - 24
-            let grabber = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: app.frame.width / 2, dy: max(12, grabberY - app.frame.minY)))
-            grabber.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
+            // Swipe the activity sheet's scroll surface, not the draggable
+            // LinkPresentation file caption. No second dismissal attempt.
+            let sheet = app.sheets.firstMatch
+            if sheet.exists { sheet.swipeDown() }
+            else { app.swipeDown() }
         }
-        XCTAssertTrue(waitForDisappearance(syntheticFile, timeout: 10))
+        let dismissed = waitForDisappearance(syntheticFile, timeout: 10)
+        if !dismissed { printSystemPanelGeometry(in: app, phase: "share-dismiss", fileElement: syntheticFile) }
+        XCTAssertTrue(dismissed)
         XCTAssertEqual(app.state, .runningForeground)
     }
 
@@ -451,8 +447,10 @@ final class QuareiaUITests: XCTestCase {
     private func ensureEnglish(in app: XCUIApplication, webView: XCUIElement) {
         if app.staticTexts["Deck"].exists { return }
         openWebMenu(in: app, webView: webView)
-        let toggle = waitForElement(labels: ["Switch to English"], in: app)
-        toggle.tap()
+        // A missing heading during initial accessibility layout does not prove
+        // the app is Chinese. Inspect the real language toggle before changing it.
+        let toggle = waitForElement(labels: ["Switch to English", "切换至简体中文"], in: app)
+        if toggle.label == "Switch to English" { toggle.tap() }
         XCTAssertTrue(app.staticTexts["Deck"].waitForExistence(timeout: 5))
         XCTAssertTrue(waitForElement(identifier: "host.menu", labels: ["App menu"], in: app).waitForExistence(timeout: 5))
         closeWebMenu(in: app)
@@ -661,6 +659,36 @@ final class QuareiaUITests: XCTestCase {
         if completion.wait(timeout: .now() + 20) == .timedOut { task.cancel() }
     }
 
+    private func waitForFilesCancel(in app: XCUIApplication) -> XCUIElement {
+        let candidates = app.descendants(matching: .any).matching(NSPredicate(
+            format: "label IN %@", ["Cancel", "取消", "Close", "关闭"]
+        ))
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            candidates.allElementsBoundByIndex.contains { self.isFilesNavigationControl($0, in: app) }
+        }, object: nil)
+        let result = XCTWaiter.wait(for: [ready], timeout: 60)
+        // Only known cancellation controls, never file names or directory items.
+        for control in candidates.allElementsBoundByIndex.prefix(6) {
+            print("FILES_CANCEL_CONTROL type=\(control.elementType.rawValue) frame=\(control.frame) hittable=\(control.isHittable)")
+        }
+        XCTAssertEqual(result, .completed, "Expected the Files navigation cancellation control")
+        return candidates.allElementsBoundByIndex.first { isFilesNavigationControl($0, in: app) } ?? candidates.firstMatch
+    }
+
+    private func isFilesNavigationControl(_ control: XCUIElement, in app: XCUIApplication) -> Bool {
+        guard control.exists && control.isEnabled else { return false }
+        let frame = control.frame
+        let bounds = app.frame
+        return !frame.isNull && !frame.isEmpty && bounds.contains(frame)
+            && frame.midY < bounds.minY + bounds.height * 0.35
+    }
+
+    private func printSystemPanelGeometry(in app: XCUIApplication, phase: String, fileElement: XCUIElement) {
+        let root = app.descendants(matching: .any).matching(identifier: "host.update.handoff").firstMatch
+        let sheet = app.sheets.firstMatch
+        print("SYSTEM_PANEL phase=\(phase) root=\(root.exists) rootFrame=\(root.exists ? root.frame : .zero) sheet=\(sheet.exists) sheetFrame=\(sheet.exists ? sheet.frame : .zero) file=\(fileElement.exists) fileFrame=\(fileElement.exists ? fileElement.frame : .zero)")
+    }
+
     private func waitForHittableControl(
         labels: [String],
         in app: XCUIApplication,
@@ -743,22 +771,20 @@ final class QuareiaUITests: XCTestCase {
             .firstMatch
     }
 
-    private func printBoardDiagnostics(in app: XCUIApplication, phase: String) {
-        let diagnostic = app.descendants(matching: .any).matching(NSPredicate(
-            format: "identifier == 'boardEventDiagnostics' OR label BEGINSWITH 'Board diagnostic '"
-        )).firstMatch
-        guard diagnostic.exists else {
-            print("BOARD_EVENT_DIAGNOSTIC phase=\(phase) absent")
-            return
-        }
-        let label = diagnostic.label
-        // The opt-in native test script emits only fixed keys, enums and numbers.
-        guard label.hasPrefix("Board diagnostic "), label.count <= 2000,
-              label.range(of: #"^[A-Za-z0-9_ .,:{}\[\]"+\-]+$"#, options: .regularExpression) != nil else {
-            print("BOARD_EVENT_DIAGNOSTIC phase=\(phase) invalid-format")
-            return
-        }
-        print("BOARD_EVENT_DIAGNOSTIC phase=\(phase) \(label)")
+    private func waitForPlacedCard(midX expected: CGFloat, in app: XCUIApplication,
+                                   file: StaticString = #filePath, line: UInt = #line) {
+        // WebKit may publish a new accessibility node after replacing the card
+        // DOM. Observe a fresh query until the actual geometry is available.
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let card = app.descendants(matching: .any).matching(NSPredicate(
+                format: "label ENDSWITH 'Drag to move; tap to select.'"
+            )).firstMatch
+            guard card.exists else { return false }
+            let frame = card.frame
+            return !frame.isNull && !frame.isEmpty && abs(frame.midX - expected) <= 3
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 8), .completed,
+                       "Expected the committed card geometry", file: file, line: line)
     }
 
     private enum ScrollDirection: Equatable { case towardUpperPage, towardLowerPage }
