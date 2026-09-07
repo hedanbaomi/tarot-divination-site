@@ -127,6 +127,8 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
     private let boardOnDemandDiagnostics: Bool
     #endif
     private var selectedTheme = "celestial"
+    private var selectedLocale = "zh-CN"
+    private var keyboardVisible = false
     private var isShutdown = false
 
     init(
@@ -220,6 +222,10 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Quareia"
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow),
+            name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide),
+            name: UIResponder.keyboardWillHideNotification, object: nil)
         loadLocalEntry()
         Task { [weak self] in
             guard let self else { return }
@@ -309,6 +315,7 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
     ) -> WKWebView? { nil }
 
     deinit {
+        NotificationCenter.default.removeObserver(self)
         let host = nativeHost
         let bridgeHandler = bridge
         Task { @MainActor in
@@ -328,6 +335,34 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         pendingLocalNavigationURL = url
         bridge.beginNavigation(to: url)
         webView.load(request)
+    }
+
+    @objc private func keyboardWillShow(_ notification: Notification) {
+        guard viewIfLoaded?.window != nil, !isShutdown else { return }
+        keyboardVisible = true
+        configureKeyboardDismiss()
+    }
+
+    @objc private func keyboardWillHide(_ notification: Notification) {
+        keyboardVisible = false
+        configureKeyboardDismiss()
+    }
+
+    private func configureKeyboardDismiss() {
+        guard keyboardVisible else {
+            navigationItem.leftBarButtonItem = nil
+            return
+        }
+        let button = UIBarButtonItem(title: HostMenuStrings(locale: selectedLocale).doneEditing,
+            style: .done, target: self, action: #selector(finishEditing))
+        button.accessibilityIdentifier = "host.keyboard.dismiss"
+        navigationItem.leftBarButtonItem = button
+    }
+
+    @objc private func finishEditing() {
+        // End the editing session, including the focused WebKit field. Merely
+        // hiding the system keyboard can leave focus and caret activity alive.
+        webView.endEditing(true)
     }
 
     private func configureMenu(locale: String) {
@@ -400,7 +435,9 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
     }
 
     private func applyLocale(_ locale: String) {
+        selectedLocale = locale
         configureMenu(locale: locale)
+        configureKeyboardDismiss()
     }
 
     private static let bridgeBootstrap = """
@@ -451,6 +488,7 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
 private struct HostMenuStrings {
     private let english: Bool
     init(locale: String) { english = locale == "en" }
+    var doneEditing: String { english ? "Done editing" : "完成编辑" }
     var menu: String { english ? "App menu" : "应用菜单" }
     var about: String { english ? "About" : "关于" }
     var privacy: String { english ? "Privacy" : "隐私" }

@@ -575,9 +575,15 @@ final class QuareiaUITests: XCTestCase {
             element.typeText(text)
         }
         if let app, app.keyboards.firstMatch.exists {
-            let dismiss = waitForHittableControl(labels: ["Done", "完成", "Hide keyboard", "隐藏键盘"], in: app)
+            let dismiss = app.buttons["host.keyboard.dismiss"]
+            XCTAssertTrue(dismiss.waitForExistence(timeout: 5), "Expected the native editing-completion action")
+            XCTAssertTrue(dismiss.isHittable)
             dismiss.tap()
             XCTAssertTrue(waitForDisappearance(app.keyboards.firstMatch))
+            XCTAssertTrue(waitForDisappearance(dismiss))
+            let retained = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", text), object: element)
+            XCTAssertEqual(XCTWaiter.wait(for: [retained], timeout: 5), .completed,
+                "Ending editing must preserve the complete synthetic input")
         }
     }
 
