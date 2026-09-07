@@ -226,7 +226,7 @@ final class QuareiaUITests: XCTestCase {
     }
 
     func testFreeBoardGesturesHistoryAndDraftRestore() {
-        let (app, webView) = launchRealApp()
+        let (app, webView) = launchRealApp(arguments: ["-board-event-diagnostics"])
         ensureEnglish(in: app, webView: webView)
         chooseOption("Free Board", controlLabel: "Layout", in: app, webView: webView)
 
@@ -267,17 +267,23 @@ final class QuareiaUITests: XCTestCase {
 
         makeVisible(placedCard, in: webView, scrolling: .towardUpperPage)
         let beforeDrag = placedCard.frame
+        printBoardDiagnostics(in: app, phase: "before-drag")
         let dragStart = placedCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let movedCardPoint = dragStart.withOffset(CGVector(dx: 42, dy: 54))
         dragStart.press(forDuration: 0.2, thenDragTo: movedCardPoint)
+        printBoardDiagnostics(in: app, phase: "after-drag")
         XCTAssertGreaterThan(abs(placedCard.frame.midX - beforeDrag.midX), 15)
         let committedDragX = placedCard.frame.midX
         XCTAssertTrue(undo.isEnabled)
         tapWhenVisible(undo, in: webView, scrolling: .towardUpperPage)
+        printBoardDiagnostics(in: app, phase: "after-undo")
+        XCTAssertTrue(placedCard.exists, "The placed card must still exist after undoing its drag")
         XCTAssertEqual(placedCard.frame.midX, beforeDrag.midX, accuracy: 3, "Undo must restore the committed drag")
         redo.tap()
+        printBoardDiagnostics(in: app, phase: "after-redo")
         XCTAssertEqual(placedCard.frame.midX, committedDragX, accuracy: 3, "Redo must restore the committed drag")
         tapWhenVisible(zoomIn, in: webView, scrolling: .towardUpperPage)
+        printBoardDiagnostics(in: app, phase: "after-zoom")
         assertBoardZoom(125, in: app)
         makeVisible(placedCard, in: webView, scrolling: .towardLowerPage)
         let beforePan = placedCard.frame
@@ -735,6 +741,24 @@ final class QuareiaUITests: XCTestCase {
         app.descendants(matching: .any)
             .matching(NSPredicate(format: "label == %@", label))
             .firstMatch
+    }
+
+    private func printBoardDiagnostics(in app: XCUIApplication, phase: String) {
+        let diagnostic = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier == 'boardEventDiagnostics' OR label BEGINSWITH 'Board diagnostic '"
+        )).firstMatch
+        guard diagnostic.exists else {
+            print("BOARD_EVENT_DIAGNOSTIC phase=\(phase) absent")
+            return
+        }
+        let label = diagnostic.label
+        // The opt-in native test script emits only fixed keys, enums and numbers.
+        guard label.hasPrefix("Board diagnostic "), label.count <= 2000,
+              label.range(of: #"^[A-Za-z0-9_ .,:{}\[\]"+\-]+$"#, options: .regularExpression) != nil else {
+            print("BOARD_EVENT_DIAGNOSTIC phase=\(phase) invalid-format")
+            return
+        }
+        print("BOARD_EVENT_DIAGNOSTIC phase=\(phase) \(label)")
     }
 
     private enum ScrollDirection: Equatable { case towardUpperPage, towardLowerPage }

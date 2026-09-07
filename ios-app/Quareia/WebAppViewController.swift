@@ -68,6 +68,9 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
     private var pendingLocalNavigationURL: URL?
     private let services: HostServiceFacading
     private let isProbe: Bool
+    #if PUBLIC_TESTING
+    private let boardEventDiagnostics: Bool
+    #endif
     private var selectedTheme = "celestial"
     private var isShutdown = false
 
@@ -78,6 +81,7 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         self.services = services
         #if PUBLIC_TESTING
         isProbe = arguments.contains("-probe")
+        boardEventDiagnostics = arguments.contains("-board-event-diagnostics")
         #else
         isProbe = false
         #endif
@@ -103,6 +107,15 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         ))
+        #if PUBLIC_TESTING
+        if boardEventDiagnostics {
+            userContentController.addUserScript(WKUserScript(
+                source: "window.__quareiaBoardDiagnostics = true;",
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            ))
+        }
+        #endif
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         configuration.userContentController = userContentController

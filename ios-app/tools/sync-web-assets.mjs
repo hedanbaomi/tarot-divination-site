@@ -119,6 +119,93 @@ function transformSource(assetPath, sourceText) {
   }
 
   if (assetPath === 'js/free-board-ui.js') {
+    const diagnosticSource = `
+    var boardDiagnostic = null;
+    var boardDiagnosticPending = false;
+    function scheduleBoardDiagnostic() {
+      if (!boardDiagnostic || boardDiagnosticPending) return;
+      boardDiagnosticPending = true;
+      root.setTimeout(function () {
+        boardDiagnosticPending = false;
+        var state = getState();
+        var first = state && state.cards[0];
+        var view = state && state.viewport;
+        var renderedCard = elements.world && elements.world.firstElementChild;
+        var cardRect = renderedCard ? renderedCard.getBoundingClientRect() : null;
+        function numeric(value) {
+          return Number.isFinite(value) ? Math.round(Math.max(-1000000, Math.min(1000000, value)) * 1000) / 1000 : 0;
+        }
+        var capture = Object.keys(pointers).some(function (id) {
+          try { return !!(elements.viewport && elements.viewport.hasPointerCapture && elements.viewport.hasPointerCapture(Number(id))); }
+          catch (_error) { return false; }
+        });
+        var snapshot = Object.assign({}, boardDiagnostic.counts, {
+          pointerType: boardDiagnostic.pointerType,
+          errorKind: boardDiagnostic.errorKind,
+          domX: numeric(cardRect && cardRect.x), domY: numeric(cardRect && cardRect.y),
+          domWidth: numeric(cardRect && cardRect.width), domHeight: numeric(cardRect && cardRect.height),
+          surface: boardDiagnostic.surface,
+          mutation: boardDiagnostic.mutation,
+          active: Math.min(9999, Object.keys(pointers).length),
+          gesture: gesture && ["card", "pan", "pinch"].indexOf(gesture.kind) >= 0 ? gesture.kind : "none",
+          visual: Math.min(9999, Object.keys(visualCards).length),
+          cards: Math.min(9999, state ? state.cards.length : 0),
+          x: numeric(first && first.x), y: numeric(first && first.y),
+          zoom: numeric(view && view.zoom), panX: numeric(view && view.panX), panY: numeric(view && view.panY),
+          undo: stateController && stateController.canUndo() ? 1 : 0,
+          redo: stateController && stateController.canRedo() ? 1 : 0,
+          rendered: numeric(elements.world ? elements.world.childElementCount : 0),
+          capture: capture ? 1 : 0
+        });
+        var text = "Board diagnostic " + JSON.stringify(snapshot);
+        if (boardDiagnostic.output.textContent !== text) boardDiagnostic.output.textContent = text;
+      }, 0);
+    }
+    function bindBoardDiagnostic() {
+      if (boardDiagnostic || !root || root.__quareiaBoardDiagnostics !== true || !document.body) return;
+      var output = document.createElement("span");
+      output.id = "boardEventDiagnostics";
+      output.setAttribute("role", "status");
+      output.setAttribute("aria-live", "polite");
+      output.setAttribute("aria-atomic", "true");
+      output.style.cssText = "position:fixed;left:2px;bottom:2px;width:260px;max-height:32px;overflow:hidden;font-size:4px;line-height:5px;pointer-events:none;z-index:2147483647";
+      document.body.appendChild(output);
+      boardDiagnostic = { output: output, counts: { down:0, move:0, up:0, cancel:0, lost:0, dragStart:0, dragEnd:0, undoClick:0, redoClick:0, zoomClick:0, errors:0 }, pointerType:"none", errorKind:"none", surface:"other", mutation:"none" };
+      function count(key) {
+        boardDiagnostic.counts[key] = Math.min(9999, boardDiagnostic.counts[key] + 1);
+        scheduleBoardDiagnostic();
+      }
+      function surface(target) {
+        if (elements.viewport && elements.viewport.contains(target)) return "viewport";
+        if (elements.undo && elements.undo.contains(target)) return "undo";
+        if (elements.redo && elements.redo.contains(target)) return "redo";
+        if ((elements.zoomIn && elements.zoomIn.contains(target)) || (elements.zoomOut && elements.zoomOut.contains(target))) return "zoom";
+        return "other";
+      }
+      [["pointerdown","down"],["pointermove","move"],["pointerup","up"],["pointercancel","cancel"],["lostpointercapture","lost"],["dragstart","dragStart"],["dragend","dragEnd"]].forEach(function (pair) {
+        document.addEventListener(pair[0], function (event) {
+          boardDiagnostic.pointerType = ["touch","mouse","pen"].indexOf(event.pointerType) >= 0 ? event.pointerType : "none";
+          boardDiagnostic.surface = surface(event.target);
+          count(pair[1]);
+        }, true);
+      });
+      [[elements.undo,"undoClick"],[elements.redo,"redoClick"],[elements.zoomIn,"zoomClick"],[elements.zoomOut,"zoomClick"]].forEach(function (pair) {
+        if (pair[0]) pair[0].addEventListener("click", function () { count(pair[1]); }, true);
+      });
+      function countError(error) {
+        var name = error && typeof error === "object" ? error.name : null;
+        boardDiagnostic.errorKind = ["TypeError", "ReferenceError", "RangeError", "Error", "SyntaxError"].indexOf(name) >= 0 ? name : "other";
+        count("errors");
+      }
+      root.addEventListener("error", function (event) { countError(event.error); }, true);
+      root.addEventListener("unhandledrejection", function (event) { countError(event.reason); });
+      scheduleBoardDiagnostic();
+    }
+`;
+    apply('    var invalidDraft = false;', '    var invalidDraft = false;\n' + diagnosticSource, 'add opt-in finite public board diagnostics');
+    apply('      bound = true;', '      bound = true;\n      bindBoardDiagnostic();', 'bind non-mutating board diagnostic observers');
+    apply('    function render() {', '    function render() {\n      scheduleBoardDiagnostic();', 'refresh finite diagnostics after board render');
+    apply('    function notifyChange(reason) {', '    function notifyChange(reason) {\n      if (boardDiagnostic) {\n        boardDiagnostic.mutation = ["move", "undo", "redo", "button-zoom", "viewport", "wheel-zoom", "draw", "reset-view"].indexOf(reason) >= 0 ? reason : "other";\n        scheduleBoardDiagnostic();\n      }', 'observe allowlisted mutation reason without content');
     const pointerStart = output.indexOf('    function handlePointerDown(event) {');
     const pointerEnd = output.indexOf('    function handleWheel(event) {', pointerStart);
     if (pointerStart < 0 || pointerEnd < 0) throw Error('Missing pointer event boundaries');
