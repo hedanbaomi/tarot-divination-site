@@ -126,6 +126,44 @@ function transformSource(assetPath, sourceText) {
     apply('      elements.selected.hidden = !selected;', '      if (elements.selectionStatus) {\n        var positionText = selected ? t("freeBoard.selectionPosition", {\n          x: Math.round(selected.x), y: Math.round(selected.y), rotation: Math.round(selected.boardRotation)\n        }) : "";\n        if (elements.selectionStatus.textContent !== positionText) elements.selectionStatus.textContent = positionText;\n      }\n      elements.selected.hidden = !selected;', 'announce committed coordinates without card identity or preview movement');
     apply('    function exit() {', '    function exit() {\n      if (elements.selectionStatus) elements.selectionStatus.textContent = "";', 'clear selected card position when leaving board');
     const diagnosticSource = `
+
+    if (root && root.__quareiaBoardOnDemandDiagnostics === true) {
+      root.__quareiaCaptureBoardDiagnostic = function () {
+        var boardDiagnostic = { native: false, counts: { down:0, move:0, up:0, cancel:0, lost:0, dragStart:0, dragEnd:0, undoClick:0, redoClick:0, zoomClick:0, errors:0 }, pointerX:0, pointerY:0, pointerType:"none", errorKind:"none", surface:"other", mutation:"snapshot" };
+        var state = getState();
+        var first = state && state.cards[0];
+        var view = state && state.viewport;
+        var renderedCard = !boardDiagnostic.native && elements.world && elements.world.firstElementChild;
+        var cardRect = renderedCard ? renderedCard.getBoundingClientRect() : null;
+        function numeric(value) {
+          return Number.isFinite(value) ? Math.round(Math.max(-1000000, Math.min(1000000, value)) * 1000) / 1000 : 0;
+        }
+        var capture = Object.keys(pointers).some(function (id) {
+          try { return !!(elements.viewport && elements.viewport.hasPointerCapture && elements.viewport.hasPointerCapture(Number(id))); }
+          catch (_error) { return false; }
+        });
+        var snapshot = Object.assign({}, boardDiagnostic.counts, {
+          pointerType: boardDiagnostic.pointerType,
+          lastPointerX: numeric(boardDiagnostic.pointerX), lastPointerY: numeric(boardDiagnostic.pointerY),
+          errorKind: boardDiagnostic.errorKind,
+          domX: numeric(cardRect && cardRect.x), domY: numeric(cardRect && cardRect.y),
+          domWidth: numeric(cardRect && cardRect.width), domHeight: numeric(cardRect && cardRect.height),
+          surface: boardDiagnostic.surface,
+          mutation: boardDiagnostic.mutation,
+          active: Math.min(9999, Object.keys(pointers).length),
+          gesture: gesture && ["card", "pan", "pinch"].indexOf(gesture.kind) >= 0 ? gesture.kind : "none",
+          visual: Math.min(9999, Object.keys(visualCards).length),
+          cards: Math.min(9999, state ? state.cards.length : 0),
+          x: numeric(first && first.x), y: numeric(first && first.y),
+          zoom: numeric(view && view.zoom), panX: numeric(view && view.panX), panY: numeric(view && view.panY),
+          undo: stateController && stateController.canUndo() ? 1 : 0,
+          redo: stateController && stateController.canRedo() ? 1 : 0,
+          rendered: numeric(elements.world ? elements.world.childElementCount : 0),
+          capture: capture ? 1 : 0
+        });
+        return snapshot;
+      };
+    }
     var boardDiagnostic = null;
     var boardDiagnosticPending = false;
     function scheduleBoardDiagnostic() {

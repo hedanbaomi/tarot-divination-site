@@ -21,7 +21,7 @@ private final class BoardDiagnosticMessageHandler: NSObject, WKScriptMessageHand
             "pointerType": ["none", "touch", "mouse", "pen"],
             "errorKind": ["none", "TypeError", "ReferenceError", "RangeError", "Error", "SyntaxError", "other"],
             "surface": ["viewport", "undo", "redo", "zoom", "other"],
-            "mutation": ["none", "move", "undo", "redo", "button-zoom", "viewport", "wheel-zoom", "draw", "reset-view", "other"],
+            "mutation": ["none", "snapshot", "move", "undo", "redo", "button-zoom", "viewport", "wheel-zoom", "draw", "reset-view", "other"],
             "gesture": ["none", "card", "pan", "pinch"]
         ]
         let numericKeys = countKeys.union(coordinateKeys).union(toggleKeys)
@@ -120,6 +120,7 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
     private let isProbe: Bool
     #if PUBLIC_TESTING
     private let boardEventDiagnostics: Bool
+    private let boardOnDemandDiagnostics: Bool
     #endif
     private var selectedTheme = "celestial"
     private var isShutdown = false
@@ -132,6 +133,7 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         #if PUBLIC_TESTING
         isProbe = arguments.contains("-probe")
         boardEventDiagnostics = arguments.contains("-board-event-diagnostics")
+        boardOnDemandDiagnostics = arguments.contains("-board-on-demand-diagnostics")
         #else
         isProbe = false
         #endif
@@ -158,9 +160,12 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
             forMainFrameOnly: true
         ))
         #if PUBLIC_TESTING
-        if boardEventDiagnostics {
+        if boardEventDiagnostics || boardOnDemandDiagnostics {
+            let diagnosticBootstrap = boardOnDemandDiagnostics
+                ? "window.__quareiaBoardOnDemandDiagnostics = true;"
+                : "window.__quareiaBoardDiagnostics = true; window.__quareiaBoardDiagnosticsNative = true;"
             userContentController.addUserScript(WKUserScript(
-                source: "window.__quareiaBoardDiagnostics = true; window.__quareiaBoardDiagnosticsNative = true;",
+                source: diagnosticBootstrap,
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: true
             ))
@@ -328,7 +333,7 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         button.accessibilityIdentifier = "host.menu"
         button.accessibilityLabel = strings.menu
         button.showsMenuAsPrimaryAction = true
-        button.menu = UIMenu(children: [
+        var actions: [UIMenuElement] = [
             menuAction(strings.about, identifier: "host.about") { [weak self] in _ = try? await self?.nativeHost.presentAbout() },
             menuAction(strings.privacy, identifier: "host.privacy") { [weak self] in _ = try? await self?.nativeHost.presentPrivacy() },
             menuAction(strings.announcements, identifier: "host.announcements") { [weak self] in _ = try? await self?.nativeHost.presentAnnouncements(manual: true) },
@@ -336,7 +341,15 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
             menuAction(strings.backup, identifier: "host.backup") { [weak self] in await self?.notifyWebMenu("backup") },
             menuAction(strings.export, identifier: "host.export") { [weak self] in await self?.notifyWebMenu("export") },
             menuAction(strings.importFile, identifier: "host.import") { [weak self] in await self?.notifyWebMenu("import") }
-        ])
+        ]
+        #if PUBLIC_TESTING
+        if boardOnDemandDiagnostics {
+            actions.append(menuAction("Capture board diagnostic", identifier: "host.boardDiagnostic") { [weak self] in
+                await self?.captureBoardDiagnostic()
+            })
+        }
+        #endif
+        button.menu = UIMenu(children: actions)
         navigationItem.rightBarButtonItem = UIBarButtonItem(customView: button)
     }
 
@@ -349,6 +362,16 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
             Task { @MainActor in await operation() }
         }
     }
+
+    #if PUBLIC_TESTING
+    private func captureBoardDiagnostic() async {
+        guard boardOnDemandDiagnostics, let url = webView.url, url.path == "/index.html",
+              BridgeContext.isTrustedDocumentURL(url) else { return }
+        _ = try? await webView.evaluateJavaScript(
+            "if (typeof window.__quareiaCaptureBoardDiagnostic === 'function') { window.webkit.messageHandlers.boardDiagnostics.postMessage(window.__quareiaCaptureBoardDiagnostic()); }"
+        )
+    }
+    #endif
 
     private func notifyWebMenu(_ action: String) async {
         guard ["backup", "export", "import"].contains(action),

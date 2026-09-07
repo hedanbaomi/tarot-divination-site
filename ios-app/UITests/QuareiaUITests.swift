@@ -236,8 +236,8 @@ final class QuareiaUITests: XCTestCase {
         ).exists)
     }
 
-    func testFreeBoardGesturesHistoryAndDraftRestore() {
-        let (app, webView) = launchRealApp(arguments: ["-board-event-diagnostics"])
+    func testFreeBoardGesturesHistoryAndDraftRestore() throws {
+        let (app, webView) = launchRealApp(arguments: ["-board-on-demand-diagnostics"])
         ensureEnglish(in: app, webView: webView)
         chooseOption("Free Board", controlLabel: "Layout", in: app, webView: webView)
 
@@ -277,16 +277,24 @@ final class QuareiaUITests: XCTestCase {
         redo.tap()
 
         makeVisible(placedCard, in: webView, scrolling: .towardUpperPage)
+        let committedPosition = waitForElement(labelPrefix: "Card position: X ", in: app)
+        let beforeCommittedX = try XCTUnwrap(Int(String(committedPosition.label
+            .dropFirst("Card position: X ".count).prefix(while: { $0 != "," }))))
         let beforeDrag = placedCard.frame
         let dragStart = placedCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let movedCardPoint = dragStart.withOffset(CGVector(dx: 42, dy: 54))
         dragStart.press(forDuration: 0.2, thenDragTo: movedCardPoint)
+        // Geometry can already reflect the uncommitted drag preview. Wait for
+        // the public committed-position status before requesting Undo.
+        waitForCommittedCardX(beforeCommittedX + 42, in: app)
         let committedDragX = beforeDrag.midX + 42
         waitForPlacedCard(midX: committedDragX, in: app)
         XCTAssertTrue(undo.isEnabled)
         tapWhenVisible(undo, in: webView, scrolling: .towardUpperPage)
+        waitForCommittedCardX(beforeCommittedX, in: app)
         waitForPlacedCard(midX: beforeDrag.midX, in: app)
         redo.tap()
+        waitForCommittedCardX(beforeCommittedX + 42, in: app)
         waitForPlacedCard(midX: committedDragX, in: app)
         tapWhenVisible(zoomIn, in: webView, scrolling: .towardUpperPage)
         assertBoardZoom(125, in: app)
@@ -815,8 +823,42 @@ final class QuareiaUITests: XCTestCase {
             let frame = card.frame
             return !frame.isNull && !frame.isEmpty && abs(frame.midX - expected) <= 3
         }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 8), .completed,
+        let result = XCTWaiter.wait(for: [ready], timeout: 8)
+        if result != .completed {
+            // Capture only after the unchanged geometry gate has already failed.
+            // The passing path runs without continuous diagnostics or sampling.
+            print("BOARD_GEOMETRY_FAILURE expectedMidX=\(expected)")
+            captureBoardAfterFailure(in: app)
+        }
+        XCTAssertEqual(result, .completed,
                        "Expected the committed card geometry", file: file, line: line)
+    }
+
+    private func waitForCommittedCardX(_ expected: Int, in app: XCUIApplication,
+                                       file: StaticString = #filePath, line: UInt = #line) {
+        let status = app.descendants(matching: .any).matching(NSPredicate(
+            format: "label BEGINSWITH %@", "Card position: X \(expected),"
+        )).firstMatch
+        let committed = status.waitForExistence(timeout: 8)
+        if !committed {
+            print("BOARD_COMMIT_FAILURE expectedX=\(expected)")
+            captureBoardAfterFailure(in: app)
+        }
+        XCTAssertTrue(committed, "Expected the committed selected-card position", file: file, line: line)
+    }
+
+    private func captureBoardAfterFailure(in app: XCUIApplication) {
+        let menu = app.buttons["host.menu"]
+        if menu.exists && menu.isHittable {
+            menu.tap()
+            let capture = app.descendants(matching: .any).matching(NSPredicate(
+                format: "label == 'Capture board diagnostic'"
+            )).firstMatch
+            if capture.waitForExistence(timeout: 3), capture.isHittable {
+                capture.tap()
+                RunLoop.current.run(until: Date().addingTimeInterval(1))
+            }
+        }
     }
 
     private enum ScrollDirection: Equatable { case towardUpperPage, towardLowerPage }
