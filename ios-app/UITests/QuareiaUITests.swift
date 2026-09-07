@@ -170,8 +170,11 @@ final class QuareiaUITests: XCTestCase {
 
         let restore = waitForElement(labels: ["Restore"], in: app, timeout: 8)
         restore.tap()
-        let cancel = waitForFilesCancel(in: app)
-        cancel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let cancelPoint = waitForFilesCancel(in: app)
+        captureFilesNavigation(in: app)
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(
+            dx: cancelPoint.x - app.frame.minX, dy: cancelPoint.y - app.frame.minY
+        )).tap()
         XCTAssertTrue(app.staticTexts["Backup restore cancelled"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.state, .runningForeground)
         XCTAssertTrue(webView.waitForExistence(timeout: 5))
@@ -659,28 +662,49 @@ final class QuareiaUITests: XCTestCase {
         if completion.wait(timeout: .now() + 20) == .timedOut { task.cancel() }
     }
 
-    private func waitForFilesCancel(in app: XCUIApplication) -> XCUIElement {
-        let candidates = app.descendants(matching: .any).matching(NSPredicate(
-            format: "label IN %@", ["Cancel", "取消", "Close", "关闭"]
-        ))
-        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            candidates.allElementsBoundByIndex.contains { self.isFilesNavigationControl($0, in: app) }
-        }, object: nil)
-        let result = XCTWaiter.wait(for: [ready], timeout: 60)
-        // Only known cancellation controls, never file names or directory items.
-        for control in candidates.allElementsBoundByIndex.prefix(6) {
-            print("FILES_CANCEL_CONTROL type=\(control.elementType.rawValue) frame=\(control.frame) hittable=\(control.isHittable)")
+    private func captureFilesNavigation(in app: XCUIApplication) {
+        // Public simulator evidence only: crop in memory to the Files navigation
+        // strip, excluding document contents and the app's card area. Never
+        // attach or export the original full-screen image or an xcresult bundle.
+        let source = app.screenshot().image
+        guard source.size.width > 0, source.size.height > 0 else { return }
+        let width = min(source.size.width, 800)
+        let scale = width / source.size.width
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(
+            size: CGSize(width: width, height: min(160, source.size.height) * scale), format: format
+        )
+        let strip = renderer.image { _ in
+            source.draw(in: CGRect(x: 0, y: 0, width: width, height: source.size.height * scale))
         }
-        XCTAssertEqual(result, .completed, "Expected the Files navigation cancellation control")
-        return candidates.allElementsBoundByIndex.first { isFilesNavigationControl($0, in: app) } ?? candidates.firstMatch
+        guard let data = strip.jpegData(compressionQuality: 0.65), data.count <= 96_000 else { return }
+        let encoded = Array(data.base64EncodedString())
+        for offset in stride(from: 0, to: encoded.count, by: 2000) {
+            print("FILES_NAV_IMAGE \(offset / 2000) \(String(encoded[offset..<min(offset + 2000, encoded.count)]))")
+        }
     }
 
-    private func isFilesNavigationControl(_ control: XCUIElement, in app: XCUIApplication) -> Bool {
-        guard control.exists && control.isEnabled else { return false }
-        let frame = control.frame
-        let bounds = app.frame
-        return !frame.isNull && !frame.isEmpty && bounds.contains(frame)
-            && frame.midY < bounds.minY + bounds.height * 0.35
+    private func waitForFilesCancel(in app: XCUIApplication) -> CGPoint {
+        var resolvedFrame = CGRect.null
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            // A remote Files snapshot can change its candidate count between
+            // reads. Resolve a fresh first match, then retain only its geometry.
+            let control = app.descendants(matching: .any).matching(NSPredicate(
+                format: "label IN %@", ["Cancel", "取消", "Close", "关闭"]
+            )).firstMatch
+            guard control.exists && control.isEnabled else { return false }
+            let frame = control.frame
+            let bounds = app.frame
+            guard !frame.isNull && !frame.isEmpty && bounds.contains(frame)
+                    && frame.midY < bounds.minY + bounds.height * 0.35 else { return false }
+            resolvedFrame = frame
+            return true
+        }, object: nil)
+        let result = XCTWaiter.wait(for: [ready], timeout: 60)
+        XCTAssertEqual(result, .completed, "Expected the Files navigation cancellation control")
+        print("FILES_CANCEL_CONTROL frame=\(resolvedFrame)")
+        return CGPoint(x: resolvedFrame.midX, y: resolvedFrame.midY)
     }
 
     private func printSystemPanelGeometry(in app: XCUIApplication, phase: String, fileElement: XCUIElement) {

@@ -39,6 +39,7 @@ function transformSource(assetPath, sourceText) {
   };
 
   if (assetPath === 'index.html') {
+    apply('        role="group" aria-label="所选卡牌控制" data-i18n-aria-label="freeBoard.selectedControlsAria">', '        role="group" aria-label="所选卡牌控制" data-i18n-aria-label="freeBoard.selectedControlsAria">\n        <span id="freeBoardSelectionStatus" role="status" aria-live="polite" aria-atomic="true"></span>', 'announce committed selected card position and rotation');
     apply('        <button class="btn btn-secondary" id="freeBoardResetViewBtn"', '        <button class="btn btn-secondary" id="freeBoardZoomOutBtn" type="button" data-i18n="freeBoard.zoomOut" data-i18n-aria-label="freeBoard.zoomOutAria">缩小</button>\n        <span id="freeBoardZoomStatus" role="status" aria-live="polite" aria-atomic="true">100%</span>\n        <button class="btn btn-secondary" id="freeBoardZoomInBtn" type="button" data-i18n="freeBoard.zoomIn" data-i18n-aria-label="freeBoard.zoomInAria">放大</button>\n        <button class="btn btn-secondary" id="freeBoardResetViewBtn"', 'add accessible iOS board zoom controls');
     apply('  <script src="js/announcements.js?v=1"></script>\n', '', 'omit Android announcements bootstrap');
     apply('  <script src="js/telemetry-notice.js?v=20260731-system-locale"></script>\n', '', 'omit Android telemetry notice');
@@ -59,6 +60,8 @@ function transformSource(assetPath, sourceText) {
   }
 
   if (assetPath === 'js/i18n.js') {
+    apply('      ,"freeBoard.resetView": "重置视图"', '      ,"freeBoard.selectionPosition": "卡牌位置：X {x}，Y {y}。旋转角度：{rotation} 度。"\n      ,"freeBoard.resetView": "重置视图"', 'localize selected card position in Chinese');
+    apply('      "freeBoard.resetView": "Reset view",', '      "freeBoard.selectionPosition": "Card position: X {x}, Y {y}. Rotation: {rotation} degrees.",\n      "freeBoard.resetView": "Reset view",', 'localize selected card position in English');
     apply('      ,"freeBoard.resetView": "重置视图"', '      ,"freeBoard.zoomLevel": "画板缩放：{percent}%"\n      ,"freeBoard.zoomIn": "放大"\n      ,"freeBoard.zoomOut": "缩小"\n      ,"freeBoard.zoomInAria": "放大自由画板"\n      ,"freeBoard.zoomOutAria": "缩小自由画板"\n      ,"freeBoard.resetView": "重置视图"', 'localize iOS board zoom in Chinese');
     apply('      "freeBoard.resetView": "Reset view",', '      "freeBoard.zoomLevel": "Board zoom: {percent}%",\n      "freeBoard.zoomIn": "Zoom in",\n      "freeBoard.zoomOut": "Zoom out",\n      "freeBoard.zoomInAria": "Zoom in on the Free Board",\n      "freeBoard.zoomOutAria": "Zoom out on the Free Board",\n      "freeBoard.resetView": "Reset view",', 'localize iOS board zoom in English');
     apply('  function syncNativeLocale() {\n    if (!hasStoredLocale()) return;', '  function syncNativeLocale() {', 'sync first-launch system locale to iOS native surfaces');
@@ -119,6 +122,9 @@ function transformSource(assetPath, sourceText) {
   }
 
   if (assetPath === 'js/free-board-ui.js') {
+    apply('      selected: options.selected || byId(document, "freeBoardSelectedControls"),', '      selectionStatus: options.selectionStatus || byId(document, "freeBoardSelectionStatus"),\n      selected: options.selected || byId(document, "freeBoardSelectedControls"),', 'resolve selected card live status');
+    apply('      elements.selected.hidden = !selected;', '      if (elements.selectionStatus) {\n        var positionText = selected ? t("freeBoard.selectionPosition", {\n          x: Math.round(selected.x), y: Math.round(selected.y), rotation: Math.round(selected.boardRotation)\n        }) : "";\n        if (elements.selectionStatus.textContent !== positionText) elements.selectionStatus.textContent = positionText;\n      }\n      elements.selected.hidden = !selected;', 'announce committed coordinates without card identity or preview movement');
+    apply('    function exit() {', '    function exit() {\n      if (elements.selectionStatus) elements.selectionStatus.textContent = "";', 'clear selected card position when leaving board');
     const diagnosticSource = `
     var boardDiagnostic = null;
     var boardDiagnosticPending = false;
