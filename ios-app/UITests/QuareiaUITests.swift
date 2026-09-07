@@ -235,6 +235,16 @@ final class QuareiaUITests: XCTestCase {
         tapWhenVisible(pileCard, in: webView, scrolling: .towardLowerPage)
         XCTAssertTrue(app.staticTexts["1 placed"].waitForExistence(timeout: 5))
 
+        // Exercise actual accessible zoom controls. Native WebView pinch can
+        // target page zoom; two-finger board acceptance remains a device gate.
+        assertBoardZoom(100, in: app)
+        let zoomIn = waitForElement(labels: ["Zoom in on the Free Board"], in: app)
+        tapWhenVisible(zoomIn, in: webView, scrolling: .towardUpperPage)
+        assertBoardZoom(125, in: app)
+        let zoomOut = waitForElement(labels: ["Zoom out on the Free Board"], in: app)
+        zoomOut.tap()
+        assertBoardZoom(100, in: app)
+
         // WebKit flattens the role=application parent. Use the actual placed
         // card's public action suffix without reading its card identity.
         let placedCard = app.descendants(matching: .any).matching(NSPredicate(
@@ -262,16 +272,8 @@ final class QuareiaUITests: XCTestCase {
         dragStart.press(forDuration: 0.2, thenDragTo: movedCardPoint)
         XCTAssertGreaterThan(abs(placedCard.frame.midX - beforeDrag.midX), 15)
         XCTAssertTrue(undo.isEnabled)
-        // Exercise actual accessible zoom controls. Native WebView pinch can
-        // target page zoom; two-finger board acceptance remains a device gate.
-        let zoomIn = waitForElement(labels: ["Zoom in on the Free Board"], in: app)
         tapWhenVisible(zoomIn, in: webView, scrolling: .towardUpperPage)
-        XCTAssertTrue(waitForElement(labels: ["Board zoom: 125%"], in: app).exists)
-        let zoomOut = waitForElement(labels: ["Zoom out on the Free Board"], in: app)
-        zoomOut.tap()
-        XCTAssertTrue(waitForElement(labels: ["Board zoom: 100%"], in: app).exists)
-        zoomIn.tap()
-        XCTAssertTrue(waitForElement(labels: ["Board zoom: 125%"], in: app).exists)
+        assertBoardZoom(125, in: app)
         makeVisible(placedCard, in: webView, scrolling: .towardLowerPage)
         let beforePan = placedCard.frame
         let panStart = placedCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
@@ -281,7 +283,7 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertGreaterThan(abs(placedCard.frame.midY - beforePan.midY), 10)
         let resetView = waitForElement(labels: ["Reset Free Board pan and zoom"], in: app)
         tapWhenVisible(resetView, in: webView, scrolling: .towardUpperPage)
-        XCTAssertTrue(waitForElement(labels: ["Board zoom: 100%"], in: app).exists)
+        assertBoardZoom(100, in: app)
 
         RunLoop.current.run(until: Date().addingTimeInterval(2))
         app.terminate()
@@ -667,6 +669,23 @@ final class QuareiaUITests: XCTestCase {
             "restoreFailed=\(app.staticTexts["Backup restore failed"].exists); " +
             "restoreCancelled=\(app.staticTexts["Backup restore cancelled"].exists)", file: file, line: line)
         return query.firstMatch
+    }
+
+    private func assertBoardZoom(_ percent: Int, in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        let label = "Board zoom: \(percent)%"
+        let result = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
+        if result.waitForExistence(timeout: 5) { return }
+        // Only fixed zoom labels/values: no hierarchy or reading/card content.
+        let statuses = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier == 'freeBoardZoomStatus' OR label BEGINSWITH 'Board zoom:'"
+        )).allElementsBoundByIndex.prefix(4).map { element -> String in
+            let value = element.value as? String ?? ""
+            let safeValue = value.range(of: "^(Board zoom: )?[0-9]{1,3}%$", options: .regularExpression) == nil ? "<not a zoom value>" : value
+            let safeLabel = element.label.range(of: "^Board zoom: [0-9]{1,3}%$", options: .regularExpression) == nil ? "<not a zoom label>" : element.label
+            return "label=\(safeLabel),value=\(safeValue),frame=\(element.frame)"
+        }
+        let zoomIn = app.buttons["Zoom in on the Free Board"]
+        XCTFail("Expected \(label); status=\(statuses); zoomInExists=\(zoomIn.exists); enabled=\(zoomIn.exists && zoomIn.isEnabled); frame=\(zoomIn.exists ? zoomIn.frame : .zero)", file: file, line: line)
     }
 
     private func waitForElement(

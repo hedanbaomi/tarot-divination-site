@@ -49,11 +49,13 @@ final class WebBackupIntegrationTests: XCTestCase {
           const before=width();
           scopedDocument.getElementById('freeBoardZoomInBtn').click();
           const enlarged=width();
+          const zoomLabel=scopedDocument.getElementById('freeBoardZoomStatus').textContent;
+          const labelMatches=zoomLabel===DivinationI18n.t('freeBoard.zoomLevel',{percent:125});
           scopedDocument.getElementById('freeBoardZoomOutBtn').click();
           const reduced=width();
           scopedDocument.getElementById('freeBoardZoomInBtn').click();
           scopedDocument.getElementById('freeBoardResetViewBtn').click();
-          return {before,enlarged,reduced,reset:width(),zoom:ui.getState().viewport.zoom};
+          return {before,enlarged,reduced,reset:width(),zoom:ui.getState().viewport.zoom,labelMatches};
         } finally {ui.exit();area.remove();}
         """)
         let before = try XCTUnwrap(result["before"] as? Double)
@@ -65,6 +67,7 @@ final class WebBackupIntegrationTests: XCTestCase {
         XCTAssertEqual(reduced, before, accuracy: 1)
         XCTAssertEqual(reset, before, accuracy: 1)
         XCTAssertEqual(result["zoom"] as? Double, 1)
+        XCTAssertEqual(result["labelMatches"] as? Bool, true)
     }
 
     func testNativeAndWebLocaleStayAlignedAtStartupAndAfterChange() async throws {

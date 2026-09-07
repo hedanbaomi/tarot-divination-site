@@ -97,7 +97,11 @@ final class ServicesIntegrationTests: XCTestCase {
 
         let updateDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("quareia-integration-update-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: updateDirectory) }
+        defer {
+            if FileManager.default.fileExists(atPath: updateDirectory.path) {
+                try? FileManager.default.removeItem(at: updateDirectory)
+            }
+        }
         let updates = UpdateService(
             configuration: configuration,
             httpClient: URLSessionHTTPClient(),
@@ -131,7 +135,11 @@ final class ServicesIntegrationTests: XCTestCase {
         let buildInfo = try XCTUnwrap(AppBuildInfo.current(locale: Locale(identifier: "en")))
         let updateDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("quareia-cancelled-update-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: updateDirectory) }
+        defer {
+            if FileManager.default.fileExists(atPath: updateDirectory.path) {
+                try? FileManager.default.removeItem(at: updateDirectory)
+            }
+        }
         let updates = UpdateService(
             configuration: configuration,
             httpClient: URLSessionHTTPClient(),
@@ -150,12 +158,19 @@ final class ServicesIntegrationTests: XCTestCase {
         var started = false
         var stateRequest = URLRequest(url: URL(string: "http://127.0.0.1:8787/__fixture/update-state")!)
         stateRequest.timeoutInterval = 2
-        for _ in 0..<100 {
-            let (data, response) = try await URLSession.shared.data(for: stateRequest)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { break }
-            if (try JSONSerialization.jsonObject(with: data) as? [String: Int])?["activeDownloads"] == 1 {
-                started = true
-                break
+        let readinessDeadline = ProcessInfo.processInfo.systemUptime + 15
+        while ProcessInfo.processInfo.systemUptime < readinessDeadline {
+            stateRequest.timeoutInterval = max(0.001, min(2, readinessDeadline - ProcessInfo.processInfo.systemUptime))
+            do {
+                let (data, response) = try await URLSession.shared.data(for: stateRequest)
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else { break }
+                if (try JSONSerialization.jsonObject(with: data) as? [String: Int])?["activeDownloads"] == 1 {
+                    started = true
+                    break
+                }
+            } catch let error as URLError where error.code == .timedOut {
+                // This read-only readiness probe may time out while the cold
+                // simulator is busy. The streaming request is started once.
             }
             try await Task<Never, Never>.sleep(nanoseconds: 100_000_000)
         }
