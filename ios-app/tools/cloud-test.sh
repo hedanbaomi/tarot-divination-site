@@ -6,7 +6,17 @@ mkdir -p ios-app/build
 export CLOUDFLARE_TELEMETRY_DISABLED=1 WRANGLER_SEND_METRICS=false
 (cd telemetry-worker && exec node tools/ios-local-fixture.mjs) > ios-app/build/local-fixture.log 2>&1 &
 FIXTURE_PID=$!
-trap 'kill "$FIXTURE_PID" 2>/dev/null || true; wait "$FIXTURE_PID" 2>/dev/null || true' EXIT
+cleanup() {
+  local cleanup_status=$?
+  if [ -n "${SIMULATOR_ID:-}" ]; then
+    python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log show --last 30m \
+      --predicate 'process == "Quareia" AND eventMessage BEGINSWITH "IOS_UI_STATE "' --style compact | tail -150 || true
+  fi
+  kill "$FIXTURE_PID" 2>/dev/null || true
+  wait "$FIXTURE_PID" 2>/dev/null || true
+  return "$cleanup_status"
+}
+trap cleanup EXIT
 python3 - <<'PY'
 import time, urllib.request
 for _ in range(120):

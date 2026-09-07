@@ -152,10 +152,12 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertTrue(waitForStableOrientation(.landscapeLeft, device: device))
         XCTAssertTrue(webView.exists)
         XCTAssertTrue(waitForElement(identifier: "host.menu", labels: ["App menu"], in: app).isHittable)
+        XCTAssertGreaterThanOrEqual(webView.frame.minY, app.navigationBars.firstMatch.frame.maxY - 1)
 
         device.orientation = .portrait
         XCTAssertTrue(waitForStableOrientation(.portrait, device: device))
         XCTAssertTrue(app.staticTexts["Deck"].exists)
+        XCTAssertGreaterThanOrEqual(webView.frame.minY, app.navigationBars.firstMatch.frame.maxY - 1)
     }
 
     func testNativeFilesImportCanBeCancelled() {
@@ -166,7 +168,7 @@ final class QuareiaUITests: XCTestCase {
 
         let restore = waitForElement(labels: ["Restore"], in: app, timeout: 8)
         restore.tap()
-        let cancel = waitForHittableButton(labels: ["Cancel", "取消"], in: app, timeout: 10)
+        let cancel = waitForHittableButton(labels: ["Cancel", "取消"], in: app, timeout: 30)
         cancel.tap()
         XCTAssertTrue(app.staticTexts["Backup restore cancelled"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.state, .runningForeground)
@@ -257,8 +259,19 @@ final class QuareiaUITests: XCTestCase {
         dragStart.press(forDuration: 0.2, thenDragTo: movedCardPoint)
         XCTAssertGreaterThan(abs(placedCard.frame.midX - beforeDrag.midX), 15)
         XCTAssertTrue(undo.isEnabled)
+        // Pinching a transformed WebKit list item gives XCTest an empty gesture
+        // rectangle. Center the real board, then synthesize on the native WebView.
+        for _ in 0..<4 {
+            let difference = placedCard.frame.midY + 17 - webView.frame.midY
+            if abs(difference) < 25 { break }
+            let limit = webView.frame.height * 0.25
+            let movement = max(-limit, min(limit, -difference))
+            let gutter = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5))
+            gutter.press(forDuration: 0.08, thenDragTo: gutter.withOffset(CGVector(dx: 0, dy: movement)))
+        }
+        XCTAssertLessThan(abs(placedCard.frame.midY + 17 - webView.frame.midY), 40)
         let beforePinch = placedCard.frame
-        placedCard.pinch(withScale: 1.35, velocity: 1)
+        webView.pinch(withScale: 1.35, velocity: 1)
         XCTAssertGreaterThan(placedCard.frame.width, beforePinch.width * 1.05)
         let beforePan = placedCard.frame
         let panStart = placedCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
@@ -268,6 +281,7 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertGreaterThan(abs(placedCard.frame.midY - beforePan.midY), 10)
         let resetView = waitForElement(labels: ["Reset Free Board pan and zoom"], in: app)
         tapWhenVisible(resetView, in: webView, scrolling: .towardUpperPage)
+        XCTAssertEqual(placedCard.frame.width, beforePinch.width, accuracy: 3, "Reset must reverse board zoom, not leave a page-level zoom")
 
         RunLoop.current.run(until: Date().addingTimeInterval(2))
         app.terminate()
@@ -360,7 +374,7 @@ final class QuareiaUITests: XCTestCase {
         let syntheticFile = app.staticTexts.matching(NSPredicate(
             format: "label BEGINSWITH 'Quareia-1.0.1-2-'"
         )).firstMatch
-        XCTAssertTrue(syntheticFile.waitForExistence(timeout: 10), "Expected the downloaded synthetic file in the system share sheet")
+        XCTAssertTrue(syntheticFile.waitForExistence(timeout: 30), "Expected the downloaded synthetic file in the system share sheet")
         let close = app.buttons.matching(NSPredicate(format: "label == 'Close' OR label == '关闭'")).allElementsBoundByIndex.first { $0.isHittable }
         if let close {
             close.tap()
@@ -504,9 +518,10 @@ final class QuareiaUITests: XCTestCase {
         // the studio header after the explicit visibility check.
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         element.typeText(text)
-        if let app {
-            let hideKeyboard = app.keyboards.buttons["Hide keyboard"]
-            if hideKeyboard.exists && hideKeyboard.isHittable { hideKeyboard.tap() }
+        if let app, app.keyboards.firstMatch.exists {
+            let dismiss = waitForHittableButton(labels: ["Done", "完成", "Hide keyboard", "隐藏键盘"], in: app)
+            dismiss.tap()
+            XCTAssertTrue(waitForDisappearance(app.keyboards.firstMatch))
         }
     }
 

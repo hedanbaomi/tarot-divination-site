@@ -553,6 +553,10 @@
       function setStatus(key) {
         statusKey = key;
         status.textContent = key ? copy()[key] : "";
+        if (key && environment.DivinationMenu && typeof environment.DivinationMenu.isOpen === "function" && environment.DivinationMenu.isOpen() &&
+            typeof status.scrollIntoView === "function") {
+          status.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
       }
       function localize() {
         var strings = copy();
@@ -602,8 +606,13 @@
         nativeMenuBound = true;
         environment.addEventListener("quareia-native-menu", function (event) {
           var action = event && event.detail && event.detail.action;
-          if (action === "backup") exportButton.click();
-          else if (action === "import") importButton.click();
+          if (action === "backup" || action === "import") {
+            if (environment.DivinationMenu && typeof environment.DivinationMenu.open === "function") {
+              environment.DivinationMenu.open();
+            }
+            if (action === "backup") exportButton.click();
+            else importButton.click();
+          }
           else if (action === "export") {
             var historyExport = document.getElementById("historyExportBtn");
             if (historyExport) historyExport.click();

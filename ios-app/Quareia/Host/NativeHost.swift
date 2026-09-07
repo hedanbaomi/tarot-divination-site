@@ -420,6 +420,7 @@ final class NativeHost {
     }
 
     func applicationDidBecomeActive(presentPrivacyIfNeeded: Bool) {
+        tracePublicHostUI("application.active")
         foregroundPresentationTask?.cancel()
         foregroundPresentationTask = Task { [weak self] in
             guard let self else { return }
@@ -433,6 +434,7 @@ final class NativeHost {
     }
 
     func applicationWillResignActive() {
+        tracePublicHostUI("application.inactive")
         foregroundPresentationTask?.cancel()
         foregroundPresentationTask = nil
         presenter.cancelActivePresentation()

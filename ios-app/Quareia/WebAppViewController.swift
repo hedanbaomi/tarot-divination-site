@@ -82,6 +82,7 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         isProbe = false
         #endif
         super.init(nibName: nil, bundle: nil)
+        edgesForExtendedLayout = []
     }
 
     @available(*, unavailable)

@@ -1,6 +1,12 @@
 import UIKit
 import UniformTypeIdentifiers
 
+func tracePublicHostUI(_ event: StaticString) {
+    #if PUBLIC_TESTING
+    NSLog("IOS_UI_STATE %@", String(describing: event))
+    #endif
+}
+
 enum HostPresentationOutcome: String, Equatable {
     case success, cancelled, failure
 }
@@ -156,6 +162,7 @@ final class HostPresentationCoordinator: NSObject, HostPresentationCoordinating,
     }
 
     func presentImport(kind: BridgeFileKind, accessibilityIdentifier: String) async throws -> HostFileSelection {
+        tracePublicHostUI("import.begin")
         guard isActiveForeground, let presenter = topPresenter(), activeToken == nil else {
             throw NativeHostError.presentationBusy
         }
@@ -175,11 +182,14 @@ final class HostPresentationCoordinator: NSObject, HostPresentationCoordinating,
                 }
                 activeCancellation = { [weak self, weak picker] in
                     guard let self, self.activeToken == token else { return }
+                    tracePublicHostUI("picker.cancelled_by_task")
                     self.clearActive()
                     picker?.dismiss(animated: false)
                     continuation.resume(returning: HostFileSelection(outcome: .cancelled, url: nil))
                 }
-                presenter.present(picker, animated: !UIAccessibility.isReduceMotionEnabled)
+                presenter.present(picker, animated: !UIAccessibility.isReduceMotionEnabled) {
+                    tracePublicHostUI("picker.presented")
+                }
             }
         }, onCancel: { [weak self] in
             Task { @MainActor in self?.cancelActivePresentation() }
@@ -293,10 +303,12 @@ final class HostPresentationCoordinator: NSObject, HostPresentationCoordinating,
     }
 
     func cancelActivePresentation() {
+        tracePublicHostUI("presentation.cancel_requested")
         activeCancellation?()
     }
 
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        tracePublicHostUI("picker.cancelled_by_user")
         pickerCompletion?(HostFileSelection(outcome: .cancelled, url: nil))
     }
 
@@ -313,6 +325,7 @@ final class HostPresentationCoordinator: NSObject, HostPresentationCoordinating,
     }
 
     private func presentShare(url: URL, accessibilityIdentifier: String) async throws -> HostPresentationOutcome {
+        tracePublicHostUI("share.begin")
         guard isActiveForeground, let presenter = topPresenter(), activeToken == nil else {
             throw NativeHostError.presentationBusy
         }
@@ -331,6 +344,7 @@ final class HostPresentationCoordinator: NSObject, HostPresentationCoordinating,
                 )
                 activity.popoverPresentationController?.permittedArrowDirections = []
                 activity.completionWithItemsHandler = { [weak self] _, completed, _, error in
+                    tracePublicHostUI("share.completed")
                     Task { @MainActor in
                         guard let self, self.activeToken == token else { return }
                         self.clearActive()
@@ -339,11 +353,14 @@ final class HostPresentationCoordinator: NSObject, HostPresentationCoordinating,
                 }
                 activeCancellation = { [weak self, weak activity] in
                     guard let self, self.activeToken == token else { return }
+                    tracePublicHostUI("share.cancelled_by_task")
                     self.clearActive()
                     activity?.dismiss(animated: false)
                     continuation.resume(returning: .cancelled)
                 }
-                presenter.present(activity, animated: !UIAccessibility.isReduceMotionEnabled)
+                presenter.present(activity, animated: !UIAccessibility.isReduceMotionEnabled) {
+                    tracePublicHostUI("share.presented")
+                }
             }
         }, onCancel: { [weak self] in
             Task { @MainActor in self?.cancelActivePresentation() }

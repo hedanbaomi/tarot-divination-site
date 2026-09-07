@@ -129,7 +129,7 @@
     {
       "path": "js/ios-backup.js",
       "source": "ios-app/web/ios-backup.js",
-      "sha256": "77e0abb18aa63a4618ea00204031f607b29f8a770c82f1411b1a69ff4ecb318b"
+      "sha256": "cdc0060ed6a182b99fab86c405af72e2eb866b2ecfa9f063df4f2551676011ac"
     }
   ],
   "binaryFiles": [

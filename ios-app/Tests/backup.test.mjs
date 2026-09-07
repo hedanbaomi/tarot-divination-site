@@ -92,6 +92,7 @@ function fakeDocument() {
       id: initialID,
       textContent: '',
       clickCount: 0,
+      scrollCount: 0,
       lastClick: Promise.resolve(),
       children: [],
       inert: false,
@@ -109,6 +110,7 @@ function fakeDocument() {
       prepend(child) { this.children.unshift(child); },
       showModal() { this.open = true; },
       close() { this.open = false; },
+      scrollIntoView() { this.scrollCount += 1; },
       click() {
         this.clickCount += 1;
         this.lastClick = Promise.all((listeners.get('click') || []).map(listener => listener({ preventDefault() {} })));
@@ -399,8 +401,10 @@ test('native menu actions map to full backup export, history export, and full ba
   const dom = fakeDocument();
   const listeners = new Map();
   const nativeCalls = [];
+  let menuOpen = false;
   const environment = {
     document: dom.document,
+    DivinationMenu: { open() { menuOpen = true; }, isOpen() { return menuOpen; } },
     addEventListener(type, listener) { listeners.set(type, listener); },
     dispatchEvent() {},
     CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } }
@@ -422,14 +426,21 @@ test('native menu actions map to full backup export, history export, and full ba
   onMenu({ detail: { action: 'backup' } });
   await dom.document.getElementById('iosBackupExportBtn').lastClick;
   assert.equal(dom.document.getElementById('iosBackupStatus').textContent, 'Backup exported');
+  assert.equal(menuOpen, true);
+  assert.ok(dom.document.getElementById('iosBackupStatus').scrollCount > 0);
   dom.document.documentElement.lang = 'zh-CN';
   listeners.get('quareia:languagechange')();
   assert.equal(dom.document.getElementById('iosBackupStatus').textContent, '完整备份已导出');
   dom.document.documentElement.lang = 'en';
   listeners.get('quareia:languagechange')();
   onMenu({ detail: { action: 'export' } });
+  menuOpen = false;
+  const previousScrolls = dom.document.getElementById('iosBackupStatus').scrollCount;
   onMenu({ detail: { action: 'import' } });
   await dom.document.getElementById('iosBackupImportBtn').lastClick;
+  assert.equal(menuOpen, true);
+  assert.equal(dom.document.getElementById('iosBackupStatus').textContent, 'Backup restore cancelled');
+  assert.ok(dom.document.getElementById('iosBackupStatus').scrollCount > previousScrolls);
 
   assert.deepEqual(nativeCalls, [['export', 'backup'], ['import', 'backup']]);
   assert.equal(dom.historyExport.clickCount, 1);
