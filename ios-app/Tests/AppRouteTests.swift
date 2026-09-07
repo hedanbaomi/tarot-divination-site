@@ -39,10 +39,25 @@ final class AppRouteTests: XCTestCase {
             "quareia-app://app:444/index.html",
             "quareia-app://user@app/index.html"
         ]
-        rejectedURLs.forEach { XCTAssertEqual(route.response(for: request($0)).statusCode, 404, $0) }
-        ["POST", "HEAD", "get"].forEach {
-            XCTAssertEqual(route.response(for: request("quareia-app://app/index.html", method: $0)).statusCode, 404)
+        rejectedURLs.forEach {
+            XCTAssertEqual(route.response(for: request($0)).statusCode, 404, "origin case: \($0)")
         }
+        ["POST", "HEAD"].forEach {
+            XCTAssertEqual(
+                route.response(for: request("quareia-app://app/index.html", method: $0)).statusCode,
+                404,
+                "URLRequest method case: \($0)"
+            )
+        }
+        let url = URL(string: "quareia-app://app/index.html")!
+        XCTAssertEqual(route.response(for: url, method: "get").statusCode, 404, "raw method case: get")
+    }
+
+    func testURLRequestCanonicalizesLowercaseGETBeforeRouteBoundary() {
+        let route = makeRoute()
+        let canonicalized = request("quareia-app://app/index.html", method: "get")
+        XCTAssertEqual(canonicalized.httpMethod, "GET")
+        XCTAssertEqual(route.response(for: canonicalized).statusCode, 200)
     }
 
     func testEncodedAndLiteralTraversalFailBeforePublicStore() {

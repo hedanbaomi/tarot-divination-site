@@ -132,7 +132,11 @@ struct AppRoute {
     }
 
     func response(for request: URLRequest) -> RouteResponse {
-        guard request.httpMethod == "GET", let url = request.url, isExactOrigin(url) else {
+        response(for: request.url, method: request.httpMethod)
+    }
+
+    func response(for url: URL?, method: String?) -> RouteResponse {
+        guard method == "GET", let url, isExactOrigin(url) else {
             return .notFound()
         }
         guard let path = exactPath(url) else { return .notFound() }

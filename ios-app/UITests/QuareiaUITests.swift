@@ -2,14 +2,21 @@ import XCTest
 
 final class QuareiaUITests: XCTestCase {
     private var activeApp: XCUIApplication?
+    private var observedFailure = false
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        observedFailure = false
+    }
+
+    override func record(_ issue: XCTIssue) {
+        observedFailure = true
+        super.record(issue)
     }
 
     override func tearDownWithError() throws {
         defer { activeApp = nil }
-        guard testRun?.hasSucceeded == false, let activeApp else { return }
+        guard observedFailure, let activeApp else { return }
         var hierarchy = activeApp.debugDescription
         let patterns = [
             "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
@@ -54,6 +61,7 @@ final class QuareiaUITests: XCTestCase {
         let secondCounts = try parseStorageLabel(secondStorage)
         XCTAssertEqual(secondCounts.localStorage, firstCounts.localStorage + 1)
         XCTAssertEqual(secondCounts.indexedDB, secondCounts.localStorage)
+        emitPublicProbeScreenshot(from: app)
     }
 
     func testRegularMainPageLoadsGeneratedBundle() {
@@ -87,6 +95,18 @@ final class QuareiaUITests: XCTestCase {
             throw ProbeEvidenceError.malformedStorageLabel(label)
         }
         return (local, database)
+    }
+
+    private func emitPublicProbeScreenshot(from app: XCUIApplication) {
+        let encoded = app.screenshot().pngRepresentation.base64EncodedString()
+        print("PUBLIC_PROBE_SCREENSHOT_BASE64_BEGIN")
+        var index = encoded.startIndex
+        while index < encoded.endIndex {
+            let next = encoded.index(index, offsetBy: 120, limitedBy: encoded.endIndex) ?? encoded.endIndex
+            print(encoded[index..<next])
+            index = next
+        }
+        print("PUBLIC_PROBE_SCREENSHOT_BASE64_END")
     }
 }
 

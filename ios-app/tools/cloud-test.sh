@@ -54,13 +54,6 @@ python3 ios-app/tools/run-bounded.py 90 xcrun simctl install "$SIMULATOR_ID" ios
 python3 ios-app/tools/run-bounded.py 90 xcrun simctl launch --terminate-running-process "$SIMULATOR_ID" com.hedanbaomi.quareia.ios -probe
 sleep 3
 python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log show --last 1m --predicate 'process == "Quareia" AND eventMessage CONTAINS "P0"' --style compact | tail -50
-python3 ios-app/tools/run-bounded.py 30 xcrun simctl io "$SIMULATOR_ID" screenshot ios-app/build/public-launch.png
-python3 - <<'PY'
-import base64
-print('PUBLIC_LAUNCH_SCREENSHOT_BASE64_BEGIN')
-print(base64.b64encode(open('ios-app/build/public-launch.png','rb').read()).decode())
-print('PUBLIC_LAUNCH_SCREENSHOT_BASE64_END')
-PY
 python3 ios-app/tools/run-bounded.py 300 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
   -derivedDataPath ios-app/build/simulator -resultBundlePath ios-app/build/public-tests.xcresult \
@@ -79,16 +72,5 @@ if xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
 fi
 grep -F 'Distribution is blocked: private LXXXI provider integration is not implemented' ios-app/build/distribution-gate.log
 echo 'PRIVATE_DISTRIBUTION_FAIL_CLOSED_PASS'
-# A tiny synthetic-only screenshot is emitted as base64 in the log, not stored as an artifact.
-# UI tests never load card artwork or private material.
-xcrun simctl terminate "$SIMULATOR_ID" com.hedanbaomi.quareia.ios || true
-xcrun simctl launch "$SIMULATOR_ID" com.hedanbaomi.quareia.ios -probe
-sleep 3
-xcrun simctl io "$SIMULATOR_ID" screenshot ios-app/build/public-probe.png
-python3 - <<'PY'
-import base64
-print('PUBLIC_PROBE_SCREENSHOT_BASE64_BEGIN')
-print(base64.b64encode(open('ios-app/build/public-probe.png','rb').read()).decode())
-print('PUBLIC_PROBE_SCREENSHOT_BASE64_END')
-PY
+# The passing probe UI test emits a synthetic-only screenshot after readiness.
 printf '\nPUBLIC_SIMULATOR_AND_DEVICE_BUILD_PASS\nDEVICE_ACCEPTANCE_PENDING\nPRIVATE_BUILD_BLOCKED\n'
