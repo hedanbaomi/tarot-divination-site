@@ -17,23 +17,18 @@ final class QuareiaUITests: XCTestCase {
     override func tearDownWithError() throws {
         defer { activeApp = nil }
         guard observedFailure, let activeApp else { return }
-        var hierarchy = activeApp.debugDescription
-        let patterns = [
-            "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-            "/_m/[A-Za-z0-9-]+"
-        ]
-        for pattern in patterns {
-            guard let expression = try? NSRegularExpression(pattern: pattern) else { continue }
-            let range = NSRange(hierarchy.startIndex..., in: hierarchy)
-            hierarchy = expression.stringByReplacingMatches(
-                in: hierarchy,
-                range: range,
-                withTemplate: "<redacted-runtime-id>"
-            )
+        let webView = activeApp.webViews["QuareiaWebView"]
+        let finiteState = [
+            "application=\(activeApp.state.rawValue)",
+            "webView.exists=\(webView.exists)",
+            "webView.hittable=\(webView.isHittable)",
+            "hostMenu.exists=\(activeApp.buttons[\"host.menu\"].exists)",
+            "privacyModal.exists=\(activeApp.otherElements[\"host.privacy\"].exists)",
+            "announcementModal.exists=\(activeApp.otherElements[\"host.announcements\"].exists)"
+        ].joined(separator: "\n")
+        XCTContext.runActivity(named: "Finite public UI state") { activity in
+            activity.add(XCTAttachment(string: finiteState))
         }
-        print("P0 PUBLIC_UI_HIERARCHY_BEGIN")
-        print(String(hierarchy.prefix(12_000)))
-        print("P0 PUBLIC_UI_HIERARCHY_END")
     }
 
     func testPublicProbePersistsStorageAndRejectsIframeBridge() throws {

@@ -25,7 +25,7 @@
  *    coordinates, metro code, and all client-supplied geo fields are ignored.
  *  - Timestamps come from the server clock, never the client.
  *  - D1 stores only the anonymous install state (hash, app version, locale,
- *    platform/environment, Android major where applicable, first/last seen) and announcements; never an IP,
+ *    platform/environment, native OS major where applicable, first/last seen) and announcements; never an IP,
  *    User-Agent, device model, city, card, spread, question, note or history.
  *  - On success the worker returns 204 with an empty body.
  *  - Admin endpoints are deny-by-default: the ADMIN_TOKEN secret is required
@@ -43,6 +43,8 @@ const SCHEMA_VERSION = 1;
 const MAX_BODY_BYTES = 1024;
 const ANDROID_MAJOR_MIN = 1;
 const ANDROID_MAJOR_MAX = 100;
+const IOS_MAJOR_MIN = 1;
+const IOS_MAJOR_MAX = 100;
 const MAX_VERSION_CODE = 2147483647;
 
 // Allow-listed events and their extra fields. Anything else is rejected.
@@ -64,10 +66,11 @@ const BASE_FIELDS = {
   locale: "string",
   platform: "optional_string",
   env_version: "optional_string",
-  android_major: "optional_int"
+  android_major: "optional_int",
+  ios_major: "optional_int"
 };
 
-const TELEMETRY_PLATFORMS = new Set(["android", "miniprogram", "minigame"]);
+const TELEMETRY_PLATFORMS = new Set(["android", "ios", "miniprogram", "minigame"]);
 const WECHAT_ENV_VERSIONS = new Set(["develop", "trial", "release"]);
 
 // Default rate limits (per worker instance / in-memory; reset on redeploy/restart).
@@ -250,7 +253,7 @@ async function handleEvents(request, env) {
     return json({ error: "telemetry_write_failed" }, 503);
   }
 
-  // app_active and the legacy daily_active both move the anonymous install to
+  // Native app_active and the legacy daily_active both move the anonymous install to
   // its current version group in D1 (legacy events have no version_code and
   // are stored as 0 = "unknown/legacy"; a later app_active from the upgraded
   // client overwrites it). install_seen and reading_completed never touch D1,
@@ -329,6 +332,22 @@ function validateEvent(event) {
         value.android_major < ANDROID_MAJOR_MIN || value.android_major > ANDROID_MAJOR_MAX) {
       return { ok: false, error: "invalid_android_major" };
     }
+    if (value.ios_major !== undefined) {
+      return { ok: false, error: "invalid_ios_major" };
+    }
+    value.ios_major = 0;
+  } else if (value.platform === "ios") {
+    if (value.env_version !== "") {
+      return { ok: false, error: "invalid_env_version" };
+    }
+    if (value.android_major !== undefined) {
+      return { ok: false, error: "invalid_android_major" };
+    }
+    if (!Number.isInteger(value.ios_major) ||
+        value.ios_major < IOS_MAJOR_MIN || value.ios_major > IOS_MAJOR_MAX) {
+      return { ok: false, error: "invalid_ios_major" };
+    }
+    value.android_major = 0;
   } else {
     if (!WECHAT_ENV_VERSIONS.has(value.env_version)) {
       return { ok: false, error: "invalid_env_version" };
@@ -339,7 +358,11 @@ function validateEvent(event) {
     if (value.android_major !== undefined) {
       return { ok: false, error: "invalid_android_major" };
     }
+    if (value.ios_major !== undefined) {
+      return { ok: false, error: "invalid_ios_major" };
+    }
     value.android_major = 0;
+    value.ios_major = 0;
   }
 
   // install_hash must be a 64-char lowercase hex SHA-256 digest.
@@ -364,7 +387,7 @@ function validateEvent(event) {
   }
 
   if (type === "app_active") {
-    if (value.platform === "android" &&
+    if ((value.platform === "android" || value.platform === "ios") &&
         (!Number.isInteger(value.version_code) ||
          value.version_code < 1 ||
          value.version_code > MAX_VERSION_CODE)) {
@@ -428,7 +451,8 @@ function writeDataPoint(env, event, geo) {
   ];
   const doubles = [
     event.event === "reading_completed" ? Number(event.card_count) : 0,
-    Number(event.android_major)
+    Number(event.android_major),
+    Number(event.ios_major)
   ];
   const indexes = [event.install_hash];
 

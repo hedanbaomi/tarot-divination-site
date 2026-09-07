@@ -6,6 +6,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        ABCDEF000000000000000001 /* WebBackupIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABCDEF000000000000000002 /* WebBackupIntegrationTests.swift */; };
 		010000000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000001 /* AppDelegate.swift */; };
 		010000000000000000000002 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000002 /* AppRoute.swift */; };
 		010000000000000000000003 /* Bridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000003 /* Bridge.swift */; };
@@ -16,6 +17,23 @@
 		010000000000000000000008 /* BridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000009 /* BridgeTests.swift */; };
 		010000000000000000000009 /* QuareiaUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000000000000000000000A /* QuareiaUITests.swift */; };
 		01000000000000000000000A /* NavigationPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000000000000000000000E /* NavigationPolicyTests.swift */; };
+		91BCB4BEA1F64D7E1ADA7337 /* FileTransferStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE45629A22B88F8E68D3E953 /* FileTransferStore.swift */; };
+		9A486D0954291BFDDC16573D /* HostPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1B9CA2049679074667F2BD /* HostPresentation.swift */; };
+		B7A0B2E0867725FDB1A13947 /* NativeHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F26F30B40A8B7C8F347EC57 /* NativeHost.swift */; };
+		7B9B1091ED262C343FA77D94 /* NativeServicesFacade.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EC3F53D692F2C10C6BAEEB3 /* NativeServicesFacade.swift */; };
+		BE08CF366E52012D10F6041B /* AnnouncementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586978F3B68479CC6BF9A8CF /* AnnouncementService.swift */; };
+		A4459967F5DED736F5D3A11C /* ServiceSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AAEF0EA574F7C9227F14CE /* ServiceSupport.swift */; };
+		D7C6BE15151D171616212E6C /* TelemetryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D8B1C52A7BA85A91999BC1D /* TelemetryService.swift */; };
+		18483A3650ACB4B1D6F01208 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB6752BC81F12A6E0A7F5607 /* UpdateService.swift */; };
+		0DD40D1F68007C02D7545E5D /* HostFileTransferTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9193C6DEAEA20CBF10E7D97 /* HostFileTransferTests.swift */; };
+		21E914A6CA36F78E62EEF367 /* HostLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF8608DF774981874C6B19A4 /* HostLifecycleTests.swift */; };
+		37A5453B72B80A354034CE6B /* PrivateProviderAcceptanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64BEC316B721FE211C561E9D /* PrivateProviderAcceptanceTests.swift */; };
+		D481D8A60EEA8A4AF0E9E726 /* ServicesAnnouncementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F307F744976FFFBDEE41222 /* ServicesAnnouncementTests.swift */; };
+		B8590315E1A19433F0B1C4B3 /* ServicesIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B8DCB1642D6C7304CCA9EA3 /* ServicesIntegrationTests.swift */; };
+		4EE093A02E5B6E71C5C67A3C /* ServicesTelemetryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B15DA5F4AE1F742919F4DE56 /* ServicesTelemetryTests.swift */; };
+		BF05C5ED639D0A892558C765 /* ServicesTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 741735FAF6ECB845D5C9224A /* ServicesTestSupport.swift */; };
+		E8E90E91D2DF3CA536A1155C /* ServicesTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C5FE6219A641AA3DEE39B47 /* ServicesTransportTests.swift */; };
+		DAA1691801365344DEE0800D /* ServicesUpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7923902874E571BC4438478 /* ServicesUpdateTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,6 +54,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+        ABCDEF000000000000000002 /* WebBackupIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebBackupIntegrationTests.swift; sourceTree = "<group>"; };
 		020000000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		020000000000000000000002 /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
 		020000000000000000000003 /* Bridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bridge.swift; sourceTree = "<group>"; };
@@ -50,6 +69,23 @@
 		02000000000000000000000C /* QuareiaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = QuareiaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		02000000000000000000000D /* QuareiaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = QuareiaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		02000000000000000000000E /* NavigationPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationPolicyTests.swift; sourceTree = "<group>"; };
+		BE45629A22B88F8E68D3E953 /* FileTransferStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Host/FileTransferStore.swift"; sourceTree = "<group>"; };
+		DD1B9CA2049679074667F2BD /* HostPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Host/HostPresentation.swift"; sourceTree = "<group>"; };
+		0F26F30B40A8B7C8F347EC57 /* NativeHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Host/NativeHost.swift"; sourceTree = "<group>"; };
+		1EC3F53D692F2C10C6BAEEB3 /* NativeServicesFacade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Host/NativeServicesFacade.swift"; sourceTree = "<group>"; };
+		586978F3B68479CC6BF9A8CF /* AnnouncementService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/AnnouncementService.swift"; sourceTree = "<group>"; };
+		79AAEF0EA574F7C9227F14CE /* ServiceSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/ServiceSupport.swift"; sourceTree = "<group>"; };
+		8D8B1C52A7BA85A91999BC1D /* TelemetryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/TelemetryService.swift"; sourceTree = "<group>"; };
+		DB6752BC81F12A6E0A7F5607 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/UpdateService.swift"; sourceTree = "<group>"; };
+		C9193C6DEAEA20CBF10E7D97 /* HostFileTransferTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HostFileTransferTests.swift"; sourceTree = "<group>"; };
+		FF8608DF774981874C6B19A4 /* HostLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HostLifecycleTests.swift"; sourceTree = "<group>"; };
+		64BEC316B721FE211C561E9D /* PrivateProviderAcceptanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PrivateProviderAcceptanceTests.swift"; sourceTree = "<group>"; };
+		6F307F744976FFFBDEE41222 /* ServicesAnnouncementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ServicesAnnouncementTests.swift"; sourceTree = "<group>"; };
+		2B8DCB1642D6C7304CCA9EA3 /* ServicesIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ServicesIntegrationTests.swift"; sourceTree = "<group>"; };
+		B15DA5F4AE1F742919F4DE56 /* ServicesTelemetryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ServicesTelemetryTests.swift"; sourceTree = "<group>"; };
+		741735FAF6ECB845D5C9224A /* ServicesTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ServicesTestSupport.swift"; sourceTree = "<group>"; };
+		6C5FE6219A641AA3DEE39B47 /* ServicesTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ServicesTransportTests.swift"; sourceTree = "<group>"; };
+		F7923902874E571BC4438478 /* ServicesUpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ServicesUpdateTests.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,6 +108,14 @@
 		050000000000000000000002 /* Quareia */ = {
 			isa = PBXGroup;
 			children = (
+				DB6752BC81F12A6E0A7F5607 /* UpdateService.swift */,
+				8D8B1C52A7BA85A91999BC1D /* TelemetryService.swift */,
+				79AAEF0EA574F7C9227F14CE /* ServiceSupport.swift */,
+				586978F3B68479CC6BF9A8CF /* AnnouncementService.swift */,
+				1EC3F53D692F2C10C6BAEEB3 /* NativeServicesFacade.swift */,
+				0F26F30B40A8B7C8F347EC57 /* NativeHost.swift */,
+				DD1B9CA2049679074667F2BD /* HostPresentation.swift */,
+				BE45629A22B88F8E68D3E953 /* FileTransferStore.swift */,
 				020000000000000000000001 /* AppDelegate.swift */,
 				020000000000000000000002 /* AppRoute.swift */,
 				020000000000000000000003 /* Bridge.swift */,
@@ -94,6 +138,16 @@
 		050000000000000000000004 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+                ABCDEF000000000000000002 /* WebBackupIntegrationTests.swift */,
+				F7923902874E571BC4438478 /* ServicesUpdateTests.swift */,
+				6C5FE6219A641AA3DEE39B47 /* ServicesTransportTests.swift */,
+				741735FAF6ECB845D5C9224A /* ServicesTestSupport.swift */,
+				B15DA5F4AE1F742919F4DE56 /* ServicesTelemetryTests.swift */,
+				2B8DCB1642D6C7304CCA9EA3 /* ServicesIntegrationTests.swift */,
+				6F307F744976FFFBDEE41222 /* ServicesAnnouncementTests.swift */,
+				64BEC316B721FE211C561E9D /* PrivateProviderAcceptanceTests.swift */,
+				FF8608DF774981874C6B19A4 /* HostLifecycleTests.swift */,
+				C9193C6DEAEA20CBF10E7D97 /* HostFileTransferTests.swift */,
 				020000000000000000000008 /* AppRouteTests.swift */,
 				020000000000000000000009 /* BridgeTests.swift */,
 				02000000000000000000000E /* NavigationPolicyTests.swift */,
@@ -204,8 +258,8 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		060000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (010000000000000000000001, 010000000000000000000002, 010000000000000000000003, 010000000000000000000004,); runOnlyForDeploymentPostprocessing = 0; };
-		060000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (010000000000000000000007, 010000000000000000000008, 01000000000000000000000A,); runOnlyForDeploymentPostprocessing = 0; };
+		060000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (18483A3650ACB4B1D6F01208, D7C6BE15151D171616212E6C, A4459967F5DED736F5D3A11C, BE08CF366E52012D10F6041B, 7B9B1091ED262C343FA77D94, B7A0B2E0867725FDB1A13947, 9A486D0954291BFDDC16573D, 91BCB4BEA1F64D7E1ADA7337, 010000000000000000000001, 010000000000000000000002, 010000000000000000000003, 010000000000000000000004,); runOnlyForDeploymentPostprocessing = 0; };
+		060000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (ABCDEF000000000000000001, DAA1691801365344DEE0800D, E8E90E91D2DF3CA536A1155C, BF05C5ED639D0A892558C765, 4EE093A02E5B6E71C5C67A3C, B8590315E1A19433F0B1C4B3, D481D8A60EEA8A4AF0E9E726, 37A5453B72B80A354034CE6B, 21E914A6CA36F78E62EEF367, 0DD40D1F68007C02D7545E5D, 010000000000000000000007, 010000000000000000000008, 01000000000000000000000A,); runOnlyForDeploymentPostprocessing = 0; };
 		060000000000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (010000000000000000000009,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
@@ -219,9 +273,9 @@
 		0C000000000000000000000002 /* PublicTesting */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = PublicTesting; };
 		0C000000000000000000000003 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; VALIDATE_PRODUCT = YES; }; name = Release; };
 
-		0C000000000000000000000011 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_ASSET_PATHS = ""; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Quareia/Info.plist; MARKETING_VERSION = 1.0.0; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios; PRODUCT_NAME = "$(TARGET_NAME)"; QUAREIA_BUILD_FLAVOR = incomplete-debug; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
-		0C000000000000000000000012 /* PublicTesting */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Quareia/Info.plist; MARKETING_VERSION = 1.0.0; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios; PRODUCT_NAME = "$(TARGET_NAME)"; QUAREIA_BUILD_FLAVOR = public-prototype; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG PUBLIC_TESTING $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; TARGETED_DEVICE_FAMILY = "1,2"; }; name = PublicTesting; };
-		0C000000000000000000000013 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Quareia/Info.plist; MARKETING_VERSION = 1.0.0; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios; PRODUCT_NAME = "$(TARGET_NAME)"; QUAREIA_BUILD_FLAVOR = blocked-distribution; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DISTRIBUTION $(inherited)"; SWIFT_COMPILATION_MODE = wholemodule; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+		0C000000000000000000000011 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_ASSET_PATHS = ""; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Quareia/Info.plist; MARKETING_VERSION = 1.0.0; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios; PRODUCT_NAME = "$(TARGET_NAME)"; QUAREIA_BUILD_FLAVOR = incomplete-debug; QUAREIA_DISPLAY_NAME = "Quareia Debug"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		0C000000000000000000000012 /* PublicTesting */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Quareia/Info.plist; MARKETING_VERSION = 1.0.0; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios; PRODUCT_NAME = "$(TARGET_NAME)"; QUAREIA_BUILD_FLAVOR = public-synthetic; QUAREIA_DISPLAY_NAME = "Quareia Test"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG PUBLIC_TESTING $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; TARGETED_DEVICE_FAMILY = "1,2"; }; name = PublicTesting; };
+		0C000000000000000000000013 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Quareia/Info.plist; MARKETING_VERSION = 1.0.0; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios; PRODUCT_NAME = "$(TARGET_NAME)"; QUAREIA_BUILD_FLAVOR = blocked-distribution; QUAREIA_DISPLAY_NAME = Quareia; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DISTRIBUTION $(inherited)"; SWIFT_COMPILATION_MODE = wholemodule; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
 
 		0C000000000000000000000021 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Quareia.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Quareia"; }; name = Debug; };
 		0C000000000000000000000022 /* PublicTesting */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.hedanbaomi.quareia.ios.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG PUBLIC_TESTING $(inherited)"; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Quareia.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Quareia"; }; name = PublicTesting; };

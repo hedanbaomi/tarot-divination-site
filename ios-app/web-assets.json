@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "sourceCommit": "c04e86f19eab2a5240b4109e11f18911fd043274",
   "license": "Android-distributed software: MPL-2.0; third-party text retains existing notices; no card artwork is copied.",
   "files": [
@@ -118,6 +118,18 @@
     {
       "path": "js/theme.js",
       "sha256": "9b919caac6b61c3724bba614a0affe7bbbb5ff3f649d42b4863f94b7d6e5c0ef"
+    }
+  ],
+  "overlays": [
+    {
+      "path": "js/ios-native-adapter.js",
+      "source": "ios-app/web/ios-native-adapter.js",
+      "sha256": "4c4f1618441d61a7e07c83332521ded8d57484c9834fe63bbaf0cd895dc31d5b"
+    },
+    {
+      "path": "js/ios-backup.js",
+      "source": "ios-app/web/ios-backup.js",
+      "sha256": "c809bf148e5bff9b9dfec61ef242abc5b99b930c19926e4e49802cdece748681"
     }
   ]
 }

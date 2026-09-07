@@ -171,8 +171,21 @@ test("unknown fields are rejected on create and update", async () => {
 
 test("invalid severities, platforms, statuses are rejected", async () => {
   assert.equal((await createAnnouncement(validBody({ severity: "critical" }))).status, 400);
-  assert.equal((await createAnnouncement(validBody({ platform: "ios" }))).status, 400);
+  assert.equal((await createAnnouncement(validBody({ platform: "desktop" }))).status, 400);
   assert.equal((await createAnnouncement(validBody({ status: "archived" }))).status, 400);
+});
+
+test("admin can create an iOS-only announcement", async () => {
+  const response = await createAnnouncement(validBody({
+    platform: "ios",
+    min_version_code: 42,
+    max_version_code: 42
+  }));
+  assert.equal(response.status, 200);
+  const announcement = (await response.json()).announcement;
+  assert.equal(announcement.platform, "ios");
+  assert.equal(announcement.min_version_code, 42);
+  assert.equal(announcement.max_version_code, 42);
 });
 
 test("admin can create a mini-program-only announcement", async () => {

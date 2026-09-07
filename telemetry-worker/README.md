@@ -1,7 +1,7 @@
 # Quareia Telemetry Worker
 
 Anonymous, opt-out usage-statistics ingest for the **Quareia Divination Android
-app, WeChat Mini Program, and WeChat Mini Game**. It stores aggregate signals only: active-device events, deck usage, and
+and iOS apps, WeChat Mini Program, and WeChat Mini Game**. It stores aggregate signals only: active-device events, deck usage, and
 completed-reading counts. It never stores raw IP addresses, request bodies,
 card faces, card names, orientations, spread layouts, questions, notes, or
 local history.
@@ -10,6 +10,9 @@ local history.
 > [`DEPLOYMENT.md`](DEPLOYMENT.md). No deployment is performed automatically by
 > this repository, and nothing here touches the existing website, R2, VPS, or
 > Cloudflare configuration outside this worker's binding.
+
+> **The iOS support revision is local and undeployed.** The recorded production
+> status above does not establish that the live Worker accepts iOS traffic.
 
 ## Licence
 
@@ -46,11 +49,12 @@ Every event must carry these fields:
 | `schema_version` | int | Must be exactly `1`. |
 | `event` | string | `install_seen`, `daily_active`, `reading_completed`, or `app_active`. |
 | `install_hash` | string | 64-character lowercase hexadecimal pseudonymous per-install identifier; never an account ID or device fingerprint. |
-| `app_version` | string | Android app version name, or the WeChat runtime release version (`0.0.0` when unavailable). |
+| `app_version` | string | Native app display version, or the WeChat runtime release version (`0.0.0` when unavailable). |
 | `locale` | string | BCP-47 language tag, such as `zh-CN`. |
-| `platform` | string | Optional for backward compatibility; omitted means `android`. Otherwise `android`, `miniprogram`, or `minigame`. |
-| `env_version` | string | Required for `miniprogram` and `minigame`: `develop`, `trial`, or `release`. Omitted for Android. |
-| `android_major` | int | Android only, inclusive range `1..100`; must be omitted by both WeChat runtimes. |
+| `platform` | string | Optional for backward compatibility; omitted means `android`. Otherwise `android`, `ios`, `miniprogram`, or `minigame`. |
+| `env_version` | string | Required for `miniprogram` and `minigame`: `develop`, `trial`, or `release`. Omitted by native clients. |
+| `android_major` | int | Android only, inclusive range `1..100`; must be omitted by iOS and both WeChat runtimes. |
+| `ios_major` | int | iOS only, inclusive range `1..100`; must be omitted by Android and both WeChat runtimes. |
 
 `reading_completed` additionally carries:
 
@@ -63,13 +67,13 @@ Every event must carry these fields:
 
 | Field | Type | Notes |
 |---|---|---|
-| `version_code` | int | Required for Android (`1..2147483647`); must be omitted by a WeChat client. The server owns the internal `0` sentinel. |
+| `version_code` | int | Required real native build for Android and iOS (`1..2147483647`); must be omitted by a WeChat client. The server owns the internal `0` sentinel. |
 
 Any field not listed above is rejected with HTTP `400`. This includes card IDs,
 card names, orientations, positions, questions, notes, history, raw IP, and
 User-Agent.
 
-`app_active` is emitted by the Android app on first launch, on returning to the
+`app_active` is emitted by each native app on first launch, on returning to the
 foreground, and immediately when the installed version changes. The client
 sends it at most once per 6 hours for the same version. `app_active` and the
 legacy `daily_active` are the only events that write to D1: the install is
@@ -77,7 +81,7 @@ upserted into `install_state` (new installs get `first_seen_at`/`last_seen_at`;
 upgrades move the row to the new version group while preserving
 `first_seen_at`).
 
-Version handling is one-way: `app_active` always carries the real
+Native version handling is one-way: `app_active` always carries the real
 `version_code` and always wins — it overwrites a legacy row's
 `app_version`/`version_code`, so an upgraded install leaves the legacy group.
 A legacy `daily_active` from an old client (no `version_code`, stored as `0`,
@@ -92,17 +96,19 @@ at all.
 
 ## D1 schema
 
-See `migrations/0001_init.sql` and `migrations/0002_miniprogram_platform.sql`. Two tables:
+See `migrations/0001_init.sql`, `migrations/0002_miniprogram_platform.sql`, and
+`migrations/0003_ios_platform.sql`. Two tables:
 
 - `announcements` — id, revision (incremented on every edit/publish/withdraw),
   status (`draft`/`published`/`withdrawn`), severity
   (`info`/`important`/`update`), zh/en title/body/button, optional HTTPS-only
-  `action_url`, platform (`all`/`android`/`web`/`miniprogram`/`minigame`), min/max `version_code`,
+  `action_url`, platform (`all`/`android`/`ios`/`web`/`miniprogram`/`minigame`), min/max `version_code`,
   `starts_at`/`ends_at` (epoch seconds, `0` = unlimited), `created_at`,
   `updated_at`. All content is plain text; the client never renders HTML.
 - `install_state` — `install_hash` (primary key), `app_version`,
-  `version_code`, `locale`, `android_major`, `platform`, `env_version`,
-  `first_seen_at`, `last_seen_at`. Existing rows migrate as `platform=android`.
+  `version_code`, `locale`, `android_major`, `ios_major`, `platform`, `env_version`,
+  `first_seen_at`, `last_seen_at`. Pre-platform rows default to Android, while
+  later migrations preserve each stored platform.
   No raw IP, IP digest, User-Agent, device model, city, card, spread, question,
   note, or history is ever stored. The daily cron deletes rows inactive for
   more than 90 days.
@@ -114,7 +120,7 @@ GET /v1/announcements?platform=android&version_code=4&locale=zh-CN
 ```
 
 Returns only announcements that are `published`, already started, not expired,
-and matching the platform (`android`/`web`/`miniprogram`/`minigame`, plus `all`) and version range.
+and matching the platform (`android`/`ios`/`web`/`miniprogram`/`minigame`, plus `all`) and version range.
 Results are ordered by severity (`update` > `important` > `info`), then publish
 time, then id. The response is a stable schema:
 
@@ -154,8 +160,8 @@ strings, logs, or client storage other than `sessionStorage` in the admin page.
 | `PUT` | `/admin/api/announcements/:id` | Update; `revision` and `updated_at` bump. |
 | `POST` | `/admin/api/announcements/:id/publish` | Set `published`; `revision` bumps. |
 | `POST` | `/admin/api/announcements/:id/withdraw` | Set `withdrawn`; `revision` bumps. |
-| `GET` | `/admin/api/stats` | Active installs in the last 24h/7d/30d windows, per-window version distributions grouped by platform, WeChat environment, and app version, plus `platform_distribution` and `known_installs_90d`. A `version_code` of `0` is labelled legacy/unknown only for Android; WeChat rows use their `app_version` and environment. |
-| `GET` | `/admin/api/analytics?window=24h\|7d\|30d&platform=all\|android\|miniprogram\|minigame` | Read-only historical Analytics Engine summary and distributions. Window and platform are strict allow-lists, so the admin can inspect either WeChat runtime's active, deck and coarse geographic distributions without accepting arbitrary SQL, fields, or table names. |
+| `GET` | `/admin/api/stats` | Active installs in the last 24h/7d/30d windows, per-window version distributions grouped by platform, WeChat environment, real native build, and app version, plus `platform_distribution` and `known_installs_90d`. A `version_code` of `0` is labelled legacy/unknown only for Android; WeChat rows use their `app_version` and environment. |
+| `GET` | `/admin/api/analytics?window=24h\|7d\|30d&platform=all\|android\|ios\|miniprogram\|minigame` | Read-only historical Analytics Engine summary and distributions. Window and platform are strict allow-lists, so the admin can inspect native or WeChat activity, deck, and coarse geographic distributions without accepting arbitrary SQL, fields, or table names. |
 
 Statistics wording is always "活跃安装数/活跃设备数" (active installs /
 active devices), never exact user counts: the numbers come from 6-hourly
@@ -221,9 +227,10 @@ The worker writes one data point for each accepted event. Arrays are positional:
 |  | `blob7` | `app_version` |
 |  | `blob8` | `locale` |
 |  | `blob9` | `platform`; historical empty slots are interpreted as `android` by admin analytics |
-|  | `blob10` | WeChat `env_version`, or `""` for Android |
+|  | `blob10` | WeChat `env_version`, or `""` for a native client |
 | `doubles` | `double1` | `card_count`, or `0` for non-reading events |
-|  | `double2` | `android_major`, or `0` for a WeChat client |
+|  | `double2` | `android_major`, or `0` for a non-Android client |
+|  | `double3` | `ios_major`, or `0` for a non-iOS client; appended without moving earlier slots |
 | `indexes` | `index1` | `install_hash` — the only index |
 
 Analytics Engine currently accepts an ordered array with one sampling index;
@@ -260,8 +267,8 @@ The worker sends exactly one index and the fixed blob/double order above.
   device model, city, card, spread, question, note, or history value, and rows
   older than 90 days are deleted daily.
 - Announcement content is plain text end to end: the admin page writes it with
-  DOM APIs, the worker passes it through verbatim, and the Android client
-  renders it as plain text (never HTML).
+  DOM APIs, the worker passes it through verbatim, and native clients render it
+  as plain text (never HTML).
 
 ## Reproducible local checks
 
@@ -281,6 +288,51 @@ npx wrangler d1 migrations apply quareia --local
 
 `npm ci` must be run from a clean checkout or temporary clean directory using
 the committed `package-lock.json`; do not substitute `npm install`.
+
+The iOS loopback check uses only the dummy D1 id and local entrypoint in
+`wrangler.local.toml`. It applies all migrations to a fresh, gitignored
+`.local/` directory, verifies migration preservation, sends real HTTP requests
+through the Worker into simulated D1, and exercises synthetic iOS announcement
+create/revise/withdraw behavior:
+
+```bash
+npm run verify:ios-local
+```
+
+For an external PUBLIC_TESTING client, start the reusable fixture and wait for
+its `FIXTURE_READY` line:
+
+```bash
+npm run fixture:ios
+```
+
+The public origin is exactly `http://127.0.0.1:8787`; ordinary `/v1/*` requests
+need no special header. Loopback-only fixture controls are `POST
+/__fixture/seed`, `/__fixture/revise`, `/__fixture/withdraw`, and
+`/__fixture/stop`. `GET /__fixture/stats` returns bounded event counters plus an
+aggregate iOS D1 row count and homogeneous build/version/OS-major values. It
+never returns an install hash, UUID, IP address, User-Agent, or row-level
+identity. These routes live in the local entrypoint and proxy scripts and are
+never added to the production Worker router. Local Analytics Engine is an
+in-memory aggregate sink because Wrangler otherwise treats that binding as
+remote-connected even in local mode.
+
+To preserve state for a same-run integration check, the persistence directory
+must remain beneath this package's gitignored `.local/` directory:
+
+```bash
+PERSIST_DIR="$PWD/.local/ci-${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
+npm run fixture:ios -- --persist-to "$PERSIST_DIR"
+```
+
+Stop the fixture before inspecting its local D1 files with another Wrangler
+process. The `/__fixture/stats` response is the preferred live assertion while
+the fixture owns those files.
+
+With that fixture running, `npm run check:admin` checks the loopback `/admin`
+page by default. A remote admin check is refused unless the operator supplies
+both `--url <https-base-url>` and `--allow-remote-check`; it must only be used
+inside a separately authorized production-read window.
 
 ## Deployment (manual, requires Cloudflare access)
 

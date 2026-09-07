@@ -32,6 +32,7 @@ const WINDOW_SPECS = Object.freeze({
 const PLATFORM_FILTERS = Object.freeze({
   all: "",
   android: "if(blob9 = '', 'android', blob9) = 'android'",
+  ios: "blob9 = 'ios'",
   miniprogram: "blob9 = 'miniprogram'",
   minigame: "blob9 = 'minigame'"
 });

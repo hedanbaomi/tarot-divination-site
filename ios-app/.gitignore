@@ -5,3 +5,5 @@ xcuserdata/
 *.ipa
 *.xcresult
 PrivateInputs/
+__pycache__/
+*.pyc

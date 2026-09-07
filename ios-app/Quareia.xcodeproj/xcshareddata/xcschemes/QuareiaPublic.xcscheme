@@ -7,7 +7,11 @@
       </BuildActionEntry>
     </BuildActionEntries>
   </BuildAction>
-  <TestAction buildConfiguration="PublicTesting" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES" codeCoverageEnabled="YES">
+  <TestAction buildConfiguration="PublicTesting" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="NO" codeCoverageEnabled="YES">
+    <EnvironmentVariables>
+      <EnvironmentVariable key="QUAREIA_PUBLIC_FIXTURE_ENVIRONMENT" value="1" isEnabled="YES"/>
+      <EnvironmentVariable key="QUAREIA_PUBLIC_FIXTURE_BASE_URL" value="http://127.0.0.1:8787" isEnabled="YES"/>
+    </EnvironmentVariables>
     <Testables>
       <TestableReference skipped="NO">
         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="080000000000000000000002" BuildableName="QuareiaTests.xctest" BlueprintName="QuareiaTests" ReferencedContainer="container:Quareia.xcodeproj"/>

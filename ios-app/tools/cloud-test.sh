@@ -3,6 +3,20 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 mkdir -p ios-app/build
+export CLOUDFLARE_TELEMETRY_DISABLED=1 WRANGLER_SEND_METRICS=false
+node telemetry-worker/tools/ios-local-fixture.mjs > ios-app/build/local-fixture.log 2>&1 &
+FIXTURE_PID=$!
+trap 'kill "$FIXTURE_PID" 2>/dev/null || true; wait "$FIXTURE_PID" 2>/dev/null || true' EXIT
+python3 - <<'PY'
+import time, urllib.request
+for _ in range(120):
+    try:
+        with urllib.request.urlopen('http://127.0.0.1:8787/__fixture/health', timeout=1) as response:
+            if response.status == 200: break
+    except Exception: time.sleep(0.5)
+else: raise SystemExit('Local Worker fixture failed to start')
+print('ISOLATED_LOOPBACK_FIXTURE_READY')
+PY
 # Verified standard runner image includes this stable Xcode. Fail if removed;
 # do not silently fall back to the broken 16.4/iOS 18.5 WebKit simulator pair.
 export DEVELOPER_DIR="${IOS_DEVELOPER_DIR:-/Applications/Xcode_26.3.app/Contents/Developer}"
@@ -22,31 +36,16 @@ if xcodebuild -version | grep -Eiq 'beta|release candidate'; then
 fi
 xcrun simctl list devices available -j > ios-app/build/devices.json
 SDK_VERSION=$(xcrun --sdk iphonesimulator --show-sdk-version)
-SIMULATOR_ID=$(python3 - "$SDK_VERSION" <<'PY'
-import json, re, sys
-data=json.load(open('ios-app/build/devices.json'))
-sdk=tuple(int(n) for n in sys.argv[1].split('.')[:2])
-choices=[]
-for runtime,devices in data['devices'].items():
-    match=re.search(r'\.iOS-(\d+)-(\d+)',runtime)
-    if not match: continue
-    version=tuple(map(int,match.groups()))
-    if version>sdk: continue
-    for device in devices:
-        if device.get('isAvailable') and device['name'].startswith('iPhone'):
-            model=re.search(r'iPhone (\d+)',device['name'])
-            choices.append((version,int(model[1]) if model else 0,device['name'],runtime,device))
-if not choices: raise SystemExit('No installed available iPhone runtime supported by the selected Xcode SDK')
-_,_,_,runtime,device=max(choices,key=lambda x:x[:3])
-json.dump({'runtime':runtime,'name':device['name'],'udid':device['udid'],'sdk':sys.argv[1]},open('ios-app/build/selected-simulator.json','w'))
-print(device['udid'])
-PY
-)
+python3 ios-app/tools/select-simulator.py ios-app/build/devices.json \
+  --sdk "$SDK_VERSION" --family "${IOS_DEVICE_FAMILY:-iPhone}" \
+  --policy "${IOS_RUNTIME_POLICY:-latest}" > ios-app/build/selected-simulator.json
+SIMULATOR_ID=$(python3 -c "import json; print(json.load(open('ios-app/build/selected-simulator.json'))['udid'])")
 cat ios-app/build/selected-simulator.json
+python3 -c "import json; d=json.load(open('ios-app/build/selected-simulator.json')); print('MIN_OS_ACCEPTANCE_PENDING' if d['minimumOSAcceptancePending'] else 'MIN_OS_RUNTIME_AVAILABLE')"
 echo "SIMULATOR_ID=$SIMULATOR_ID"
 xcrun simctl boot "$SIMULATOR_ID" || test "$(xcrun simctl list devices booted -j | grep -c "$SIMULATOR_ID")" -gt 0
 python3 ios-app/tools/run-bounded.py 240 xcrun simctl bootstatus "$SIMULATOR_ID" -b
-xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
+python3 ios-app/tools/run-bounded.py 600 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
   -derivedDataPath ios-app/build/simulator \
   -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES build-for-testing | tee ios-app/build/xcode-build.log
@@ -54,22 +53,33 @@ python3 ios-app/tools/run-bounded.py 90 xcrun simctl install "$SIMULATOR_ID" ios
 python3 ios-app/tools/run-bounded.py 90 xcrun simctl launch --terminate-running-process "$SIMULATOR_ID" com.hedanbaomi.quareia.ios -probe
 sleep 3
 python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log show --last 1m --predicate 'process == "Quareia" AND eventMessage CONTAINS "P0"' --style compact | tail -50
-python3 ios-app/tools/run-bounded.py 300 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
+python3 ios-app/tools/run-bounded.py 1200 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
   -derivedDataPath ios-app/build/simulator -resultBundlePath ios-app/build/public-tests.xcresult \
   -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES test-without-building | tee ios-app/build/xcode-test.log
-# Device build is deliberately separate. No archive, signing, IPA or upload.
+echo 'PUBLIC_SIMULATOR_TESTS_PASS'
+if [ "${IOS_BUILD_PAYLOADS:-1}" != 1 ]; then
+  printf '\nDEVICE_ACCEPTANCE_PENDING\nPRIVATE_BUILD_BLOCKED\n'
+  exit 0
+fi
+# Device build is separate; a synthetic IPA is inspected locally and never uploaded.
 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -configuration PublicTesting -sdk iphoneos -destination 'generic/platform=iOS' \
   -derivedDataPath ios-app/build/device CODE_SIGNING_ALLOWED=NO build | tee ios-app/build/xcode-device.log
-python3 ios-app/tools/inspect-app.py ios-app/build/device/Build/Products/PublicTesting-iphoneos/Quareia.app --platform IOS
+python3 ios-app/tools/inspect-app.py ios-app/build/device/Build/Products/PublicTesting-iphoneos/Quareia.app --platform IOS \
+  --source-sha "$(git rev-parse HEAD)" --expected-version 1.0.0 --expected-build 1 --synthetic-test-product
+python3 ios-app/tools/package-ipa.py ios-app/build/device/Build/Products/PublicTesting-iphoneos/Quareia.app \
+  --source-sha "$(git rev-parse HEAD)" --expected-version 1.0.0 --expected-build 1 --synthetic-test-product \
+  --output ios-app/build/Quareia-1.0.0-1-synthetic.ipa --package-report ios-app/build/synthetic-package.json
+echo 'SYNTHETIC_IPHONEOS_PACKAGE_INSPECTION_PASS_NO_UPLOAD'
 # The test host contains an injected XCTest PlugIns bundle. Inspect a separate
 # app-only simulator build so the no-extensions gate stays strict for both apps.
 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -configuration PublicTesting -sdk iphonesimulator \
   -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
   -derivedDataPath ios-app/build/simulator-app ONLY_ACTIVE_ARCH=YES build | tee ios-app/build/xcode-simulator-app.log
-python3 ios-app/tools/inspect-app.py ios-app/build/simulator-app/Build/Products/PublicTesting-iphonesimulator/Quareia.app --platform IOSSIMULATOR
+python3 ios-app/tools/inspect-app.py ios-app/build/simulator-app/Build/Products/PublicTesting-iphonesimulator/Quareia.app --platform IOSSIMULATOR \
+  --source-sha "$(git rev-parse HEAD)" --expected-version 1.0.0 --expected-build 1 --synthetic-test-product
 # Prove a public checkout cannot silently emit a complete distribution build.
 if xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \

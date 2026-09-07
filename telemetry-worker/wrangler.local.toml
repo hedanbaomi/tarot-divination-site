@@ -1,0 +1,20 @@
+# Isolated loopback-only iOS integration fixture. Scripts always pass --local,
+# --ip 127.0.0.1 and an explicit .local persistence directory. This config has
+# no production database id, routes, account id, or secret values.
+name = "quareia-telemetry-ios-local"
+main = "tools/ios-local-worker.mjs"
+compatibility_date = "2025-07-01"
+workers_dev = false
+send_metrics = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "quareia-ios-local"
+database_id = "00000000-0000-4000-8000-000000000003"
+migrations_dir = "migrations"
+
+[vars]
+ADMIN_TOKEN = "local-fixture-token-not-a-secret"
+ACCOUNT_ID = ""
+RATE_LIMIT_PER_INSTALL_PER_HOUR = "600"
+RATE_LIMIT_PER_IP_PER_MINUTE = "600"

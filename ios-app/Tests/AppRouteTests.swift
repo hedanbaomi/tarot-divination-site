@@ -127,6 +127,12 @@ final class AppRouteTests: XCTestCase {
         XCTAssertTrue(BundledPublicResourceStore.isSafeManifestPath("css/styles.css"))
     }
 
+    func testPNGSignatureAloneAndTruncatedImageCannotSatisfyDecodeGate() {
+        XCTAssertFalse(AppRoute.isValidPNG(Data(png.prefix(8))))
+        XCTAssertFalse(AppRoute.isValidPNG(Data(png.prefix(24))))
+        XCTAssertTrue(AppRoute.isValidPNG(png))
+    }
+
     func testStoppedSchemeTaskReceivesNoCallbacks() {
         let suspendedQueue = DispatchQueue(label: "AppRouteTests.suspended")
         suspendedQueue.suspend()

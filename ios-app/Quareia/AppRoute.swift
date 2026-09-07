@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import WebKit
 
 struct RouteResponse: Equatable {
@@ -208,7 +209,18 @@ struct AppRoute {
 
     static func isValidPNG(_ data: Data) -> Bool {
         let signature = Data([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
-        return data.count >= signature.count && data.count <= maximumImageBytes && data.prefix(8) == signature
+        guard data.count >= signature.count, data.count <= maximumImageBytes,
+              data.prefix(8) == signature,
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetStatus(source) == .statusComplete,
+              CGImageSourceGetCount(source) == 1,
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0, width <= 8192, height <= 8192,
+              width * height <= 32_000_000,
+              CGImageSourceCreateImageAtIndex(source, 0, nil) != nil else { return false }
+        return true
     }
 }
 
@@ -227,12 +239,18 @@ struct SyntheticPNGProvider: LxxxiImageProviding {
 enum LxxxiImageProviderFactory {
     static func make() -> LxxxiImageProviding? {
         #if DISTRIBUTION
+        #if PRIVATE_LXXXI_PROVIDER
+        return IntegratedLxxxiProvider()
+        #else
         #error("Distribution is blocked: private LXXXI provider integration is not implemented")
         #endif
+        #endif
+        #if !DISTRIBUTION
         #if PUBLIC_TESTING
         return SyntheticPNGProvider()
         #else
         return nil
+        #endif
         #endif
     }
 }

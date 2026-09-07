@@ -3,6 +3,14 @@ import test from "node:test";
 import vm from "node:vm";
 
 import { ADMIN_PAGE_HTML } from "../src/admin-page.js";
+import worker from "../src/index.js";
+
+test("GET /admin is static and does not require D1", async () => {
+  const response = await worker.fetch(new Request("https://telemetry.test/admin"), {});
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("cache-control") || "", /no-store/);
+  assert.match(await response.text(), /id="appView"/);
+});
 
 /**
  * The admin page ships its UI as an inline <script> inside a JavaScript
@@ -52,7 +60,10 @@ test("the history UI uses the authenticated analytics endpoint and fixed windows
   assert.match(ADMIN_PAGE_HTML, /sessionStorage/);
 });
 
-test("the admin page exposes Mini Game as an announcement target and analytics filter", () => {
+test("the admin page exposes iOS and Mini Game as announcement targets and analytics filters", () => {
+  assert.match(ADMIN_PAGE_HTML, /value="ios">ios<\/option>/);
+  assert.match(ADMIN_PAGE_HTML, /value="ios">iOS<\/option>/);
+  assert.match(ADMIN_PAGE_HTML, /if \(value === "ios"\) return "iOS"/);
   assert.match(ADMIN_PAGE_HTML, /value="minigame">minigame · 微信小游戏端<\/option>/);
   assert.match(ADMIN_PAGE_HTML, /value="minigame">微信小游戏端<\/option>/);
   assert.match(ADMIN_PAGE_HTML, /if \(value === "minigame"\) return "微信小游戏端"/);

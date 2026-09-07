@@ -414,12 +414,16 @@ test("platform analytics groups active installs and falls back old empty slots t
 test("analytics platform filter is closed and scopes every fixed query", async () => {
   const allQueries = buildAnalyticsQueries("24h", "all");
   const androidQueries = buildAnalyticsQueries("24h", "android");
+  const iosQueries = buildAnalyticsQueries("24h", "ios");
   const miniQueries = buildAnalyticsQueries("24h", "miniprogram");
   const gameQueries = buildAnalyticsQueries("24h", "minigame");
-  assert.ok(allQueries && androidQueries && miniQueries && gameQueries);
+  assert.ok(allQueries && androidQueries && iosQueries && miniQueries && gameQueries);
   assert.equal(buildAnalyticsQueries("24h", "web"), null);
   Object.values(androidQueries).forEach((sql) => {
     assert.match(sql, /if\(blob9 = '', 'android', blob9\) = 'android'/);
+  });
+  Object.values(iosQueries).forEach((sql) => {
+    assert.match(sql, /blob9 = 'ios'/);
   });
   Object.values(miniQueries).forEach((sql) => {
     assert.match(sql, /blob9 = 'miniprogram'/);
@@ -467,7 +471,7 @@ test("analytics platform filter is closed and scopes every fixed query", async (
   assert.deepEqual(await invalid.json(), {
     error: "invalid_platform",
     module: "analytics",
-    allowed_platforms: ["all", "android", "miniprogram", "minigame"]
+    allowed_platforms: ["all", "android", "ios", "miniprogram", "minigame"]
   });
 });
 

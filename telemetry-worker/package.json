@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "Anonymous, opt-out usage-statistics ingest for Quareia Android, WeChat Mini Program, and WeChat Mini Game clients. Stores aggregate signals only; never stores raw IP or reading content.",
+  "description": "Anonymous, opt-out usage-statistics ingest for Quareia Android, iOS, WeChat Mini Program, and WeChat Mini Game clients. Stores aggregate signals only; never stores raw IP or reading content.",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.js",
     "check:admin": "node tools/check-admin-page.mjs",
+    "fixture:ios": "node tools/ios-local-fixture.mjs",
+    "verify:ios-local": "node tools/verify-ios-local.mjs",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev"
   },

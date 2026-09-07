@@ -1,8 +1,8 @@
-name: iOS public feasibility
+name: iOS public implementation
 on:
   push:
     branches: [feature/ios-self-sign-v1]
-    paths: ['ios-app/**', '.github/workflows/ios-public.yml']
+    paths: ['ios-app/**', 'telemetry-worker/**', '.github/workflows/ios-public.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,7 +13,25 @@ jobs:
   simulator-and-device:
     if: github.repository == 'hedanbaomi/tarot-divination-site' && github.event.repository.private == false
     runs-on: macos-15
-    timeout-minutes: 35
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: iphone
+            family: iPhone
+            runtime: latest
+          - role: ipad
+            family: iPad
+            runtime: latest
+          - role: compatibility
+            family: iPhone
+            runtime: oldest
+    name: public-${{ matrix.role }}
+    env:
+      IOS_DEVICE_FAMILY: ${{ matrix.family }}
+      IOS_RUNTIME_POLICY: ${{ matrix.runtime }}
+      IOS_BUILD_PAYLOADS: ${{ matrix.role == 'iphone' && '1' || '0' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -28,6 +46,11 @@ jobs:
           test ! -e ios-app/PrivateInputs
           node ios-app/tools/sync-web-assets.mjs
           node ios-app/tools/sync-web-assets.mjs --check
-          python3 ios-app/tools/test_inspect_app.py
+          node --test ios-app/Tests/*.test.mjs
+          node --test ios-app/tools/test_plan_ios_release.mjs
+          python3 -m unittest discover -s ios-app/tools -p 'test_*.py'
+          npm ci --prefix telemetry-worker --ignore-scripts
+          npm test --prefix telemetry-worker
+          npm run verify:ios-local --prefix telemetry-worker
           bash ios-app/tools/cloud-test.sh
       # No IPA, .app, DerivedData, xcresult, private material, cache, or artifact upload.

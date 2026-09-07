@@ -1,0 +1,112 @@
+import Foundation
+import XCTest
+@testable import Quareia
+
+#if PUBLIC_TESTING
+final class ServicesIntegrationTests: XCTestCase {
+    func testExplicitLoopbackFixtureExercisesSwiftWorkerAndD1Path() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["QUAREIA_PUBLIC_FIXTURE_ENVIRONMENT"] == "1",
+              environment["QUAREIA_PUBLIC_FIXTURE_BASE_URL"] == "http://127.0.0.1:8787"
+        else {
+            throw XCTSkip(
+                "Set the explicit PUBLIC_TESTING fixture environment and run the Worker at 127.0.0.1:8787"
+            )
+        }
+        let configuration = try XCTUnwrap(ServiceConfiguration.fixtureEnvironment(
+            baseURL: URL(string: environment["QUAREIA_PUBLIC_FIXTURE_BASE_URL"]!)!,
+            explicitFixtureEnvironment: true
+        ))
+        let buildInfo = try XCTUnwrap(AppBuildInfo.current(locale: Locale(identifier: "en")))
+
+        let announcements = AnnouncementService(
+            configuration: configuration,
+            httpClient: URLSessionHTTPClient(),
+            store: MemoryServiceStore()
+        )
+        let context = try XCTUnwrap(AnnouncementContext(buildInfo: buildInfo))
+        let announcementResult = await announcements.refresh(context: context, reason: .foreground)
+        XCTAssertEqual(announcementResult.source, .network)
+
+        let telemetry = TelemetryService(
+            configuration: configuration,
+            httpClient: URLSessionHTTPClient(),
+            store: MemoryServiceStore(),
+            buildInfo: { buildInfo },
+            sleeper: { _ in }
+        )
+        await telemetry.markPrivacyDisclosureShown()
+        let optedIn = await telemetry.setConsent(.enabled)
+        XCTAssertTrue(optedIn)
+        await telemetry.recordInstallSeen()
+        await telemetry.recordAppActive()
+        await telemetry.recordReadingCompleted(deckType: .tarot, cardCount: 3)
+        await telemetry.waitUntilIdle()
+        let pendingEvents = await telemetry.pendingEventCount()
+        let successfulDeliveries = await telemetry.successfulDeliveryCount()
+        XCTAssertEqual(pendingEvents, 0)
+        XCTAssertEqual(successfulDeliveries, 3,
+                       "all three Swift event shapes must receive Worker 204 success")
+
+        var statsRequest = URLRequest(url: URL(string: "http://127.0.0.1:8787/__fixture/stats")!)
+        statsRequest.httpMethod = "GET"
+        statsRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+        let statsResponse = try await URLSessionHTTPClient().data(
+            for: statsRequest,
+            owner: UUID(),
+            maximumBytes: 4 * 1_024,
+            redirectValidator: configuration.allowsServiceURL
+        )
+        XCTAssertEqual(statsResponse.statusCode, 200)
+        XCTAssertEqual(statsResponse.headers["cache-control"], "no-store")
+        let stats = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: statsResponse.data) as? [String: Any]
+        )
+        XCTAssertEqual(Set(stats.keys), ["events", "reading_completed", "install_state"],
+                       "fixture readback must expose aggregates only")
+
+        let events = try XCTUnwrap(stats["events"] as? [String: Any])
+        XCTAssertEqual(Set(events.keys), ["install_seen", "app_active", "reading_completed"])
+        XCTAssertEqual(events["install_seen"] as? Int, 1)
+        XCTAssertEqual(events["app_active"] as? Int, 1)
+        XCTAssertEqual(events["reading_completed"] as? Int, 1)
+
+        let reading = try XCTUnwrap(stats["reading_completed"] as? [String: Any])
+        XCTAssertEqual(Set(reading.keys), ["tarot", "mystagogus", "lxxxi", "card_count_sum"])
+        XCTAssertEqual(reading["tarot"] as? Int, 1)
+        XCTAssertEqual(reading["mystagogus"] as? Int, 0)
+        XCTAssertEqual(reading["lxxxi"] as? Int, 0)
+        XCTAssertEqual(reading["card_count_sum"] as? Int, 3)
+
+        let installState = try XCTUnwrap(stats["install_state"] as? [String: Any])
+        XCTAssertEqual(Set(installState.keys), [
+            "platform", "rows", "version_code", "app_version", "ios_major"
+        ])
+        XCTAssertEqual(installState["platform"] as? String, "ios")
+        XCTAssertEqual(installState["rows"] as? Int, 1)
+        XCTAssertEqual(installState["version_code"] as? Int, buildInfo.versionCode)
+        XCTAssertEqual(installState["app_version"] as? String, buildInfo.displayVersion)
+        XCTAssertEqual(installState["ios_major"] as? Int, buildInfo.iosMajor)
+        for forbiddenKey in ["install_hash", "uuid", "ip", "user_agent"] {
+            XCTAssertNil(stats[forbiddenKey])
+            XCTAssertNil(installState[forbiddenKey])
+        }
+    }
+
+    func testLoopbackConfigurationCannotBeEnabledWithoutBothCompileAndRuntimeGates() throws {
+        let loopback = URL(string: "http://127.0.0.1:8787")!
+        XCTAssertNil(ServiceConfiguration.fixtureEnvironment(
+            baseURL: loopback,
+            explicitFixtureEnvironment: false
+        ))
+        XCTAssertNil(ServiceConfiguration.fixtureEnvironment(
+            baseURL: URL(string: "http://localhost:8787")!,
+            explicitFixtureEnvironment: true
+        ))
+        XCTAssertNil(ServiceConfiguration.fixtureEnvironment(
+            baseURL: URL(string: "http://127.0.0.1:8788")!,
+            explicitFixtureEnvironment: true
+        ))
+    }
+}
+#endif

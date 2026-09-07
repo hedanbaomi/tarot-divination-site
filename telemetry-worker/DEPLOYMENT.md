@@ -23,6 +23,10 @@
 > than being described as absent. The Analytics history code in this review
 > revision remains local and undeployed.
 
+> **The iOS Worker support in the current checkout is also local and
+> undeployed.** No production iOS event, D1 migration, announcement request, or
+> deployment was performed while validating it.
+
 The endpoint accepts one event JSON object at a time. It does not accept event
 arrays. The fixed Analytics Engine projection remains documented in the main
 README and in the Worker source.
@@ -61,6 +65,16 @@ The Android UI revision was also verified locally with the full JS contract
 suite (5/5), Robolectric tests (7/7), and a successful debug APK build. The
 APK is a local build artifact and is not published by this repository.
 
+The later local iOS compatibility revision passed the full Worker suite and the
+isolated `npm run verify:ios-local` check. That check applied migrations
+0001 through 0003 to synthetic local D1 data, preserved rows, announcement
+ids/revisions, and indexes, then exercised loopback HTTP for `install_seen`,
+`app_active`, `reading_completed`, identity-free aggregate readback, and iOS
+announcement create/revise/withdraw.
+Its Wrangler config uses a dummy D1 id, no production route or account id, and
+an in-memory local Analytics Engine sink. These results are local validation;
+they do not change the deployed status recorded above.
+
 ## Historical Analytics API local contract
 
 The historical endpoint is part of the un-deployed local revision only. It
@@ -97,7 +111,7 @@ Only an authorized Cloudflare operator should perform these actions:
 2. To stop public ingestion, first remove the Worker Custom Domain
    `telemetry.luotianyi.fun` from this Worker through the Cloudflare Workers
    UI. Do not alter the root domain or unrelated DNS records.
-3. Disable Android reporting through the app release/configuration process if
+3. Disable native-client reporting through the app release/configuration process if
    ingestion is intentionally being retired. Do not delete the Analytics
    Engine dataset as part of routine rollback; its existing rows expire under
    the documented retention policy.
