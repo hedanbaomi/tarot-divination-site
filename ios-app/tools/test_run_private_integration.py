@@ -851,6 +851,13 @@ class PrivatePayloadPrivacyTests(unittest.TestCase):
         self.assertNotIn("SYNTHETIC_PRIVATE", json.dumps(diagnostic))
         self.assertNotIn("/private/", json.dumps(diagnostic))
 
+    def test_ui_metadata_accepts_icon_selection(self):
+        files = {"selection": "icon", "tapX": 0.1, "tapY": 0.2, "cancelToastVisible": False,
+                 "webViewExists": True, "appForeground": True}
+        content = self.ui_segment(["UI_FILES_META=" + json.dumps(files)], method="testFiles")
+        self.assertEqual(TOOL.failed_ui_metadata(content),
+                         [{"test": "QuareiaUITests/testFiles", "files": files}])
+
     def test_ui_metadata_rejects_unsafe_types_values_and_fields(self):
         ready = {"appState": "foreground", "webViewExists": True, "ready": "loading", "completed": False}
         files = {"selection": "ocr", "tapX": 0.1, "tapY": 0.2, "cancelToastVisible": False,
@@ -862,7 +869,7 @@ class PrivatePayloadPrivacyTests(unittest.TestCase):
                 {"ready": "secret"}, {"ready": None}, {"completed": 0}, {"webViewExists": "true"},
             ]),
             ("UI_FILES_META=", files, [
-                {"text": "SYNTHETIC_PRIVATE"}, {"selection": "secret"}, {"selection": []},
+                {"text": "SYNTHETIC_PRIVATE"}, {"selection": "secret"}, {"selection": "icon-extra"}, {"selection": []},
                 {"tapX": float("nan")}, {"tapX": float("inf")}, {"tapY": float("-inf")},
                 {"tapX": True}, {"tapY": "0.2"}, {"tapX": -0.01}, {"tapY": 1.01},
                 {"cancelToastVisible": 0}, {"appForeground": None}, {"webViewExists": []},

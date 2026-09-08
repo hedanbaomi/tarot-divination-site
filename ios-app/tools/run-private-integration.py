@@ -859,7 +859,7 @@ def failed_ui_metadata(content: str) -> list[dict[str, Any]]:
         else:
             if set(value) != {"selection", "tapX", "tapY", "cancelToastVisible", "webViewExists", "appForeground"}:
                 return None
-            if type(value["selection"]) is not str or value["selection"] not in {"ocr", "ax", "ipad-fallback"}:
+            if type(value["selection"]) is not str or value["selection"] not in {"ocr", "ax", "ipad-fallback", "icon"}:
                 return None
             # These bounds also reject infinities; booleans are not coordinates.
             if any(type(value[key]) not in (int, float) or not 0 <= value[key] <= 1 for key in ["tapX", "tapY"]):

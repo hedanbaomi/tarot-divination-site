@@ -104,6 +104,7 @@ if [ "${IOS_FILES_DIAGNOSTIC_ONLY-0}" = 1 ]; then
     -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
     -derivedDataPath ios-app/build/simulator -resultBundlePath ios-app/build/files-diagnostic.xcresult \
     -only-testing:"$FILES_TEST" \
+    -only-testing:QuareiaUITests/QuareiaUITests/testFilesCloseGlyphLocatorRejectsAmbiguousControls \
     -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES test-without-building | tee ios-app/build/xcode-files-diagnostic.log
   echo 'PUBLIC_FILES_DIAGNOSTIC_PASS'
   exit 0

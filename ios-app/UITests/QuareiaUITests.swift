@@ -177,15 +177,24 @@ final class QuareiaUITests: XCTestCase {
         var cancelSelection = "ax"
         if let visibleCancelPoint {
             // Remote Files accessibility geometry can point at the neighboring
-            // More control. Tap the actual rendered cancellation label instead.
-            cancelPoint = visibleCancelPoint
-            cancelSelection = "ocr"
+            // More control. Tap the actual rendered cancellation label or close glyph.
+            cancelPoint = visibleCancelPoint.point
+            cancelSelection = visibleCancelPoint.kind.rawValue
         } else if UIDevice.current.userInterfaceIdiom == .pad && cancelFrame.width < 2 {
             // The current portrait iPad runtime exposes a 1-point Cancel frame
             // over the grid control. The captured native navigation strip shows
             // its actual close affordance at the upper-left (36, 84).
             cancelPoint = CGPoint(x: app.frame.minX + 36, y: app.frame.minY + 84)
             cancelSelection = "ipad-fallback"
+        } else {
+            // Reject the known misrouted 44-point More frame. Without rendered
+            // evidence, accept only a compact square cancellation glyph frame.
+            let aspect = cancelFrame.width / cancelFrame.height
+            guard (10...28).contains(cancelFrame.width), (10...28).contains(cancelFrame.height),
+                  (0.8...1.25).contains(aspect) else {
+                XCTFail("Expected rendered cancellation evidence or a compact cancellation glyph frame")
+                return
+            }
         }
         print("FILES_CANCEL_TAP point=\(cancelPoint)")
         app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(
@@ -773,7 +782,7 @@ final class QuareiaUITests: XCTestCase {
         if completion.wait(timeout: .now() + 20) == .timedOut { task.cancel() }
     }
 
-    private func captureFilesNavigation(in app: XCUIApplication) -> CGPoint? {
+    private func captureFilesNavigation(in app: XCUIApplication) -> FilesCancelPoint? {
         // Public simulator evidence only: crop in memory to the Files navigation
         // strip, excluding document contents and the app's card area. Never
         // attach or export the original full-screen image or an xcresult bundle.
@@ -803,21 +812,161 @@ final class QuareiaUITests: XCTestCase {
         request.recognitionLanguages = ["en-US"]
         request.usesLanguageCorrection = false
         do { try VNImageRequestHandler(cgImage: image, options: [:]).perform([request]) }
-        catch { return nil }
+        catch { /* The bounded glyph locator remains available if OCR fails. */ }
         let matches = (request.results ?? []).filter { observation in
             guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.8 else { return false }
             return ["cancel", "close"].contains(candidate.string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
         }
-        guard matches.count == 1 else { return nil }
-        let box = matches[0].boundingBox
         let bounds = app.frame
-        let point = CGPoint(
-            x: bounds.minX + box.midX * bounds.width,
-            y: bounds.minY + (1 - box.midY) * min(160, source.size.height) / source.size.height * bounds.height
-        )
+        let cropHeight = min(160, source.size.height)
+        let point: CGPoint
+        let kind: FilesCancelPoint.Kind
+        if matches.count == 1 {
+            let box = matches[0].boundingBox
+            point = CGPoint(x: bounds.minX + box.midX * bounds.width,
+                y: bounds.minY + (1 - box.midY) * cropHeight / source.size.height * bounds.height)
+            kind = .ocr
+        } else if matches.isEmpty, let glyph = filesCloseGlyph(in: image, rasterScale: scale) {
+            point = CGPoint(x: bounds.minX + glyph.x / CGFloat(image.width) * bounds.width,
+                y: bounds.minY + glyph.y / CGFloat(image.height) * cropHeight / source.size.height * bounds.height)
+            kind = .icon
+        } else { return nil }
         guard bounds.contains(point), point.y < bounds.minY + bounds.height * 0.35 else { return nil }
         print("FILES_CANCEL_VISUAL_POINT point=\(point)")
-        return point
+        return FilesCancelPoint(point: point, kind: kind)
+    }
+
+    private struct FilesCancelPoint {
+        enum Kind: String { case ocr, icon }
+        let point: CGPoint
+        let kind: Kind
+    }
+
+    private func filesCloseGlyph(in image: CGImage, rasterScale: CGFloat) -> CGPoint? {
+        let width = image.width, height = image.height
+        guard width > 0, width <= 800, height > 0, height <= 160,
+              rasterScale.isFinite, rasterScale > 0, rasterScale <= 1 else { return nil }
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        let rendered = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height,
+                bitsPerComponent: 8, bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(),
+                bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard rendered else { return nil }
+        let firstRow = max(0, Int(ceil(65 * rasterScale)))
+        let minimum = max(3, Int(floor(10 * rasterScale)))
+        let maximum = max(minimum, Int(ceil(28 * rasterScale)))
+        guard firstRow < height else { return nil }
+        var candidates: [CGPoint] = []
+        for light in [false, true] {
+            var visited = [Bool](repeating: false, count: pixels.count)
+            func foreground(_ index: Int) -> Bool {
+                light ? pixels[index] >= 160 : pixels[index] <= 96
+            }
+            for seed in (firstRow * width)..<pixels.count {
+                if visited[seed] || !foreground(seed) { continue }
+                var component = [seed]
+                visited[seed] = true
+                var cursor = 0
+                var minX = seed % width, maxX = minX
+                var minY = seed / width, maxY = minY
+                while cursor < component.count {
+                    let index = component[cursor]
+                    cursor += 1
+                    let x = index % width, y = index / width
+                    minX = min(minX, x); maxX = max(maxX, x)
+                    minY = min(minY, y); maxY = max(maxY, y)
+                    for dy in -1...1 {
+                        for dx in -1...1 where dx != 0 || dy != 0 {
+                            let nx = x + dx, ny = y + dy
+                            guard nx >= 0, nx < width, ny >= firstRow, ny < height else { continue }
+                            let next = ny * width + nx
+                            if !visited[next] && foreground(next) {
+                                visited[next] = true
+                                component.append(next)
+                            }
+                        }
+                    }
+                }
+                let w = maxX - minX + 1, h = maxY - minY + 1
+                guard w >= minimum, w <= maximum, h >= minimum, h <= maximum,
+                      minX > 0, maxX < width - 1, minY > firstRow, maxY < height - 1 else { continue }
+                let aspect = Double(w) / Double(h)
+                let fill = Double(component.count) / Double(w * h)
+                guard (0.8...1.25).contains(aspect), (0.12...0.5).contains(fill) else { continue }
+                var fitted = 0
+                var arms = [Int](repeating: 0, count: 4)
+                for index in component {
+                    let x = Double(index % width - minX) / Double(w - 1)
+                    let y = Double(index / width - minY) / Double(h - 1)
+                    if min(abs(x - y), abs(x + y - 1)) <= 0.17 { fitted += 1 }
+                    // Four outer diagonal arms, not merely a central blob or slash.
+                    if abs(x - 0.5) >= 0.2 && abs(y - 0.5) >= 0.2 {
+                        arms[(x < 0.5 ? 0 : 1) + (y < 0.5 ? 0 : 2)] += 1
+                    }
+                }
+                guard Double(fitted) / Double(component.count) >= 0.95,
+                      arms.allSatisfy({ arm in Double(arm) / Double(component.count) >= 0.1 }) else { continue }
+                candidates.append(CGPoint(x: CGFloat(minX + maxX + 1) / 2,
+                                          y: CGFloat(minY + maxY + 1) / 2))
+                if candidates.count > 1 { return nil }
+            }
+        }
+        return candidates.count == 1 ? candidates[0] : nil
+    }
+
+    @MainActor
+    func testFilesCloseGlyphLocatorRejectsAmbiguousControls() throws {
+        let center = CGPoint(x: 113, y: 103)
+        func sample(_ shape: String, light: Bool = false, scale: CGFloat = 1) throws -> CGImage {
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = true
+            let result = UIGraphicsImageRenderer(size: CGSize(width: 240 * scale, height: 160 * scale),
+                                                 format: format).image { renderer in
+                let context = renderer.cgContext
+                context.scaleBy(x: scale, y: scale)
+                context.setFillColor((light ? UIColor.black : UIColor.white).cgColor)
+                context.fill(CGRect(x: 0, y: 0, width: 240, height: 160))
+                context.setStrokeColor((light ? UIColor.white : UIColor.black).cgColor)
+                context.setLineWidth(2)
+                func cross(at point: CGPoint) {
+                    context.move(to: CGPoint(x: point.x - 8, y: point.y - 8))
+                    context.addLine(to: CGPoint(x: point.x + 8, y: point.y + 8))
+                    context.move(to: CGPoint(x: point.x - 8, y: point.y + 8))
+                    context.addLine(to: CGPoint(x: point.x + 8, y: point.y - 8))
+                    context.strokePath()
+                }
+                switch shape {
+                case "x": cross(at: center)
+                case "ambiguous": cross(at: center); cross(at: CGPoint(x: 173, y: 103))
+                case "ellipse": context.strokeEllipse(in: CGRect(x: 105, y: 95, width: 16, height: 16))
+                case "m":
+                    context.move(to: CGPoint(x: 105, y: 111))
+                    for point in [CGPoint(x: 105, y: 95), CGPoint(x: 113, y: 103),
+                                  CGPoint(x: 121, y: 95), CGPoint(x: 121, y: 111)] {
+                        context.addLine(to: point)
+                    }
+                    context.strokePath()
+                default: break
+                }
+            }
+            return try XCTUnwrap(result.cgImage)
+        }
+        for light in [false, true] {
+            for scale in [CGFloat(1), CGFloat(0.5)] {
+                let image = try sample("x", light: light, scale: scale)
+                let point = try XCTUnwrap(filesCloseGlyph(in: image, rasterScale: scale))
+                XCTAssertEqual(point.x / scale, center.x, accuracy: 1)
+                // An asymmetric Y explicitly proves the bitmap's top-down mapping.
+                XCTAssertEqual(point.y / scale, center.y, accuracy: 1)
+            }
+            for shape in ["blank", "ellipse", "m", "ambiguous"] {
+                XCTAssertNil(filesCloseGlyph(in: try sample(shape, light: light), rasterScale: 1), shape)
+            }
+        }
     }
 
     private func waitForFilesCancel(in app: XCUIApplication) -> CGRect {
@@ -840,7 +989,7 @@ final class QuareiaUITests: XCTestCase {
         if result != .completed, let point = captureFilesNavigation(in: app) {
             // A visible native Cancel label remains actionable even when the
             // remote accessibility snapshot omits its geometry entirely.
-            return CGRect(x: point.x - 1, y: point.y - 1, width: 2, height: 2)
+            return CGRect(x: point.point.x - 1, y: point.point.y - 1, width: 2, height: 2)
         }
         XCTAssertEqual(result, .completed, "Expected the Files navigation cancellation control")
         print("FILES_CANCEL_CONTROL frame=\(resolvedFrame)")
