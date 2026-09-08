@@ -795,6 +795,83 @@ def _safe_command_environment(environment: dict[str, str]) -> dict[str, str]:
     return {key: value for key, value in environment.items() if key in allowed}
 
 
+def failed_ui_metadata(content: str) -> list[dict[str, Any]]:
+    """Keep fixed-schema markers only inside matching, completed failed tests."""
+    markers = {"UI_READY_META=": "ready", "UI_FILES_META=": "files"}
+    active = None
+    captured: dict[str, Any] = {}
+    result = []
+
+    def unique_object(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError("Duplicate metadata field")
+            value[key] = item
+        return value
+
+    def reject_constant(unused):
+        raise ValueError("Non-finite metadata number")
+
+    def validated(kind: str, raw: str) -> dict[str, Any] | None:
+        if len(raw) > 1024:
+            return None
+        try:
+            value = json.loads(raw, object_pairs_hook=unique_object, parse_constant=reject_constant)
+        except (ValueError, RecursionError):
+            return None
+        if type(value) is not dict:
+            return None
+        if kind == "ready":
+            if set(value) != {"appState", "webViewExists", "ready", "completed"}:
+                return None
+            if type(value["appState"]) is not str or value["appState"] not in {
+                "foreground", "background", "suspended", "not-running", "unknown"
+            }:
+                return None
+            if type(value["ready"]) is not str or value["ready"] not in {
+                "main-ready", "loading", "failed", "missing", "other"
+            }:
+                return None
+            flags = ["webViewExists", "completed"]
+        else:
+            if set(value) != {"selection", "tapX", "tapY", "cancelToastVisible", "webViewExists", "appForeground"}:
+                return None
+            if type(value["selection"]) is not str or value["selection"] not in {"ocr", "ax", "ipad-fallback"}:
+                return None
+            # These bounds also reject infinities; booleans are not coordinates.
+            if any(type(value[key]) not in (int, float) or not 0 <= value[key] <= 1 for key in ["tapX", "tapY"]):
+                return None
+            flags = ["cancelToastVisible", "webViewExists", "appForeground"]
+        if any(type(value[key]) is not bool for key in flags):
+            return None
+        return value
+
+    for line in content.splitlines():
+        boundary = re.search(
+            r"Test Case '-\[([A-Za-z0-9_.]+) (test[A-Za-z0-9_]+)\]' (started|passed|failed|skipped)\b", line
+        )
+        if boundary:
+            name, method, status = boundary.groups()
+            identity = (name, method)
+            if status == "started":
+                active, captured = identity, {}
+            else:
+                if status == "failed" and identity == active and len(result) < 10:
+                    safe = {key: value for key, value in captured.items() if value is not None}
+                    if safe:
+                        result.append({"test": f"{name.split('.')[-1]}/{method}", **safe})
+                active, captured = None, {}
+            continue
+        if active is not None:
+            for prefix, kind in markers.items():
+                if line.startswith(prefix):
+                    # Duplicate or malformed markers cannot replace earlier evidence.
+                    captured[kind] = None if kind in captured else validated(kind, line[len(prefix):])
+                    break
+    return result
+
+
 def sanitized_command_failure(log: pathlib.Path) -> dict[str, Any]:
     """Return only allowlisted categories, Swift basenames/line numbers and test IDs."""
     try:
@@ -839,6 +916,9 @@ def sanitized_command_failure(log: pathlib.Path) -> dict[str, Any]:
                 for filename, line in sorted(set(locations))[:10]
                 if 1 <= int(line) <= 1_000_000
             ]
+        metadata = [entry for entry in failed_ui_metadata(content) if entry["test"] in result["tests"]]
+        if metadata:
+            result["uiMetadata"] = metadata
         return with_context(result)
     errors = re.findall(r"(?:^|[/\\])([A-Za-z][A-Za-z0-9_]*\.swift):(\d+):\d+: error: ([^\n]*)", content, re.MULTILINE)
     if errors:

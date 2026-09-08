@@ -174,21 +174,34 @@ final class QuareiaUITests: XCTestCase {
         let cancelFrame = waitForFilesCancel(in: app)
         let visibleCancelPoint = captureFilesNavigation(in: app)
         var cancelPoint = CGPoint(x: cancelFrame.midX, y: cancelFrame.midY)
+        var cancelSelection = "ax"
         if let visibleCancelPoint {
             // Remote Files accessibility geometry can point at the neighboring
             // More control. Tap the actual rendered cancellation label instead.
             cancelPoint = visibleCancelPoint
+            cancelSelection = "ocr"
         } else if UIDevice.current.userInterfaceIdiom == .pad && cancelFrame.width < 2 {
             // The current portrait iPad runtime exposes a 1-point Cancel frame
             // over the grid control. The captured native navigation strip shows
             // its actual close affordance at the upper-left (36, 84).
             cancelPoint = CGPoint(x: app.frame.minX + 36, y: app.frame.minY + 84)
+            cancelSelection = "ipad-fallback"
         }
         print("FILES_CANCEL_TAP point=\(cancelPoint)")
         app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(
             dx: cancelPoint.x - app.frame.minX, dy: cancelPoint.y - app.frame.minY
         )).tap()
-        XCTAssertTrue(app.staticTexts["Backup restore cancelled"].waitForExistence(timeout: 5))
+        let cancelToastVisible = app.staticTexts["Backup restore cancelled"].waitForExistence(timeout: 5)
+        let bounds = app.frame
+        emitSafeUIMetadata("UI_FILES_META", [
+            "selection": cancelSelection,
+            "tapX": Double((cancelPoint.x - bounds.minX) / bounds.width),
+            "tapY": Double((cancelPoint.y - bounds.minY) / bounds.height),
+            "cancelToastVisible": cancelToastVisible,
+            "webViewExists": webView.exists,
+            "appForeground": app.state == .runningForeground
+        ])
+        XCTAssertTrue(cancelToastVisible)
         XCTAssertEqual(app.state, .runningForeground)
         XCTAssertTrue(webView.waitForExistence(timeout: 5))
     }
@@ -467,9 +480,42 @@ final class QuareiaUITests: XCTestCase {
             predicate: NSPredicate(format: "value == 'main-ready'"),
             object: webView
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [loaded], timeout: 10), .completed)
+        let readiness = XCTWaiter.wait(for: [loaded], timeout: 10)
+        let rawReady = webView.value as? String
+        let ready: String
+        switch rawReady {
+        case "main-ready": ready = "main-ready"
+        case "loading": ready = "loading"
+        case "failed": ready = "failed"
+        case nil, "": ready = "missing"
+        default: ready = "other"
+        }
+        let appState: String
+        switch app.state {
+        case .runningForeground: appState = "foreground"
+        case .runningBackground: appState = "background"
+        case .runningBackgroundSuspended: appState = "suspended"
+        case .notRunning: appState = "not-running"
+        default: appState = "unknown"
+        }
+        emitSafeUIMetadata("UI_READY_META", [
+            "appState": appState,
+            "webViewExists": webView.exists,
+            "ready": ready,
+            "completed": readiness == .completed
+        ])
+        XCTAssertEqual(readiness, .completed)
         dismissInitialPrivacyIfNeeded(in: app)
         return (app, webView)
+    }
+
+    private func emitSafeUIMetadata(_ marker: String, _ fields: [String: Any]) {
+        // These call sites contain only fixed enums, booleans, and geometry.
+        // Do not add accessibility text, URLs, filenames, or image bytes.
+        guard JSONSerialization.isValidJSONObject(fields),
+              let data = try? JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys]),
+              let json = String(data: data, encoding: .utf8) else { return }
+        print("\(marker)=\(json)")
     }
 
     private func dismissInitialPrivacyIfNeeded(in app: XCUIApplication) {

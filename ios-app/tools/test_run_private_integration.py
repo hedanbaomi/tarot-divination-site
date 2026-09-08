@@ -736,6 +736,86 @@ class PrivateDeploymentTargetTests(unittest.TestCase):
 
 
 class PrivatePayloadPrivacyTests(unittest.TestCase):
+    @staticmethod
+    def ui_segment(markers, method="testReady", status="failed"):
+        return "\n".join([
+            f"Test Case '-[QuareiaUITests.QuareiaUITests {method}]' started.",
+            *markers,
+            f"Test Case '-[QuareiaUITests.QuareiaUITests {method}]' {status} (1 seconds).",
+        ])
+
+    def test_ui_metadata_is_bound_to_failed_test_and_exact_safe_schema(self):
+        ready = {"appState": "foreground", "webViewExists": True, "ready": "loading", "completed": False}
+        files = {"selection": "ocr", "tapX": 0.1, "tapY": 0.2, "cancelToastVisible": False,
+                 "webViewExists": True, "appForeground": True}
+        content = self.ui_segment(["UI_READY_META=" + json.dumps(ready)], method="testPassed", status="passed")
+        content += "\n" + self.ui_segment([
+            "UI_READY_META=" + json.dumps(ready), "UI_FILES_META=" + json.dumps(files),
+            "FILES_NAV_IMAGE 0 SYNTHETIC_PRIVATE_IMAGE", "OCR_TEXT=SYNTHETIC_PRIVATE_TEXT /private/path",
+        ], method="testFiles")
+        expected = [{"test": "QuareiaUITests/testFiles", "ready": ready, "files": files}]
+        self.assertEqual(TOOL.failed_ui_metadata(content), expected)
+        with tempfile.TemporaryDirectory() as directory:
+            log = pathlib.Path(directory) / "private-critical-ui.log"
+            log.write_text(content, encoding="utf-8")
+            diagnostic = TOOL.sanitized_command_failure(log)
+        self.assertEqual(diagnostic["uiMetadata"], expected)
+        self.assertEqual(diagnostic["category"], "xctest-failed")
+        self.assertNotIn("SYNTHETIC_PRIVATE", json.dumps(diagnostic))
+        self.assertNotIn("/private/", json.dumps(diagnostic))
+
+    def test_ui_metadata_rejects_unsafe_types_values_and_fields(self):
+        ready = {"appState": "foreground", "webViewExists": True, "ready": "loading", "completed": False}
+        files = {"selection": "ocr", "tapX": 0.1, "tapY": 0.2, "cancelToastVisible": False,
+                 "webViewExists": True, "appForeground": True}
+        invalid = []
+        for prefix, base, changes in [
+            ("UI_READY_META=", ready, [
+                {"detail": "SYNTHETIC_PRIVATE"}, {"appState": []}, {"appState": "/private/path"},
+                {"ready": "secret"}, {"ready": None}, {"completed": 0}, {"webViewExists": "true"},
+            ]),
+            ("UI_FILES_META=", files, [
+                {"text": "SYNTHETIC_PRIVATE"}, {"selection": "secret"}, {"selection": []},
+                {"tapX": float("nan")}, {"tapX": float("inf")}, {"tapY": float("-inf")},
+                {"tapX": True}, {"tapY": "0.2"}, {"tapX": -0.01}, {"tapY": 1.01},
+                {"cancelToastVisible": 0}, {"appForeground": None}, {"webViewExists": []},
+            ]),
+        ]:
+            invalid.extend(prefix + json.dumps({**base, **change}) for change in changes)
+            missing = dict(base)
+            missing.pop(next(iter(base)))
+            invalid.append(prefix + json.dumps(missing))
+        invalid += [
+            'UI_READY_META={"appState":"foreground","webViewExists":true,"ready":"loading","ready":"main-ready","completed":false}',
+            "UI_READY_META=null", "UI_READY_META=[]", "UI_READY_META=invalid",
+            "UI_READY_META=" + " " * 1025 + json.dumps(ready),
+            "UI_FILES_META=" + json.dumps(files).replace('"tapX": 0.1', '"tapX": 1e999'),
+        ]
+        for index, marker in enumerate(invalid):
+            with self.subTest(index=index):
+                self.assertEqual(TOOL.failed_ui_metadata(self.ui_segment([marker])), [])
+
+    def test_ui_metadata_never_reuses_passed_unfinished_or_duplicate_markers(self):
+        marker = 'UI_READY_META={"appState":"foreground","webViewExists":true,"ready":"loading","completed":false}'
+        start = "Test Case '-[QuareiaUITests.QuareiaUITests testReady]' started."
+        failed = "Test Case '-[QuareiaUITests.QuareiaUITests testReady]' failed (1 seconds)."
+        for content in [
+            marker + "\n" + failed,
+            start + "\n" + marker,
+            self.ui_segment([marker], status="passed") + "\n" + self.ui_segment([], method="testOther"),
+            self.ui_segment([marker], status="skipped"),
+            self.ui_segment([marker, marker]),
+            self.ui_segment([marker, "UI_READY_META=invalid"]),
+            self.ui_segment(["UI_READY_META=invalid", marker]),
+            start + "\n" + marker + "\n" + self.ui_segment([], method="testOther"),
+            start + "\n" + marker + "\nTest Case '-[OtherSuite testReady]' failed (1 seconds).",
+            self.ui_segment(["assertion text " + marker]),
+        ]:
+            with self.subTest(content=content):
+                self.assertEqual(TOOL.failed_ui_metadata(content), [])
+        many = "\n".join(self.ui_segment([marker], method=f"testCase{index}") for index in range(12))
+        self.assertEqual(len(TOOL.failed_ui_metadata(many)), 10)
+
     def test_failure_diagnostic_never_returns_compiler_literals_or_full_paths(self):
         with tempfile.TemporaryDirectory() as directory:
             log = pathlib.Path(directory) / "synthetic.log"
