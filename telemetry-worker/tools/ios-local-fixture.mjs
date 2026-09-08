@@ -27,6 +27,7 @@ const updateArtifact = Buffer.from(
 );
 const updateArtifactSha256 = "1148e3aae6c847d29f11873cb73f848322fc825ff975c9bd73c182df97fff66b";
 const updateArtifactDelayMs = 1_200;
+const workerReadinessTimeoutMs = 2_000;
 let updateDownloadMode = "normal";
 let activeUpdateDownloads = 0;
 
@@ -121,6 +122,10 @@ async function handleRequest(request, response, workerOrigin) {
     return;
   }
   if (url.pathname === "/__fixture/health" && request.method === "GET") {
+    if (!await workerAnnouncementsReady(workerOrigin)) {
+      sendJson(response, 503, { error: "worker_not_ready" });
+      return;
+    }
     sendJson(response, 200, { ok: true, worker_origin: workerOrigin });
     return;
   }
@@ -364,6 +369,30 @@ function sendJson(response, status, value) {
     "cache-control": "no-store"
   });
   response.end(JSON.stringify(value));
+}
+
+async function workerAnnouncementsReady(workerOrigin) {
+  const url = new URL("/v1/announcements", workerOrigin);
+  url.searchParams.set("platform", "ios");
+  url.searchParams.set("version_code", "1");
+  url.searchParams.set("locale", "en");
+  try {
+    const readiness = await fetch(url, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(workerReadinessTimeoutMs)
+    });
+    if (readiness.status !== 200 ||
+        !readiness.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+      await readiness.body?.cancel();
+      return false;
+    }
+    const body = await readiness.json();
+    return body !== null && typeof body === "object" && !Array.isArray(body) &&
+      Object.keys(body).sort().join(",") === "announcements,locale" &&
+      body.locale === "en" && Array.isArray(body.announcements);
+  } catch (_error) {
+    return false;
+  }
 }
 
 async function sendSyntheticUpdateArtifact(response) {

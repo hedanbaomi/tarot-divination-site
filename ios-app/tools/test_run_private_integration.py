@@ -654,24 +654,47 @@ class PrivateCandidatePackagingTests(unittest.TestCase):
 
 
 class PrivateDeploymentTargetTests(unittest.TestCase):
+    @staticmethod
+    def modern_build(minimum):
+        return ("Load command 11\n cmd LC_BUILD_VERSION\n cmdsize 32\n"
+                f" platform IOS\n minos {minimum}\n sdk 26.2\n"
+                " ntools 1\n tool LD\n version 1230.1\n")
+
     def test_macho_target_checks_main_and_each_runtime_minimum(self):
         files = [{"path": "Quareia", "_absolute": pathlib.Path("Quareia")},
                  {"path": "Frameworks/libswiftCore.dylib", "_absolute": pathlib.Path("libswiftCore.dylib")}]
         machos = [{"path": entry["path"], "architectures": ["arm64"]} for entry in files]
-        with patch.object(TOOL.subprocess, "check_output", side_effect=["platform IOS\n minos 16.0\n", "platform IOS\n minos 15.0\n"]):
+        with patch.object(TOOL.subprocess, "check_output", side_effect=[self.modern_build("16.0"), self.modern_build("15.0")]):
             result = TOOL.validate_macho_deployment_targets(machos, files, "Quareia")
         self.assertEqual([entry["minimumOSVersion"] for entry in result], ["16.0", "15.0"])
         for outputs in [
-            ["minos 17.0\n", "minos 15.0\n"],
-            ["minos 15.0\n", "minos 15.0\n"],
-            ["minos 16.0\n", "minos 16.1\n"],
-            ["sdk 26.2\n", "minos 15.0\n"],
-            ["minos 16.0\nminos 16.0\n", "minos 15.0\n"],
+            [self.modern_build("17.0"), self.modern_build("15.0")],
+            [self.modern_build("15.0"), self.modern_build("15.0")],
+            [self.modern_build("16.0"), self.modern_build("16.1")],
+            [self.modern_build("16.0").replace("minos 16.0", "missing 16.0"), self.modern_build("15.0")],
+            [self.modern_build("16.0") + "minos 16.0\n", self.modern_build("15.0")],
         ]:
             with self.subTest(outputs=outputs), patch.object(TOOL.subprocess, "check_output", side_effect=outputs), self.assertRaises(TOOL.PrivateIntegrationError):
                 TOOL.validate_macho_deployment_targets(machos, files, "Quareia")
         with self.assertRaisesRegex(TOOL.PrivateIntegrationError, "arm64"):
             TOOL.validate_macho_deployment_targets([{"path": "Quareia", "architectures": ["x86_64"]}], files, "Quareia")
+
+    def test_legacy_minimum_and_ambiguous_platform_commands(self):
+        files = [{"path": "Quareia", "_absolute": pathlib.Path("Quareia")}]
+        machos = [{"path": "Quareia", "architectures": ["arm64"]}]
+        legacy = "Load command 7\n cmd LC_VERSION_MIN_IPHONEOS\n cmdsize 16\n version 16.0\n sdk 18.0\n"
+        with patch.object(TOOL.subprocess, "check_output", return_value=legacy):
+            self.assertEqual(TOOL.validate_macho_deployment_targets(machos, files, "Quareia")[0]["minimumOSVersion"], "16.0")
+        for output in [
+            "minos 16.0\n", legacy + "version 15.0\n",
+            legacy.replace("IPHONEOS", "MACOSX"),
+            self.modern_build("16.0").replace("platform IOS", "platform IOSSIMULATOR"),
+            self.modern_build("16.0") + legacy,
+            self.modern_build("16.0") + self.modern_build("16.0"),
+            self.modern_build("16.0") + "platform IOS\n",
+        ]:
+            with self.subTest(output=output), patch.object(TOOL.subprocess, "check_output", return_value=output), self.assertRaises(TOOL.PrivateIntegrationError):
+                TOOL.validate_macho_deployment_targets(machos, files, "Quareia")
 
     def test_private_info_target_and_final_deployment_report(self):
         # Only platform tool/provenance answers are mocked; this is not Apple build evidence.
@@ -691,7 +714,7 @@ class PrivateDeploymentTargetTests(unittest.TestCase):
                 inspector, "_validate_public_resources", return_value={"reviewedBuildSourceSHA": SOURCE_SHA}
             ), patch.object(inspector, "_inspect_machos", return_value=[{"path": "Quareia", "architectures": ["arm64"]}]), patch.object(
                 inspector, "_validate_entitlements", return_value=[]
-            ), patch.object(TOOL.subprocess, "check_output", return_value="platform IOS\nminos 16.0\n") as vtool:
+            ), patch.object(TOOL.subprocess, "check_output", return_value=self.modern_build("16.0")) as vtool:
                 for minimum in [None, "15.0", "17.0", "16.0"]:
                     if minimum is None:
                         info.pop("MinimumOSVersion", None)

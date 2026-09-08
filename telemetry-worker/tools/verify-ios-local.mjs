@@ -166,7 +166,7 @@ async function verifyHttpFlow() {
   fixture.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
 
   try {
-    await waitForFixture(fixture, () => stdout, () => stderr);
+    const fixtureHealth = await waitForFixture(fixture, () => stdout, () => stderr);
     assert.match(await checkAdminPage([]), /127\.0\.0\.1:8787\/admin 200/);
     const common = {
       schema_version: 1,
@@ -250,7 +250,7 @@ async function verifyHttpFlow() {
     );
     assert.deepEqual((await withdrawnPublic.json()).announcements, []);
 
-    return await finishHttpVerification(fixture, statuses, seeded.id, fixtureStats);
+    return await finishHttpVerification(fixture, statuses, seeded.id, fixtureStats, fixtureHealth);
   } catch (error) {
     await stopFixture(fixture);
     const wrapped = new Error(`${safeMessage(error)};fixture_stderr=${sanitizeOutput(stderr)}`);
@@ -259,7 +259,7 @@ async function verifyHttpFlow() {
   }
 }
 
-async function finishHttpVerification(fixture, statuses, announcementId, fixtureStats) {
+async function finishHttpVerification(fixture, statuses, announcementId, fixtureStats, fixtureHealth) {
   await stopFixture(fixture);
   const installs = results(runD1(config, httpPersist,
     "SELECT install_hash, app_version, version_code, platform, android_major, ios_major, " +
@@ -290,6 +290,7 @@ async function finishHttpVerification(fixture, statuses, announcementId, fixture
   });
   return {
     status: "PASS",
+    fixture_health: fixtureHealth,
     admin_check: "PASS",
     event_statuses: statuses,
     fixture_stats: fixtureStats,
@@ -349,9 +350,27 @@ function firstResult(payload) {
 async function waitForFixture(child, stdout, stderr) {
   const deadline = Date.now() + 45_000;
   while (Date.now() < deadline) {
-    if (stdout().includes("FIXTURE_READY ")) return;
     if (child.exitCode !== null) {
       throw new Error(`fixture_exited:${sanitizeOutput(stderr())}`);
+    }
+    if (stdout().includes("FIXTURE_READY ")) {
+      let response;
+      try {
+        response = await fetch(fixtureOrigin + "/__fixture/health", {
+          headers: { accept: "application/json" },
+          signal: AbortSignal.timeout(2_500)
+        });
+      } catch (_error) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        continue;
+      }
+      const body = await response.json();
+      if (response.status === 200) {
+        assert.deepEqual(body, { ok: true, worker_origin: "http://127.0.0.1:8788" });
+        return { status: "PASS", worker_path: "announcements+d1" };
+      }
+      assert.equal(response.status, 503);
+      assert.deepEqual(body, { error: "worker_not_ready" });
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }

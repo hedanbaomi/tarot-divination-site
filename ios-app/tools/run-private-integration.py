@@ -627,8 +627,19 @@ def validate_macho_deployment_targets(
             )
         except (OSError, subprocess.CalledProcessError) as cause:
             raise PrivateIntegrationError("Cannot verify private Mach-O deployment target") from cause
-        # Modern LC_BUILD_VERSION uses minos; older version-min commands use version.
-        declared = re.findall(r"^\s*(?:minos|version)\s+(\d+(?:\.\d+){0,2})\s*$", build, re.MULTILINE)
+        # LC_BUILD_VERSION also lists the linker's `version`. Only `minos`
+        # describes deployment there; `version` is the minimum solely in the
+        # legacy LC_VERSION_MIN_IPHONEOS command.
+        commands = re.findall(r"^\s*cmd\s+(LC_[A-Z0-9_]+)\s*$", build, re.MULTILINE)
+        require(len(commands) == 1 and commands[0] in {"LC_BUILD_VERSION", "LC_VERSION_MIN_IPHONEOS"},
+                "Private Mach-O has missing or ambiguous iOS build commands")
+        if commands[0] == "LC_BUILD_VERSION":
+            platforms = re.findall(r"^\s*platform\s+(\S+)\s*$", build, re.MULTILINE)
+            require(platforms == ["IOS"], "Private Mach-O build platform must be IOS")
+            minimum_field = "minos"
+        else:
+            minimum_field = "version"
+        declared = re.findall(r"^\s*" + minimum_field + r"\s+(\d+(?:\.\d+){0,2})\s*$", build, re.MULTILINE)
         require(len(declared) == 1, "Private Mach-O has missing or ambiguous minimum iOS metadata")
         version = tuple(int(part) for part in declared[0].split("."))
         version += (0,) * (3 - len(version))
