@@ -66,7 +66,9 @@ echo 'SIMULATOR_INSTALL_PASS_LAUNCH_BEGIN'
 python3 ios-app/tools/run-bounded.py 180 xcrun simctl launch --terminate-running-process "$SIMULATOR_ID" com.hedanbaomi.quareia.ios -probe
 echo 'SIMULATOR_LAUNCH_PASS'
 sleep 3
-python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log show --last 1m --predicate 'process == "Quareia" AND eventMessage CONTAINS "P0"' --style compact | tail -50
+# Unified log collection is diagnostic; the XCTest smoke below checks the app.
+python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log show --last 1m --predicate 'process == "Quareia" AND eventMessage CONTAINS "P0"' --style compact | tail -50 \
+  || echo 'PUBLIC_PROBE_LOG_COLLECTION_UNAVAILABLE'
 # Run gesture and system-panel scenarios first for prompt failure evidence.
 # The remainder excludes exactly these already-executed tests; no retry.
 BOARD_TEST='QuareiaUITests/QuareiaUITests/testFreeBoardGesturesHistoryAndDraftRestore'

@@ -728,6 +728,13 @@ class PrivatePayloadPrivacyTests(unittest.TestCase):
             log.write_text("Test Case '-[QuareiaTests.ProviderTests testTamper]' failed (0.1 seconds).\n", encoding="utf-8")
             self.assertEqual(TOOL.sanitized_command_failure(log),
                              {"category": "xctest-failed", "tests": ["ProviderTests/testTamper"]})
+            log.write_text("/private/temporary/PrivateInputs/ProviderTests.swift:52: error: -[QuareiaTests.ProviderTests testTamper] : XCTAssertEqual failed: SYNTHETIC_SENSITIVE_LITERAL\n"
+                           "Test Case '-[QuareiaTests.ProviderTests testTamper]' failed (0.1 seconds).\n", encoding="utf-8")
+            self.assertEqual(TOOL.sanitized_command_failure(log), {
+                "category": "xctest-failed", "tests": ["ProviderTests/testTamper"],
+                "errors": [{"category": "xctest-failed", "file": "ProviderTests.swift", "line": 52}]})
+            self.assertNotIn("SYNTHETIC_SENSITIVE_LITERAL", json.dumps(TOOL.sanitized_command_failure(log)))
+            self.assertNotIn("/private/", json.dumps(TOOL.sanitized_command_failure(log)))
             log.write_text("COMMAND_TIMEOUT after 600s: xcodebuild\n", encoding="utf-8")
             self.assertEqual(TOOL.sanitized_command_failure(log), {"category": "command-timeout"})
 

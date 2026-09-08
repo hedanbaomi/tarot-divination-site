@@ -797,7 +797,16 @@ def sanitized_command_failure(log: pathlib.Path) -> dict[str, Any]:
         return {"category": "command-timeout"}
     tests = re.findall(r"Test Case '-\[([A-Za-z0-9_.]+) (test[A-Za-z0-9_]+)\]' failed\b", content)
     if tests:
-        return {"category": "xctest-failed", "tests": sorted({f"{name.split('.')[-1]}/{method}" for name, method in tests})[:10]}
+        result = {"category": "xctest-failed", "tests": sorted({f"{name.split('.')[-1]}/{method}" for name, method in tests})[:10]}
+        # Keep only source coordinates, never assertion values or private paths.
+        locations = re.findall(r"(?:^|[/\\])([A-Za-z][A-Za-z0-9_]*\.swift):(\d+):(?:\d+:)? error:", content, re.MULTILINE)
+        if locations:
+            result["errors"] = [
+                {"category": "xctest-failed", "file": filename, "line": int(line)}
+                for filename, line in sorted(set(locations))[:10]
+                if 1 <= int(line) <= 1_000_000
+            ]
+        return result
     errors = re.findall(r"(?:^|[/\\])([A-Za-z][A-Za-z0-9_]*\.swift):(\d+):\d+: error: ([^\n]*)", content, re.MULTILINE)
     if errors:
         findings = []
