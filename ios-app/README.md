@@ -120,13 +120,44 @@ manifest. Its output is never publishable, and it tests the Android latest
 release parser. The original download hash is verified before sharing; app
 startup does not bind execution to that hash or an author's signing identity.
 
-`tools/private-integration-gate.py` supplies synthetic contract exercises;
+`tools/private-integration-gate.py` supplies synthetic contract exercises; its
+legacy `real` subcommand remains a blocked public scaffold, not the real runner.
 `tools/run-private-integration.py status` returns `PRIVATE_BUILD_BLOCKED` and
 exit code 3 by default. Its separately approved real mode requires reviewed
 source, owner-only external inputs, isolated temporary/output directories, and
 provider runtime acceptance tests. It copies no input into this checkout and
 removes its disposable test simulator and temporary inputs. Synthetic checks
-are not evidence that the real private format decoded successfully.
+are not evidence that the real private format decoded successfully. A successful
+authorized `run` instead reports `PRIVATE_PROVIDER_RUNTIME_VERIFIED` with a
+`PRIVATE_CANDIDATE` product; default/public blocked status does not describe that
+verified private run.
+
+The approved `run` command accepts `--full-runtime` to run the reviewed public
+Swift and UI tests with the integrated provider, in addition to the 82-record
+decode and format-authentication tests. The private workflow must first start
+the reviewed `telemetry-worker/tools/ios-local-fixture.mjs` at its fixed loopback
+origin and own its cleanup. There is no production fallback. Simulator tests
+retain `PUBLIC_TESTING` only for test hooks and loopback services;
+`DISTRIBUTION PRIVATE_LXXXI_PROVIDER` keeps the real provider selected. The runner
+requires every reviewed test to pass once, in native, critical-UI and remaining-UI
+groups with the existing 600/600/1200-second limits, without retries.
+
+Every device candidate uses Release, `-O`, no testability/debug dylib, and only
+`DISTRIBUTION PRIVATE_LXXXI_PROVIDER`. Add
+`--ipa-output /owner-private/output/Quareia-<version>-<build>.ipa` to the existing
+required `run` arguments to create an unsigned `Payload/Quareia.app` archive.
+This output must be outside the public repository, manifest inputs, temporary
+root and candidate app, with an owner-only parent. The runner rechecks the app
+and ZIP and records the approved source/manifest, final app tree, IPA size/hash,
+provider evidence and full-suite status in the private report. Its final bundle
+allowlist rejects source/key/environment sidecars, raw or decoded material, and
+unreviewed runtime files. Source-tree checks run before overlay injection.
+The synthetic inspector/packager CLI remains unchanged and cannot accept this
+private candidate. A verified unsigned IPA still reports
+`DEVICE_ACCEPTANCE_PENDING` and `releaseComplete=false`; signing, device
+acceptance and publication are separate operations. Failure output contains
+only normalized categories, Swift basenames/line numbers or failed test names;
+raw logs and result bundles remain ephemeral and must not be uploaded.
 
 iOS updates must use an independent manifest/channel. Any future `ios-v*` Release
 must set `make_latest=false` and pass the existing Android latest-release parser

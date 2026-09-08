@@ -13,6 +13,7 @@ import os
 import pathlib
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 
@@ -375,6 +376,144 @@ class PrivateOrchestrationContractTests(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertEqual(stdout.getvalue().strip(), "PRIVATE_BUILD_BLOCKED")
 
+    def test_full_runtime_discovery_covers_public_ui_native_and_private_acceptance(self):
+        authentication = "QuareiaTests/PrivateProviderAuthenticationNegativeTests/testRejectsCorruptSourceAndWrongKey"
+        expected = TOOL.expected_runtime_tests(TOOL_PATH.parents[2], authentication)
+        self.assertIn(TOOL.PROVIDER_TEST_IDENTIFIER, expected)
+        self.assertIn(authentication, expected)
+        self.assertTrue(set(TOOL.CRITICAL_UI_TESTS) <= set(expected))
+        self.assertIn("QuareiaTests/AppRouteTests/testProtectedRouteRejectsWrongTokenKeysSuffixesQueryAndFragment", expected)
+        self.assertIn("QuareiaUITests/QuareiaUITests/testCustomSpreadQSPRoundTripUsesTheRealStudio", expected)
+        self.assertGreater(len(expected), 80)
+
+    def test_full_runtime_requires_each_test_once_not_only_a_success_summary(self):
+        expected = ["QuareiaTests/FirstTests/testFirst", "QuareiaTests/SecondTests/testSecond"]
+        first = "Test Case '-[QuareiaTests.FirstTests testFirst]' passed (0.1 seconds)."
+        second = "Test Case '-[QuareiaTests.SecondTests testSecond]' passed (0.1 seconds)."
+        summary = "Executed 2 tests, with 0 failures (0 unexpected) in 0.2 seconds"
+        valid = "\n".join([first, second, summary])
+        self.assertEqual(TOOL.validate_runtime_group(valid, expected)["testCount"], 2)
+        for candidate in [
+            "\n".join([first, summary]),
+            "\n".join([first, first, second, summary]),
+            valid.replace("testSecond]' passed", "testSecond]' skipped"),
+            valid.replace("0 failures", "1 failure"),
+        ]:
+            with self.subTest(candidate=candidate), self.assertRaises(TOOL.PrivateIntegrationError):
+                TOOL.validate_runtime_group(candidate, expected)
+
+    def test_distribution_settings_keep_real_provider_and_strip_device_test_flags(self):
+        self.assertIn("SWIFT_ACTIVE_COMPILATION_CONDITIONS=PRIVATE_LXXXI_PROVIDER DISTRIBUTION PUBLIC_TESTING",
+                      TOOL.simulator_settings(True))
+        self.assertIn("SWIFT_ACTIVE_COMPILATION_CONDITIONS=PRIVATE_LXXXI_PROVIDER DISTRIBUTION",
+                      TOOL.simulator_settings(False))
+        device = TOOL.device_settings()
+        self.assertIn("SWIFT_ACTIVE_COMPILATION_CONDITIONS=PRIVATE_LXXXI_PROVIDER DISTRIBUTION", device)
+        self.assertIn("SWIFT_OPTIMIZATION_LEVEL=-O", device)
+        self.assertIn("ENABLE_TESTABILITY=NO", device)
+        self.assertIn("CODE_SIGNING_ALLOWED=NO", device)
+        conditions = next(setting for setting in device if setting.startswith("SWIFT_ACTIVE_COMPILATION_CONDITIONS="))
+        self.assertNotIn("PUBLIC_TESTING", conditions)
+        self.assertNotIn("DEBUG", conditions)
+        self.assertIn("ENABLE_DEBUG_DYLIB=NO", device)
+        self.assertEqual(TOOL.bounded_xcode_command(600, ["test"])[1:],
+                         ["ios-app/tools/run-bounded.py", "600", "xcodebuild", "test"])
+
+    def test_cli_full_runtime_and_ipa_are_explicit_opt_ins(self):
+        with tempfile.TemporaryDirectory() as directory:
+            values = self.run_args(pathlib.Path(directory))
+        cli = ["run"]
+        for key, value in vars(values).items():
+            if value is True:
+                cli.append("--" + key.replace("_", "-"))
+            else:
+                cli.extend(["--" + key.replace("_", "-"), str(value)])
+        args = TOOL.parse_args(cli)
+        self.assertFalse(args.full_runtime)
+        self.assertIsNone(args.ipa_output)
+        args = TOOL.parse_args([*cli, "--full-runtime", "--ipa-output", "candidate.ipa"])
+        self.assertTrue(args.full_runtime)
+        self.assertEqual(args.ipa_output, "candidate.ipa")
+
+    def test_full_orchestration_orders_gates_groups_release_and_verified_ipa(self):
+        # External tools/inspection are mocked. Real local ZIP/hash checks still run;
+        # this test is not evidence of Xcode compilation or provider decoding.
+        authentication = "QuareiaTests/PrivateProviderAuthenticationNegativeTests/testRejectsCorruptSourceAndWrongKey"
+        native = [TOOL.PROVIDER_TEST_IDENTIFIER, authentication, "QuareiaTests/AppRouteTests/testNonce"]
+        remaining = ["QuareiaUITests/QuareiaUITests/testCustomSpreadQSPRoundTripUsesTheRealStudio"]
+        expected = [*native, *TOOL.CRITICAL_UI_TESTS, *remaining]
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            self.make_path_fixture(root)
+            args = self.run_args(root, full_runtime=True,
+                                 ipa_output=str(root / "ipa" / "Quareia-1.0.0-1.ipa"))
+            commands, events = [], []
+            inspection = {}
+
+            @contextlib.contextmanager
+            def simulator(*unused, **kwargs):
+                yield args.simulator_id
+
+            def check_output(command, **kwargs):
+                if command[1] == "rev-parse":
+                    return SOURCE_SHA
+                self.assertEqual(command[1:4], ["ls-tree", "-r", "-z"])
+                events.append("public-tree-gate")
+                return f"100644 blob {SOURCE_SHA}\tios-app/Quareia/AppRoute.swift\0"
+
+            def execute(command, *, cwd, log, environment):
+                commands.append(command)
+                if command[:2] == ["git", "clone"]:
+                    pathlib.Path(command[-1]).mkdir()
+                if "test-without-building" in command:
+                    if "-only-testing:QuareiaTests" in command:
+                        group = native
+                    elif "-only-testing:QuareiaUITests" in command:
+                        group = remaining
+                    else:
+                        group = TOOL.CRITICAL_UI_TESTS
+                    lines = []
+                    if group == native:
+                        lines = [f"PRIVATE_PROVIDER_DECODE_OK:{key}" for key in TOOL.EXPECTED_KEYS]
+                        lines += ["PRIVATE_PROVIDER_82_DECODE_PASS", "PRIVATE_PROVIDER_AUTHENTICATION_NEGATIVE_PASS"]
+                    for identifier in group:
+                        target, name, method = identifier.split("/")
+                        lines.append(f"Test Case '-[{target}.{name} {method}]' passed (0.1 seconds).")
+                    lines.append(f"Executed {len(group)} tests, with 0 failures (0 unexpected)")
+                    log.write_text("\n".join(lines), encoding="utf-8")
+                    pathlib.Path(command[command.index("-resultBundlePath") + 1]).mkdir()
+                if "Release" in command:
+                    product = pathlib.Path(command[command.index("-derivedDataPath") + 1]) / "Build" / "Products" / "Release-iphoneos"
+                    product.mkdir(parents=True)
+                    _, report = PrivateCandidatePackagingTests().fixture(product)
+                    inspection.update(report)
+
+            with patch.object(TOOL.sys, "platform", "darwin"), patch.object(
+                TOOL.subprocess, "check_output", side_effect=check_output
+            ), patch.object(TOOL, "load_and_validate_manifest", return_value={"authenticationTestIdentifier": authentication}), patch.object(
+                TOOL, "_copy_manifest_inputs", side_effect=lambda *unused: events.append("overlay-copy")
+            ), patch.object(TOOL, "expected_runtime_tests", return_value=expected), patch.object(
+                TOOL, "_ephemeral_simulator", side_effect=simulator
+            ), patch.object(TOOL, "_run_logged", side_effect=execute), patch.object(
+                TOOL, "inspect_private_device_app", side_effect=lambda *unused, **kwargs: dict(inspection)
+            ):
+                result = TOOL.run_private_integration(args, {"QUAREIA_PRIVATE_CI_APPROVED_CONTEXT": APPROVAL_CONTEXT})
+            self.assertEqual(events, ["public-tree-gate", "overlay-copy"])
+            groups = [command for command in commands if "test-without-building" in command]
+            self.assertEqual([command[2] for command in groups], ["600", "600", "1200"])
+            self.assertIn("-only-testing:QuareiaTests", groups[0])
+            self.assertTrue(all(f"-only-testing:{test}" in groups[1] for test in TOOL.CRITICAL_UI_TESTS))
+            self.assertTrue(all(f"-skip-testing:{test}" in groups[2] for test in TOOL.CRITICAL_UI_TESTS))
+            release = next(command for command in commands if "Release" in command)
+            self.assertTrue(set(TOOL.device_settings()) <= set(release))
+            self.assertEqual(result["runtimeSuite"]["testCount"], len(expected))
+            self.assertEqual(result["providerRuntimeEvidence"]["recordCount"], 82)
+            self.assertTrue(result["providerRuntimeEvidence"]["authenticationNegativePassed"])
+            self.assertEqual(result["deviceAcceptance"], "DEVICE_ACCEPTANCE_PENDING")
+            self.assertFalse(result["releaseComplete"])
+            self.assertEqual(result["ipa"]["sha256"], TOOL.sha256_file(pathlib.Path(args.ipa_output)))
+            self.assertEqual(result["ipa"]["appBundleTreeSHA256"], result["finalApp"]["bundleTreeSHA256"])
+
     def test_authorization_rejects_pull_request_or_missing_explicit_gate(self):
         args = argparse.Namespace(
             approved_private_context=False,
@@ -396,7 +535,162 @@ class PrivateOrchestrationContractTests(unittest.TestCase):
                     "GITHUB_EVENT_NAME": "pull_request_target",
                     "GITHUB_HEAD_REF": "untrusted-branch",
                 },
-            )
+                )
+
+
+class PrivateCandidatePackagingTests(unittest.TestCase):
+    def fixture(self, root: pathlib.Path):
+        app = root / "Quareia.app"
+        app.mkdir(mode=0o755)
+        data = b"PUBLIC SYNTHETIC TEST BYTES - NOT A PRIVATE PROVIDER OR REAL APP\n"
+        file = app / "test-fixture.txt"
+        file.write_bytes(data)
+        file.chmod(0o644)
+        report = {
+            "status": "PRIVATE_CANDIDATE", "releaseComplete": False, "platform": "IOS",
+            "reviewedSourceSHA": SOURCE_SHA,
+            "bundleTreeSHA256": digest(("\0".join(["F", file.name, "0644", str(len(data)), digest(data)]) + "\n").encode()),
+            "files": [{"path": file.name, "mode": "0644", "bytes": len(data),
+                       "sha256": digest(data), "isMachO": False}], "directories": [],
+        }
+        return app, report
+
+    def package(self, app, output, report):
+        return TOOL.package_private_candidate(app, output, report,
+            source_sha=SOURCE_SHA, manifest_sha256="b" * 64)
+
+    def test_private_archive_is_reopened_and_binds_source_manifest_app_and_ipa(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            app, report = self.fixture(root)
+            output = root / "Quareia-1.0.0-1.ipa"
+            result = self.package(app, output, report)
+            self.assertEqual(result["sha256"], TOOL.sha256_file(output))
+            self.assertEqual(result["bytes"], output.stat().st_size)
+            self.assertEqual(result["appBundleTreeSHA256"], report["bundleTreeSHA256"])
+            self.assertEqual(result["reviewedPublicSourceSHA"], SOURCE_SHA)
+            self.assertEqual(result["approvedManifestSHA256"], "b" * 64)
+            self.assertFalse(result["signed"])
+            with zipfile.ZipFile(output) as archive:
+                self.assertEqual(set(archive.namelist()),
+                                 {"Payload/", "Payload/Quareia.app/", "Payload/Quareia.app/test-fixture.txt"})
+            if os.name != "nt":
+                self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+
+    def test_changed_app_and_wrong_source_cannot_produce_private_ipa(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            app, report = self.fixture(root)
+            output = root / "Quareia-1.0.0-1.ipa"
+            report["reviewedSourceSHA"] = "d" * 40
+            with self.assertRaisesRegex(TOOL.PrivateIntegrationError, "source binding"):
+                self.package(app, output, report)
+            report["reviewedSourceSHA"] = SOURCE_SHA
+            original_tree = report["bundleTreeSHA256"]
+            report["bundleTreeSHA256"] = "c" * 64
+            with self.assertRaisesRegex(TOOL.PrivateIntegrationError, "tree binding"):
+                self.package(app, output, report)
+            report["bundleTreeSHA256"] = original_tree
+            (app / "test-fixture.txt").write_bytes(b"changed")
+            with self.assertRaisesRegex(TOOL.PrivateIntegrationError, "bundle/ZIP"):
+                self.package(app, output, report)
+            self.assertFalse(output.exists())
+
+    def test_extra_zip_payload_is_rejected_before_output_and_existing_output_is_preserved(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            app, report = self.fixture(root)
+            output = root / "Quareia-1.0.0-1.ipa"
+            packager = TOOL._load_public_packager()
+            original = packager.write_candidate
+
+            def inject(destination, *args):
+                original(destination, *args)
+                with zipfile.ZipFile(destination, "a") as archive:
+                    archive.writestr("unreviewed.txt", b"synthetic extra")
+
+            with patch.object(TOOL, "_load_public_packager", return_value=packager), patch.object(
+                packager, "write_candidate", side_effect=inject
+            ), self.assertRaisesRegex(TOOL.PrivateIntegrationError, "bundle/ZIP"):
+                self.package(app, output, report)
+            self.assertFalse(output.exists())
+            output.write_bytes(b"existing")
+            with self.assertRaisesRegex(TOOL.PrivateIntegrationError, "overwrite"):
+                self.package(app, output, report)
+            self.assertEqual(output.read_bytes(), b"existing")
+
+
+class PrivatePayloadPrivacyTests(unittest.TestCase):
+    def test_failure_diagnostic_never_returns_compiler_literals_or_full_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = pathlib.Path(directory) / "synthetic.log"
+            log.write_text("/private/temporary/PrivateInputs/IntegratedLxxxiProvider.swift:42:9: error: cannot convert value 'SYNTHETIC_SENSITIVE_LITERAL'\n"
+                           " 42 | let opaque = [12, 34, 56, 78]\n", encoding="utf-8")
+            diagnostic = TOOL.sanitized_command_failure(log)
+            self.assertEqual(diagnostic, {"category": "swift-compile", "errors": [
+                {"category": "swift-type-check", "file": "IntegratedLxxxiProvider.swift", "line": 42}]})
+            encoded = json.dumps(diagnostic)
+            self.assertNotIn("SYNTHETIC_SENSITIVE_LITERAL", encoded)
+            self.assertNotIn("12, 34", encoded)
+            self.assertNotIn("/private/", encoded)
+            log.write_text("Test Case '-[QuareiaTests.ProviderTests testTamper]' failed (0.1 seconds).\n", encoding="utf-8")
+            self.assertEqual(TOOL.sanitized_command_failure(log),
+                             {"category": "xctest-failed", "tests": ["ProviderTests/testTamper"]})
+            log.write_text("COMMAND_TIMEOUT after 600s: xcodebuild\n", encoding="utf-8")
+            self.assertEqual(TOOL.sanitized_command_failure(log), {"category": "command-timeout"})
+
+    def test_public_source_tree_rejects_private_material_before_overlay(self):
+        def listing(path, mode="100644"):
+            return f"{mode} blob {'a' * 40}\t{path}\0"
+
+        TOOL.validate_public_source_tree(listing("ios-app/Quareia/AppRoute.swift"))
+        TOOL.validate_public_source_tree(listing("backend/.env.example"))
+        TOOL.validate_public_source_tree(listing("android-demo/app/src/main/java/example/LxxxiAssetProvider.kt"))
+        for path in [".private/handoff.md", "ios-app/PrivateInputs/Provider.swift",
+                     "records/lxxxi-01.qv", "config/.env.production", ".env.example", "secret.key",
+                     "android-demo/app/src/main/java/example/VaultMaterial.kt",
+                     "android-demo/app/src/main/java/example/LxxxiVault.kt",
+                     "android-demo/app/src/main/java/example/PrivateLxxxiAssetProvider.kt",
+                     "ios-app/Quareia/IntegratedLxxxiProvider.swift",
+                     "ios-app/Quareia/IntegratedVaultMaterial.swift",
+                     "android-demo/app/src/main/assets/qv/opaque.dat",
+                     "android-demo/app/src/main/assets/QV/opaque.dat"]:
+            with self.subTest(path=path), self.assertRaises(TOOL.PrivateIntegrationError):
+                TOOL.validate_public_source_tree(listing(path))
+        with self.assertRaises(TOOL.PrivateIntegrationError):
+            TOOL.validate_public_source_tree(listing("linked-source", "120000"))
+
+    def test_private_payload_rejects_sidecars_raw_directories_and_arbitrary_files(self):
+        def entry(path, data=b"public synthetic fixture", macho=False):
+            return {"path": path, "_data": data, "isMachO": macho, "sha256": digest(data)}
+
+        base = [entry("Quareia", macho=True), entry("Info.plist"), entry("PkgInfo", b"APPL????")]
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            TOOL.validate_private_runtime_payload(base, [], "Quareia", root)
+            for path in ["Provider.swift", "Provider.kt", "Provider.java", ".env", ".env.production", ".env.example",
+                         "private.key", "settings.env", "notes.txt", "raw-scans/card.png", "plaintext/image.png"]:
+                with self.subTest(path=path), self.assertRaises(TOOL.PrivateIntegrationError):
+                    TOOL.validate_private_runtime_payload([*base, entry(path)], [], "Quareia", root)
+            with self.assertRaisesRegex(TOOL.PrivateIntegrationError, "directory"):
+                TOOL.validate_private_runtime_payload(base, [{"path": "raw-scans"}], "Quareia", root)
+
+    def test_probe_bytes_must_match_reviewed_source_and_frameworks_must_be_compiled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            source = root / "ios-app" / "Quareia" / "Resources" / "probe" / "index.html"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"public probe")
+            probe = {"path": "probe/index.html", "_data": b"public probe",
+                     "sha256": digest(b"public probe"), "isMachO": False}
+            TOOL.validate_private_runtime_payload([probe], [{"path": "probe"}], "Quareia", root)
+            probe["sha256"] = "0" * 64
+            with self.assertRaisesRegex(TOOL.PrivateIntegrationError, "reviewed public source"):
+                TOOL.validate_private_runtime_payload([probe], [{"path": "probe"}], "Quareia", root)
+            library = {"path": "Frameworks/libswiftCore.dylib", "_data": b"not a compiled binary",
+                       "sha256": "a" * 64, "isMachO": False}
+            with self.assertRaisesRegex(TOOL.PrivateIntegrationError, "not Mach-O"):
+                TOOL.validate_private_runtime_payload([library], [{"path": "Frameworks"}], "Quareia", root)
 
 
 if __name__ == "__main__":

@@ -5,9 +5,10 @@
 The command never runs for pull-request events and never reads a private
 manifest until an explicit local approval-context gate is satisfied. It creates
 an ephemeral checkout at one reviewed public SHA, injects only manifest-listed
-files, runs the real provider XCTest and format-specific authentication test,
-builds an unsigned device app, validates the final payload, and writes only a
-sanitized local report. All Xcode output remains in the ephemeral private
+files, runs the real provider XCTest and format-specific authentication test
+(or the explicitly requested full runtime suite), builds an optimized unsigned
+device app, and optionally packages its verified bytes as a private IPA.
+All Xcode output remains in the ephemeral private
 directory and is removed with it.
 """
 
@@ -48,7 +49,20 @@ PROVIDER_TEST_IDENTIFIER = (
     "QuareiaTests/PrivateProviderAcceptanceTests/"
     "testIntegratedProviderDecodesExactRecordSet"
 )
+CRITICAL_UI_TESTS = [
+    "QuareiaUITests/QuareiaUITests/testFreeBoardGesturesHistoryAndDraftRestore",
+    "QuareiaUITests/QuareiaUITests/testLoopbackUpdateDownloadCancelAndHandoff",
+    "QuareiaUITests/QuareiaUITests/testNativeFilesImportCanBeCancelled",
+]
 MAX_PRIVATE_INPUT_BYTES = 100 * 1024 * 1024
+PRIVATE_NAMES = {".private", "privateinputs", "vaultmaterial", "agent-handoff", "raw-scans", "raw_scans", "rawscans", "plaintext", "decoded"}
+KEY_SUFFIXES = {".key", ".pem", ".p12", ".pfx", ".jks", ".keystore", ".mobileprovision", ".env"}
+# Existing reviewed public configuration template; never allowed in the app.
+PUBLIC_SOURCE_TEMPLATES = {"backend/.env.example"}
+PRIVATE_SOURCE_NAMES = {
+    "vaultmaterial.kt", "lxxxivault.kt", "privatelxxxiassetprovider.kt",
+    "integratedlxxxiprovider.swift", "integratedvaultmaterial.swift",
+}
 SIMULATOR_UDID_RE = re.compile(
     r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
 )
@@ -314,7 +328,12 @@ def patch_xcode_project(
     return patched
 
 
-def validate_test_evidence(log_text: str, authentication_test_identifier: str) -> dict[str, Any]:
+def validate_test_evidence(
+    log_text: str,
+    authentication_test_identifier: str,
+    *,
+    expected_test_count: int = 2,
+) -> dict[str, Any]:
     decode_keys = re.findall(
         r"(?m)^.*?PRIVATE_PROVIDER_DECODE_OK:(lxxxi-(?:back|(?:0[1-9]|[1-7][0-9]|8[01])))\s*$",
         log_text,
@@ -346,8 +365,8 @@ def validate_test_evidence(log_text: str, authentication_test_identifier: str) -
         "Format-specific authentication XCTest did not report passed",
     )
     require(
-        re.search(r"Executed 2 tests?, with 0 failures", log_text) is not None,
-        "Private XCTest summary does not prove two passing tests",
+        re.search(rf"Executed {expected_test_count} tests?, with 0 failures", log_text) is not None,
+        "Private XCTest summary does not prove the required passing test count",
     )
     return {
         "providerTestIdentifier": PROVIDER_TEST_IDENTIFIER,
@@ -356,6 +375,154 @@ def validate_test_evidence(log_text: str, authentication_test_identifier: str) -
         "recordCount": len(decode_keys),
         "authenticationNegativePassed": True,
     }
+
+
+def expected_runtime_tests(checkout: pathlib.Path, authentication_test_identifier: str) -> list[str]:
+    """Enumerate the reviewed public XCTest methods; missing/skipped tests fail closed."""
+    identifiers = []
+    for folder, target in [("Tests", "QuareiaTests"), ("UITests", "QuareiaUITests")]:
+        for path in sorted((checkout / "ios-app" / folder).glob("*.swift")):
+            source = path.read_text(encoding="utf-8")
+            classes = re.findall(r"\bclass\s+([A-Za-z][A-Za-z0-9_]*)\s*:\s*XCTestCase\b", source)
+            if not classes:
+                continue
+            require(len(classes) == 1, "Full-runtime discovery requires one XCTestCase class per public source")
+            methods = re.findall(r"^\s*(?:@MainActor\s+)?func\s+(test[A-Z][A-Za-z0-9_]*)\s*\(", source, re.MULTILINE)
+            identifiers.extend(f"{target}/{classes[0]}/{method}" for method in methods)
+    require(PROVIDER_TEST_IDENTIFIER in identifiers, "Full-runtime provider acceptance source is missing")
+    require(all(test in identifiers for test in CRITICAL_UI_TESTS), "Full-runtime critical UI source is missing")
+    require(authentication_test_identifier not in identifiers, "Authentication test collides with a public XCTest")
+    identifiers.append(authentication_test_identifier)
+    require(len(identifiers) == len(set(identifiers)), "Duplicate full-runtime test identifier")
+    return identifiers
+
+
+def validate_runtime_group(log_text: str, expected: list[str]) -> dict[str, Any]:
+    require(bool(expected), "Full-runtime test group is empty")
+    cases = re.findall(
+        r"Test Case '-\[([A-Za-z0-9_.]+) (test[A-Za-z0-9_]+)\]' (passed|failed|skipped)\b",
+        log_text,
+    )
+    require(all(status == "passed" for _, _, status in cases), "Full-runtime XCTest failed or skipped")
+    observed = [(class_name.split(".")[-1], method) for class_name, method, _ in cases]
+    for identifier in expected:
+        _, class_name, method = identifier.split("/")
+        require(observed.count((class_name, method)) == 1, "Full-runtime XCTest is missing or duplicated")
+    require(len(observed) == len(expected), "Full-runtime XCTest count differs from reviewed source")
+    require(
+        re.search(rf"Executed {len(expected)} tests?, with 0 failures", log_text) is not None,
+        "Full-runtime XCTest summary does not prove the expected passing count",
+    )
+    return {"status": "PASS", "testCount": len(expected), "testIdentifiers": expected}
+
+
+def simulator_settings(full_runtime: bool) -> list[str]:
+    conditions = "PRIVATE_LXXXI_PROVIDER DISTRIBUTION"
+    if full_runtime:
+        # Public test hooks/loopback services remain available, but DISTRIBUTION
+        # always selects IntegratedLxxxiProvider rather than SyntheticPNGProvider.
+        conditions += " PUBLIC_TESTING"
+    return [
+        f"SWIFT_ACTIVE_COMPILATION_CONDITIONS={conditions}",
+        "QUAREIA_BUILD_FLAVOR=private-candidate",
+        "QUAREIA_DISPLAY_NAME=Quareia",
+    ]
+
+
+def device_settings() -> list[str]:
+    return [
+        "CODE_SIGNING_ALLOWED=NO",
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS=PRIVATE_LXXXI_PROVIDER DISTRIBUTION",
+        "SWIFT_OPTIMIZATION_LEVEL=-O",
+        "SWIFT_COMPILATION_MODE=wholemodule",
+        "ENABLE_TESTABILITY=NO",
+        "ENABLE_DEBUG_DYLIB=NO",
+        "QUAREIA_BUILD_FLAVOR=private-candidate",
+        "QUAREIA_DISPLAY_NAME=Quareia",
+    ]
+
+
+def bounded_xcode_command(timeout: int, arguments: list[str]) -> list[str]:
+    return [sys.executable, "ios-app/tools/run-bounded.py", str(timeout), "xcodebuild", *arguments]
+
+
+def validate_public_source_tree(listing: str) -> None:
+    """Inspect committed path metadata before overlay injection, never private contents."""
+    require(bool(listing), "Reviewed public source tree is empty")
+    for record in listing.rstrip("\0").split("\0"):
+        header, separator, path = record.partition("\t")
+        require(bool(separator), "Invalid public Git tree record")
+        fields = header.split()
+        require(len(fields) == 3 and fields[0] in {"100644", "100755"} and fields[1] == "blob",
+                "Public source tree contains a symlink, submodule, or nonregular entry")
+        parts = pathlib.PurePosixPath(path).parts
+        require(bool(parts) and not path.startswith("/") and "\\" not in path and all(part not in {".", ".."} for part in parts),
+                "Public source tree contains an unsafe path")
+        name = parts[-1].casefold()
+        require(not any(part.casefold() in PRIVATE_NAMES for part in parts), "Public source tree contains a private material path")
+        require(name not in PRIVATE_SOURCE_NAMES and not any(part.casefold() == "qv" for part in parts),
+                "Public source tree contains a private implementation or encrypted record directory")
+        require(path in PUBLIC_SOURCE_TEMPLATES or
+                (pathlib.PurePosixPath(path).suffix.casefold() not in KEY_SUFFIXES | {".qv"}
+                 and name != ".env" and not name.startswith(".env.")),
+                "Public source tree contains a key, environment, or encrypted input sidecar")
+
+
+def validate_private_runtime_payload(
+    files: list[dict[str, Any]],
+    directories: list[dict[str, Any]],
+    executable: str,
+    public_checkout: pathlib.Path,
+) -> None:
+    """Close the non-www/non-qv bundle surface to reviewed runtime artifacts only."""
+    require(re.fullmatch(r"[A-Za-z0-9_-]+", executable) is not None, "Unsafe private app executable name")
+    by_path = {entry["path"]: entry for entry in files}
+    for entry in files:
+        path = entry["path"]
+        parts = pathlib.PurePosixPath(path).parts
+        name = parts[-1].casefold()
+        require(not any(part.casefold() in PRIVATE_NAMES or part.casefold().endswith((".dsym", ".xcarchive")) for part in parts),
+                "Private app contains raw, decoded, handoff, or development material")
+        require(pathlib.PurePosixPath(path).suffix.casefold() not in KEY_SUFFIXES | {".swift", ".kt", ".java"}
+                and name != ".env" and not name.startswith(".env."), "Private app contains a source, key, or environment sidecar")
+        if path.startswith(("www/", "PrivateAssets/")):
+            # Exact file sets/hashes are validated by the public and private manifests.
+            continue
+        if path == executable:
+            require(entry["isMachO"], "Private app executable is not Mach-O")
+            continue
+        if path == "Info.plist":
+            continue
+        if path == "PkgInfo":
+            require(entry["_data"] == b"APPL????", "Unexpected application package metadata")
+            continue
+        if path in {"probe/index.html", "probe/frame.html"}:
+            source = public_checkout / "ios-app" / "Quareia" / "Resources" / path
+            require(source.is_file() and not source.is_symlink() and sha256_file(source) == entry["sha256"],
+                    "Private app probe resource differs from reviewed public source")
+            continue
+        if re.fullmatch(r"Frameworks/libswift[A-Za-z0-9_]+\.dylib", path):
+            require(entry["isMachO"], "Swift runtime library is not Mach-O")
+            continue
+        framework = re.fullmatch(r"Frameworks/([A-Za-z][A-Za-z0-9_]*)\.framework/([A-Za-z][A-Za-z0-9_.]*)", path)
+        if framework:
+            bundle, leaf = framework.groups()
+            if leaf == bundle:
+                require(entry["isMachO"], "Framework executable is not Mach-O")
+                continue
+            if leaf == "Info.plist":
+                metadata = plistlib.loads(entry["_data"])
+                binary = by_path.get(f"Frameworks/{bundle}.framework/{bundle}")
+                require(type(metadata) is dict and metadata.get("CFBundleExecutable") == bundle
+                        and metadata.get("CFBundlePackageType") == "FMWK" and binary and binary["isMachO"],
+                        "Framework metadata is not bound to a compiled runtime")
+                continue
+        raise PrivateIntegrationError("Private app contains an unreviewed nonpublic runtime file")
+    allowed_directories = set()
+    for path in by_path:
+        allowed_directories.update(parent.as_posix() for parent in pathlib.PurePosixPath(path).parents if parent.as_posix() != ".")
+    require({entry["path"] for entry in directories} == allowed_directories,
+            "Private app contains an unexpected empty or missing runtime directory")
 
 
 def _load_public_inspector():
@@ -367,6 +534,79 @@ def _load_public_inspector():
     return module
 
 
+def _load_public_packager():
+    path = pathlib.Path(__file__).with_name("package-ipa.py")
+    spec = importlib.util.spec_from_file_location("quareia_public_packager", path)
+    require(spec is not None and spec.loader is not None, "Cannot load public IPA helpers")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def package_private_candidate(
+    app: pathlib.Path,
+    output: pathlib.Path,
+    inspection: dict[str, Any],
+    *,
+    source_sha: str,
+    manifest_sha256: str,
+) -> dict[str, Any]:
+    """Archive only freshly inspected private bytes; never relax the synthetic CLI."""
+    require(inspection.get("status") == "PRIVATE_CANDIDATE", "Private IPA requires a private candidate inspection")
+    require(inspection.get("releaseComplete") is False and inspection.get("platform") == "IOS", "Private IPA is an unsigned device candidate")
+    require(inspection.get("reviewedSourceSHA") == source_sha, "Private IPA source binding mismatch")
+    require(SHA256_RE.fullmatch(manifest_sha256) is not None, "Private IPA requires an approved manifest hash")
+    require(SHA256_RE.fullmatch(inspection.get("bundleTreeSHA256", "")) is not None, "Private IPA has no app tree binding")
+    require(not output.exists(), "Refusing to overwrite a private IPA")
+    packager = _load_public_packager()
+    try:
+        files, directories = packager._manifest_maps(inspection)
+        tree = hashlib.sha256()
+        for path, entry in sorted(files.items()):
+            tree.update(f"F\0{path}\0{entry['mode']}\0{entry['bytes']}\0{entry['sha256']}\n".encode())
+        for path, entry in sorted(directories.items()):
+            tree.update(f"D\0{path}\0{entry['mode']}\n".encode())
+        require(tree.hexdigest() == inspection["bundleTreeSHA256"], "Private IPA app tree binding mismatch")
+        packager.validate_source_unchanged(app, files, directories)
+        with tempfile.TemporaryDirectory(prefix=".quareia-private-ipa-", dir=output.parent) as directory:
+            pathlib.Path(directory).chmod(0o700)
+            staged = pathlib.Path(directory) / "candidate.ipa"
+            packager.write_candidate(staged, app, files, directories)
+            staged.chmod(0o600)
+            packager.validate_candidate(staged, files, directories)
+            packager.validate_source_unchanged(app, files, directories)
+            size = staged.stat().st_size
+            digest = sha256_file(staged)
+            # Exclusive creation prevents overwriting a concurrent output.
+            target_created = False
+            try:
+                with staged.open("rb") as source, output.open("xb") as target:
+                    target_created = True
+                    output.chmod(0o600)
+                    shutil.copyfileobj(source, target)
+            except BaseException:
+                if target_created:
+                    output.unlink(missing_ok=True)
+                raise
+            try:
+                require(output.stat().st_size == size and sha256_file(output) == digest, "Copied private IPA hash mismatch")
+                packager.validate_candidate(output, files, directories)
+            except BaseException:
+                output.unlink(missing_ok=True)
+                raise
+    except packager.PackageError as cause:
+        raise PrivateIntegrationError("Private IPA failed the inspected bundle/ZIP invariants") from cause
+    return {
+        "filename": output.name,
+        "bytes": size,
+        "sha256": digest,
+        "appBundleTreeSHA256": inspection["bundleTreeSHA256"],
+        "reviewedPublicSourceSHA": source_sha,
+        "approvedManifestSHA256": manifest_sha256,
+        "signed": False,
+    }
+
+
 def inspect_private_device_app(
     app: pathlib.Path,
     manifest: dict[str, Any],
@@ -374,6 +614,7 @@ def inspect_private_device_app(
     source_sha: str,
     expected_version: str,
     expected_build: int,
+    public_checkout: pathlib.Path,
 ) -> dict[str, Any]:
     inspector = _load_public_inspector()
     require(app.name == "Quareia.app" and app.is_dir() and not app.is_symlink(), "Missing private candidate Quareia.app")
@@ -452,6 +693,7 @@ def inspect_private_device_app(
     provenance = inspector._validate_public_resources(app, files, source_sha)
     executable = info.get("CFBundleExecutable")
     require(type(executable) is str, "Private candidate executable is missing")
+    validate_private_runtime_payload(files, directories, executable, public_checkout)
     machos = inspector._inspect_machos(files, "IOS", executable)
     entitlements = inspector._validate_entitlements(app, "IOS", files)
     tree = hashlib.sha256()
@@ -505,6 +747,42 @@ def _safe_command_environment(environment: dict[str, str]) -> dict[str, str]:
     return {key: value for key, value in environment.items() if key in allowed}
 
 
+def sanitized_command_failure(log: pathlib.Path) -> dict[str, Any]:
+    """Return only allowlisted categories, Swift basenames/line numbers and test IDs."""
+    try:
+        with log.open("rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            stream.seek(max(0, stream.tell() - 2 * 1024 * 1024))
+            content = stream.read().decode("utf-8", errors="replace")
+    except OSError:
+        return {"category": "command-failed"}
+    if "COMMAND_TIMEOUT after " in content:
+        return {"category": "command-timeout"}
+    tests = re.findall(r"Test Case '-\[([A-Za-z0-9_.]+) (test[A-Za-z0-9_]+)\]' failed\b", content)
+    if tests:
+        return {"category": "xctest-failed", "tests": sorted({f"{name.split('.')[-1]}/{method}" for name, method in tests})[:10]}
+    errors = re.findall(r"(?:^|[/\\])([A-Za-z][A-Za-z0-9_]*\.swift):(\d+):\d+: error: ([^\n]*)", content, re.MULTILINE)
+    if errors:
+        findings = []
+        for filename, line, message in errors[:10]:
+            lowered = message.casefold()
+            category = "swift-compile"
+            for terms, label in [
+                (("no such module",), "swift-module-missing"),
+                (("only available", "unavailable"), "swift-availability"),
+                (("cannot find",), "swift-symbol-missing"),
+                (("cannot convert", "does not conform", "ambiguous", "generic parameter"), "swift-type-check"),
+            ]:
+                if any(term in lowered for term in terms):
+                    category = label
+                    break
+            findings.append({"category": category, "file": filename, "line": int(line)})
+        return {"category": "swift-compile", "errors": findings}
+    if "Undefined symbols" in content or "linker command failed" in content:
+        return {"category": "link-failed"}
+    return {"category": "command-failed"}
+
+
 def _run_logged(command: list[str], *, cwd: pathlib.Path, log: pathlib.Path, environment: dict[str, str]) -> None:
     with log.open("ab") as stream:
         completed = subprocess.run(
@@ -515,7 +793,10 @@ def _run_logged(command: list[str], *, cwd: pathlib.Path, log: pathlib.Path, env
             stderr=subprocess.STDOUT,
             check=False,
         )
-    require(completed.returncode == 0, "A private build/test command failed; details remain in ephemeral private logs")
+    if completed.returncode != 0:
+        diagnostic = sanitized_command_failure(log)
+        diagnostic["exitCode"] = completed.returncode
+        raise PrivateIntegrationError("Private command failed: " + json.dumps(diagnostic, sort_keys=True, separators=(",", ":")))
 
 
 def _path_is_within(path: pathlib.Path, directory: pathlib.Path) -> bool:
@@ -733,6 +1014,8 @@ def run_private_integration(args: argparse.Namespace, environment: dict[str, str
     require(not _path_is_within(manifest_path, repo), "Private manifest must remain outside the public repository")
     candidate_output = pathlib.Path(args.candidate_app_output).resolve(strict=False)
     report_path = pathlib.Path(args.report).resolve(strict=False)
+    ipa_output = pathlib.Path(args.ipa_output).resolve(strict=False) if getattr(args, "ipa_output", None) else None
+    full_runtime = getattr(args, "full_runtime", False)
     private_temp_root = pathlib.Path(args.private_temp_root).resolve(strict=True)
     for output in [candidate_output, report_path]:
         require(not _path_is_within(output, repo), "Private outputs must remain outside the public repository")
@@ -744,6 +1027,14 @@ def run_private_integration(args: argparse.Namespace, environment: dict[str, str
     require(candidate_output.name == "Quareia.app", "Private candidate output must be named Quareia.app")
     _require_owner_private_directory(private_temp_root, "Private temp root")
     manifest_directory = manifest_path.parent.resolve(strict=True)
+    if ipa_output is not None:
+        require(ipa_output.name == f"Quareia-{args.expected_version}-{args.expected_build}.ipa", "Private IPA must use canonical Quareia-<version>-<build>.ipa name")
+        require(not ipa_output.exists(), "Refusing to overwrite a private IPA")
+        require(all(not _paths_overlap(ipa_output, path) for path in
+                    [repo, manifest_directory, private_temp_root, candidate_output, report_path]),
+                "Private IPA output must be isolated from inputs, app, report, and temporary root")
+        ipa_output.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+        _require_owner_private_directory(ipa_output.parent, "Private IPA parent")
     require(
         not _path_is_within(private_temp_root, repo)
         and not _paths_overlap(private_temp_root, manifest_directory)
@@ -790,6 +1081,8 @@ def run_private_integration(args: argparse.Namespace, environment: dict[str, str
             log=orchestration_log,
             environment=safe_env,
         )
+        validate_public_source_tree(subprocess.check_output(
+            ["git", "ls-tree", "-r", "-z", args.source_sha], cwd=checkout, env=safe_env, text=True))
         _copy_manifest_inputs(checkout, manifest)
         _run_logged(
             ["node", "ios-app/tools/sync-web-assets.mjs"],
@@ -806,20 +1099,14 @@ def run_private_integration(args: argparse.Namespace, environment: dict[str, str
 
         test_log = temporary / "private-xctest.log"
         result_bundle = temporary / "private-tests.xcresult"
-        common_settings = [
-            "SWIFT_ACTIVE_COMPILATION_CONDITIONS=PRIVATE_LXXXI_PROVIDER DISTRIBUTION",
-            "QUAREIA_BUILD_FLAVOR=private-candidate",
-            "QUAREIA_DISPLAY_NAME=Quareia",
-        ]
+        runtime_report = {"status": "NOT_REQUESTED", "mode": "provider-only"}
         with _ephemeral_simulator(
             args.simulator_id,
             cwd=checkout,
             log=test_log,
             environment=safe_env,
         ) as ephemeral_simulator:
-            _run_logged(
-                [
-                    "xcodebuild",
+            simulator_arguments = [
                     "-project",
                     "ios-app/Quareia.xcodeproj",
                     "-scheme",
@@ -832,57 +1119,83 @@ def run_private_integration(args: argparse.Namespace, environment: dict[str, str
                     f"platform=iOS Simulator,id={ephemeral_simulator}",
                     "-derivedDataPath",
                     str(temporary / "derived-simulator"),
-                    "-resultBundlePath",
-                    str(result_bundle),
                     "-parallel-testing-enabled",
                     "NO",
-                    f"-only-testing:{PROVIDER_TEST_IDENTIFIER}",
-                    f"-only-testing:{manifest['authenticationTestIdentifier']}",
-                    *common_settings,
-                    "test",
-                ],
-                cwd=checkout,
-                log=test_log,
-                environment=safe_env,
-            )
-            require(result_bundle.is_dir(), "Private XCTest result bundle is missing")
-            evidence = validate_test_evidence(
-                test_log.read_text(encoding="utf-8", errors="replace"),
-                manifest["authenticationTestIdentifier"],
-            )
+                    "ONLY_ACTIVE_ARCH=YES",
+                    *simulator_settings(full_runtime),
+            ]
+            if full_runtime:
+                # The approved workflow owns the reviewed fixture's lifecycle.
+                # This verifier only contacts the fixed loopback origin.
+                _run_logged(["node", "ios-app/tools/verify-fixture.mjs"], cwd=checkout,
+                            log=orchestration_log, environment=safe_env)
+                expected = expected_runtime_tests(checkout, manifest["authenticationTestIdentifier"])
+                native_tests = [test for test in expected if test.startswith("QuareiaTests/")]
+                other_ui_tests = [test for test in expected if test.startswith("QuareiaUITests/") and test not in CRITICAL_UI_TESTS]
+                _run_logged(bounded_xcode_command(600, [*simulator_arguments, "build-for-testing"]),
+                            cwd=checkout, log=orchestration_log, environment=safe_env)
+                groups = [
+                    ("native", 600, ["-only-testing:QuareiaTests"], native_tests),
+                    ("critical-ui", 600, [f"-only-testing:{test}" for test in CRITICAL_UI_TESTS], CRITICAL_UI_TESTS),
+                    ("remaining-ui", 1200, ["-only-testing:QuareiaUITests", *[f"-skip-testing:{test}" for test in CRITICAL_UI_TESTS]], other_ui_tests),
+                ]
+                results = {}
+                for name, timeout, selection, group_tests in groups:
+                    group_log = temporary / f"private-{name}.log"
+                    group_result = temporary / f"private-{name}.xcresult"
+                    _run_logged(bounded_xcode_command(timeout, [*simulator_arguments,
+                                "-resultBundlePath", str(group_result), *selection, "test-without-building"]),
+                                cwd=checkout, log=group_log, environment=safe_env)
+                    require(group_result.is_dir(), "Full-runtime XCTest result bundle is missing")
+                    content = group_log.read_text(encoding="utf-8", errors="replace")
+                    results[name] = validate_runtime_group(content, group_tests)
+                    if name == "native":
+                        evidence = validate_test_evidence(content, manifest["authenticationTestIdentifier"],
+                                                          expected_test_count=len(native_tests))
+                runtime_report = {"status": "PASS", "mode": "full", "testCount": len(expected), "groups": results}
+            else:
+                _run_logged(bounded_xcode_command(600, [*simulator_arguments,
+                            "-resultBundlePath", str(result_bundle),
+                            f"-only-testing:{PROVIDER_TEST_IDENTIFIER}",
+                            f"-only-testing:{manifest['authenticationTestIdentifier']}", "test"]),
+                            cwd=checkout, log=test_log, environment=safe_env)
+                require(result_bundle.is_dir(), "Private XCTest result bundle is missing")
+                evidence = validate_test_evidence(
+                    test_log.read_text(encoding="utf-8", errors="replace"),
+                    manifest["authenticationTestIdentifier"],
+                )
 
         device_log = temporary / "private-device-build.log"
         device_derived = temporary / "derived-device"
         _run_logged(
-            [
-                "xcodebuild",
+            bounded_xcode_command(600, [
                 "-project",
                 "ios-app/Quareia.xcodeproj",
                 "-scheme",
                 "QuareiaPublic",
                 "-configuration",
-                "PublicTesting",
+                "Release",
                 "-sdk",
                 "iphoneos",
                 "-destination",
                 "generic/platform=iOS",
                 "-derivedDataPath",
                 str(device_derived),
-                "CODE_SIGNING_ALLOWED=NO",
-                *common_settings,
+                *device_settings(),
                 "build",
-            ],
+            ]),
             cwd=checkout,
             log=device_log,
             environment=safe_env,
         )
-        app = device_derived / "Build" / "Products" / "PublicTesting-iphoneos" / "Quareia.app"
+        app = device_derived / "Build" / "Products" / "Release-iphoneos" / "Quareia.app"
         app_report = inspect_private_device_app(
             app,
             manifest,
             source_sha=args.source_sha,
             expected_version=args.expected_version,
             expected_build=args.expected_build,
+            public_checkout=checkout,
         )
         with tempfile.TemporaryDirectory(
             prefix=".quareia-private-candidate-", dir=candidate_output.parent
@@ -896,12 +1209,18 @@ def run_private_integration(args: argparse.Namespace, environment: dict[str, str
                 source_sha=args.source_sha,
                 expected_version=args.expected_version,
                 expected_build=args.expected_build,
+                public_checkout=checkout,
             )
             require(
                 copied_report["bundleTreeSHA256"] == app_report["bundleTreeSHA256"],
                 "Copied private candidate app hash mismatch",
             )
             os.rename(staged_candidate, candidate_output)
+
+        ipa_report = None
+        if ipa_output is not None:
+            ipa_report = package_private_candidate(candidate_output, ipa_output, copied_report,
+                source_sha=args.source_sha, manifest_sha256=args.manifest_sha256)
 
     sanitized = {
         "schemaVersion": 1,
@@ -913,8 +1232,13 @@ def run_private_integration(args: argparse.Namespace, environment: dict[str, str
         "reviewedPublicSourceSHA": args.source_sha,
         "approvedManifestSHA256": args.manifest_sha256,
         "providerRuntimeEvidence": evidence,
+        "runtimeSuite": runtime_report,
+        "deviceBuild": {"configuration": "Release", "swiftConditions": ["PRIVATE_LXXXI_PROVIDER", "DISTRIBUTION"],
+                        "optimization": "-O", "signed": False},
         "finalApp": copied_report,
     }
+    if ipa_report is not None:
+        sanitized["ipa"] = ipa_report
     with report_path.open("x", encoding="utf-8", newline="\n") as stream:
         json.dump(sanitized, stream, indent=2, sort_keys=True)
         stream.write("\n")
@@ -937,6 +1261,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     run.add_argument("--expected-version", required=True)
     run.add_argument("--expected-build", required=True, type=int)
     run.add_argument("--candidate-app-output", required=True)
+    run.add_argument("--full-runtime", action="store_true", help="Run all public Swift/UI tests with the real provider and the externally started loopback fixture")
+    run.add_argument("--ipa-output", help="Optional owner-private canonical Quareia-<version>-<build>.ipa output")
     run.add_argument("--report", required=True)
     return parser.parse_args(argv)
 
