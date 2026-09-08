@@ -5,6 +5,13 @@ case "${IOS_SHARE_DIAGNOSTIC_ONLY-0}" in
   0|1) ;;
   *) echo 'Invalid IOS_SHARE_DIAGNOSTIC_ONLY: expected unset, 0, or 1' >&2; exit 2 ;;
 esac
+case "${IOS_FILES_DIAGNOSTIC_ONLY-0}" in
+  0|1) ;;
+  *) echo 'Invalid IOS_FILES_DIAGNOSTIC_ONLY: expected unset, 0, or 1' >&2; exit 2 ;;
+esac
+if [ "${IOS_FILES_DIAGNOSTIC_ONLY-0}" = 1 ] && [ "${IOS_SHARE_DIAGNOSTIC_ONLY-0}" = 1 ]; then
+  echo 'Choose only one public diagnostic mode' >&2; exit 2
+fi
 cd "$(dirname "$0")/../.."
 mkdir -p ios-app/build
 export CLOUDFLARE_TELEMETRY_DISABLED=1 WRANGLER_SEND_METRICS=false
@@ -78,6 +85,15 @@ python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log s
 BOARD_TEST='QuareiaUITests/QuareiaUITests/testFreeBoardGesturesHistoryAndDraftRestore'
 UPDATE_TEST='QuareiaUITests/QuareiaUITests/testLoopbackUpdateDownloadCancelAndHandoff'
 FILES_TEST='QuareiaUITests/QuareiaUITests/testNativeFilesImportCanBeCancelled'
+if [ "${IOS_FILES_DIAGNOSTIC_ONLY-0}" = 1 ]; then
+  python3 ios-app/tools/run-bounded.py 300 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
+    -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
+    -derivedDataPath ios-app/build/simulator -resultBundlePath ios-app/build/files-diagnostic.xcresult \
+    -only-testing:"$FILES_TEST" \
+    -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES test-without-building | tee ios-app/build/xcode-files-diagnostic.log
+  echo 'PUBLIC_FILES_DIAGNOSTIC_PASS'
+  exit 0
+fi
 if [ "${IOS_SHARE_DIAGNOSTIC_ONLY-0}" = 1 ]; then
   python3 ios-app/tools/run-bounded.py 300 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
     -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \

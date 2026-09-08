@@ -203,11 +203,13 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Custom Spread Studio"].waitForExistence(timeout: 5))
         let studio = element(label: "Custom Spread Studio, web dialog", in: app)
         XCTAssertTrue(studio.waitForExistence(timeout: 5))
+        let studioContent = waitForElement(labelPrefix: "Custom spread editor content", in: app)
+        XCTAssertTrue(studioContent.exists, "Expected the real editor scroll region in WebKit accessibility")
 
         let newDesign = waitForElement(labels: ["New design"], in: app)
         newDesign.tap()
         let spreadName = waitForTextField(label: "Spread name", in: app)
-        enterSyntheticText("UI Test QSP", into: spreadName, in: studio, app: app)
+        enterSyntheticText("UI Test QSP", into: spreadName, in: studioContent, app: app)
 
         let positionNames = app.textFields.matching(NSPredicate(format: "label == 'Position name'"))
         XCTAssertTrue(positionNames.firstMatch.waitForExistence(timeout: 5))
@@ -216,13 +218,13 @@ final class QuareiaUITests: XCTestCase {
             enterSyntheticText(
                 "UI position \(index + 1)",
                 into: positionNames.element(boundBy: index),
-                in: studio,
+                in: studioContent,
                 app: app
             )
         }
 
         let generate = waitForElement(labels: ["Generate share code"], in: app)
-        tapWhenVisible(generate, in: studio, scrolling: .towardLowerPage)
+        tapWhenVisible(generate, in: studioContent, scrolling: .towardLowerPage)
         let shareCode = waitForTextView(label: "Custom spread share code", in: app)
         let code = try XCTUnwrap(shareCode.value as? String)
         XCTAssertTrue(code.hasPrefix("QSP1.") || code.hasPrefix("QSP2."), "Expected a versioned QSP share code")
@@ -230,9 +232,9 @@ final class QuareiaUITests: XCTestCase {
         let importTab = waitForElement(labels: ["Import code"], in: app)
         tapWhenVisible(importTab, in: studio, scrolling: .towardUpperPage)
         let importCode = waitForTextView(label: "Paste a share code", in: app)
-        enterSyntheticText(code, into: importCode, in: studio, app: app)
+        enterSyntheticText(code, into: importCode, in: studioContent, app: app)
         let importAndUse = waitForElement(labels: ["Import and use"], in: app)
-        tapWhenVisible(importAndUse, in: studio, scrolling: .towardLowerPage)
+        tapWhenVisible(importAndUse, in: studioContent, scrolling: .towardLowerPage)
 
         XCTAssertTrue(waitForElement(
             labelPrefix: "Spread, currently UI Test QSP",
@@ -996,9 +998,25 @@ final class QuareiaUITests: XCTestCase {
     }
 
     private func scroll(_ element: XCUIElement, toward direction: ScrollDirection) {
+        if element.label.hasPrefix("Custom spread editor content") {
+            scrollStudioContent(element, toward: direction)
+            return
+        }
         let gutterX = element.elementType == .webView ? 0.99 : 0.98
         let upper = element.coordinate(withNormalizedOffset: CGVector(dx: gutterX, dy: 0.34))
         let lower = element.coordinate(withNormalizedOffset: CGVector(dx: gutterX, dy: 0.70))
+        switch direction {
+        case .towardUpperPage: upper.press(forDuration: 0.08, thenDragTo: lower)
+        case .towardLowerPage: lower.press(forDuration: 0.08, thenDragTo: upper)
+        }
+    }
+
+    private func scrollStudioContent(_ content: XCUIElement, toward direction: ScrollDirection) {
+        // The content region has at least 10 CSS points of horizontal padding.
+        // Stay inside that padding, outside the preview's draggable markers.
+        let origin = content.coordinate(withNormalizedOffset: .zero)
+        let upper = origin.withOffset(CGVector(dx: 7, dy: content.frame.height * 0.34))
+        let lower = origin.withOffset(CGVector(dx: 7, dy: content.frame.height * 0.70))
         switch direction {
         case .towardUpperPage: upper.press(forDuration: 0.08, thenDragTo: lower)
         case .towardLowerPage: lower.press(forDuration: 0.08, thenDragTo: upper)
