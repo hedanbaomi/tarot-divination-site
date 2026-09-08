@@ -216,38 +216,43 @@ final class QuareiaUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Custom Spread Studio"].waitForExistence(timeout: 5))
         let studio = element(label: "Custom Spread Studio, web dialog", in: app)
         XCTAssertTrue(studio.waitForExistence(timeout: 5))
-        let studioContent = waitForElement(labelPrefix: "Custom spread editor content", in: app)
-        XCTAssertTrue(studioContent.exists, "Expected the real editor scroll region in WebKit accessibility")
 
         let newDesign = waitForElement(labels: ["New design"], in: app)
         newDesign.tap()
         let spreadName = waitForTextField(label: "Spread name", in: app)
-        enterSyntheticText("UI Test QSP", into: spreadName, in: studioContent, app: app)
+        let importTab = waitForElement(labels: ["Import code"], in: app)
+        let studioViewport = try studioScrollViewport(dialog: studio, firstField: spreadName, tab: importTab)
+        revealStudioControl(spreadName, in: studio, viewport: studioViewport)
+        enterSyntheticText("UI Test QSP", into: spreadName, in: studio, app: app)
 
         let positionNames = app.textFields.matching(NSPredicate(format: "label == 'Position name'"))
         XCTAssertTrue(positionNames.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(positionNames.count, 3, "Expected the default custom spread to contain three positions")
         for index in 0..<3 {
+            revealStudioControl(positionNames.element(boundBy: index), in: studio, viewport: studioViewport)
             enterSyntheticText(
                 "UI position \(index + 1)",
                 into: positionNames.element(boundBy: index),
-                in: studioContent,
+                in: studio,
                 app: app
             )
         }
 
         let generate = waitForElement(labels: ["Generate share code"], in: app)
-        tapWhenVisible(generate, in: studioContent, scrolling: .towardLowerPage)
+        revealStudioControl(generate, in: studio, viewport: studioViewport)
+        tapWhenVisible(generate, in: studio, scrolling: .towardLowerPage)
         let shareCode = waitForTextView(label: "Custom spread share code", in: app)
         let code = try XCTUnwrap(shareCode.value as? String)
         XCTAssertTrue(code.hasPrefix("QSP1.") || code.hasPrefix("QSP2."), "Expected a versioned QSP share code")
 
-        let importTab = waitForElement(labels: ["Import code"], in: app)
         tapWhenVisible(importTab, in: studio, scrolling: .towardUpperPage)
         let importCode = waitForTextView(label: "Paste a share code", in: app)
-        enterSyntheticText(code, into: importCode, in: studioContent, app: app)
+        let importViewport = try studioScrollViewport(dialog: studio, firstField: importCode, tab: importTab)
+        revealStudioControl(importCode, in: studio, viewport: importViewport)
+        enterSyntheticText(code, into: importCode, in: studio, app: app)
         let importAndUse = waitForElement(labels: ["Import and use"], in: app)
-        tapWhenVisible(importAndUse, in: studioContent, scrolling: .towardLowerPage)
+        revealStudioControl(importAndUse, in: studio, viewport: importViewport)
+        tapWhenVisible(importAndUse, in: studio, scrolling: .towardLowerPage)
 
         XCTAssertTrue(waitForElement(
             labelPrefix: "Spread, currently UI Test QSP",
@@ -1044,10 +1049,6 @@ final class QuareiaUITests: XCTestCase {
     }
 
     private func scroll(_ element: XCUIElement, toward direction: ScrollDirection) {
-        if element.label.hasPrefix("Custom spread editor content") {
-            scrollStudioContent(element, toward: direction)
-            return
-        }
         let gutterX = element.elementType == .webView ? 0.99 : 0.98
         let upper = element.coordinate(withNormalizedOffset: CGVector(dx: gutterX, dy: 0.34))
         let lower = element.coordinate(withNormalizedOffset: CGVector(dx: gutterX, dy: 0.70))
@@ -1057,16 +1058,44 @@ final class QuareiaUITests: XCTestCase {
         }
     }
 
-    private func scrollStudioContent(_ content: XCUIElement, toward direction: ScrollDirection) {
-        // The content region has at least 10 CSS points of horizontal padding.
-        // Stay inside that padding, outside the preview's draggable markers.
-        let origin = content.coordinate(withNormalizedOffset: .zero)
-        let upper = origin.withOffset(CGVector(dx: 7, dy: content.frame.height * 0.34))
-        let lower = origin.withOffset(CGVector(dx: 7, dy: content.frame.height * 0.70))
-        switch direction {
-        case .towardUpperPage: upper.press(forDuration: 0.08, thenDragTo: lower)
-        case .towardLowerPage: lower.press(forDuration: 0.08, thenDragTo: upper)
+    private func studioScrollViewport(dialog: XCUIElement, firstField: XCUIElement,
+                                      tab: XCUIElement) throws -> CGRect {
+        let field = firstField.frame
+        let frame = dialog.frame
+        // The full-width first field directly follows the content padding.
+        // A seven-point offset stays inside its minimum ten-point CSS padding.
+        // Conservatively inset above the status area, which starts empty and
+        // has no stable accessibility frame. Runtime tests validate containment.
+        let left = field.minX - 7
+        let top = tab.frame.maxY + 12
+        let viewport = CGRect(x: left, y: top, width: frame.maxX - 8 - left,
+                              height: frame.maxY - 64 - top)
+        XCTAssertTrue(firstField.isHittable && tab.isHittable,
+                      "Expected visible Studio geometry anchors")
+        XCTAssertTrue(!viewport.isEmpty && frame.contains(viewport) && viewport.contains(field),
+                      "Expected the first field inside the anchored editor viewport; dialog=\(frame); field=\(field); tab=\(tab.frame); viewport=\(viewport)")
+        return viewport
+    }
+
+    private func revealStudioControl(_ control: XCUIElement, in dialog: XCUIElement,
+                                     viewport: CGRect, file: StaticString = #filePath,
+                                     line: UInt = #line) {
+        for _ in 0..<8 {
+            let target = control.frame
+            if control.exists && control.isHittable && viewport.contains(target) { return }
+            let origin = dialog.coordinate(withNormalizedOffset: .zero)
+            let upper = origin.withOffset(CGVector(dx: viewport.minX - dialog.frame.minX,
+                dy: viewport.minY + viewport.height * 0.2 - dialog.frame.minY))
+            let lower = origin.withOffset(CGVector(dx: viewport.minX - dialog.frame.minX,
+                dy: viewport.minY + viewport.height * 0.8 - dialog.frame.minY))
+            if target.minY < viewport.minY {
+                upper.press(forDuration: 0.08, thenDragTo: lower)
+            } else {
+                lower.press(forDuration: 0.08, thenDragTo: upper)
+            }
         }
+        XCTFail("Expected a fully visible Studio control; target=\(control.frame); viewport=\(viewport)",
+                file: file, line: line)
     }
 
     private func openWebMenu(in app: XCUIApplication, webView: XCUIElement) {
