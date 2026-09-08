@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import Vision
 
 final class QuareiaUITests: XCTestCase {
     private var activeApp: XCUIApplication?
@@ -171,9 +172,13 @@ final class QuareiaUITests: XCTestCase {
         let restore = waitForElement(labels: ["Restore"], in: app, timeout: 8)
         restore.tap()
         let cancelFrame = waitForFilesCancel(in: app)
-        captureFilesNavigation(in: app)
+        let visibleCancelPoint = captureFilesNavigation(in: app)
         var cancelPoint = CGPoint(x: cancelFrame.midX, y: cancelFrame.midY)
-        if UIDevice.current.userInterfaceIdiom == .pad && cancelFrame.width < 2 {
+        if let visibleCancelPoint {
+            // Remote Files accessibility geometry can point at the neighboring
+            // More control. Tap the actual rendered cancellation label instead.
+            cancelPoint = visibleCancelPoint
+        } else if UIDevice.current.userInterfaceIdiom == .pad && cancelFrame.width < 2 {
             // The current portrait iPad runtime exposes a 1-point Cancel frame
             // over the grid control. The captured native navigation strip shows
             // its actual close affordance at the upper-left (36, 84).
@@ -691,12 +696,12 @@ final class QuareiaUITests: XCTestCase {
         if completion.wait(timeout: .now() + 20) == .timedOut { task.cancel() }
     }
 
-    private func captureFilesNavigation(in app: XCUIApplication) {
+    private func captureFilesNavigation(in app: XCUIApplication) -> CGPoint? {
         // Public simulator evidence only: crop in memory to the Files navigation
         // strip, excluding document contents and the app's card area. Never
         // attach or export the original full-screen image or an xcresult bundle.
         let source = app.screenshot().image
-        guard source.size.width > 0, source.size.height > 0 else { return }
+        guard source.size.width > 0, source.size.height > 0 else { return nil }
         let width = min(source.size.width, 800)
         let scale = width / source.size.width
         let format = UIGraphicsImageRendererFormat()
@@ -707,11 +712,35 @@ final class QuareiaUITests: XCTestCase {
         let strip = renderer.image { _ in
             source.draw(in: CGRect(x: 0, y: 0, width: width, height: source.size.height * scale))
         }
-        guard let data = strip.jpegData(compressionQuality: 0.65), data.count <= 96_000 else { return }
-        let encoded = Array(data.base64EncodedString())
-        for offset in stride(from: 0, to: encoded.count, by: 2000) {
-            print("FILES_NAV_IMAGE \(offset / 2000) \(String(encoded[offset..<min(offset + 2000, encoded.count)]))")
+        if let data = strip.jpegData(compressionQuality: 0.65), data.count <= 96_000 {
+            let encoded = Array(data.base64EncodedString())
+            for offset in stride(from: 0, to: encoded.count, by: 2000) {
+                print("FILES_NAV_IMAGE \(offset / 2000) \(String(encoded[offset..<min(offset + 2000, encoded.count)]))")
+            }
         }
+        // Vision runs locally on the same in-memory navigation crop. Text and
+        // document/card contents are never exported as OCR diagnostics.
+        guard let image = strip.cgImage else { return nil }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["en-US"]
+        request.usesLanguageCorrection = false
+        do { try VNImageRequestHandler(cgImage: image, options: [:]).perform([request]) }
+        catch { return nil }
+        let matches = (request.results ?? []).filter { observation in
+            guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.8 else { return false }
+            return ["cancel", "close"].contains(candidate.string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+        }
+        guard matches.count == 1 else { return nil }
+        let box = matches[0].boundingBox
+        let bounds = app.frame
+        let point = CGPoint(
+            x: bounds.minX + box.midX * bounds.width,
+            y: bounds.minY + (1 - box.midY) * min(160, source.size.height) / source.size.height * bounds.height
+        )
+        guard bounds.contains(point), point.y < bounds.minY + bounds.height * 0.35 else { return nil }
+        print("FILES_CANCEL_VISUAL_POINT point=\(point)")
+        return point
     }
 
     private func waitForFilesCancel(in app: XCUIApplication) -> CGRect {
@@ -731,6 +760,11 @@ final class QuareiaUITests: XCTestCase {
             return true
         }, object: nil)
         let result = XCTWaiter.wait(for: [ready], timeout: 60)
+        if result != .completed, let point = captureFilesNavigation(in: app) {
+            // A visible native Cancel label remains actionable even when the
+            // remote accessibility snapshot omits its geometry entirely.
+            return CGRect(x: point.x - 1, y: point.y - 1, width: 2, height: 2)
+        }
         XCTAssertEqual(result, .completed, "Expected the Files navigation cancellation control")
         print("FILES_CANCEL_CONTROL frame=\(resolvedFrame)")
         return resolvedFrame
