@@ -504,7 +504,7 @@ class PrivateOrchestrationContractTests(unittest.TestCase):
                     elif "-only-testing:QuareiaUITests" in command:
                         group = remaining
                     else:
-                        group = TOOL.CRITICAL_UI_TESTS
+                        group = [argument.removeprefix("-only-testing:") for argument in command if argument.startswith("-only-testing:")]
                     lines = []
                     if group == native:
                         lines = [f"PRIVATE_PROVIDER_DECODE_OK:{key}" for key in TOOL.EXPECTED_KEYS]
@@ -533,10 +533,16 @@ class PrivateOrchestrationContractTests(unittest.TestCase):
                 result = TOOL.run_private_integration(args, {"QUAREIA_PRIVATE_CI_APPROVED_CONTEXT": APPROVAL_CONTEXT})
             self.assertEqual(events, ["public-tree-gate", "overlay-copy"])
             groups = [command for command in commands if "test-without-building" in command]
-            self.assertEqual([command[2] for command in groups], ["600", "600", "1200"])
+            self.assertEqual(len(groups), 5)
+            self.assertEqual((groups[0][2], groups[-1][2]), ("600", "1200"))
+            self.assertTrue(all(0 < int(command[2]) <= 600 for command in groups[1:4]))
             self.assertIn("-only-testing:QuareiaTests", groups[0])
-            self.assertTrue(all(f"-only-testing:{test}" in groups[1] for test in TOOL.CRITICAL_UI_TESTS))
-            self.assertTrue(all(f"-skip-testing:{test}" in groups[2] for test in TOOL.CRITICAL_UI_TESTS))
+            for command, identifier in zip(groups[1:4], TOOL.CRITICAL_UI_TESTS):
+                self.assertEqual([argument for argument in command if argument.startswith("-only-testing:")],
+                                 [f"-only-testing:{identifier}"])
+            self.assertTrue(all(f"-skip-testing:{test}" in groups[-1] for test in TOOL.CRITICAL_UI_TESTS))
+            self.assertEqual(result["runtimeSuite"]["groups"]["critical-ui"], {
+                "status": "PASS", "testCount": 3, "testIdentifiers": TOOL.CRITICAL_UI_TESTS})
             release = next(command for command in commands if "Release" in command)
             self.assertTrue(set(TOOL.device_settings()) <= set(release))
             self.assertEqual(result["runtimeSuite"]["testCount"], len(expected))
@@ -733,6 +739,87 @@ class PrivateDeploymentTargetTests(unittest.TestCase):
                         self.assertEqual(report["architectures"], ["arm64"])
                         self.assertEqual((report["platform"], report["version"], report["build"]), ("IOS", "1.0.0", 1))
                         self.assertEqual(report["machOBinaries"][0]["minimumOSVersion"], "16.0")
+
+
+class CriticalUISplitTests(unittest.TestCase):
+    @staticmethod
+    def emit(command, *, cwd, log, environment, fault=None):
+        selected = [item.removeprefix("-only-testing:") for item in command if item.startswith("-only-testing:")]
+        assert len(selected) == 1
+        target, name, method = selected[0].split("/")
+        line = f"Test Case '-[{target}.{name} {method}]' passed (0.1 seconds)."
+        lines = [line, "Executed 1 test, with 0 failures (0 unexpected)"]
+        if fault == "failed":
+            lines[0] = line.replace(" passed ", " failed ")
+        elif fault == "missing":
+            lines.pop(0)
+        elif fault == "duplicate":
+            lines.insert(0, line)
+        elif fault == "skipped":
+            lines[0] = line.replace(" passed ", " skipped ")
+        log.write_text(chr(10).join(lines), encoding="utf-8")
+        if fault != "result-missing":
+            pathlib.Path(command[command.index("-resultBundlePath") + 1]).mkdir()
+
+    def test_single_case_commands_share_deadline_simulator_and_validated_schema(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            arguments = ["-destination", "platform=iOS Simulator,id=SAME", "-derivedDataPath", "same-derived"]
+            calls = []
+            def execute(command, **kwargs):
+                calls.append(command)
+                self.emit(command, **kwargs)
+            with patch.object(TOOL, "_run_logged", side_effect=execute), patch.object(
+                TOOL.time, "monotonic", side_effect=[100, 100, 180, 200, 300, 320, 450]
+            ):
+                report = TOOL.run_critical_ui_tests(arguments, temporary=root, checkout=root, environment={})
+            self.assertEqual(report, {"status": "PASS", "testCount": 3, "testIdentifiers": TOOL.CRITICAL_UI_TESTS})
+            self.assertEqual([int(command[2]) for command in calls], [600, 500, 380])
+            for index, (command, identifier) in enumerate(zip(calls, TOOL.CRITICAL_UI_TESTS), start=1):
+                self.assertEqual(command[3:8], ["xcodebuild", *arguments])
+                self.assertEqual([item for item in command if item.startswith("-only-testing:")], ["-only-testing:" + identifier])
+                self.assertEqual(pathlib.Path(command[command.index("-resultBundlePath") + 1]).name,
+                                 f"private-critical-ui-{index}.xcresult")
+                self.assertEqual(command[-1], "test-without-building")
+            self.assertEqual({path.name for path in root.glob("*.log")},
+                             {f"private-critical-ui-{index}.log" for index in range(1, 4)})
+
+    def test_failed_missing_skipped_duplicate_or_absent_result_stops_without_retry(self):
+        for fault in ["failed", "missing", "skipped", "duplicate", "result-missing"]:
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as directory:
+                root = pathlib.Path(directory)
+                def execute(command, **kwargs):
+                    self.emit(command, fault=fault, **kwargs)
+                with patch.object(TOOL, "_run_logged", side_effect=execute) as run, patch.object(
+                    TOOL.time, "monotonic", return_value=0
+                ), self.assertRaises(TOOL.PrivateIntegrationError):
+                    TOOL.run_critical_ui_tests([], temporary=root, checkout=root, environment={})
+                self.assertEqual(run.call_count, 1)
+
+    def test_shared_deadline_expiry_prevents_following_case(self):
+        for times, count in [([0, 601], 0), ([0, 0, 601], 1), ([0, 0, 599, 600], 1)]:
+            with self.subTest(times=times), tempfile.TemporaryDirectory() as directory:
+                root = pathlib.Path(directory)
+                with patch.object(TOOL, "_run_logged", side_effect=self.emit) as run, patch.object(
+                    TOOL.time, "monotonic", side_effect=times
+                ), self.assertRaisesRegex(TOOL.PrivateIntegrationError, "shared deadline"):
+                    TOOL.run_critical_ui_tests([], temporary=root, checkout=root, environment={})
+                self.assertEqual(run.call_count, count)
+
+    def test_each_finite_critical_log_keeps_failure_phase_and_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            ready = {"appState": "foreground", "webViewExists": True, "ready": "loading", "completed": False}
+            for index in range(1, 4):
+                log = root / f"private-critical-ui-{index}.log"
+                log.write_text(chr(10).join([
+                    "Test Case '-[QuareiaUITests.QuareiaUITests testReady]' started.",
+                    "UI_READY_META=" + json.dumps(ready),
+                    "Test Case '-[QuareiaUITests.QuareiaUITests testReady]' failed (1 seconds).",
+                ]), encoding="utf-8")
+                diagnostic = TOOL.sanitized_command_failure(log)
+                self.assertEqual(diagnostic["phase"], "critical-ui")
+                self.assertEqual(diagnostic["uiMetadata"], [{"test": "QuareiaUITests/testReady", "ready": ready}])
 
 
 class PrivatePayloadPrivacyTests(unittest.TestCase):

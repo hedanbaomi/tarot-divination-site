@@ -28,6 +28,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from typing import Any
 
@@ -795,6 +796,27 @@ def _safe_command_environment(environment: dict[str, str]) -> dict[str, str]:
     return {key: value for key, value in environment.items() if key in allowed}
 
 
+def run_critical_ui_tests(simulator_arguments: list[str], *, temporary: pathlib.Path,
+                          checkout: pathlib.Path, environment: dict[str, str]) -> dict[str, Any]:
+    """Run each critical case once, sharing the simulator and one 600-second budget."""
+    deadline = time.monotonic() + 600
+    validated_tests = []
+    for index, identifier in enumerate(CRITICAL_UI_TESTS, start=1):
+        remaining = int(deadline - time.monotonic())
+        require(remaining > 0, "Critical UI shared deadline expired")
+        log = temporary / f"private-critical-ui-{index}.log"
+        result = temporary / f"private-critical-ui-{index}.xcresult"
+        _run_logged(bounded_xcode_command(remaining, [*simulator_arguments,
+                    "-resultBundlePath", str(result), f"-only-testing:{identifier}", "test-without-building"]),
+                    cwd=checkout, log=log, environment=environment)
+        require(result.is_dir(), "Critical UI XCTest result bundle is missing")
+        group = validate_runtime_group(log.read_text(encoding="utf-8", errors="replace"), [identifier])
+        validated_tests.extend(group["testIdentifiers"])
+        require(time.monotonic() <= deadline, "Critical UI shared deadline expired")
+    require(validated_tests == CRITICAL_UI_TESTS, "Critical UI validated identities differ from the required cases")
+    return {"status": "PASS", "testCount": len(validated_tests), "testIdentifiers": validated_tests}
+
+
 def failed_ui_metadata(content: str) -> list[dict[str, Any]]:
     """Keep fixed-schema markers only inside matching, completed failed tests."""
     markers = {"UI_READY_META=": "ready", "UI_FILES_META=": "files"}
@@ -887,6 +909,9 @@ def sanitized_command_failure(log: pathlib.Path) -> dict[str, Any]:
             "private-xctest.log": "provider",
             "private-native.log": "native",
             "private-critical-ui.log": "critical-ui",
+            "private-critical-ui-1.log": "critical-ui",
+            "private-critical-ui-2.log": "critical-ui",
+            "private-critical-ui-3.log": "critical-ui",
             "private-remaining-ui.log": "remaining-ui",
             "private-device-build.log": "device-build",
         }
@@ -1304,6 +1329,10 @@ def run_private_integration(args: argparse.Namespace, environment: dict[str, str
                 ]
                 results = {}
                 for name, timeout, selection, group_tests in groups:
+                    if name == "critical-ui":
+                        results[name] = run_critical_ui_tests(simulator_arguments, temporary=temporary,
+                                                              checkout=checkout, environment=safe_env)
+                        continue
                     group_log = temporary / f"private-{name}.log"
                     group_result = temporary / f"private-{name}.xcresult"
                     _run_logged(bounded_xcode_command(timeout, [*simulator_arguments,

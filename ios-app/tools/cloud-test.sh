@@ -103,11 +103,22 @@ if [ "${IOS_SHARE_DIAGNOSTIC_ONLY-0}" = 1 ]; then
   echo 'PUBLIC_SHARE_DIAGNOSTIC_PASS'
   exit 0
 fi
-python3 ios-app/tools/run-bounded.py 600 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
-  -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
-  -derivedDataPath ios-app/build/simulator -resultBundlePath ios-app/build/board-tests.xcresult \
-  -only-testing:"$BOARD_TEST" -only-testing:"$UPDATE_TEST" -only-testing:"$FILES_TEST" \
-  -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES test-without-building | tee ios-app/build/xcode-board-test.log
+# Renew the XCTest runner session between system-panel scenarios. Keep the
+# same simulator/app container and run every test once within the original
+# aggregate 600-second budget; do not erase state, retry, or reinstall.
+critical_tests=("$BOARD_TEST" "$UPDATE_TEST" "$FILES_TEST")
+critical_deadline=$((SECONDS + 600))
+for critical_index in "${!critical_tests[@]}"; do
+  remaining_seconds=$((critical_deadline - SECONDS))
+  if [ "$remaining_seconds" -le 0 ]; then
+    echo 'Critical UI aggregate deadline exceeded' >&2; exit 1
+  fi
+  python3 ios-app/tools/run-bounded.py "$remaining_seconds" xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
+    -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
+    -derivedDataPath ios-app/build/simulator -resultBundlePath "ios-app/build/critical-$critical_index.xcresult" \
+    -only-testing:"${critical_tests[$critical_index]}" \
+    -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES test-without-building | tee "ios-app/build/xcode-critical-$critical_index.log"
+done
 echo 'PUBLIC_CRITICAL_UI_PASS'
 python3 ios-app/tools/run-bounded.py 1200 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
