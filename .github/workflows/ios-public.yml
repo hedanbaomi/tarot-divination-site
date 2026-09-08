@@ -4,14 +4,20 @@ on:
     branches: [feature/ios-self-sign-v1]
     paths: ['ios-app/**', 'telemetry-worker/**', '.github/workflows/ios-public.yml']
   workflow_dispatch:
+    inputs:
+      share_diagnostic_only:
+        description: Run only the share handoff diagnostic (not release acceptance)
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 concurrency:
-  group: ios-public-${{ github.ref }}
+  group: ios-public-${{ github.ref }}-${{ inputs.share_diagnostic_only && 'share-diagnostic' || 'full' }}
   cancel-in-progress: true
 jobs:
   simulator-and-device:
-    if: github.repository == 'hedanbaomi/tarot-divination-site' && github.event.repository.private == false
+    if: github.repository == 'hedanbaomi/tarot-divination-site' && github.event.repository.private == false && inputs.share_diagnostic_only != true
     runs-on: macos-15
     timeout-minutes: 45
     strategy:
@@ -54,7 +60,7 @@ jobs:
           bash ios-app/tools/cloud-test.sh
       # No IPA, .app, DerivedData, xcresult, private material, cache, or artifact upload.
   device-packaging:
-    if: github.repository == 'hedanbaomi/tarot-divination-site' && github.event.repository.private == false
+    if: github.repository == 'hedanbaomi/tarot-divination-site' && github.event.repository.private == false && inputs.share_diagnostic_only != true
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -73,3 +79,30 @@ jobs:
           node ios-app/tools/sync-web-assets.mjs --check
           bash ios-app/tools/cloud-device.sh
       # Local runner inspection only: no package, cache, or artifact upload.
+  diagnostic-share:
+    if: github.event_name == 'workflow_dispatch' && inputs.share_diagnostic_only == true && github.repository == 'hedanbaomi/tarot-divination-site' && github.event.repository.private == false
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      IOS_SHARE_DIAGNOSTIC_ONLY: '1'
+      IOS_DEVICE_FAMILY: iPhone
+      IOS_RUNTIME_POLICY: oldest
+      IOS_DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: false
+          lfs: false
+      - name: Public share diagnostic only (not release acceptance)
+        run: |
+          set -euo pipefail
+          test ! -e .private
+          test ! -e ios-app/PrivateInputs
+          npm ci --prefix telemetry-worker --ignore-scripts
+          node ios-app/tools/sync-web-assets.mjs
+          node ios-app/tools/sync-web-assets.mjs --check
+          bash ios-app/tools/cloud-test.sh
+      # No secrets, caches, or artifact uploads; final acceptance requires the full jobs.

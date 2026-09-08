@@ -402,6 +402,13 @@ final class QuareiaUITests: XCTestCase {
         )).firstMatch
         let fileVisible = syntheticFile.waitForExistence(timeout: 60)
         printSystemPanelGeometry(in: app, phase: "share-ready", fileElement: syntheticFile)
+        if !fileVisible {
+            // This scenario only opens the explicit synthetic loopback artifact.
+            // Capture each owning accessibility tree once, with a finite bound.
+            print("PUBLIC_SHARE_APP_AX_BEGIN\n" + String(app.debugDescription.prefix(20_000)) + "\nPUBLIC_SHARE_APP_AX_END")
+            let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            print("PUBLIC_SHARE_SYSTEM_AX_BEGIN\n" + String(springboard.debugDescription.prefix(12_000)) + "\nPUBLIC_SHARE_SYSTEM_AX_END")
+        }
         XCTAssertTrue(fileVisible, "Expected the downloaded synthetic file in the system share sheet")
         let close = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Close' OR label == '关闭' OR label == 'Cancel' OR label == '取消'")).allElementsBoundByIndex.first { $0.isHittable }
         if let close {

@@ -1,6 +1,10 @@
 #!/bin/bash
 # SPDX-License-Identifier: MPL-2.0
 set -euo pipefail
+case "${IOS_SHARE_DIAGNOSTIC_ONLY-0}" in
+  0|1) ;;
+  *) echo 'Invalid IOS_SHARE_DIAGNOSTIC_ONLY: expected unset, 0, or 1' >&2; exit 2 ;;
+esac
 cd "$(dirname "$0")/../.."
 mkdir -p ios-app/build
 export CLOUDFLARE_TELEMETRY_DISABLED=1 WRANGLER_SEND_METRICS=false
@@ -74,6 +78,15 @@ python3 ios-app/tools/run-bounded.py 30 xcrun simctl spawn "$SIMULATOR_ID" log s
 BOARD_TEST='QuareiaUITests/QuareiaUITests/testFreeBoardGesturesHistoryAndDraftRestore'
 UPDATE_TEST='QuareiaUITests/QuareiaUITests/testLoopbackUpdateDownloadCancelAndHandoff'
 FILES_TEST='QuareiaUITests/QuareiaUITests/testNativeFilesImportCanBeCancelled'
+if [ "${IOS_SHARE_DIAGNOSTIC_ONLY-0}" = 1 ]; then
+  python3 ios-app/tools/run-bounded.py 300 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
+    -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
+    -derivedDataPath ios-app/build/simulator -resultBundlePath ios-app/build/share-diagnostic.xcresult \
+    -only-testing:"$UPDATE_TEST" \
+    -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES test-without-building | tee ios-app/build/xcode-share-diagnostic.log
+  echo 'PUBLIC_SHARE_DIAGNOSTIC_PASS'
+  exit 0
+fi
 python3 ios-app/tools/run-bounded.py 600 xcodebuild -project ios-app/Quareia.xcodeproj -scheme QuareiaPublic \
   -destination "platform=iOS Simulator,id=$SIMULATOR_ID,arch=$(uname -m)" \
   -derivedDataPath ios-app/build/simulator -resultBundlePath ios-app/build/board-tests.xcresult \

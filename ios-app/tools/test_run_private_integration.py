@@ -738,6 +738,41 @@ class PrivatePayloadPrivacyTests(unittest.TestCase):
             log.write_text("COMMAND_TIMEOUT after 600s: xcodebuild\n", encoding="utf-8")
             self.assertEqual(TOOL.sanitized_command_failure(log), {"category": "command-timeout"})
 
+    def test_cli_gate_failure_reports_only_public_source_coordinate(self):
+        import contextlib
+        import io
+        import types
+        from unittest import mock
+        error = io.StringIO()
+        with mock.patch.object(TOOL, "parse_args", return_value=types.SimpleNamespace(command="run")), \
+             mock.patch.object(TOOL, "run_private_integration", side_effect=ValueError("SYNTHETIC_SENSITIVE_LITERAL /private/material")), \
+             contextlib.redirect_stderr(error):
+            self.assertEqual(TOOL.main([]), 3)
+        prefix = "PRIVATE_BUILD_BLOCKED: Private command failed: "
+        self.assertTrue(error.getvalue().startswith(prefix))
+        value = json.loads(error.getvalue()[len(prefix):])
+        self.assertEqual(set(value), {"category", "gateLine"})
+        self.assertEqual(value["category"], "gate-failed")
+        self.assertTrue(1 <= value["gateLine"] <= 1_000_000)
+        self.assertNotIn("SYNTHETIC_SENSITIVE_LITERAL", error.getvalue())
+        self.assertNotIn("/private/", error.getvalue())
+
+    def test_timeout_context_is_finite_and_contains_no_test_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = pathlib.Path(directory) / "private-critical-ui.log"
+            log.write_text(
+                "Test Case '-[QuareiaUITests.QuareiaUITests testFirst]' started.\n"
+                "Test Case '-[QuareiaUITests.QuareiaUITests testFirst]' passed (1 seconds).\n"
+                "Test Case '-[QuareiaUITests.QuareiaUITests testShare]' started.\n"
+                "SYNTHETIC_SENSITIVE_LITERAL /private/temporary/value\n"
+                "COMMAND_TIMEOUT after 600s: xcodebuild\n", encoding="utf-8")
+            self.assertEqual(TOOL.sanitized_command_failure(log), {
+                "category": "command-timeout", "phase": "critical-ui",
+                "progress": {"passed": 1, "failed": 0, "skipped": 0, "lastTest": "QuareiaUITests/testShare"}})
+            encoded = json.dumps(TOOL.sanitized_command_failure(log))
+            self.assertNotIn("SYNTHETIC_SENSITIVE_LITERAL", encoded)
+            self.assertNotIn("/private/", encoded)
+
     def test_public_source_tree_rejects_private_material_before_overlay(self):
         def listing(path, mode="100644"):
             return f"{mode} blob {'a' * 40}\t{path}\0"

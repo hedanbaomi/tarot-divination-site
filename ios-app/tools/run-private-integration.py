@@ -793,8 +793,30 @@ def sanitized_command_failure(log: pathlib.Path) -> dict[str, Any]:
             content = stream.read().decode("utf-8", errors="replace")
     except OSError:
         return {"category": "command-failed"}
+    def with_context(value: dict[str, Any]) -> dict[str, Any]:
+        phases = {
+            "orchestration.log": "prepare",
+            "private-xctest.log": "provider",
+            "private-native.log": "native",
+            "private-critical-ui.log": "critical-ui",
+            "private-remaining-ui.log": "remaining-ui",
+            "private-device-build.log": "device-build",
+        }
+        phase = phases.get(log.name)
+        if phase is not None:
+            value["phase"] = phase
+            cases = re.findall(
+                r"Test Case '-\[([A-Za-z0-9_.]+) (test[A-Za-z0-9_]+)\]' (started|passed|failed|skipped)\b", content
+            )
+            if cases:
+                progress = {status: sum(case[2] == status for case in cases) for status in ("passed", "failed", "skipped")}
+                if all(count <= 10_000 for count in progress.values()):
+                    progress["lastTest"] = f"{cases[-1][0].split('.')[-1]}/{cases[-1][1]}"
+                    value["progress"] = progress
+        return value
+
     if "COMMAND_TIMEOUT after " in content:
-        return {"category": "command-timeout"}
+        return with_context({"category": "command-timeout"})
     tests = re.findall(r"Test Case '-\[([A-Za-z0-9_.]+) (test[A-Za-z0-9_]+)\]' failed\b", content)
     if tests:
         result = {"category": "xctest-failed", "tests": sorted({f"{name.split('.')[-1]}/{method}" for name, method in tests})[:10]}
@@ -806,7 +828,7 @@ def sanitized_command_failure(log: pathlib.Path) -> dict[str, Any]:
                 for filename, line in sorted(set(locations))[:10]
                 if 1 <= int(line) <= 1_000_000
             ]
-        return result
+        return with_context(result)
     errors = re.findall(r"(?:^|[/\\])([A-Za-z][A-Za-z0-9_]*\.swift):(\d+):\d+: error: ([^\n]*)", content, re.MULTILINE)
     if errors:
         findings = []
@@ -823,10 +845,10 @@ def sanitized_command_failure(log: pathlib.Path) -> dict[str, Any]:
                     category = label
                     break
             findings.append({"category": category, "file": filename, "line": int(line)})
-        return {"category": "swift-compile", "errors": findings}
+        return with_context({"category": "swift-compile", "errors": findings})
     if "Undefined symbols" in content or "linker command failed" in content:
-        return {"category": "link-failed"}
-    return {"category": "command-failed"}
+        return with_context({"category": "link-failed"})
+    return with_context({"category": "command-failed"})
 
 
 def _run_logged(command: list[str], *, cwd: pathlib.Path, log: pathlib.Path, environment: dict[str, str]) -> None:
@@ -841,6 +863,8 @@ def _run_logged(command: list[str], *, cwd: pathlib.Path, log: pathlib.Path, env
         )
     if completed.returncode != 0:
         diagnostic = sanitized_command_failure(log)
+        if diagnostic.get("phase") == "prepare" and "build-for-testing" in command:
+            diagnostic["phase"] = "simulator-build"
         diagnostic["exitCode"] = completed.returncode
         raise PrivateIntegrationError("Private command failed: " + json.dumps(diagnostic, sort_keys=True, separators=(",", ":")))
 
@@ -1323,7 +1347,21 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = run_private_integration(args)
     except (PrivateIntegrationError, OSError, subprocess.SubprocessError, ValueError) as cause:
-        print(f"PRIVATE_BUILD_BLOCKED: {cause}", file=sys.stderr)
+        if isinstance(cause, PrivateIntegrationError) and str(cause).startswith("Private command failed: "):
+            print(f"PRIVATE_BUILD_BLOCKED: {cause}", file=sys.stderr)
+        else:
+            # The public runner source coordinate identifies the failed gate
+            # without exposing private paths, exception values, or source text.
+            gate_line = 1
+            trace = cause.__traceback__
+            while trace is not None:
+                code = trace.tb_frame.f_code
+                if os.path.abspath(code.co_filename) == os.path.abspath(__file__) and code.co_name != "require":
+                    gate_line = trace.tb_lineno
+                trace = trace.tb_next
+            diagnostic = {"category": "gate-failed", "gateLine": gate_line}
+            print("PRIVATE_BUILD_BLOCKED: Private command failed: " +
+                  json.dumps(diagnostic, sort_keys=True, separators=(",", ":")), file=sys.stderr)
         return 3
     print(
         json.dumps(
