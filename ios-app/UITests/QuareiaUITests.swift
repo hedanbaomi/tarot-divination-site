@@ -221,15 +221,15 @@ final class QuareiaUITests: XCTestCase {
         newDesign.tap()
         let spreadName = waitForTextField(label: "Spread name", in: app)
         let importTab = waitForElement(labels: ["Import code"], in: app)
-        let studioViewport = try studioScrollViewport(dialog: studio, firstField: spreadName, tab: importTab)
-        revealStudioControl(spreadName, in: studio, viewport: studioViewport)
+        let studioCorridorX = try studioScrollViewport(dialog: studio, firstField: spreadName, tab: importTab).minX
+        revealStudioControl(spreadName, in: studio, corridorX: studioCorridorX, tab: importTab, app: app, webView: webView)
         enterSyntheticText("UI Test QSP", into: spreadName, in: studio, app: app)
 
         let positionNames = app.textFields.matching(NSPredicate(format: "label == 'Position name'"))
         XCTAssertTrue(positionNames.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(positionNames.count, 3, "Expected the default custom spread to contain three positions")
         for index in 0..<3 {
-            revealStudioControl(positionNames.element(boundBy: index), in: studio, viewport: studioViewport)
+            revealStudioControl(positionNames.element(boundBy: index), in: studio, corridorX: studioCorridorX, tab: importTab, app: app, webView: webView)
             enterSyntheticText(
                 "UI position \(index + 1)",
                 into: positionNames.element(boundBy: index),
@@ -239,7 +239,7 @@ final class QuareiaUITests: XCTestCase {
         }
 
         let generate = waitForElement(labels: ["Generate share code"], in: app)
-        revealStudioControl(generate, in: studio, viewport: studioViewport)
+        revealStudioControl(generate, in: studio, corridorX: studioCorridorX, tab: importTab, app: app, webView: webView)
         tapWhenVisible(generate, in: studio, scrolling: .towardLowerPage)
         let shareCode = waitForTextView(label: "Custom spread share code", in: app)
         let code = try XCTUnwrap(shareCode.value as? String)
@@ -247,11 +247,11 @@ final class QuareiaUITests: XCTestCase {
 
         tapWhenVisible(importTab, in: studio, scrolling: .towardUpperPage)
         let importCode = waitForTextView(label: "Paste a share code", in: app)
-        let importViewport = try studioScrollViewport(dialog: studio, firstField: importCode, tab: importTab)
-        revealStudioControl(importCode, in: studio, viewport: importViewport)
+        let importCorridorX = try studioScrollViewport(dialog: studio, firstField: importCode, tab: importTab).minX
+        revealStudioControl(importCode, in: studio, corridorX: importCorridorX, tab: importTab, app: app, webView: webView)
         enterSyntheticText(code, into: importCode, in: studio, app: app)
         let importAndUse = waitForElement(labels: ["Import and use"], in: app)
-        revealStudioControl(importAndUse, in: studio, viewport: importViewport)
+        revealStudioControl(importAndUse, in: studio, corridorX: importCorridorX, tab: importTab, app: app, webView: webView)
         tapWhenVisible(importAndUse, in: studio, scrolling: .towardLowerPage)
 
         XCTAssertTrue(waitForElement(
@@ -1102,24 +1102,59 @@ final class QuareiaUITests: XCTestCase {
     }
 
     private func revealStudioControl(_ control: XCUIElement, in dialog: XCUIElement,
-                                     viewport: CGRect, file: StaticString = #filePath,
-                                     line: UInt = #line) {
-        for _ in 0..<8 {
+                                     corridorX: CGFloat, tab: XCUIElement,
+                                     app: XCUIApplication, webView: XCUIElement,
+                                     file: StaticString = #filePath, line: UInt = #line) {
+        // Only the padding corridor survives editing. Keyboard transitions can
+        // change layout, so sample the vertical bounds again before every drag.
+        for attempt in 0...8 {
+            let appFrame = app.frame
+            let dialogFrame = dialog.frame
+            let webFrame = webView.frame
+            let tabFrame = tab.frame
+            let targetExists = control.exists
             let target = control.frame
-            if control.exists && control.isHittable && viewport.contains(target) { return }
-            let origin = dialog.coordinate(withNormalizedOffset: .zero)
-            let upper = origin.withOffset(CGVector(dx: viewport.minX - dialog.frame.minX,
-                dy: viewport.minY + viewport.height * 0.2 - dialog.frame.minY))
-            let lower = origin.withOffset(CGVector(dx: viewport.minX - dialog.frame.minX,
-                dy: viewport.minY + viewport.height * 0.8 - dialog.frame.minY))
-            if target.minY < viewport.minY {
-                upper.press(forDuration: 0.08, thenDragTo: lower)
-            } else {
-                lower.press(forDuration: 0.08, thenDragTo: upper)
+            let hittable = targetExists && control.isHittable
+            let visible = appFrame.intersection(webFrame).intersection(dialogFrame)
+            let top = max(visible.minY + 8, tabFrame.maxY + 12)
+            let bottom = min(visible.maxY - 8, dialogFrame.maxY - 64)
+            let viewport = CGRect(x: corridorX, y: top,
+                                  width: visible.maxX - 8 - corridorX, height: bottom - top)
+            guard !visible.isNull, !visible.isEmpty, !viewport.isNull,
+                  viewport.width > 16, viewport.height > 48,
+                  visible.contains(viewport), tab.exists, tab.isHittable else {
+                print("PUBLIC_QSP_GEOMETRY attempt=\(attempt) invalid=true app=\(appFrame) dialog=\(dialogFrame) web=\(webFrame) tab=\(tabFrame) viewport=\(viewport)")
+                XCTFail("Expected current visible Studio scroll anchors", file: file, line: line)
+                return
             }
+            print("PUBLIC_QSP_GEOMETRY attempt=\(attempt) target=\(target) hittable=\(hittable) dialog=\(dialogFrame) web=\(webFrame) tab=\(tabFrame) viewport=\(viewport)")
+            if targetExists && hittable && !target.isEmpty && viewport.contains(target) { return }
+            // The eighth drag gets a final visibility check, without a ninth drag.
+            guard attempt < 8 else { break }
+            guard targetExists, !target.isNull, !target.isEmpty else {
+                XCTFail("Expected the synthetic Studio control to exist", file: file, line: line)
+                return
+            }
+            let towardUpper = target.minY < viewport.minY
+            let overflow = towardUpper
+                ? viewport.minY - target.minY
+                : max(0, target.maxY - viewport.maxY)
+            // Move just beyond the clipping edge; cap each gesture inside the
+            // current content window instead of always moving a full fixed span.
+            let distance = min(max(24, overflow + 8), viewport.height * 0.6)
+            let startY = towardUpper ? viewport.minY + 16 : viewport.maxY - 16
+            let endY = towardUpper ? startY + distance : startY - distance
+            let start = CGPoint(x: corridorX, y: startY)
+            let end = CGPoint(x: corridorX, y: endY)
+            print("PUBLIC_QSP_GEOMETRY attempt=\(attempt) start=\(start) end=\(end)")
+            // Use the stable application coordinate space, not a scrollable AX
+            // ancestor whose origin may be resolved again during the gesture.
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            origin.withOffset(CGVector(dx: start.x - appFrame.minX, dy: start.y - appFrame.minY))
+                .press(forDuration: 0.08, thenDragTo: origin.withOffset(CGVector(
+                    dx: end.x - appFrame.minX, dy: end.y - appFrame.minY)))
         }
-        XCTFail("Expected a fully visible Studio control; target=\(control.frame); viewport=\(viewport)",
-                file: file, line: line)
+        XCTFail("Expected a fully visible Studio control after eight drags", file: file, line: line)
     }
 
     private func openWebMenu(in app: XCUIApplication, webView: XCUIElement) {
