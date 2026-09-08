@@ -196,7 +196,7 @@ class UpdateManagerTest {
         UpdateManager.downloadAndInstall(activity, release(size = 1024))
 
         assertTrue(latch.await(10, TimeUnit.SECONDS))
-        idleMainLooper()
+        awaitDownloadCallback()
 
         assertEquals(1, fakeInstaller.launchedFiles.size)
         assertEquals(cachedApkFile().absolutePath, fakeInstaller.launchedFiles[0].absolutePath)
@@ -217,7 +217,7 @@ class UpdateManagerTest {
         UpdateManager.downloadAndInstall(activity, release(size = 1024))
 
         assertTrue(latch.await(10, TimeUnit.SECONDS))
-        idleMainLooper()
+        awaitDownloadCallback()
 
         assertTrue(fakeInstaller.launchedFiles.isEmpty())
         assertNotNull(pending.load())
@@ -240,7 +240,7 @@ class UpdateManagerTest {
         UpdateManager.downloadAndInstall(activity, release(size = 1024))
 
         assertTrue(latch.await(10, TimeUnit.SECONDS))
-        idleMainLooper()
+        awaitDownloadCallback()
 
         assertTrue(fakeInstaller.launchedFiles.isEmpty())
         assertNull(pending.load())
@@ -260,7 +260,7 @@ class UpdateManagerTest {
         UpdateManager.downloadAndInstall(activity, release(size = 1024))
 
         assertTrue(latch.await(10, TimeUnit.SECONDS))
-        idleMainLooper()
+        awaitDownloadCallback()
 
         assertTrue(fakeInstaller.launchedFiles.isEmpty())
         assertEquals(
@@ -314,7 +314,7 @@ class UpdateManagerTest {
         fakeDownloader.finishLatch = downloadLatch
         UpdateManager.downloadAndInstall(activity, release(size = 1024))
         assertTrue(downloadLatch.await(10, TimeUnit.SECONDS))
-        idleMainLooper()
+        awaitDownloadCallback()
         assertNotNull(pending.load())
 
         // The user returns from the system settings without granting.
@@ -379,6 +379,12 @@ class UpdateManagerTest {
 
     private fun cachedApkFile(): File =
         File(activity.filesDir, "updates/quareia-update.apk")
+
+    /** The downloader latch precedes verification and the final main-thread post. */
+    private fun awaitDownloadCallback() {
+        UpdateManager.testDependencies!!.executor.submit {}.get(10, TimeUnit.SECONDS)
+        idleMainLooper()
+    }
 
     private fun idleMainLooper() {
         shadowOf(Looper.getMainLooper()).idle()
