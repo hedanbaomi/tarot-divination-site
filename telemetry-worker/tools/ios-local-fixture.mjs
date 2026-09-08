@@ -97,10 +97,11 @@ async function handleRequest(request, response, workerOrigin) {
     sendJson(response, 200, {
       schema_version: 1,
       platform: "ios",
-      display_version: "1.0.1",
+      version: "1.0.1",
       build: 2,
-      download_url: updateFixtureOrigin + updateArtifactPath,
-      size_bytes: updateArtifact.length,
+      minimum_ios: "16.0",
+      ipa_url: updateFixtureOrigin + updateArtifactPath,
+      size: updateArtifact.length,
       sha256: updateArtifactSha256
     });
     return;

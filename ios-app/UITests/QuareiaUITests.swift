@@ -890,14 +890,33 @@ final class QuareiaUITests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        makeVisible(element, in: scrollable, scrolling: direction, file: file, line: line)
-        if element.isHittable { element.tap() }
+        makeVisible(element, in: scrollable, scrolling: direction, forTapping: true, file: file, line: line)
+        let target = element.frame
+        guard element.isHittable, let point = visibleTapPoint(target, in: scrollable.frame) else {
+            XCTFail("Expected a hittable control with a safe visible tap point", file: file, line: line)
+            return
+        }
+        // A control can be clipped at the WebView edge and still be actionable.
+        // Tap inside its visible area without XCTest scrolling its ancestor again.
+        element.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(
+            dx: point.x - target.minX, dy: point.y - target.minY
+        )).tap()
+    }
+
+    private func visibleTapPoint(_ target: CGRect, in scrollFrame: CGRect) -> CGPoint? {
+        guard !target.isNull, !target.isEmpty, !target.isInfinite,
+              !scrollFrame.isNull, !scrollFrame.isEmpty, !scrollFrame.isInfinite else { return nil }
+        let visible = target.intersection(scrollFrame.insetBy(dx: 8, dy: 8))
+        // Keep the point away from both clipping edges; a tiny sliver is insufficient.
+        guard !visible.isNull, visible.width >= 16, visible.height >= 16 else { return nil }
+        return CGPoint(x: visible.midX, y: visible.midY)
     }
 
     private func makeVisible(
         _ element: XCUIElement,
         in scrollable: XCUIElement,
         scrolling direction: ScrollDirection,
+        forTapping: Bool = false,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
@@ -910,7 +929,10 @@ final class QuareiaUITests: XCTestCase {
                     let centerIsVisible = viewport.contains(CGPoint(x: target.midX, y: target.midY))
                     let targetFits = target.width <= viewport.width && target.height <= viewport.height
                     let safelyVisible = centerIsVisible && (!targetFits || viewport.contains(target))
-                    if element.isHittable && safelyVisible { return }
+                    let ready = forTapping
+                        ? visibleTapPoint(target, in: scrollable.frame) != nil
+                        : safelyVisible
+                    if element.isHittable && ready { return }
                     if target.maxY > viewport.maxY - 20 {
                         next = .towardLowerPage
                     } else if target.minY < viewport.minY + 20 {

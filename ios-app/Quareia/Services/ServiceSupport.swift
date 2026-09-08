@@ -24,13 +24,29 @@ struct AppBuildInfo: Equatable {
     let versionCode: Int
     let locale: String
     let iosMajor: Int
+    let iosMinor: Int
+
+    init(
+        displayVersion: String,
+        versionCode: Int,
+        locale: String,
+        iosMajor: Int,
+        iosMinor: Int = 0
+    ) {
+        self.displayVersion = displayVersion
+        self.versionCode = versionCode
+        self.locale = locale
+        self.iosMajor = iosMajor
+        self.iosMinor = iosMinor
+    }
 
     var isValidForServices: Bool {
         !displayVersion.isEmpty &&
             displayVersion.utf8.count <= 64 &&
             (1...Self.maximumVersionCode).contains(versionCode) &&
             ServiceLocale.isValid(locale) &&
-            (1...100).contains(iosMajor)
+            (1...100).contains(iosMajor) &&
+            (0...99).contains(iosMinor)
     }
 
     static func current(
@@ -60,7 +76,8 @@ struct AppBuildInfo: Equatable {
             displayVersion: displayVersion,
             versionCode: versionCode,
             locale: locale,
-            iosMajor: operatingSystemVersion.majorVersion
+            iosMajor: operatingSystemVersion.majorVersion,
+            iosMinor: operatingSystemVersion.minorVersion
         )
     }
 }
@@ -70,6 +87,7 @@ struct ServiceConfiguration: Equatable {
     let telemetryURL: URL?
     let updateManifestURL: URL?
     let trustedHosts: Set<String>
+    let trustedArtifactHosts: Set<String>
     fileprivate let permitsExplicitLoopbackFixture: Bool
 
     static let unconfigured = ServiceConfiguration(
@@ -77,6 +95,7 @@ struct ServiceConfiguration: Equatable {
         telemetryURL: nil,
         updateManifestURL: nil,
         trustedHosts: [],
+        trustedArtifactHosts: [],
         permitsExplicitLoopbackFixture: false
     )
 
@@ -84,15 +103,18 @@ struct ServiceConfiguration: Equatable {
         announcementsURL: URL? = nil,
         telemetryURL: URL? = nil,
         updateManifestURL: URL? = nil,
-        trustedHosts: Set<String>
+        trustedHosts: Set<String>,
+        trustedArtifactHosts: Set<String>? = nil
     ) -> ServiceConfiguration? {
         let normalizedHosts = Set(trustedHosts.map { $0.lowercased() })
+        let normalizedArtifactHosts = Set((trustedArtifactHosts ?? trustedHosts).map { $0.lowercased() })
         guard !normalizedHosts.isEmpty else { return nil }
         let configuration = ServiceConfiguration(
             announcementsURL: announcementsURL,
             telemetryURL: telemetryURL,
             updateManifestURL: updateManifestURL,
             trustedHosts: normalizedHosts,
+            trustedArtifactHosts: normalizedArtifactHosts,
             permitsExplicitLoopbackFixture: false
         )
         let endpoints = [announcementsURL, telemetryURL, updateManifestURL].compactMap { $0 }
@@ -136,12 +158,21 @@ struct ServiceConfiguration: Equatable {
             telemetryURL: URL(string: "/v1/events", relativeTo: root)?.absoluteURL,
             updateManifestURL: manifestURL,
             trustedHosts: ["127.0.0.1"],
+            trustedArtifactHosts: ["127.0.0.1"],
             permitsExplicitLoopbackFixture: true
         )
     }
     #endif
 
     func allowsServiceURL(_ url: URL) -> Bool {
+        allowsURL(url, trustedHosts: trustedHosts)
+    }
+
+    func allowsArtifactURL(_ url: URL) -> Bool {
+        allowsURL(url, trustedHosts: trustedArtifactHosts)
+    }
+
+    private func allowsURL(_ url: URL, trustedHosts: Set<String>) -> Bool {
         guard
             url.user == nil,
             url.password == nil,

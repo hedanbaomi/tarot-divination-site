@@ -32,8 +32,8 @@ else
 fi
 node ios-app/tools/plan-ios-release.mjs \
   --ipa ios-app/build/Quareia-1.0.0-1.ipa --package-report ios-app/build/synthetic-package.json \
-  --download-url https://example.invalid/ios-v1.0.0-b1/Quareia-1.0.0-1.ipa \
-  --tag ios-v1.0.0-b1 --previous-manifest INITIAL_CHANNEL --output ios-app/build/ios-release-plan.json
+  --download-url https://github.com/hedanbaomi/tarot-divination-site/releases/download/ios-v1.0.0/QuareiaDivination-iOS-v1.0.0.ipa \
+  --tag ios-v1.0.0 --previous-manifest INITIAL_CHANNEL --output ios-app/build/ios-release-plan.json
 echo 'SYNTHETIC_CONTRACT_AND_RELEASE_DRY_RUN_PASS_REAL_PRIVATE_PENDING'
 # The test host contains an injected XCTest PlugIns bundle. Inspect a separate
 # app-only simulator build so the no-extensions gate stays strict for both apps.

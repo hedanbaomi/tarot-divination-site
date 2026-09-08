@@ -374,6 +374,8 @@ def validate_test_evidence(
         "decodedLogicalKeys": decode_keys,
         "recordCount": len(decode_keys),
         "authenticationNegativePassed": True,
+        "actualDecodeEvidence": True,
+        "actualProviderRuntimeExecuted": True,
     }
 
 
@@ -607,6 +609,37 @@ def package_private_candidate(
     }
 
 
+def validate_macho_deployment_targets(
+    machos: list[dict[str, Any]],
+    files: list[dict[str, Any]],
+    executable: str,
+) -> list[dict[str, Any]]:
+    """Prove the app and its linked runtimes can load on the declared iOS 16 target."""
+    by_path = {entry["path"]: entry for entry in files}
+    checked = []
+    for macho in machos:
+        require(macho.get("architectures") == ["arm64"], "Private device Mach-O must contain only arm64")
+        try:
+            build = subprocess.check_output(
+                ["xcrun", "vtool", "-show-build", str(by_path[macho["path"]]["_absolute"])],
+                text=True,
+                stderr=subprocess.PIPE,
+            )
+        except (OSError, subprocess.CalledProcessError) as cause:
+            raise PrivateIntegrationError("Cannot verify private Mach-O deployment target") from cause
+        # Modern LC_BUILD_VERSION uses minos; older version-min commands use version.
+        declared = re.findall(r"^\s*(?:minos|version)\s+(\d+(?:\.\d+){0,2})\s*$", build, re.MULTILINE)
+        require(len(declared) == 1, "Private Mach-O has missing or ambiguous minimum iOS metadata")
+        version = tuple(int(part) for part in declared[0].split("."))
+        version += (0,) * (3 - len(version))
+        require(version <= (16, 0, 0), "Private Mach-O requires a newer iOS than 16.0")
+        if macho["path"] == executable:
+            require(version == (16, 0, 0), "Private executable minimum iOS must be 16.0")
+        checked.append({**macho, "minimumOSVersion": declared[0]})
+    require(any(entry["path"] == executable for entry in checked), "Private deployment evidence has no main executable")
+    return checked
+
+
 def inspect_private_device_app(
     app: pathlib.Path,
     manifest: dict[str, Any],
@@ -673,6 +706,7 @@ def inspect_private_device_app(
     require(info.get("CFBundleShortVersionString") == expected_version, "Private candidate version mismatch")
     require(info.get("CFBundleVersion") == str(expected_build), "Private candidate build mismatch")
     require(info.get("CFBundleSupportedPlatforms") == ["iPhoneOS"], "Private candidate is not iPhoneOS")
+    require(info.get("MinimumOSVersion") == "16.0", "Private candidate minimum iOS must be 16.0")
 
     expected_records = {
         f"PrivateAssets/lxxxi/{entry['logicalKey']}.qv": entry for entry in manifest["encryptedRecords"]
@@ -695,6 +729,7 @@ def inspect_private_device_app(
     require(type(executable) is str, "Private candidate executable is missing")
     validate_private_runtime_payload(files, directories, executable, public_checkout)
     machos = inspector._inspect_machos(files, "IOS", executable)
+    machos = validate_macho_deployment_targets(machos, files, executable)
     entitlements = inspector._validate_entitlements(app, "IOS", files)
     tree = hashlib.sha256()
     total_bytes = 0
@@ -710,6 +745,8 @@ def inspect_private_device_app(
         "status": "PRIVATE_CANDIDATE",
         "releaseComplete": False,
         "platform": "IOS",
+        "deploymentTarget": "16.0",
+        "architectures": ["arm64"],
         "version": expected_version,
         "build": expected_build,
         "reviewedSourceSHA": source_sha,
@@ -840,17 +877,19 @@ def _simulator_profile(
             continue
         for device in runtime_devices:
             if type(device) is dict and device.get("udid") == reference_udid:
-                matches.append((runtime_identifier, device.get("deviceTypeIdentifier")))
+                matches.append((runtime_identifier, device.get("deviceTypeIdentifier"), device.get("isAvailable")))
     require(len(matches) == 1, "Reference simulator is unavailable or ambiguous")
-    runtime_identifier, device_type_identifier = matches[0]
+    runtime_identifier, device_type_identifier, available = matches[0]
+    require(available is True, "Reference simulator is unavailable")
     require(
         runtime_identifier.startswith("com.apple.CoreSimulator.SimRuntime.iOS-"),
         "Reference simulator is not an iOS runtime",
     )
     require(
         type(device_type_identifier) is str
-        and device_type_identifier.startswith("com.apple.CoreSimulator.SimDeviceType.iPhone-"),
-        "Reference simulator is not an iPhone device type",
+        and device_type_identifier.startswith(("com.apple.CoreSimulator.SimDeviceType.iPhone-",
+                                                "com.apple.CoreSimulator.SimDeviceType.iPad-")),
+        "Reference simulator is not an iPhone or iPad device type",
     )
     return runtime_identifier, device_type_identifier
 

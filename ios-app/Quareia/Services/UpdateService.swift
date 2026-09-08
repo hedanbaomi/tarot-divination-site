@@ -4,10 +4,11 @@ import Foundation
 struct UpdateManifest: Equatable {
     let schemaVersion: Int
     let platform: String
-    let displayVersion: String
+    let version: String
     let build: Int
-    let downloadURL: URL
-    let sizeBytes: Int64
+    let minimumIOS: String
+    let ipaURL: URL
+    let size: Int64
     let sha256: String
 }
 
@@ -16,6 +17,7 @@ enum UpdateFailure: Error, Equatable {
     case invalidCurrentVersion
     case transport
     case invalidManifest
+    case incompatibleOS
     case untrustedURL
     case invalidResponse
     case invalidArtifact
@@ -101,6 +103,7 @@ actor UpdateService {
                     manifestURL: manifestURL,
                     currentVersion: currentVersion,
                     currentBuild: buildInfo.versionCode,
+                    currentIOS: IOSVersion(major: buildInfo.iosMajor, minor: buildInfo.iosMinor),
                     configuration: configuration,
                     httpClient: httpClient,
                     owner: owner
@@ -124,13 +127,13 @@ actor UpdateService {
         guard case .available(let checkedManifest) = currentState,
               checkedManifest == manifest
         else { return .failure(.invalidManifest) }
-        guard manifest.sizeBytes > 0,
-              manifest.sizeBytes <= Self.maximumArtifactBytes,
-              configuration.allowsServiceURL(manifest.downloadURL)
+        guard manifest.size > 0,
+              manifest.size <= Self.maximumArtifactBytes,
+              configuration.allowsArtifactURL(manifest.ipaURL)
         else { return .failure(.untrustedURL) }
 
         let expectedGeneration = generation
-        var request = URLRequest(url: manifest.downloadURL)
+        var request = URLRequest(url: manifest.ipaURL)
         request.httpMethod = "GET"
         request.timeoutInterval = 30
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
@@ -141,14 +144,14 @@ actor UpdateService {
             response = try await httpClient.download(
                 for: request,
                 owner: owner,
-                maximumBytes: min(manifest.sizeBytes, Self.maximumArtifactBytes),
+                maximumBytes: min(manifest.size, Self.maximumArtifactBytes),
                 progress: { downloadedBytes in
                     progress?(UpdateDownloadProgress(
-                        totalBytes: manifest.sizeBytes,
+                        totalBytes: manifest.size,
                         downloadedBytes: downloadedBytes
                     ))
                 },
-                redirectValidator: configuration.allowsServiceURL
+                redirectValidator: configuration.allowsArtifactURL
             )
         } catch ServiceHTTPError.cancelled {
             return .failure(.cancelled)
@@ -165,15 +168,15 @@ actor UpdateService {
             return .failure(.cancelled)
         }
         guard response.statusCode == 200,
-              response.byteCount == manifest.sizeBytes,
-              configuration.allowsServiceURL(response.finalURL)
+              response.byteCount == manifest.size,
+              configuration.allowsArtifactURL(response.finalURL)
         else {
             try? FileManager.default.removeItem(at: response.fileURL)
             return .failure(.invalidResponse)
         }
         if let rawLength = response.headers["content-length"],
            let contentLength = Int64(rawLength),
-           contentLength != manifest.sizeBytes
+           contentLength != manifest.size
         {
             try? FileManager.default.removeItem(at: response.fileURL)
             return .failure(.invalidArtifact)
@@ -197,13 +200,13 @@ actor UpdateService {
                 withIntermediateDirectories: true
             )
             let destination = downloadDirectory.appendingPathComponent(
-                "Quareia-\(manifest.displayVersion)-\(manifest.build)-\(UUID().uuidString).ipa",
+                "Quareia-\(manifest.version)-\(manifest.build)-\(UUID().uuidString).ipa",
                 isDirectory: false
             )
             try FileManager.default.moveItem(at: response.fileURL, to: destination)
             progress?(UpdateDownloadProgress(
-                totalBytes: manifest.sizeBytes,
-                downloadedBytes: manifest.sizeBytes
+                totalBytes: manifest.size,
+                downloadedBytes: manifest.size
             ))
             return .success(destination)
         } catch {
@@ -224,6 +227,7 @@ actor UpdateService {
         manifestURL: URL,
         currentVersion: SemanticVersion,
         currentBuild: Int,
+        currentIOS: IOSVersion,
         configuration: ServiceConfiguration,
         httpClient: ServiceHTTPClient,
         owner: UUID
@@ -263,19 +267,26 @@ actor UpdateService {
             return .failed(.invalidResponse)
         }
         guard let manifest = parseManifest(response.data),
-              configuration.allowsServiceURL(manifest.downloadURL),
-              let remoteVersion = SemanticVersion(manifest.displayVersion)
+              let remoteVersion = SemanticVersion(manifest.version),
+              let minimumIOS = IOSVersion(manifest.minimumIOS)
         else { return .failed(.invalidManifest) }
-
-        if remoteVersion < currentVersion || manifest.build < currentBuild {
+        guard configuration.allowsArtifactURL(manifest.ipaURL) else {
+            return .failed(.untrustedURL)
+        }
+        if manifestURL.host?.lowercased() == "telemetry.luotianyi.fun",
+           !isCanonicalProductionIPAURL(manifest.ipaURL, version: manifest.version) {
             return .failed(.invalidManifest)
         }
+        guard currentIOS >= minimumIOS else {
+            return .failed(.incompatibleOS)
+        }
+
         if remoteVersion == currentVersion && manifest.build == currentBuild {
             return .upToDate
         }
-        guard manifest.build > currentBuild else {
-            // A display-version bump without a globally increasing
-            // CFBundleVersion is an internally inconsistent release.
+        guard remoteVersion > currentVersion, manifest.build > currentBuild else {
+            // The version-bound GitHub asset path is immutable. Every release
+            // must advance both its public version and global CFBundleVersion.
             return .failed(.invalidManifest)
         }
         return .available(manifest)
@@ -286,21 +297,27 @@ actor UpdateService {
             let raw = try? JSONSerialization.jsonObject(with: data),
             let object = raw as? [String: Any],
             Set(object.keys) == [
-                "schema_version", "platform", "display_version", "build",
-                "download_url", "size_bytes", "sha256"
+                "schema_version", "platform", "version", "build",
+                "minimum_ios", "ipa_url", "size", "sha256"
             ],
             strictInt64(object["schema_version"]) == 1,
             object["platform"] as? String == "ios",
-            let displayVersion = object["display_version"] as? String,
-            SemanticVersion(displayVersion) != nil,
+            let version = object["version"] as? String,
+            SemanticVersion(version) != nil,
             let build64 = strictInt64(object["build"]),
             (1...Int64(AppBuildInfo.maximumVersionCode)).contains(build64),
-            let rawURL = object["download_url"] as? String,
+            let minimumIOS = object["minimum_ios"] as? String,
+            IOSVersion(minimumIOS) != nil,
+            let rawURL = object["ipa_url"] as? String,
             rawURL.utf8.count <= 2_048,
             let downloadURL = URL(string: rawURL),
+            downloadURL.user == nil,
+            downloadURL.password == nil,
+            downloadURL.query == nil,
+            downloadURL.fragment == nil,
             downloadURL.pathExtension.lowercased() == "ipa",
             !downloadURL.lastPathComponent.isEmpty,
-            let sizeBytes = strictInt64(object["size_bytes"]),
+            let sizeBytes = strictInt64(object["size"]),
             (1...maximumArtifactBytes).contains(sizeBytes),
             let sha256 = object["sha256"] as? String,
             sha256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil
@@ -309,10 +326,11 @@ actor UpdateService {
         return UpdateManifest(
             schemaVersion: 1,
             platform: "ios",
-            displayVersion: displayVersion,
+            version: version,
             build: Int(build64),
-            downloadURL: downloadURL,
-            sizeBytes: sizeBytes,
+            minimumIOS: minimumIOS,
+            ipaURL: downloadURL,
+            size: sizeBytes,
             sha256: sha256
         )
     }
@@ -328,6 +346,52 @@ actor UpdateService {
               double <= Double(Int64.max)
         else { return nil }
         return number.int64Value
+    }
+
+    private static func isCanonicalProductionIPAURL(_ url: URL, version: String) -> Bool {
+        guard url.scheme?.lowercased() == "https",
+              url.host?.lowercased() == "github.com",
+              url.port == nil,
+              url.user == nil,
+              url.password == nil,
+              url.query == nil,
+              url.fragment == nil
+        else { return false }
+        return url.path ==
+            "/hedanbaomi/tarot-divination-site/releases/download/ios-v\(version)/" +
+            "QuareiaDivination-iOS-v\(version).ipa"
+    }
+}
+
+private struct IOSVersion: Comparable {
+    let major: Int
+    let minor: Int
+
+    init(major: Int, minor: Int) {
+        self.major = major
+        self.minor = minor
+    }
+
+    init?(_ raw: String) {
+        guard raw.utf8.count <= 16,
+              raw.range(
+                of: "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+                options: .regularExpression
+              ) != nil
+        else { return nil }
+        let parts = raw.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let major = Int(parts[0]),
+              let minor = Int(parts[1]),
+              (16...100).contains(major),
+              (0...99).contains(minor)
+        else { return nil }
+        self.major = major
+        self.minor = minor
+    }
+
+    static func < (lhs: IOSVersion, rhs: IOSVersion) -> Bool {
+        lhs.major != rhs.major ? lhs.major < rhs.major : lhs.minor < rhs.minor
     }
 }
 

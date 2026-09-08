@@ -183,7 +183,7 @@ final class NativeServicesFacade: HostServiceFacading {
             return .upToDate
         case let .available(manifest):
             setAvailableManifest(manifest)
-            return .available(version: manifest.displayVersion, build: manifest.build)
+            return .available(version: manifest.version, build: manifest.build)
         case .failed:
             setAvailableManifest(nil)
             return .failure
@@ -269,7 +269,8 @@ final class NativeServicesFacade: HostServiceFacading {
             displayVersion: current.displayVersion,
             versionCode: current.versionCode,
             locale: locale,
-            iosMajor: current.iosMajor
+            iosMajor: current.iosMajor,
+            iosMinor: current.iosMinor
         )
     }
 
@@ -319,11 +320,28 @@ enum NativeHostServiceFactory {
             return NativeServicesFacade(configuration: configuration, bundle: bundle)
         }
         #endif
+        #if DISTRIBUTION && !PUBLIC_TESTING
+        return NativeServicesFacade(configuration: productionConfiguration, bundle: bundle)
+        #else
         return NativeServicesFacade(
             configuration: configuration(from: bundle.object(forInfoDictionaryKey: bundleConfigurationKey)),
             bundle: bundle
         )
+        #endif
     }
+
+    #if DISTRIBUTION && !PUBLIC_TESTING
+    private static let productionConfiguration = ServiceConfiguration.configured(
+        announcementsURL: URL(string: "https://telemetry.luotianyi.fun/v1/announcements"),
+        telemetryURL: URL(string: "https://telemetry.luotianyi.fun/v1/events"),
+        updateManifestURL: URL(string: "https://telemetry.luotianyi.fun/v1/ios-update"),
+        trustedHosts: ["telemetry.luotianyi.fun"],
+        trustedArtifactHosts: [
+            "github.com",
+            "release-assets.githubusercontent.com"
+        ]
+    ) ?? .unconfigured
+    #endif
 
     static func configuration(from value: Any?) -> ServiceConfiguration {
         guard let object = value as? [String: Any],

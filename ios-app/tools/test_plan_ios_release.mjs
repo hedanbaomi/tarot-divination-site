@@ -48,8 +48,8 @@ function plan(input) {
   return buildDryRunPlan({
     ipaPath: input.ipaPath,
     packageReport: input.packageReport,
-    downloadUrl: "https://downloads.example.test/ios-v1.2.3-b42/Quareia-1.2.3-42.ipa",
-    tag: "ios-v1.2.3-b42",
+    downloadUrl: "https://github.com/hedanbaomi/tarot-divination-site/releases/download/ios-v1.2.3/QuareiaDivination-iOS-v1.2.3.ipa",
+    tag: "ios-v1.2.3",
     previousManifest: null,
   });
 }
@@ -65,16 +65,17 @@ test("dry-run plan matches UpdateManifest v1 and can never publish or become lat
     assert.equal(result.networkPerformed, false);
     assert.equal(result.uploadPerformed, false);
     assert.equal(result.syntheticTestProduct, true);
-    assert.equal(result.release.tagName, "ios-v1.2.3-b42");
+    assert.equal(result.release.tagName, "ios-v1.2.3");
     assert.equal(result.release.make_latest, false);
     assert.deepEqual(Object.keys(result.updateManifestPreview).sort(), [
       "build",
-      "display_version",
-      "download_url",
+      "ipa_url",
+      "minimum_ios",
       "platform",
       "schema_version",
       "sha256",
-      "size_bytes",
+      "size",
+      "version",
     ]);
     assert.equal(result.updateManifestPreview.sha256, input.sha256);
   } finally {
@@ -98,9 +99,9 @@ test("CLI writes one local dry-run plan with an explicit initial-channel baselin
         "--package-report",
         reportPath,
         "--download-url",
-        "https://downloads.example.test/ios-v1.2.3-b42/Quareia-1.2.3-42.ipa",
+        "https://github.com/hedanbaomi/tarot-divination-site/releases/download/ios-v1.2.3/QuareiaDivination-iOS-v1.2.3.ipa",
         "--tag",
-        "ios-v1.2.3-b42",
+        "ios-v1.2.3",
         "--previous-manifest",
         "INITIAL_CHANNEL",
         "--output",
@@ -124,6 +125,7 @@ test("strict SemVer rejects leading v, partial versions, and numeric prerelease 
   for (const value of ["v1.2.3", "1.2", "01.2.3", "1.2.3-rc.01"]) {
     assert.equal(isStrictSemVer(value), false, value);
   }
+  assert.equal(isStrictSemVer(`1.2.3-${"a".repeat(59)}`), false);
   assert.equal(compareSemVer("1.2.3", "1.2.3-rc.9"), 1);
   assert.equal(compareSemVer("1.2.3-rc.10", "1.2.3-rc.2"), 1);
   assert.equal(compareSemVer("1.2.3+build.2", "1.2.3+build.1"), 0);
@@ -133,21 +135,24 @@ test("manifest rejects unknown, missing, null, HTTP, credentialed, query, and ma
   const base = {
     schema_version: 1,
     platform: "ios",
-    display_version: "1.2.3",
+    version: "1.2.3",
     build: 42,
-    download_url: "https://downloads.example.test/Quareia-1.2.3-42.ipa",
-    size_bytes: 123,
+    minimum_ios: "16.0",
+    ipa_url: "https://github.com/hedanbaomi/tarot-divination-site/releases/download/ios-v1.2.3/QuareiaDivination-iOS-v1.2.3.ipa",
+    size: 123,
     sha256: "a".repeat(64),
   };
   const bad = [
     { ...base, unknown: true },
     Object.fromEntries(Object.entries(base).filter(([key]) => key !== "build")),
     { ...base, build: null },
-    { ...base, download_url: base.download_url.replace("https:", "http:") },
-    { ...base, download_url: "https://user:pass@downloads.example.test/Quareia-1.2.3-42.ipa" },
-    { ...base, download_url: `${base.download_url}?candidate=1` },
+    { ...base, minimum_ios: "15.9" },
+    { ...base, ipa_url: base.ipa_url.replace("https:", "http:") },
+    { ...base, ipa_url: "https://user:pass@github.com/hedanbaomi/tarot-divination-site/releases/download/ios-v1.2.3/QuareiaDivination-iOS-v1.2.3.ipa" },
+    { ...base, ipa_url: `${base.ipa_url}?candidate=1` },
+    { ...base, ipa_url: `https://github.com/${"a".repeat(2_049)}` },
     { ...base, sha256: "A".repeat(64) },
-    { ...base, size_bytes: MAX_ARTIFACT_BYTES + 1 },
+    { ...base, size: MAX_ARTIFACT_BYTES + 1 },
   ];
   for (const candidate of bad) assert.throws(() => validateUpdateManifest(candidate));
 });
@@ -174,17 +179,17 @@ test("tag and download basename must match the inspected version build and artif
       () => buildDryRunPlan({
         ipaPath: input.ipaPath,
         packageReport: input.packageReport,
-        downloadUrl: "https://downloads.example.test/wrong.ipa",
-        tag: "ios-v1.2.3-b42",
+        downloadUrl: "https://github.com/hedanbaomi/tarot-divination-site/releases/download/ios-v1.2.3/wrong.ipa",
+        tag: "ios-v1.2.3",
         previousManifest: null,
       }),
-      /basename/,
+      /canonical versioned GitHub asset path/,
     );
     assert.throws(
       () => buildDryRunPlan({
         ipaPath: input.ipaPath,
         packageReport: input.packageReport,
-        downloadUrl: "https://downloads.example.test/Quareia-1.2.3-42.ipa",
+        downloadUrl: "https://github.com/hedanbaomi/tarot-divination-site/releases/download/ios-v1.2.3/QuareiaDivination-iOS-v1.2.3.ipa",
         tag: "v1.2.3",
         previousManifest: null,
       }),
@@ -199,17 +204,18 @@ test("candidate build is globally monotonic even across display-version bumps", 
   const previous = {
     schema_version: 1,
     platform: "ios",
-    display_version: "1.2.3",
+    version: "1.2.3",
     build: 42,
-    download_url: "https://downloads.example.test/Quareia-1.2.3-42.ipa",
-    size_bytes: 123,
+    minimum_ios: "16.0",
+    ipa_url: "https://github.com/hedanbaomi/tarot-divination-site/releases/download/ios-v1.2.3/QuareiaDivination-iOS-v1.2.3.ipa",
+    size: 123,
     sha256: "a".repeat(64),
   };
   const valid = {
     ...previous,
-    display_version: "1.3.0",
+    version: "1.3.0",
     build: 43,
-    download_url: "https://downloads.example.test/Quareia-1.3.0-43.ipa",
+    ipa_url: "https://github.com/hedanbaomi/tarot-divination-site/releases/download/ios-v1.3.0/QuareiaDivination-iOS-v1.3.0.ipa",
     sha256: "b".repeat(64),
   };
   assert.doesNotThrow(() => validateUpdateTransition(previous, valid));
@@ -218,8 +224,12 @@ test("candidate build is globally monotonic even across display-version bumps", 
     /globally greater/,
   );
   assert.throws(
-    () => validateUpdateTransition(previous, { ...valid, display_version: "1.2.2" }),
-    /move backwards/,
+    () => validateUpdateTransition(previous, {
+      ...valid,
+      version: "1.2.2",
+      ipa_url: "https://github.com/hedanbaomi/tarot-divination-site/releases/download/ios-v1.2.2/QuareiaDivination-iOS-v1.2.2.ipa",
+    }),
+    /move forward/,
   );
 });
 

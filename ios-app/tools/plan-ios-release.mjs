@@ -16,13 +16,14 @@ import { fileURLToPath } from "node:url";
 export const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
+const MINIMUM_IOS = "16.0";
 
 export function requireCondition(condition, message) {
   if (!condition) throw new Error(message);
 }
 
 export function isStrictSemVer(value) {
-  if (typeof value !== "string") return false;
+  if (typeof value !== "string" || value.length > 64) return false;
   const match = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(value);
   if (!match) return false;
   if (match[4]) {
@@ -87,10 +88,11 @@ export function validateUpdateManifest(manifest) {
   const required = [
     "schema_version",
     "platform",
-    "display_version",
+    "version",
     "build",
-    "download_url",
-    "size_bytes",
+    "minimum_ios",
+    "ipa_url",
+    "size",
     "sha256",
   ];
   requireCondition(
@@ -103,27 +105,40 @@ export function validateUpdateManifest(manifest) {
   );
   requireCondition(manifest.schema_version === 1, "Unsupported update manifest schema");
   requireCondition(manifest.platform === "ios", "Update manifest platform must be ios");
-  requireCondition(isStrictSemVer(manifest.display_version), "display_version must be strict SemVer");
+  requireCondition(isStrictSemVer(manifest.version), "version must be strict SemVer");
   requireCondition(
     Number.isInteger(manifest.build) && manifest.build >= 1 && manifest.build <= 2147483647,
     "build must be a positive 32-bit integer",
   );
   requireCondition(
-    Number.isInteger(manifest.size_bytes) &&
-      manifest.size_bytes >= 1 &&
-      manifest.size_bytes <= MAX_ARTIFACT_BYTES,
-    "size_bytes is outside the 100 MiB channel limit",
+    manifest.minimum_ios === MINIMUM_IOS,
+    `minimum_ios must be ${MINIMUM_IOS}`,
+  );
+  requireCondition(
+    Number.isInteger(manifest.size) &&
+      manifest.size >= 1 &&
+      manifest.size <= MAX_ARTIFACT_BYTES,
+    "size is outside the 100 MiB channel limit",
   );
   requireCondition(typeof manifest.sha256 === "string" && SHA256_RE.test(manifest.sha256), "sha256 must be lowercase 64-hex");
+  requireCondition(
+    typeof manifest.ipa_url === "string" && Buffer.byteLength(manifest.ipa_url, "utf8") <= 2_048,
+    "ipa_url must be a string of at most 2048 bytes",
+  );
   let url;
   try {
-    url = new URL(manifest.download_url);
+    url = new URL(manifest.ipa_url);
   } catch {
-    throw new Error("download_url must be an absolute URL");
+    throw new Error("ipa_url must be an absolute URL");
   }
-  requireCondition(url.protocol === "https:", "download_url must use HTTPS");
-  requireCondition(url.username === "" && url.password === "", "download_url must not contain credentials");
-  requireCondition(url.search === "" && url.hash === "", "download_url must not contain query or fragment");
+  requireCondition(url.protocol === "https:", "ipa_url must use HTTPS");
+  requireCondition(url.hostname === "github.com" && url.port === "", "ipa_url must use the public GitHub release host");
+  requireCondition(url.username === "" && url.password === "", "ipa_url must not contain credentials");
+  requireCondition(url.search === "" && url.hash === "", "ipa_url must not contain query or fragment");
+  const expectedPath =
+    `/hedanbaomi/tarot-divination-site/releases/download/ios-v${manifest.version}/` +
+    `QuareiaDivination-iOS-v${manifest.version}.ipa`;
+  requireCondition(url.pathname === expectedPath, "ipa_url must match the canonical versioned GitHub asset path");
   return url;
 }
 
@@ -132,8 +147,8 @@ export function validateUpdateTransition(previous, candidate) {
   validateUpdateManifest(candidate);
   requireCondition(candidate.build > previous.build, "Candidate build must be globally greater than the previous build");
   requireCondition(
-    compareSemVer(candidate.display_version, previous.display_version) >= 0,
-    "Candidate display version must not move backwards",
+    compareSemVer(candidate.version, previous.version) > 0,
+    "Candidate version must move forward",
   );
 }
 
@@ -197,19 +212,20 @@ export function buildDryRunPlan({ ipaPath, packageReport, downloadUrl, tag, prev
   requireCondition(hash === packageReport.ipa.sha256, "Local IPA hash does not match package report");
   requireCondition(size >= 1 && size <= MAX_ARTIFACT_BYTES, "Local IPA is outside the 100 MiB channel limit");
 
-  const expectedTag = `ios-v${packageReport.version}-b${packageReport.build}`;
+  const expectedTag = `ios-v${packageReport.version}`;
   requireCondition(tag === expectedTag && tag.startsWith("ios-v"), "iOS release tag is not canonical");
+  const releaseAssetName = `QuareiaDivination-iOS-v${packageReport.version}.ipa`;
   const manifest = {
     schema_version: 1,
     platform: "ios",
-    display_version: packageReport.version,
+    version: packageReport.version,
     build: packageReport.build,
-    download_url: downloadUrl,
-    size_bytes: size,
+    minimum_ios: MINIMUM_IOS,
+    ipa_url: downloadUrl,
+    size,
     sha256: hash,
   };
   const url = validateUpdateManifest(manifest);
-  requireCondition(decodeURIComponent(path.posix.basename(url.pathname)) === canonicalName, "download_url basename does not match the IPA filename");
   requireCondition(
     previousManifest === null || (previousManifest && typeof previousManifest === "object"),
     "A previous manifest or explicit INITIAL_CHANNEL baseline is required",
@@ -228,12 +244,13 @@ export function buildDryRunPlan({ ipaPath, packageReport, downloadUrl, tag, prev
     release: {
       tagName: tag,
       make_latest: false,
-      artifactFilename: canonicalName,
+      artifactFilename: releaseAssetName,
+      localArtifactFilename: canonicalName,
       baseline:
         previousManifest === null
           ? "INITIAL_CHANNEL"
           : {
-              displayVersion: previousManifest.display_version,
+              version: previousManifest.version,
               build: previousManifest.build,
               sha256: previousManifest.sha256,
             },

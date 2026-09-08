@@ -111,9 +111,10 @@ final class ServicesIntegrationTests: XCTestCase {
         guard case .available(let manifest) = await updates.check() else {
             return XCTFail("real loopback update manifest must be available")
         }
-        XCTAssertEqual(manifest.displayVersion, "1.0.1")
+        XCTAssertEqual(manifest.version, "1.0.1")
         XCTAssertEqual(manifest.build, 2)
-        XCTAssertEqual(manifest.sizeBytes, 85)
+        XCTAssertEqual(manifest.minimumIOS, "16.0")
+        XCTAssertEqual(manifest.size, 85)
         XCTAssertEqual(manifest.sha256, "1148e3aae6c847d29f11873cb73f848322fc825ff975c9bd73c182df97fff66b")
         let downloadedURL = try await updates.download(manifest).get()
         XCTAssertEqual((try FileManager.default.attributesOfItem(atPath: downloadedURL.path)[.size] as? NSNumber)?.int64Value, 85)

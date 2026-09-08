@@ -19,7 +19,7 @@ final class ServicesUpdateTests: XCTestCase {
         let fake = FakeServiceHTTPClient()
         fake.dataHandler = { request, _ in
             makeDataResponse(for: request, status: 200, body: Self.manifestData(
-                displayVersion: "1.2.3",
+                displayVersion: "1.2.4",
                 build: 8,
                 bytes: Data("artifact".utf8)
             ))
@@ -32,10 +32,11 @@ final class ServicesUpdateTests: XCTestCase {
 
         let state = await service.check()
         guard case .available(let manifest) = state else {
-            return XCTFail("same display version with a newer real build must be available")
+            return XCTFail("a newer version with a newer build must be available")
         }
-        XCTAssertEqual(manifest.displayVersion, "1.2.3")
+        XCTAssertEqual(manifest.version, "1.2.4")
         XCTAssertEqual(manifest.build, 8)
+        XCTAssertEqual(manifest.minimumIOS, "16.0")
 
         let malformed = FakeServiceHTTPClient()
         malformed.dataHandler = { request, _ in
@@ -84,6 +85,8 @@ final class ServicesUpdateTests: XCTestCase {
 
         let exact = await checkedState(displayVersion: "1.2.3", build: 7)
         XCTAssertEqual(exact, .upToDate)
+        let sameVersionWithNewerBuild = await checkedState(displayVersion: "1.2.3", build: 8)
+        XCTAssertEqual(sameVersionWithNewerBuild, .failed(.invalidManifest))
         let newerDisplayWithoutNewerBuild = await checkedState(displayVersion: "1.2.4", build: 7)
         XCTAssertEqual(newerDisplayWithoutNewerBuild, .failed(.invalidManifest))
         let displayDowngradeWithNewerBuild = await checkedState(displayVersion: "1.2.2", build: 8)
@@ -187,6 +190,16 @@ final class ServicesUpdateTests: XCTestCase {
             updateManifestURL: URL(string: "https://evil.example/manifest.json"),
             trustedHosts: ["services.example"]
         ))
+
+        let separated = try! XCTUnwrap(ServiceConfiguration.configured(
+            updateManifestURL: URL(string: "https://telemetry.luotianyi.fun/v1/ios-update"),
+            trustedHosts: ["telemetry.luotianyi.fun"],
+            trustedArtifactHosts: ["github.com", "release-assets.githubusercontent.com"]
+        ))
+        XCTAssertFalse(separated.allowsServiceURL(URL(string: "https://github.com/asset.ipa")!))
+        XCTAssertTrue(separated.allowsArtifactURL(URL(string: "https://github.com/asset.ipa")!))
+        XCTAssertTrue(separated.allowsArtifactURL(URL(string: "https://release-assets.githubusercontent.com/asset.ipa")!))
+        XCTAssertFalse(separated.allowsArtifactURL(URL(string: "https://objects.githubusercontent.com/asset.ipa")!))
     }
 
     func testManifestRedirectRejectionIsReportedAsUntrusted() async {
@@ -202,6 +215,114 @@ final class ServicesUpdateTests: XCTestCase {
         )
         let state = await service.check()
         XCTAssertEqual(state, .failed(.untrustedURL))
+    }
+
+    func testUnavailableTimeoutAndMalformedResponsesAreFailuresNotUpToDate() async {
+        let unavailable = FakeServiceHTTPClient()
+        unavailable.dataHandler = { request, _ in
+            makeDataResponse(for: request, status: 404, body: Data(#"{"error":"ios_update_unavailable"}"#.utf8))
+        }
+        let unavailableService = UpdateService(
+            configuration: testServiceConfiguration(announcements: false, telemetry: false),
+            httpClient: unavailable,
+            buildInfo: { Self.buildInfo() }
+        )
+        let unavailableState = await unavailableService.check()
+        XCTAssertEqual(unavailableState, .failed(.invalidResponse))
+
+        let timeout = FakeServiceHTTPClient()
+        timeout.dataHandler = { _, _ in throw URLError(.timedOut) }
+        let timeoutService = UpdateService(
+            configuration: testServiceConfiguration(announcements: false, telemetry: false),
+            httpClient: timeout,
+            buildInfo: { Self.buildInfo() }
+        )
+        let timeoutState = await timeoutService.check()
+        XCTAssertEqual(timeoutState, .failed(.transport))
+
+        let malformed = FakeServiceHTTPClient()
+        malformed.dataHandler = { request, _ in
+            makeDataResponse(for: request, status: 200, body: Data(#"{"schema_version":1}"#.utf8))
+        }
+        let malformedService = UpdateService(
+            configuration: testServiceConfiguration(announcements: false, telemetry: false),
+            httpClient: malformed,
+            buildInfo: { Self.buildInfo() }
+        )
+        let malformedState = await malformedService.check()
+        XCTAssertEqual(malformedState, .failed(.invalidManifest))
+    }
+
+    func testMinimumIOSIsStrictAndIncompatibleDevicesDoNotOfferAnUpdate() async {
+        func state(minimumIOS: String, iosMajor: Int, iosMinor: Int) async -> UpdateCheckState {
+            let fake = FakeServiceHTTPClient()
+            fake.dataHandler = { request, _ in
+                makeDataResponse(
+                    for: request,
+                    status: 200,
+                    body: Self.manifestData(
+                        displayVersion: "1.2.4",
+                        build: 8,
+                        bytes: Data("artifact".utf8),
+                        minimumIOS: minimumIOS
+                    )
+                )
+            }
+            let service = UpdateService(
+                configuration: testServiceConfiguration(announcements: false, telemetry: false),
+                httpClient: fake,
+                buildInfo: { Self.buildInfo(iosMajor: iosMajor, iosMinor: iosMinor) }
+            )
+            return await service.check()
+        }
+
+        guard case .available = await state(minimumIOS: "16.1", iosMajor: 16, iosMinor: 1) else {
+            return XCTFail("an exactly compatible OS must receive the update")
+        }
+        let incompatible = await state(minimumIOS: "16.1", iosMajor: 16, iosMinor: 0)
+        XCTAssertEqual(incompatible, .failed(.incompatibleOS))
+        let partial = await state(minimumIOS: "16", iosMajor: 18, iosMinor: 0)
+        XCTAssertEqual(partial, .failed(.invalidManifest))
+        let padded = await state(minimumIOS: "015.0", iosMajor: 18, iosMinor: 0)
+        XCTAssertEqual(padded, .failed(.invalidManifest))
+    }
+
+    func testProductionManifestAcceptsOnlyTheVersionBoundGitHubAssetPath() async {
+        let configuration = try! XCTUnwrap(ServiceConfiguration.configured(
+            updateManifestURL: URL(string: "https://telemetry.luotianyi.fun/v1/ios-update"),
+            trustedHosts: ["telemetry.luotianyi.fun"],
+            trustedArtifactHosts: ["github.com", "release-assets.githubusercontent.com"]
+        ))
+        func state(ipaURL: String) async -> UpdateCheckState {
+            let fake = FakeServiceHTTPClient()
+            fake.dataHandler = { request, _ in
+                makeDataResponse(
+                    for: request,
+                    status: 200,
+                    body: Self.manifestData(
+                        displayVersion: "1.2.4",
+                        build: 8,
+                        bytes: Data("artifact".utf8),
+                        ipaURL: ipaURL
+                    )
+                )
+            }
+            let service = UpdateService(
+                configuration: configuration,
+                httpClient: fake,
+                buildInfo: { Self.buildInfo() }
+            )
+            return await service.check()
+        }
+
+        let canonical =
+            "https://github.com/hedanbaomi/tarot-divination-site/releases/download/" +
+            "ios-v1.2.4/QuareiaDivination-iOS-v1.2.4.ipa"
+        guard case .available = await state(ipaURL: canonical) else {
+            return XCTFail("canonical production asset must be available")
+        }
+        let arbitrary = await state(ipaURL: "https://github.com/other/repository/releases/download/v1/app.ipa")
+        XCTAssertEqual(arbitrary, .failed(.invalidManifest))
     }
 
     private func makeDownloadResult(
@@ -246,12 +367,17 @@ final class ServicesUpdateTests: XCTestCase {
         return await service.download(manifest)
     }
 
-    private static func buildInfo(versionCode: Int = 7) -> AppBuildInfo {
+    private static func buildInfo(
+        versionCode: Int = 7,
+        iosMajor: Int = 18,
+        iosMinor: Int = 0
+    ) -> AppBuildInfo {
         AppBuildInfo(
             displayVersion: "1.2.3",
             versionCode: versionCode,
             locale: "en-US",
-            iosMajor: 18
+            iosMajor: iosMajor,
+            iosMinor: iosMinor
         )
     }
 
@@ -259,15 +385,18 @@ final class ServicesUpdateTests: XCTestCase {
         displayVersion: String,
         build: Int,
         bytes: Data,
-        overrideHash: String? = nil
+        overrideHash: String? = nil,
+        minimumIOS: String = "16.0",
+        ipaURL: String? = nil
     ) -> Data {
         try! JSONSerialization.data(withJSONObject: [
             "schema_version": 1,
             "platform": "ios",
-            "display_version": displayVersion,
+            "version": displayVersion,
             "build": build,
-            "download_url": "https://services.example/releases/Quareia-\(displayVersion)-\(build).ipa",
-            "size_bytes": bytes.count,
+            "minimum_ios": minimumIOS,
+            "ipa_url": ipaURL ?? "https://services.example/releases/Quareia-\(displayVersion)-\(build).ipa",
+            "size": bytes.count,
             "sha256": overrideHash ?? ServiceHash.sha256Hex(bytes)
         ], options: [.sortedKeys])
     }

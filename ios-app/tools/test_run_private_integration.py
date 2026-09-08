@@ -11,6 +11,7 @@ import io
 import json
 import os
 import pathlib
+import plistlib
 import tempfile
 import unittest
 import zipfile
@@ -273,6 +274,7 @@ class PrivateOrchestrationContractTests(unittest.TestCase):
                     "com.apple.CoreSimulator.SimRuntime.iOS-18-0": [
                         {
                             "udid": reference,
+                            "isAvailable": True,
                             "deviceTypeIdentifier": (
                                 "com.apple.CoreSimulator.SimDeviceType.iPhone-15"
                             ),
@@ -339,6 +341,35 @@ class PrivateOrchestrationContractTests(unittest.TestCase):
                     environment,
                 )
 
+    def test_simulator_profile_preserves_exact_iphone_or_ipad_reference(self):
+        reference = "11111111-1111-1111-1111-111111111111"
+        runtime = "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+        for model in ["iPhone-17", "iPad-Pro-13-inch-M4-16GB"]:
+            device_type = "com.apple.CoreSimulator.SimDeviceType." + model
+            listing = {"devices": {runtime: [{"udid": reference, "isAvailable": True,
+                                              "deviceTypeIdentifier": device_type}]}}
+            with self.subTest(model=model), patch.object(TOOL.subprocess, "check_output", return_value=json.dumps(listing)):
+                self.assertEqual(TOOL._simulator_profile(reference, cwd=pathlib.Path.cwd(), environment={}),
+                                 (runtime, device_type))
+
+    def test_simulator_profile_rejects_non_ios_non_phone_tablet_and_unavailable(self):
+        reference = "11111111-1111-1111-1111-111111111111"
+        for runtime, model, available in [
+            ("watchOS-26-0", "iPhone-17", True),
+            ("tvOS-26-0", "Apple-TV-4K", True),
+            ("iOS-26-2", "Apple-Watch-Series-11-46mm", True),
+            ("iOS-26-2", "Apple-TV-4K", True),
+            ("iOS-26-2", "iPad-Pro-13-inch-M4-16GB", False),
+            ("iOS-26-2", "iPhone-17", None),
+        ]:
+            listing = {"devices": {"com.apple.CoreSimulator.SimRuntime." + runtime: [
+                {"udid": reference, "isAvailable": available,
+                 "deviceTypeIdentifier": "com.apple.CoreSimulator.SimDeviceType." + model}]}}
+            with self.subTest(runtime=runtime, model=model, available=available), patch.object(
+                TOOL.subprocess, "check_output", return_value=json.dumps(listing)
+            ), self.assertRaises(TOOL.PrivateIntegrationError):
+                TOOL._simulator_profile(reference, cwd=pathlib.Path.cwd(), environment={})
+
     def test_real_xctest_evidence_requires_exact_82_order_both_passed_tests_and_summary(self):
         lines = [f"PRIVATE_PROVIDER_DECODE_OK:{key}" for key in TOOL.EXPECTED_KEYS]
         lines += [
@@ -354,6 +385,8 @@ class PrivateOrchestrationContractTests(unittest.TestCase):
         )
         self.assertEqual(result["recordCount"], 82)
         self.assertTrue(result["authenticationNegativePassed"])
+        self.assertTrue(result["actualDecodeEvidence"])
+        self.assertTrue(result["actualProviderRuntimeExecuted"])
 
         for mutation in [
             lambda value: value.pop(0),
@@ -618,6 +651,65 @@ class PrivateCandidatePackagingTests(unittest.TestCase):
             with self.assertRaisesRegex(TOOL.PrivateIntegrationError, "overwrite"):
                 self.package(app, output, report)
             self.assertEqual(output.read_bytes(), b"existing")
+
+
+class PrivateDeploymentTargetTests(unittest.TestCase):
+    def test_macho_target_checks_main_and_each_runtime_minimum(self):
+        files = [{"path": "Quareia", "_absolute": pathlib.Path("Quareia")},
+                 {"path": "Frameworks/libswiftCore.dylib", "_absolute": pathlib.Path("libswiftCore.dylib")}]
+        machos = [{"path": entry["path"], "architectures": ["arm64"]} for entry in files]
+        with patch.object(TOOL.subprocess, "check_output", side_effect=["platform IOS\n minos 16.0\n", "platform IOS\n minos 15.0\n"]):
+            result = TOOL.validate_macho_deployment_targets(machos, files, "Quareia")
+        self.assertEqual([entry["minimumOSVersion"] for entry in result], ["16.0", "15.0"])
+        for outputs in [
+            ["minos 17.0\n", "minos 15.0\n"],
+            ["minos 15.0\n", "minos 15.0\n"],
+            ["minos 16.0\n", "minos 16.1\n"],
+            ["sdk 26.2\n", "minos 15.0\n"],
+            ["minos 16.0\nminos 16.0\n", "minos 15.0\n"],
+        ]:
+            with self.subTest(outputs=outputs), patch.object(TOOL.subprocess, "check_output", side_effect=outputs), self.assertRaises(TOOL.PrivateIntegrationError):
+                TOOL.validate_macho_deployment_targets(machos, files, "Quareia")
+        with self.assertRaisesRegex(TOOL.PrivateIntegrationError, "arm64"):
+            TOOL.validate_macho_deployment_targets([{"path": "Quareia", "architectures": ["x86_64"]}], files, "Quareia")
+
+    def test_private_info_target_and_final_deployment_report(self):
+        # Only platform tool/provenance answers are mocked; this is not Apple build evidence.
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            app = root / "Quareia.app"
+            app.mkdir()
+            binary = app / "Quareia"
+            binary.write_bytes(b"\xcf\xfa\xed\xfe" + b"public synthetic unit fixture")
+            binary.chmod(0o755)
+            info = {"QuareiaBuildFlavor": "private-candidate", "CFBundleDisplayName": "Quareia",
+                    "CFBundleIdentifier": "com.hedanbaomi.quareia.ios", "CFBundleShortVersionString": "1.0.0",
+                    "CFBundleVersion": "1", "CFBundleSupportedPlatforms": ["iPhoneOS"],
+                    "CFBundleExecutable": "Quareia", "MinimumOSVersion": "16.0"}
+            inspector = TOOL._load_public_inspector()
+            with patch.object(TOOL, "_load_public_inspector", return_value=inspector), patch.object(
+                inspector, "_validate_public_resources", return_value={"reviewedBuildSourceSHA": SOURCE_SHA}
+            ), patch.object(inspector, "_inspect_machos", return_value=[{"path": "Quareia", "architectures": ["arm64"]}]), patch.object(
+                inspector, "_validate_entitlements", return_value=[]
+            ), patch.object(TOOL.subprocess, "check_output", return_value="platform IOS\nminos 16.0\n") as vtool:
+                for minimum in [None, "15.0", "17.0", "16.0"]:
+                    if minimum is None:
+                        info.pop("MinimumOSVersion", None)
+                    else:
+                        info["MinimumOSVersion"] = minimum
+                    (app / "Info.plist").write_bytes(plistlib.dumps(info))
+                    arguments = {"source_sha": SOURCE_SHA, "expected_version": "1.0.0", "expected_build": 1,
+                                 "public_checkout": root}
+                    if minimum != "16.0":
+                        with self.subTest(minimum=minimum), self.assertRaisesRegex(TOOL.PrivateIntegrationError, "minimum iOS"):
+                            TOOL.inspect_private_device_app(app, {"encryptedRecords": []}, **arguments)
+                        vtool.assert_not_called()
+                    else:
+                        report = TOOL.inspect_private_device_app(app, {"encryptedRecords": []}, **arguments)
+                        self.assertEqual(report["deploymentTarget"], "16.0")
+                        self.assertEqual(report["architectures"], ["arm64"])
+                        self.assertEqual((report["platform"], report["version"], report["build"]), ("IOS", "1.0.0", 1))
+                        self.assertEqual(report["machOBinaries"][0]["minimumOSVersion"], "16.0")
 
 
 class PrivatePayloadPrivacyTests(unittest.TestCase):

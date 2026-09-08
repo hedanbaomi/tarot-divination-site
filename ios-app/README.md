@@ -1,15 +1,117 @@
-# Quareia iOS self-signing implementation
+# Quareia for iOS
 
-This Swift/UIKit/WKWebView application targets iOS/iPadOS 16+, iPhone and iPad,
-version 1.0.0/build 1. The public testing build is named **Quareia Test** and
-uses synthetic LXXXI artwork. It is not a signed release or a complete private package.
+Quareia 1.0.0 (build 1) is a Swift/UIKit/WKWebView application for iPhone and
+iPad with a minimum deployment target of iOS/iPadOS 16.0. The release is
+distributed as an unsigned IPA for users to sign and install with an external
+tool of their choice.
 
-`QuareiaPublic` uses synthetic images for its protected-resource tests. The
-public build has no private provider or private LXXXI artwork. Release builds
-must fail until the separate private integration has been implemented and
-approved. Simulator success does not establish device or re-signing acceptance.
+## Download
+
+- [QuareiaDivination-iOS-v1.0.0.ipa](https://github.com/hedanbaomi/tarot-divination-site/releases/download/ios-v1.0.0/QuareiaDivination-iOS-v1.0.0.ipa)
+- [Official SHA-256 checksum](https://github.com/hedanbaomi/tarot-divination-site/releases/download/ios-v1.0.0/QuareiaDivination-iOS-v1.0.0.ipa.sha256)
+- [iOS update manifest](https://telemetry.luotianyi.fun/v1/ios-update)
+- [Release and acceptance record](https://github.com/hedanbaomi/tarot-divination-site/releases/tag/ios-v1.0.0)
+
+Download the IPA and checksum from the same release. On Windows, compare the
+downloaded file with the published checksum before opening it in a signing tool:
+
+```powershell
+Get-FileHash .\QuareiaDivination-iOS-v1.0.0.ipa -Algorithm SHA256
+Get-Content .\QuareiaDivination-iOS-v1.0.0.ipa.sha256
+```
+
+The checksum authenticates the original release IPA. Signing necessarily
+changes the archive, so a re-signed IPA normally has a different SHA-256. The
+app can check the independent iOS manifest, download and validate an original
+update, and hand it to the system share sheet. Quareia does not collect an Apple
+Account, sign an IPA, install an app, or renew a signing profile. Enter your
+Apple Account credentials only in the external signing tool you chose.
+
+## Install on Windows with Sideloadly
+
+1. Back up Quareia data as described in [Protect data during renewal](#protect-data-during-renewal).
+2. Install Sideloadly from its [official download page](https://sideloadly.io/).
+   Follow its Windows prerequisite notice for Apple components; do not download
+   repackaged installers from unrelated sites.
+3. Connect and unlock the iPhone or iPad, accept the device trust prompt, then
+   open Sideloadly and select the downloaded IPA and the connected device.
+4. Enter your Apple Account in Sideloadly and start sideloading. Keep the
+   effective Bundle ID unchanged when Sideloadly permits it, especially when
+   overwriting or renewing an existing installation.
+5. Follow the prompts on the device to trust the developer profile and enable
+   Developer Mode when iOS/iPadOS requires it.
+
+Sideloadly documents device detection, Wi-Fi sideloading, renewal and
+same-Bundle-ID overwrite behavior in its [official FAQ](https://sideloadly.io/faq).
+
+## Install on Windows with AltStore Classic
+
+1. Back up Quareia data as described in [Protect data during renewal](#protect-data-during-renewal).
+2. Follow AltStore's [official Windows installation guide](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows).
+   It covers the required Apple components, AltServer installation, device
+   trust, Wi-Fi sync, profile trust and Developer Mode on iOS/iPadOS 16 or later.
+3. Keep AltServer running, download the verified Quareia IPA to the device, and
+   use AltStore Classic's IPA import from **My Apps**. Enter your Apple Account
+   only in AltStore/AltServer when its official flow requests it.
+4. Before expiry, use **Refresh All** while the device can reach AltServer by
+   local Wi-Fi or USB. AltStore explains manual and background renewal in
+   [Getting Started](https://faq.altstore.io/altstore-classic/your-altstore) and
+   its [AltServer guide](https://faq.altstore.io/altstore-classic/altserver).
+
+Apple states that a free account shown as a Personal Team uses provisioning
+profiles that expire seven days after issuance, after which the app must be
+reprovisioned and reinstalled. See Apple's current
+[developer account overview](https://developer.apple.com/help/account/basics/about-your-developer-account/).
+Refresh or re-sign before expiry rather than waiting for the app to stop opening.
+
+## Protect data during renewal
+
+Before an overwrite, update or renewal, export a Quareia backup and keep a copy
+outside the app. Confirm that it contains the history, custom spreads and
+settings you need. For the safest in-place renewal:
+
+- use the same signing account and preserve the effective Bundle ID whenever possible;
+- install over the existing app rather than uninstalling it;
+- keep the backup until the renewed app has launched and the data has been checked.
+
+A different effective Bundle ID can install a separate app with a separate data
+container. Uninstalling can delete the existing container and its local data.
+Neither the release IPA checksum nor a successful signature proves that local
+data survived an overwrite, so verify the result on the device.
+
+## Acceptance status
+
+The release gate requires the source-pinned public sync checks, unit and UI
+tests, device archive inspection, reopened-IPA validation, checksum and update
+manifest checks, and the Android latest-release regression to pass before
+publication. The exact run links and results are recorded with the
+[ios-v1.0.0 Release](https://github.com/hedanbaomi/tarot-divination-site/releases/tag/ios-v1.0.0).
+
+The cloud acceptance scope for this version is iPhone on iOS 26.2, compatibility
+iPhone on iOS 18.6, and iPad on iPadOS 26.2. This matrix does not establish
+physical-device signing, installation or renewal. Those remain
+`DEVICE_ACCEPTANCE_PENDING`. The deployment target remains 16.0, but no actual
+iOS/iPadOS 16 runtime result is claimed; minimum-OS runtime acceptance remains
+`MIN_OS_ACCEPTANCE_PENDING`.
+
+External device acceptance should cover first launch after signing; offline
+LXXXI back and all 81 faces; all three decks; the touch drawing board; Files
+export/import and cancellation; announcement revision handling; telemetry
+opt-out; restart; same-identity renewal and version overwrite with history,
+custom spreads and settings intact; iPad landscape; text sizes; and the share
+popover.
+
+When reporting a problem, include app version/build, device model, iOS/iPadOS
+version, signing-tool name and version, effective Bundle ID, reproduction steps,
+expected and actual results, a redacted error, and whether a backup exists. Do
+not include an Apple Account, certificate, provisioning profile, pairing file,
+device identifier, personal reading content or protected card image.
 
 ## Build and test
+
+`QuareiaPublic` uses synthetic images for protected-resource tests. Public CI
+and the public source tree contain no private provider or private LXXXI artwork.
+Simulator success does not establish device or re-signing acceptance.
 
 From a checkout with the source commit in `web-assets.json` available:
 
@@ -76,36 +178,6 @@ The dedicated `-probe` page remains a foundation test alongside the real app.
 An implemented test is not evidence of execution: use the exact source SHA and
 matching successful Actions run when reporting acceptance. Missing iOS 16
 runtime coverage remains `MIN_OS_ACCEPTANCE_PENDING`; the target stays 16.0.
-
-## Signing and external acceptance
-
-No complete private IPA is supplied by public CI. When an approved complete
-device IPA becomes available, a tester on Windows can use a supported signing
-tool such as AltStore Classic, following its current official instructions:
-[Windows installation](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows).
-The tester enters their Apple account only into the signing tool, connects and
-trusts their iPhone/iPad, enables Developer Mode when required, and imports the
-candidate IPA. The unsigned original is not directly installable. Personal Team
-profiles expire and require renewal; the app does not sign or renew itself.
-
-Keep the same signing identity and effective Bundle ID when testing renewal and
-an N to N+1 overwrite. Export a backup first. Uninstalling, changing Bundle ID or
-changing signing configuration may produce a separate data container; retention
-is a device test result, not a guarantee. A re-signed IPA normally has a different
-SHA-256 from the original candidate.
-
-Required external checks: first launch after signing; offline LXXXI back and all
-81 faces after re-signing; three decks; touch drawing board; Files export/import
-and cancellation; announcement revision handling; telemetry opt-out; restart;
-same-identity renewal and version overwrite with history/spreads/settings intact;
-iPad landscape, text sizes and share popover. Status remains
-`DEVICE_ACCEPTANCE_PENDING` until evidence is received.
-
-Feedback should contain candidate source SHA and original package SHA, OS and
-device model, signing-tool version, effective Bundle ID (no account identifiers),
-reproduction steps, expected/actual result and a redacted error. Do not send Apple
-credentials, certificates, provisioning profiles, pairing files, identifiers,
-personal reading content or protected card screenshots.
 
 ## Packaging and distribution tools
 

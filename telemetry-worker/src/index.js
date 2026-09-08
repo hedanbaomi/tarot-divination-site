@@ -38,6 +38,7 @@ import { nowMs, setClockForTesting, resetClock } from "./clock.js";
 import { handleAnnouncements, publicAnnouncementHeaders } from "./announcements.js";
 import { recordInstallActivity, cleanupInactiveInstalls } from "./stats.js";
 import { handleAdminPage, handleAdminVerify, handleAdminApi } from "./admin.js";
+import { handleIOSUpdate } from "./ios-update.js";
 
 const SCHEMA_VERSION = 1;
 const MAX_BODY_BYTES = 1024;
@@ -137,6 +138,10 @@ export default {
         return json({ error: "rate_limited" }, 429, publicAnnouncementHeaders(request));
       }
       return handleAnnouncements(request, env);
+    }
+
+    if (request.method === "GET" && url.pathname === "/v1/ios-update") {
+      return handleIOSUpdate(env);
     }
 
     if (request.method === "GET" && url.pathname === "/admin") {

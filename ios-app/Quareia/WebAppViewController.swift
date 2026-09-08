@@ -360,9 +360,16 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
     }
 
     @objc private func finishEditing() {
-        // End the editing session, including the focused WebKit field. Merely
-        // hiding the system keyboard can leave focus and caret activity alive.
+        // End UIKit editing immediately, then clear WebKit's document focus as
+        // well. A remote WebKit input session can otherwise retain its caret and
+        // keyboard on iPad even after the native view resigns first responder.
         webView.endEditing(true)
+        webView.evaluateJavaScript(
+            "(() => { const active = document.activeElement; if (active instanceof HTMLElement) active.blur(); })()"
+        ) { [weak self] _, _ in
+            guard let self, !self.isShutdown else { return }
+            self.webView.endEditing(true)
+        }
     }
 
     private func configureMenu(locale: String) {

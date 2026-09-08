@@ -16,14 +16,16 @@ try {
   const manifestResponse = await fetch(`${base}/v1/ios-update`, { signal: AbortSignal.timeout(3000) });
   assert.equal(manifestResponse.status, 200);
   const manifest = await manifestResponse.json();
-  assert.deepEqual(Object.keys(manifest).sort(), ['build', 'display_version', 'download_url', 'platform', 'schema_version', 'sha256', 'size_bytes']);
-  assert.equal(manifest.download_url, `${base}/fixtures/Quareia-1.0.1-2.ipa`);
+  assert.deepEqual(Object.keys(manifest).sort(), ['build', 'ipa_url', 'minimum_ios', 'platform', 'schema_version', 'sha256', 'size', 'version']);
+  assert.equal(manifest.version, '1.0.1');
+  assert.equal(manifest.minimum_ios, '16.0');
+  assert.equal(manifest.ipa_url, `${base}/fixtures/Quareia-1.0.1-2.ipa`);
   assert.equal(manifest.platform, 'ios');
   assert.equal(manifest.build, 2);
   const cancellation = new AbortController();
   const headerTimeout = setTimeout(() => cancellation.abort(), 3000);
   let blocked;
-  try { blocked = await fetch(manifest.download_url, { signal: cancellation.signal }); }
+  try { blocked = await fetch(manifest.ipa_url, { signal: cancellation.signal }); }
   finally { clearTimeout(headerTimeout); }
   const stateResponse = await fetch(`${base}/__fixture/update-state`, { signal: AbortSignal.timeout(3000) });
   assert.equal(stateResponse.status, 200);
@@ -31,9 +33,9 @@ try {
   cancellation.abort();
   await assert.rejects(blocked.arrayBuffer(), /abort/i);
   await mode('normal');
-  const complete = await fetch(manifest.download_url, { signal: AbortSignal.timeout(5000) });
+  const complete = await fetch(manifest.ipa_url, { signal: AbortSignal.timeout(5000) });
   const bytes = Buffer.from(await complete.arrayBuffer());
-  assert.equal(bytes.length, manifest.size_bytes);
+  assert.equal(bytes.length, manifest.size);
   assert.equal(createHash('sha256').update(bytes).digest('hex'), manifest.sha256);
   assert.match(bytes.toString('utf8'), /not an installable application archive/);
   assert.equal(complete.headers.get('cache-control'), 'no-store');
