@@ -1346,7 +1346,9 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     try:
         result = run_private_integration(args)
-    except (PrivateIntegrationError, OSError, subprocess.SubprocessError, ValueError) as cause:
+    except Exception as cause:
+        # Imported bundle inspectors have their own exception classes. Keep
+        # every ordinary gate failure sanitized while preserving failure exit 3.
         if isinstance(cause, PrivateIntegrationError) and str(cause).startswith("Private command failed: "):
             print(f"PRIVATE_BUILD_BLOCKED: {cause}", file=sys.stderr)
         else:

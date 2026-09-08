@@ -743,9 +743,11 @@ class PrivatePayloadPrivacyTests(unittest.TestCase):
         import io
         import types
         from unittest import mock
+        class ImportedInspectionFailure(RuntimeError):
+            pass
         error = io.StringIO()
         with mock.patch.object(TOOL, "parse_args", return_value=types.SimpleNamespace(command="run")), \
-             mock.patch.object(TOOL, "run_private_integration", side_effect=ValueError("SYNTHETIC_SENSITIVE_LITERAL /private/material")), \
+             mock.patch.object(TOOL, "run_private_integration", side_effect=ImportedInspectionFailure("SYNTHETIC_SENSITIVE_LITERAL /private/material")), \
              contextlib.redirect_stderr(error):
             self.assertEqual(TOOL.main([]), 3)
         prefix = "PRIVATE_BUILD_BLOCKED: Private command failed: "
