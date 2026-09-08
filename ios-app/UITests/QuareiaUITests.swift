@@ -644,7 +644,31 @@ final class QuareiaUITests: XCTestCase {
             XCTAssertTrue(dismiss.waitForExistence(timeout: 5), "Expected the native editing-completion action")
             XCTAssertTrue(dismiss.isHittable)
             dismiss.tap()
-            XCTAssertTrue(waitForDisappearance(app.keyboards.firstMatch))
+            let keyboard = app.keyboards.firstMatch
+            let keyboardDismissed = waitForDisappearance(keyboard)
+            if !keyboardDismissed {
+                // Fixed geometry/state only; never input text or accessibility trees.
+                let keyboardExists = keyboard.exists
+                let keyboardFrame = keyboardExists ? keyboard.frame : .zero
+                let visibleKeyboard = keyboardFrame.intersection(app.frame)
+                let dismissExists = dismiss.exists
+                let dismissFrame = dismissExists ? dismiss.frame : .zero
+                emitSafeUIMetadata("UI_KEYBOARD_META", [
+                    "keyboardExists": keyboardExists,
+                    "keyboardHittable": keyboardExists && keyboard.isHittable,
+                    "keyboardX": Double(keyboardFrame.minX),
+                    "keyboardY": Double(keyboardFrame.minY),
+                    "keyboardWidth": Double(keyboardFrame.width),
+                    "keyboardHeight": Double(keyboardFrame.height),
+                    "visibleKeyboardHeight": visibleKeyboard.isNull ? 0 : Double(visibleKeyboard.height),
+                    "dismissExists": dismissExists,
+                    "dismissHittable": dismissExists && dismiss.isHittable,
+                    "dismissX": Double(dismissFrame.midX),
+                    "dismissY": Double(dismissFrame.midY),
+                    "appForeground": app.state == .runningForeground
+                ])
+            }
+            XCTAssertTrue(keyboardDismissed)
             XCTAssertTrue(waitForDisappearance(dismiss))
             let retained = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", text), object: element)
             XCTAssertEqual(XCTWaiter.wait(for: [retained], timeout: 5), .completed,

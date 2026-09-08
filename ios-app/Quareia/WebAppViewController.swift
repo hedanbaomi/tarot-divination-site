@@ -226,6 +226,10 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
             name: UIResponder.keyboardWillShowNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide),
             name: UIResponder.keyboardWillHideNotification, object: nil)
+        #if PUBLIC_TESTING
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardDidHide),
+            name: UIResponder.keyboardDidHideNotification, object: nil)
+        #endif
         loadLocalEntry()
         Task { [weak self] in
             guard let self else { return }
@@ -339,14 +343,22 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
 
     @objc private func keyboardWillShow(_ notification: Notification) {
         guard viewIfLoaded?.window != nil, !isShutdown else { return }
+        tracePublicHostUI("keyboard.will-show")
         keyboardVisible = true
         configureKeyboardDismiss()
     }
 
     @objc private func keyboardWillHide(_ notification: Notification) {
+        tracePublicHostUI("keyboard.will-hide")
         keyboardVisible = false
         configureKeyboardDismiss()
     }
+
+    #if PUBLIC_TESTING
+    @objc private func keyboardDidHide(_ notification: Notification) {
+        tracePublicHostUI("keyboard.did-hide")
+    }
+    #endif
 
     private func configureKeyboardDismiss() {
         guard keyboardVisible else {
@@ -363,12 +375,19 @@ final class WebAppViewController: UIViewController, WKNavigationDelegate, WKUIDe
         // End UIKit editing immediately, then clear WebKit's document focus as
         // well. A remote WebKit input session can otherwise retain its caret and
         // keyboard on iPad even after the native view resigns first responder.
-        webView.endEditing(true)
+        tracePublicHostUI("keyboard.finish-editing")
+        let resigned = webView.endEditing(true)
+        if resigned { tracePublicHostUI("keyboard.initial-resign.accepted") }
+        else { tracePublicHostUI("keyboard.initial-resign.rejected") }
         webView.evaluateJavaScript(
             "(() => { const active = document.activeElement; if (active instanceof HTMLElement) active.blur(); })()"
-        ) { [weak self] _, _ in
+        ) { [weak self] _, error in
+            if error == nil { tracePublicHostUI("keyboard.blur.completed") }
+            else { tracePublicHostUI("keyboard.blur.failed") }
             guard let self, !self.isShutdown else { return }
-            self.webView.endEditing(true)
+            let resignedAfterBlur = self.webView.endEditing(true)
+            if resignedAfterBlur { tracePublicHostUI("keyboard.final-resign.accepted") }
+            else { tracePublicHostUI("keyboard.final-resign.rejected") }
         }
     }
 
