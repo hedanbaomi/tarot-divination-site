@@ -305,10 +305,10 @@ final class QuareiaUITests: XCTestCase {
         tapWhenVisible(rotate, in: webView, scrolling: .towardLowerPage)
         let undo = waitForElement(labels: ["Undo the last Free Board action"], in: app)
         XCTAssertTrue(undo.isEnabled)
-        undo.tap()
+        tapBoardControl(undo, action: "undo", in: app, webView: webView)
         let redo = waitForElement(labels: ["Redo the last Free Board action"], in: app)
         XCTAssertTrue(redo.isEnabled)
-        redo.tap()
+        tapBoardControl(redo, action: "redo", in: app, webView: webView)
 
         makeVisible(placedCard, in: webView, scrolling: .towardUpperPage)
         let committedPosition = waitForElement(labelPrefix: "Card position: X ", in: app)
