@@ -30,6 +30,16 @@ https://hedanbaomi.github.io/tarot-divination-site/
 
 构建与发布说明见 [`android-demo/README.md`](android-demo/README.md)。开源仓库包含应用完整源代码（不含 LXXXI 牌面加密实现与密钥材料，详见 `.gitignore` 与 android-demo 的「开源边界」一节）；完整牌面功能仅随正式 APK 提供。
 
+## iPhone / iPad（IPA 自签安装）
+
+如果 Release 中提供 `.ipa` 文件，可以通过自己的 Apple 账户自签安装到 iPhone / iPad，无需越狱。
+
+面向第一次接触 iOS 自签的用户，我们准备了从零开始的详细教程，包含 **Sideloadly、AltStore Classic、SideStore** 三种方法，以及开发者信任、Developer Mode、免费账户 7 天续签、覆盖更新与常见报错排查：
+
+**[iPhone / iPad IPA 自签安装超详细教程](docs/ios-sideloading.md)**
+
+> 对大多数第一次安装的用户，推荐优先使用 Sideloadly。免费 Apple 账户的个人开发签名通常需要每 7 天重新签名/刷新，这是 Apple 的签名限制，并非本项目设置的试用期。
+
 ## 功能
 
 - **三牌组**：塔罗 78 张 / Mystagogus（M 牌）78 张 / LXXXI 魔法牌 81 张，可在设置中切换
