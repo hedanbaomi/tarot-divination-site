@@ -62,7 +62,14 @@ KEY_SUFFIXES = {".key", ".pem", ".p12", ".pfx", ".jks", ".keystore", ".mobilepro
 PUBLIC_SOURCE_TEMPLATES = {"backend/.env.example"}
 PRIVATE_SOURCE_NAMES = {
     "vaultmaterial.kt", "lxxxivault.kt", "privatelxxxiassetprovider.kt",
-    "integratedlxxxiprovider.swift", "integratedvaultmaterial.swift",
+    "integratedlxxxiprovider.swift", "integratedlxxxiauthenticationtests.swift",
+    "integratedvaultmaterial.swift",
+}
+# The reviewed overlay path is the only public location allowed to carry the
+# private provider and authentication test; everything else stays forbidden tree-wide.
+PUBLIC_OVERLAY_SOURCES = {
+    "ios-app/private-build/provider/integratedlxxxiprovider.swift",
+    "ios-app/private-build/tests/integratedlxxxiauthenticationtests.swift",
 }
 SIMULATOR_UDID_RE = re.compile(
     r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
@@ -463,8 +470,11 @@ def validate_public_source_tree(listing: str) -> None:
                 "Public source tree contains an unsafe path")
         name = parts[-1].casefold()
         require(not any(part.casefold() in PRIVATE_NAMES for part in parts), "Public source tree contains a private material path")
-        require(name not in PRIVATE_SOURCE_NAMES and not any(part.casefold() == "qv" for part in parts),
-                "Public source tree contains a private implementation or encrypted record directory")
+        require(
+            (name not in PRIVATE_SOURCE_NAMES or path.casefold() in PUBLIC_OVERLAY_SOURCES)
+            and not any(part.casefold() == "qv" for part in parts),
+            "Public source tree contains a private implementation or encrypted record directory",
+        )
         require(path in PUBLIC_SOURCE_TEMPLATES or
                 (pathlib.PurePosixPath(path).suffix.casefold() not in KEY_SUFFIXES | {".qv"}
                  and name != ".env" and not name.startswith(".env.")),

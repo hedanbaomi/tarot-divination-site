@@ -20,3 +20,9 @@ android-demo/app/src/main/java/com/quareia/divination/PrivateLxxxiAssetProvider.
 android-demo/app/src/test/java/com/quareia/divination/LxxxiVaultTest.kt
 android-demo/tests/lxxxi-hardening-contract.test.js
 android-demo/app/src/main/assets/qv/
+
+# iOS private build: the encrypted .qv records and the generated vault material
+# are never open-sourced — they exist only inside the private pipeline
+# (see ios-app/private-build/README.md).
+**/*.qv
+ios-app/private-build/provider/IntegratedVaultMaterial.swift

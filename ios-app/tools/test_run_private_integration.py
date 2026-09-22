@@ -979,6 +979,8 @@ class PrivatePayloadPrivacyTests(unittest.TestCase):
         TOOL.validate_public_source_tree(listing("ios-app/Quareia/AppRoute.swift"))
         TOOL.validate_public_source_tree(listing("backend/.env.example"))
         TOOL.validate_public_source_tree(listing("android-demo/app/src/main/java/example/LxxxiAssetProvider.kt"))
+        TOOL.validate_public_source_tree(listing("ios-app/private-build/provider/IntegratedLxxxiProvider.swift"))
+        TOOL.validate_public_source_tree(listing("ios-app/private-build/tests/IntegratedLxxxiAuthenticationTests.swift"))
         for path in [".private/handoff.md", "ios-app/PrivateInputs/Provider.swift",
                      "records/lxxxi-01.qv", "config/.env.production", ".env.example", "secret.key",
                      "android-demo/app/src/main/java/example/VaultMaterial.kt",
@@ -986,6 +988,8 @@ class PrivatePayloadPrivacyTests(unittest.TestCase):
                      "android-demo/app/src/main/java/example/PrivateLxxxiAssetProvider.kt",
                      "ios-app/Quareia/IntegratedLxxxiProvider.swift",
                      "ios-app/Quareia/IntegratedVaultMaterial.swift",
+                     "ios-app/Quareia/IntegratedLxxxiAuthenticationTests.swift",
+                     "ios-app/private-build/provider/IntegratedVaultMaterial.swift",
                      "android-demo/app/src/main/assets/qv/opaque.dat",
                      "android-demo/app/src/main/assets/QV/opaque.dat"]:
             with self.subTest(path=path), self.assertRaises(TOOL.PrivateIntegrationError):
