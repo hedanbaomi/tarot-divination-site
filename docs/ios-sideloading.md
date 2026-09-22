@@ -4,7 +4,7 @@
 > 目标：把本项目提供的 `.ipa` 文件安装到自己的 iPhone / iPad 上。  
 > 最后核对：2026-09-22。
 
-如果你只想尽快装上，不想研究原理，**优先看「方法一：Sideloadly」**。它对第一次操作的人最直观。
+如果你只想照着一个方案安装，**优先看「方法一：SideStore」**。本教程把“能自动续签、尽量不让用户每 7 天重新折腾”放在第一优先级；SideStore 首次配置完成后可在设备端定期后台刷新自签 App，电脑主要用于第一次安装。
 
 ---
 
@@ -64,149 +64,172 @@ https://github.com/hedanbaomi/tarot-divination-site/releases
 
 | 方法 | 难度 | 需要电脑 | 后续续签 | 适合谁 |
 |---|---:|---|---|---|
-| **Sideloadly** | ★ | 安装和续签时通常需要 | 可配置自动刷新 | 第一次自签、只想把 IPA 装上 |
-| **AltStore Classic** | ★★ | 初装需要，刷新时电脑端 AltServer 要可连接 | AltStore 可自动/手动刷新 | 经常侧载多个 App |
-| **SideStore** | ★★★ | 初装需要，之后通常不需要电脑 | 可在手机端刷新 | 愿意多配置一步，想减少依赖电脑 |
+| **SideStore** | ★★★ | 主要是首次安装需要 | **可在设备端定期后台自动刷新** | 首选；希望以后尽量不用管 7 天续签 |
+| **AltStore Classic** | ★★ | 初装需要；自动刷新依赖运行 AltServer 的电脑 | **可自动刷新** | 电脑经常开机、手机常与电脑同网 |
+| **Sideloadly** | ★ | 安装最简单；自动刷新依赖电脑端组件和设备发现 | 可配置自动刷新，也可手动续签 | 只想最快装上，或前两种配置失败 |
 
-**完全小白推荐顺序：Sideloadly > AltStore > SideStore。**
+**本教程推荐顺序：SideStore > AltStore Classic > Sideloadly。**
 
-如果你只是安装本项目，而不是长期折腾各种 IPA，Sideloadly 通常最省事。
-
----
-
-# 3. 方法一：Sideloadly（最推荐小白）
-
-官方站点：
-
-https://sideloadly.io/
-
-Sideloadly 支持 Windows 和 macOS，不需要越狱，也支持免费 Apple 账户。
-
-## 3.1 Windows 用户：先处理 Apple 驱动
-
-这是整个教程里**最容易翻车的一步**。
-
-Sideloadly 官方目前仍建议 Windows 用户安装 Apple 官网提供的 iTunes / iCloud 组件，而不是依赖不兼容的精简驱动环境。
-
-如果之后出现：
-
-- No devices detected
-- 找不到 iPhone
-- 插线以后 Sideloadly 没反应
-- 登录/Anisette 异常
-
-第一件事就是回来检查 Apple 驱动。
-
-### 步骤 A：安装 iTunes / Apple 设备支持
-
-安装后：
-
-1. 用数据线连接 iPhone；
-2. 解锁 iPhone；
-3. iPhone 如果弹出「要信任此电脑吗？」；
-4. 点**信任**；
-5. 输入 iPhone 锁屏密码；
-6. 电脑端打开 iTunes，确认能看到你的设备。
-
-如果电脑连 iTunes 都看不到手机，Sideloadly 大概率也看不到。
-
-### 步骤 B：必要时安装 iCloud
-
-如果 Sideloadly 提示和 Apple 账户认证、Anisette、iCloud 组件有关，再检查 iCloud 是否正确安装。
-
-Sideloadly 官方下载页会给出其当前推荐的 Apple 组件下载入口，请优先按官方页面提示操作。
+原因很简单：第一次多配置几步通常只痛苦一次；如果以后每 7 天都要想起来插线重签，才是真的折磨。SideStore 的设计目标就是减少这种长期维护成本。
 
 ---
 
-## 3.2 macOS 用户准备
+# 3. 方法一：SideStore（首选：可自动续签）
 
-macOS 通常简单很多：
+SideStore 可以理解成更偏“手机端自维护”的侧载方案。
 
-1. 用数据线连接 iPhone；
-2. 解锁；
-3. Finder 左侧找到你的 iPhone；
-4. 如果弹出「信任」，电脑和手机两边都点信任；
-5. 确认 Finder 能正常看到设备。
+官方文档：
 
----
+https://docs.sidestore.io/
 
-## 3.3 下载并打开 Sideloadly
+它的核心优势是：**电脑主要用于第一次安装，之后可以在设备端刷新，并会定期在后台尝试刷新 App，避免免费签名的 7 天有效期到期。**
 
-1. 打开 https://sideloadly.io/
-2. 下载对应系统版本；
-3. 安装；
-4. 启动 Sideloadly；
-5. 用数据线连接 iPhone；
-6. 等几秒。
+所以虽然第一次配置比 Sideloadly 多几步，本教程仍然把 SideStore 放在第一位：对普通用户来说，**一次配置麻烦一点，换来以后尽量不用每周手动重签**，更省心。
 
-正常情况下，Sideloadly 顶部设备框里会出现你的 iPhone。
-
-### 如果设备栏是空的
-
-依次检查：
-
-1. iPhone 有没有解锁；
-2. 有没有点「信任此电脑」；
-3. 换一个 USB 接口；
-4. 换一根确认能传数据的线；
-5. Windows 下打开 iTunes 看能否识别设备；
-6. 重启 Sideloadly；
-7. 还不行就重启电脑和手机。
-
-很多“神秘问题”最后真的是线只能充电不能传数据。
+需要注意：SideStore 的刷新依赖 LocalDevVPN。安装、更新或刷新 App 时，需要让 LocalDevVPN 处于可用/连接状态。自动刷新也不是“永久签名”，而是在旧签名过期前重新刷新 7 天有效期。
 
 ---
 
-## 3.4 把 IPA 放进去
+## 3.1 SideStore 需要什么？
 
-你可以：
+按照当前官方文档，需要：
 
-- 把下载好的 `.ipa` 文件直接拖到 Sideloadly 窗口；
-- 或点击 IPA 图标手动选择文件。
+- iOS / iPadOS 15 或更高版本设备；
+- Apple 账户；
+- 首次配置用电脑；
+- Wi-Fi；
+- SideStore 当前要求的安装器；
+- LocalDevVPN。
 
-确认你选的是本项目的 IPA。
+SideStore 通过设备上的本地 VPN 与系统服务通信，因此在**安装、更新、刷新 App 时**通常需要打开 LocalDevVPN。
 
 ---
 
-## 3.5 填 Apple 账户
+## 3.2 安装 LocalDevVPN
 
-在 Apple Account / Apple ID 一栏填写你的 Apple 账户邮箱。
+根据 SideStore 官方文档：
+
+1. 在 iPhone 上安装 LocalDevVPN；
+2. 第一次打开时允许添加 VPN 配置；
+3. 输入锁屏密码；
+4. 连接 VPN。
+
+注意：
+
+这个 VPN 主要用于 SideStore 的本地通信机制。
+
+它不是让你“翻墙”的 VPN。
+
+---
+
+## 3.3 在电脑安装 SideStore
+
+SideStore 的安装工具会随项目发展变化，所以这里不写死某一个旧安装器版本。
+
+请打开：
+
+https://docs.sidestore.io/docs/installation/prerequisites
+
+以及：
+
+https://docs.sidestore.io/docs/installation/install
+
+按官方页面下载当前推荐的安装器。
+
+按照当前官方流程，大致是：
+
+1. iPhone 用 USB 连接电脑；
+2. 解锁并信任电脑；
+3. 启动官方推荐安装器；
+4. 登录 Apple 账户；
+5. 选择你的设备；
+6. 选择安装稳定版 SideStore；
+7. 等待安装完成。
+
+---
+
+## 3.4 手机端完成信任
+
+安装 SideStore 后：
+
+1. 设置；
+2. 通用；
+3. VPN 与设备管理；
+4. 找到你的 Apple 账户；
+5. 选择信任 / 允许并重新启动。
 
 然后：
 
-1. 点击 **Start**；
-2. 根据提示输入 Apple 账户密码；
-3. 如果开启了双重认证，按提示完成验证码验证。
+**设置 → 隐私与安全性 → 开发者模式**
 
-### 我应该用主 Apple 账户吗？
-
-技术上可以。
-
-如果你比较介意把主账户用于第三方签名工具，也可以专门注册一个 Apple 账户用于侧载。
-
-无论用哪个账号，都建议：
-
-- 开启双重认证；
-- 不要把密码发给任何人；
-- 只从 Sideloadly 官方站点下载工具。
+打开并重启。
 
 ---
 
-## 3.6 等待安装完成
+## 3.5 打开 SideStore 并完成第一次刷新
 
-点击 Start 后不要拔线。
+1. 打开 LocalDevVPN；
+2. 确认 VPN 已连接；
+3. 打开 SideStore；
+4. 登录刚才用于安装 SideStore 的 Apple 账户；
+5. 进入 **My Apps**；
+6. 找到 SideStore 自己；
+7. 点击右侧显示的 `7 DAYS` / 剩余天数；
+8. 手动刷新一次。
 
-你会看到日志不断滚动。
+如果它询问是否创建/撤销并重建签名证书，按照 SideStore 官方提示继续。
 
-成功时通常会看到类似：
+---
 
-`Done.`
+## 3.6 用 SideStore 安装本项目 IPA
 
-然后查看 iPhone 主屏幕/App 资源库。
+1. Safari 打开本项目 Releases；
+2. 下载 IPA；
+3. 保存到「文件」App；
+4. 打开 SideStore；
+5. 确保 LocalDevVPN 已连接；
+6. 选择安装 IPA / 从文件导入；
+7. 找到下载的 `.ipa`；
+8. 等待签名和安装完成。
 
-此时 App 可能已经出现，但**第一次打开大概率还会提示开发者未受信任**。
+### 3.7 自动续签：这是为什么把 SideStore 放在首选
 
-这很正常。
+SideStore 官方的设计就是会**定期在后台刷新已侧载 App**，尽量在免费签名的 7 天期限结束前续上新的有效期。
+
+正常使用时：
+
+1. 保留 SideStore，不要把它删除；
+2. 保留 LocalDevVPN；
+3. 需要刷新时确保设备连接 Wi-Fi；
+4. 让 LocalDevVPN 保持可用；SideStore 刷新 App 时需要它；
+5. 偶尔打开 SideStore → **My Apps** 看一眼剩余天数即可。
+
+如果一切正常，你通常不需要每周重新连接电脑，也不需要每 7 天重新从电脑安装本项目 IPA。
+
+但请注意：iOS 的后台任务并不是一个“每天几点必定执行”的精确定时器。因此即使使用自动刷新，仍建议你偶尔看一下剩余天数。发现只剩 1～2 天却一直没有刷新时：
+
+1. 连接 Wi-Fi；
+2. 打开 LocalDevVPN；
+3. 打开 SideStore；
+4. 进入 **My Apps**；
+5. 点击对应 App 的剩余天数，手动刷新一次。
+
+这相当于给自动续签兜底，通常不需要电脑。
+
+### SideStore pairing file 失效怎么办？
+
+SideStore 官方明确提醒：系统升级、重置设备，甚至某些随机情况都可能导致 pairing file 失效。
+
+症状通常包括：
+
+- 刷新失败；
+- 无法安装；
+- 本地设备服务连接异常；
+- SideStore 突然不能正常工作。
+
+这时不要反复删 App。
+
+优先回到 SideStore 官方安装文档，重新生成/替换 pairing file。
 
 ---
 
@@ -260,7 +283,268 @@ macOS 通常简单很多：
 
 ---
 
-# 6. Sideloadly 的 7 天续签
+# 6. 方法二：AltStore Classic（电脑常开时可自动续签）
+
+如果你以后还想装别的 IPA，AltStore 是很成熟的一套方案。
+
+官方站点：
+
+https://altstore.io/
+
+官方文档：
+
+https://faq.altstore.io/
+
+## 6.1 Windows 前置条件
+
+AltStore 对 Windows 的 Apple 组件要求比较严格。
+
+其官方教程目前建议：
+
+- 安装 Apple 官方网站版本的 iTunes；
+- 安装 Apple 官方网站版本的 iCloud；
+- 不要优先使用 Microsoft Store 版本来做经典配置。
+
+然后重启电脑。
+
+---
+
+## 6.2 安装 AltServer
+
+1. 从 AltStore 官网下载 **AltServer for Windows**；
+2. 解压；
+3. 运行安装程序；
+4. 安装完成后，在开始菜单里找到 AltServer；
+5. 建议第一次**以管理员身份运行**。
+
+AltServer 通常不会显示一个大窗口，而是在 Windows 右下角托盘里出现图标。
+
+找不到托盘图标时，点任务栏右下角的 `^` 展开隐藏图标。
+
+---
+
+## 6.3 把 iPhone 连接到电脑
+
+1. 插数据线；
+2. 解锁 iPhone；
+3. 点「信任此电脑」；
+4. 打开 iTunes；
+5. 进入设备页面；
+6. 勾选类似：
+   **通过 Wi-Fi 与此 iPhone 同步 / Sync with this iPhone over Wi-Fi**；
+7. 点应用/同步。
+
+这一步是后续无线刷新 AltStore 的关键。
+
+---
+
+## 6.4 用 AltServer 安装 AltStore
+
+1. 点右下角 AltServer 图标；
+2. 选择 **Install AltStore**；
+3. 选择你的 iPhone；
+4. 输入 Apple 账户；
+5. 按提示完成验证；
+6. 等待安装完成。
+
+然后回到 iPhone。
+
+同样需要完成：
+
+- 设置 → 通用 → VPN 与设备管理 → 信任开发者；
+- iOS 16+：设置 → 隐私与安全性 → 开发者模式。
+
+---
+
+## 6.5 用 AltStore 安装本项目 IPA
+
+先把本项目 IPA 下载到 iPhone。
+
+最简单的保存方式：
+
+1. 用 Safari 打开 GitHub Releases；
+2. 下载 `.ipa`；
+3. 下载完成后，文件通常在「文件」App 的「下载项」里。
+
+然后：
+
+1. 打开 AltStore；
+2. 进入 **My Apps**；
+3. 点击左上角 **+**；
+4. 文件选择器弹出；
+5. 找到刚下载的 IPA；
+6. 点它；
+7. 等待安装。
+
+如果 AltStore 要求重新登录 Apple 账户，按提示操作。
+
+安装完成后，App 会出现在主屏幕或 App 资源库。
+
+---
+
+## 6.6 AltStore 怎么续签？
+
+免费账户仍然是 7 天。
+
+AltStore 会显示每个 App 还剩多少天。
+
+你可以：
+
+1. 让运行 AltServer 的电脑保持开机；
+2. iPhone 和电脑连同一个 Wi-Fi；
+3. 确保之前已经打开 Wi-Fi 同步；
+4. AltStore 会尝试后台刷新。
+
+也可以手动：
+
+**AltStore → My Apps → Refresh All**
+
+如果刷新失败，最稳妥的排错方法就是：
+
+- 插上数据线；
+- 打开 AltServer；
+- 解锁手机；
+- 再点 Refresh All。
+
+---
+
+# 7. 方法三：Sideloadly（首次安装最简单）
+
+官方站点：
+
+https://sideloadly.io/
+
+Sideloadly 支持 Windows 和 macOS，不需要越狱，也支持免费 Apple 账户。它的第一次安装流程最直观；不过如果你的目标是“以后尽量不用管续签”，本教程仍优先推荐 SideStore。
+
+## 7.1 Windows 用户：先处理 Apple 驱动
+
+这是整个教程里**最容易翻车的一步**。
+
+Sideloadly 官方目前仍建议 Windows 用户安装 Apple 官网提供的 iTunes / iCloud 组件，而不是依赖不兼容的精简驱动环境。
+
+如果之后出现：
+
+- No devices detected
+- 找不到 iPhone
+- 插线以后 Sideloadly 没反应
+- 登录/Anisette 异常
+
+第一件事就是回来检查 Apple 驱动。
+
+### 步骤 A：安装 iTunes / Apple 设备支持
+
+安装后：
+
+1. 用数据线连接 iPhone；
+2. 解锁 iPhone；
+3. iPhone 如果弹出「要信任此电脑吗？」；
+4. 点**信任**；
+5. 输入 iPhone 锁屏密码；
+6. 电脑端打开 iTunes，确认能看到你的设备。
+
+如果电脑连 iTunes 都看不到手机，Sideloadly 大概率也看不到。
+
+### 步骤 B：必要时安装 iCloud
+
+如果 Sideloadly 提示和 Apple 账户认证、Anisette、iCloud 组件有关，再检查 iCloud 是否正确安装。
+
+Sideloadly 官方下载页会给出其当前推荐的 Apple 组件下载入口，请优先按官方页面提示操作。
+
+---
+
+## 7.2 macOS 用户准备
+
+macOS 通常简单很多：
+
+1. 用数据线连接 iPhone；
+2. 解锁；
+3. Finder 左侧找到你的 iPhone；
+4. 如果弹出「信任」，电脑和手机两边都点信任；
+5. 确认 Finder 能正常看到设备。
+
+---
+
+## 7.3 下载并打开 Sideloadly
+
+1. 打开 https://sideloadly.io/
+2. 下载对应系统版本；
+3. 安装；
+4. 启动 Sideloadly；
+5. 用数据线连接 iPhone；
+6. 等几秒。
+
+正常情况下，Sideloadly 顶部设备框里会出现你的 iPhone。
+
+### 如果设备栏是空的
+
+依次检查：
+
+1. iPhone 有没有解锁；
+2. 有没有点「信任此电脑」；
+3. 换一个 USB 接口；
+4. 换一根确认能传数据的线；
+5. Windows 下打开 iTunes 看能否识别设备；
+6. 重启 Sideloadly；
+7. 还不行就重启电脑和手机。
+
+很多“神秘问题”最后真的是线只能充电不能传数据。
+
+---
+
+## 7.4 把 IPA 放进去
+
+你可以：
+
+- 把下载好的 `.ipa` 文件直接拖到 Sideloadly 窗口；
+- 或点击 IPA 图标手动选择文件。
+
+确认你选的是本项目的 IPA。
+
+---
+
+## 7.5 填 Apple 账户
+
+在 Apple Account / Apple ID 一栏填写你的 Apple 账户邮箱。
+
+然后：
+
+1. 点击 **Start**；
+2. 根据提示输入 Apple 账户密码；
+3. 如果开启了双重认证，按提示完成验证码验证。
+
+### 我应该用主 Apple 账户吗？
+
+技术上可以。
+
+如果你比较介意把主账户用于第三方签名工具，也可以专门注册一个 Apple 账户用于侧载。
+
+无论用哪个账号，都建议：
+
+- 开启双重认证；
+- 不要把密码发给任何人；
+- 只从 Sideloadly 官方站点下载工具。
+
+---
+
+## 7.6 等待安装完成
+
+点击 Start 后不要拔线。
+
+你会看到日志不断滚动。
+
+成功时通常会看到类似：
+
+`Done.`
+
+然后查看 iPhone 主屏幕/App 资源库。
+
+此时 App 可能已经出现，但**第一次打开大概率还会提示开发者未受信任**。
+
+这很正常。
+
+---
+
+## 7.7 Sideloadly 怎么续签？
 
 如果你使用免费 Apple 账户，自签 App 一般只有 7 天有效期。
 
@@ -301,285 +585,23 @@ Sideloadly 提供自动刷新功能。
 
 ---
 
-# 7. 方法二：AltStore Classic
+# 8. 我到底应该用哪一种？
 
-如果你以后还想装别的 IPA，AltStore 是很成熟的一套方案。
+### 你只想按本教程的默认方案走
 
-官方站点：
+用 **SideStore**。首次配置麻烦一点，但后续可以在设备端自动/手动刷新，长期最省心。
 
-https://altstore.io/
+### 你最在意自动续签，而且不想让电脑每周参与
 
-官方文档：
+优先 **SideStore**。
 
-https://faq.altstore.io/
+### 你电脑几乎一直开机，而且手机经常和电脑在同一个 Wi-Fi
 
-## 7.1 Windows 前置条件
+可以用 **AltStore Classic**。AltServer 可配合 AltStore 自动刷新。
 
-AltStore 对 Windows 的 Apple 组件要求比较严格。
+### 你只想最快把 IPA 装上，暂时不在乎以后怎么续签
 
-其官方教程目前建议：
-
-- 安装 Apple 官方网站版本的 iTunes；
-- 安装 Apple 官方网站版本的 iCloud；
-- 不要优先使用 Microsoft Store 版本来做经典配置。
-
-然后重启电脑。
-
----
-
-## 7.2 安装 AltServer
-
-1. 从 AltStore 官网下载 **AltServer for Windows**；
-2. 解压；
-3. 运行安装程序；
-4. 安装完成后，在开始菜单里找到 AltServer；
-5. 建议第一次**以管理员身份运行**。
-
-AltServer 通常不会显示一个大窗口，而是在 Windows 右下角托盘里出现图标。
-
-找不到托盘图标时，点任务栏右下角的 `^` 展开隐藏图标。
-
----
-
-## 7.3 把 iPhone 连接到电脑
-
-1. 插数据线；
-2. 解锁 iPhone；
-3. 点「信任此电脑」；
-4. 打开 iTunes；
-5. 进入设备页面；
-6. 勾选类似：
-   **通过 Wi-Fi 与此 iPhone 同步 / Sync with this iPhone over Wi-Fi**；
-7. 点应用/同步。
-
-这一步是后续无线刷新 AltStore 的关键。
-
----
-
-## 7.4 用 AltServer 安装 AltStore
-
-1. 点右下角 AltServer 图标；
-2. 选择 **Install AltStore**；
-3. 选择你的 iPhone；
-4. 输入 Apple 账户；
-5. 按提示完成验证；
-6. 等待安装完成。
-
-然后回到 iPhone。
-
-同样需要完成：
-
-- 设置 → 通用 → VPN 与设备管理 → 信任开发者；
-- iOS 16+：设置 → 隐私与安全性 → 开发者模式。
-
----
-
-## 7.5 用 AltStore 安装本项目 IPA
-
-先把本项目 IPA 下载到 iPhone。
-
-最简单的保存方式：
-
-1. 用 Safari 打开 GitHub Releases；
-2. 下载 `.ipa`；
-3. 下载完成后，文件通常在「文件」App 的「下载项」里。
-
-然后：
-
-1. 打开 AltStore；
-2. 进入 **My Apps**；
-3. 点击左上角 **+**；
-4. 文件选择器弹出；
-5. 找到刚下载的 IPA；
-6. 点它；
-7. 等待安装。
-
-如果 AltStore 要求重新登录 Apple 账户，按提示操作。
-
-安装完成后，App 会出现在主屏幕或 App 资源库。
-
----
-
-## 7.6 AltStore 怎么续签？
-
-免费账户仍然是 7 天。
-
-AltStore 会显示每个 App 还剩多少天。
-
-你可以：
-
-1. 让运行 AltServer 的电脑保持开机；
-2. iPhone 和电脑连同一个 Wi-Fi；
-3. 确保之前已经打开 Wi-Fi 同步；
-4. AltStore 会尝试后台刷新。
-
-也可以手动：
-
-**AltStore → My Apps → Refresh All**
-
-如果刷新失败，最稳妥的排错方法就是：
-
-- 插上数据线；
-- 打开 AltServer；
-- 解锁手机；
-- 再点 Refresh All。
-
----
-
-# 8. 方法三：SideStore（初装后更少依赖电脑）
-
-SideStore 可以理解成更偏“手机端自维护”的侧载方案。
-
-官方文档：
-
-https://docs.sidestore.io/
-
-它的优势是：**电脑主要用于第一次安装**。配置完成后，安装 / 刷新 IPA 可以更多地在手机端完成。
-
-代价是第一次配置比 Sideloadly 麻烦。
-
-如果你只装一个 App，而且不想研究 pairing file、LocalDevVPN，建议直接回去用 Sideloadly。
-
----
-
-## 8.1 SideStore 需要什么？
-
-按照当前官方文档，需要：
-
-- iOS / iPadOS 15 或更高版本设备；
-- Apple 账户；
-- 首次配置用电脑；
-- Wi-Fi；
-- SideStore 当前要求的安装器；
-- LocalDevVPN。
-
-SideStore 通过设备上的本地 VPN 与系统服务通信，因此在**安装、更新、刷新 App 时**通常需要打开 LocalDevVPN。
-
----
-
-## 8.2 安装 LocalDevVPN
-
-根据 SideStore 官方文档：
-
-1. 在 iPhone 上安装 LocalDevVPN；
-2. 第一次打开时允许添加 VPN 配置；
-3. 输入锁屏密码；
-4. 连接 VPN。
-
-注意：
-
-这个 VPN 主要用于 SideStore 的本地通信机制。
-
-它不是让你“翻墙”的 VPN。
-
----
-
-## 8.3 在电脑安装 SideStore
-
-SideStore 的安装工具会随项目发展变化，所以这里不写死某一个旧安装器版本。
-
-请打开：
-
-https://docs.sidestore.io/docs/installation/prerequisites
-
-以及：
-
-https://docs.sidestore.io/docs/installation/install
-
-按官方页面下载当前推荐的安装器。
-
-按照当前官方流程，大致是：
-
-1. iPhone 用 USB 连接电脑；
-2. 解锁并信任电脑；
-3. 启动官方推荐安装器；
-4. 登录 Apple 账户；
-5. 选择你的设备；
-6. 选择安装稳定版 SideStore；
-7. 等待安装完成。
-
----
-
-## 8.4 手机端完成信任
-
-安装 SideStore 后：
-
-1. 设置；
-2. 通用；
-3. VPN 与设备管理；
-4. 找到你的 Apple 账户；
-5. 选择信任 / 允许并重新启动。
-
-然后：
-
-**设置 → 隐私与安全性 → 开发者模式**
-
-打开并重启。
-
----
-
-## 8.5 打开 SideStore 并完成第一次刷新
-
-1. 打开 LocalDevVPN；
-2. 确认 VPN 已连接；
-3. 打开 SideStore；
-4. 登录刚才用于安装 SideStore 的 Apple 账户；
-5. 进入 **My Apps**；
-6. 找到 SideStore 自己；
-7. 点击右侧显示的 `7 DAYS` / 剩余天数；
-8. 手动刷新一次。
-
-如果它询问是否创建/撤销并重建签名证书，按照 SideStore 官方提示继续。
-
----
-
-## 8.6 用 SideStore 安装本项目 IPA
-
-1. Safari 打开本项目 Releases；
-2. 下载 IPA；
-3. 保存到「文件」App；
-4. 打开 SideStore；
-5. 确保 LocalDevVPN 已连接；
-6. 选择安装 IPA / 从文件导入；
-7. 找到下载的 `.ipa`；
-8. 等待签名和安装完成。
-
-之后定期打开 SideStore 检查剩余天数并刷新即可。
-
-### SideStore pairing file 失效怎么办？
-
-SideStore 官方明确提醒：系统升级、重置设备，甚至某些随机情况都可能导致 pairing file 失效。
-
-症状通常包括：
-
-- 刷新失败；
-- 无法安装；
-- 本地设备服务连接异常；
-- SideStore 突然不能正常工作。
-
-这时不要反复删 App。
-
-优先回到 SideStore 官方安装文档，重新生成/替换 pairing file。
-
----
-
-# 9. 我到底应该用哪一种？
-
-### 你第一次自签
-
-用 **Sideloadly**。
-
-### 你有 Windows，想偶尔装一个 IPA
-
-还是 **Sideloadly**。
-
-### 你经常装 IPA，而且电脑经常开机
-
-可以用 **AltStore**。
-
-### 你不想每周都依赖电脑
-
-可以研究 **SideStore**。
+用 **Sideloadly**。它第一次安装最直观，也可以配置自动刷新，但长期体验更依赖电脑端环境。
 
 ### 你有付费 Apple Developer Program
 
@@ -587,7 +609,7 @@ SideStore 官方明确提醒：系统升级、重置设备，甚至某些随机�
 
 ---
 
-# 10. 常见问题：照着症状找答案
+# 9. 常见问题：照着症状找答案
 
 ## Q1：装好了，点开提示「未受信任的开发者」
 
@@ -785,7 +807,7 @@ App 本身是否需要联网取决于 App 功能。
 
 ---
 
-# 11. 安全提醒
+# 10. 安全提醒
 
 请尽量做到：
 
@@ -799,7 +821,7 @@ App 本身是否需要联网取决于 App 功能。
 
 ---
 
-# 12. 官方参考
+# 11. 官方参考
 
 为了避免第三方教程过时，遇到界面和本文不一致时，优先看这些页面：
 
@@ -824,21 +846,24 @@ App 本身是否需要联网取决于 App 功能。
 
 ---
 
-# 13. 一分钟版：真的不想看全文
+# 12. 一分钟版：真的不想看全文
 
-如果你是 Windows 用户：
+**默认推荐：SideStore，因为它后续可以自动刷新签名。**
 
-1. 下载本项目 IPA；
-2. 下载并安装 Sideloadly；
-3. 安装/确认 Apple iTunes 驱动正常；
-4. 数据线连接 iPhone；
-5. 手机点「信任此电脑」；
-6. Sideloadly 里拖入 IPA；
-7. 输入自己的 Apple 账户；
-8. 点 Start；
-9. 手机：设置 → 通用 → VPN 与设备管理 → 信任开发者；
-10. 手机：设置 → 隐私与安全性 → 开发者模式 → 开启并重启；
-11. 打开 App；
-12. 免费账户记得 **7 天内刷新一次**。
+1. iPhone / iPad 安装 **LocalDevVPN**；
+2. 电脑打开 SideStore 官方安装文档，下载当前推荐的安装器（目前官方流程使用 iloader）；
+3. 数据线连接 iPhone / iPad，解锁并点「信任此电脑」；
+4. 在安装器里登录你的 Apple 账户，选择设备，安装 **SideStore Stable**；
+5. 手机上进入：设置 → 通用 → VPN 与设备管理 → 信任对应开发者；
+6. iOS 16+ 再进入：设置 → 隐私与安全性 → 开发者模式 → 开启并重启；
+7. 打开 LocalDevVPN 并连接；
+8. 打开 SideStore，用刚才同一个 Apple 账户登录；
+9. 在 **My Apps** 里先点 SideStore 自己的剩余天数，完成第一次刷新；
+10. Safari 打开本项目 GitHub Releases，下载 `.ipa`；
+11. 在 SideStore 中导入这个 IPA 并安装；
+12. 以后保留 SideStore + LocalDevVPN。SideStore 会定期尝试在后台刷新 App；
+13. 偶尔看一下 My Apps 的剩余天数；如果只剩 1～2 天还没自动刷新，就连接 Wi-Fi、打开 LocalDevVPN，手动点一下刷新即可，通常仍然**不需要电脑**。
+
+如果 SideStore 的首次配置实在卡住，再看后面的 **AltStore Classic**；如果你只想最快装上，则用 **Sideloadly**。
 
 如果卡住，别从头乱试，直接回到上面的「常见问题」，按你屏幕上的报错找对应条目。
