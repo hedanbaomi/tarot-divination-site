@@ -34,11 +34,11 @@ https://hedanbaomi.github.io/tarot-divination-site/
 
 如果 Release 中提供 `.ipa` 文件，可以通过自己的 Apple 账户自签安装到 iPhone / iPad，无需越狱。
 
-面向第一次接触 iOS 自签的用户，我们准备了从零开始的详细教程，包含 **Sideloadly、AltStore Classic、SideStore** 三种方法，以及开发者信任、Developer Mode、免费账户 7 天续签、覆盖更新与常见报错排查：
+面向第一次接触 iOS 自签的用户，我们准备了从零开始的详细教程，包含 **SideStore、AltStore Classic、Sideloadly** 三种方法，以及开发者信任、Developer Mode、免费账户 7 天续签、自动刷新、覆盖更新与常见报错排查：
 
 **[iPhone / iPad IPA 自签安装超详细教程](docs/ios-sideloading.md)**
 
-> 对大多数第一次安装的用户，推荐优先使用 Sideloadly。免费 Apple 账户的个人开发签名通常需要每 7 天重新签名/刷新，这是 Apple 的签名限制，并非本项目设置的试用期。
+> **默认推荐 SideStore**：首次配置完成后，它可以在设备端定期后台刷新自签 App，尽量避免每 7 天手动连接电脑重签。免费 Apple 账户的个人开发签名通常仍只有 7 天有效期；所谓“自动续签”是自动刷新这 7 天有效期，并不是永久签名。
 
 ## 功能
 
