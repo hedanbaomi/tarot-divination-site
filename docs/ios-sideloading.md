@@ -1,10 +1,13 @@
 # iPhone / iPad 安装 IPA：超详细自签教程
 
 > 适用对象：第一次听说“IPA、自签、证书、开发者模式”的普通用户。  
-> 目标：把本项目提供的 `.ipa` 文件安装到自己的 iPhone / iPad 上。  
+> 目标：把 Quareia 占卜 App（塔罗 / M 牌 / LXXXI 魔法牌）安装到自己的 iPhone / iPad 上。  
+> 适用安装包：`Quareia-1.0.0-1.ipa`，要求 **iOS / iPadOS 16.0 及以上**，iPhone 与 iPad 均可。  
 > 最后核对：2026-09-22。
 
 如果你只想照着一个方案安装，**优先看「方法一：SideStore」**。本教程把“能自动续签、尽量不让用户每 7 天重新折腾”放在第一优先级；SideStore 首次配置完成后可在设备端定期后台刷新自签 App，电脑主要用于第一次安装。
+
+> **不想折腾自签？** 也可以直接用 Safari 打开网页版 https://hedanbaomi.github.io/tarot-divination-site/ ，占卜功能与 App 版一致；用「分享 → 添加到主屏幕」还能把它放到桌面上当图标点开。网页版不需要本教程的任何步骤。
 
 ---
 
@@ -16,7 +19,7 @@ Android 下载的是 `.apk`；iPhone / iPad 上的应用安装包通常是 `.ipa
 
 所谓**自签**，可以简单理解成：
 
-1. 你下载本项目提供的 IPA；
+1. 你下载 Quareia 的 IPA；
 2. 用你自己的 Apple 账户向 Apple 申请一个个人开发签名；
 3. 工具用这个签名重新签一次 IPA；
 4. 再把签过名的 App 安装到你自己的设备上。
@@ -44,9 +47,9 @@ Android 下载的是 `.apk`；iPhone / iPad 上的应用安装包通常是 `.ipa
 
 你需要准备：
 
-- 一台 iPhone 或 iPad；
+- 一台 **iOS / iPadOS 16.0 或更高版本**的 iPhone 或 iPad（这是 Quareia 的最低系统要求；SideStore 本身支持 iOS 15，但低于 16 的系统装不上本 App）；
 - 一个能正常登录的 Apple 账户；
-- 本项目的 `.ipa` 文件；
+- Quareia 的 `.ipa` 安装包；
 - 一根能传数据的数据线；
 - 根据你选择的方法，准备 Windows / macOS / Linux 电脑。
 
@@ -54,9 +57,18 @@ Android 下载的是 `.apk`；iPhone / iPad 上的应用安装包通常是 `.ipa
 
 https://github.com/hedanbaomi/tarot-divination-site/releases
 
-如果某个版本提供 iOS 安装包，请下载文件名以 `.ipa` 结尾的文件。
+在最新 Release 的资产列表里下载以 `.ipa` 结尾的文件（例如 `Quareia-1.0.0-1.ipa`）。
 
 > **不要把 APK 下载到 iPhone 上。** APK 是 Android 安装包，iPhone 不能安装。
+
+### 可选：核对文件没被动过
+
+Release 说明栏里给出了该 IPA 的 `sha256` 校验值。下载后想确认文件完整、没被篡改，可以在电脑上算一遍再对比：
+
+- **macOS**：终端执行 `shasum -a 256 Quareia-1.0.0-1.ipa`
+- **Windows**：命令提示符执行 `certutil -hashfile Quareia-1.0.0-1.ipa SHA256`
+
+输出与 Release 说明栏一致即可；不一致就删掉重新下载。iPhone 上不方便算哈希，在电脑上核对就行。
 
 ---
 
@@ -181,16 +193,17 @@ https://docs.sidestore.io/docs/installation/install
 
 ---
 
-## 3.6 用 SideStore 安装本项目 IPA
+## 3.6 用 SideStore 安装 Quareia
 
 1. Safari 打开本项目 Releases；
-2. 下载 IPA；
+2. 下载 `Quareia-…….ipa`；
 3. 保存到「文件」App；
 4. 打开 SideStore；
 5. 确保 LocalDevVPN 已连接；
 6. 选择安装 IPA / 从文件导入；
 7. 找到下载的 `.ipa`；
-8. 等待签名和安装完成。
+8. 等待签名和安装完成；
+9. 主屏幕 / App 资源库出现「Quareia」图标即安装成功。
 
 ### 3.7 自动续签：这是为什么把 SideStore 放在首选
 
@@ -356,9 +369,9 @@ AltServer 通常不会显示一个大窗口，而是在 Windows 右下角托盘�
 
 ---
 
-## 6.5 用 AltStore 安装本项目 IPA
+## 6.5 用 AltStore 安装 Quareia
 
-先把本项目 IPA 下载到 iPhone。
+先把 Quareia 的 IPA 下载到 iPhone。
 
 最简单的保存方式：
 
@@ -378,7 +391,7 @@ AltServer 通常不会显示一个大窗口，而是在 Windows 右下角托盘�
 
 如果 AltStore 要求重新登录 Apple 账户，按提示操作。
 
-安装完成后，App 会出现在主屏幕或 App 资源库。
+安装完成后，名为「Quareia」的 App 会出现在主屏幕或 App 资源库。
 
 ---
 
@@ -495,10 +508,10 @@ macOS 通常简单很多：
 
 你可以：
 
-- 把下载好的 `.ipa` 文件直接拖到 Sideloadly 窗口；
+- 把下载好的 `Quareia-…….ipa` 直接拖到 Sideloadly 窗口；
 - 或点击 IPA 图标手动选择文件。
 
-确认你选的是本项目的 IPA。
+确认你选的是 Quareia 的 IPA。Bundle ID 保持工具默认值（`com.hedanbaomi.quareia.ios`，或工具自动加后缀的形式），不要自己改名——以后每次续签用同一个 Bundle ID，覆盖安装才不会出问题。
 
 ---
 
@@ -587,6 +600,10 @@ Sideloadly 提供自动刷新功能。
 
 # 8. 我到底应该用哪一种？
 
+### 你不想折腾自签
+
+直接用网页版 https://hedanbaomi.github.io/tarot-divination-site/ ，占卜功能一致，零安装成本。
+
 ### 你只想按本教程的默认方案走
 
 用 **SideStore**。首次配置麻烦一点，但后续可以在设备端自动/手动刷新，长期最省心。
@@ -662,13 +679,15 @@ Sideloadly 提供自动刷新功能。
 
 正确“覆盖安装”时通常可以保留原 App 容器数据，但这不是绝对保证。
 
+**先说 Quareia 的情况：Quareia 没有账号和云同步，占卜历史只保存在这台设备上。删除 App 等于删除全部历史，没有云端可找回。** 所以重签、换机之前，先在 Quareia 的应用菜单里点「备份」，把备份文件导出存到「文件」App 或电脑上；装好之后用「导入备份」恢复。
+
 为了降低风险：
 
 - 尽量一直使用同一种签名工具；
 - 使用同一个 Apple 账户；
 - 不要随便改 Bundle ID；
 - 不要先删除旧 App；
-- 重要数据先导出/备份。
+- 重签前先在应用菜单里「备份」一次。
 
 如果你主动删除 App，iOS 通常也会一起删除该 App 的本地数据。
 
@@ -771,9 +790,9 @@ TrollStore 属于依赖特定系统条件/漏洞链的持久签名方案，不�
 
 常规免费开发签名通常受 Apple 的免费 provisioning 限制，常见限制是同时 3 个侧载 App。
 
-而且 **AltStore / SideStore 自己也会占用侧载名额**。
+而且 **AltStore / SideStore 自己也会占用侧载名额**。具体到 Quareia：用 SideStore 方案时，SideStore 占 1 个、Quareia 占 1 个，你还剩 1 个空闲名额；用 Sideloadly 直装则只占 1 个。
 
-所以如果你只是想装本项目一个 IPA，Sideloadly 的名额利用通常更直接。
+所以如果你只是想装 Quareia 一个 IPA，Sideloadly 的名额利用通常更直接。
 
 ---
 
@@ -788,7 +807,7 @@ App 本身是否需要联网取决于 App 功能。
 - 重新签名；
 - SideStore 刷新。
 
-本项目的核心占卜体验设计为本地可用；公告、更新检查等联网功能另说。
+Quareia 的三套牌组占卜、牌阵和历史记录完全离线可用；只有应用菜单里的「公告」「检查更新」和匿名使用统计需要联网（统计可在隐私设置里关闭，且默认询问后才开启）。
 
 ---
 
@@ -800,10 +819,11 @@ App 本身是否需要联网取决于 App 功能。
 
 1. 在新设备上重新连接电脑；
 2. 重新建立信任；
-3. 用签名工具重新安装；
-4. 重新开启开发者模式。
+3. 用签名工具重新安装 Quareia；
+4. 重新开启开发者模式；
+5. 打开 Quareia，在应用菜单里「导入备份」，恢复旧设备导出的备份文件。
 
-本地应用数据能否迁移，取决于系统迁移和应用容器是否被完整转移，重要内容请提前导出。
+Quareia 的占卜历史只存在本机、没有云同步，系统迁移不保证完整搬过去，**换机前务必先在旧设备上「备份」并把备份文件传到新手机**。
 
 ---
 
@@ -811,7 +831,7 @@ App 本身是否需要联网取决于 App 功能。
 
 请尽量做到：
 
-1. 只从本项目 GitHub Releases 下载本项目 IPA；
+1. 只从本项目 GitHub Releases 下载 Quareia 的 IPA，可按第 1 节的方法核对 sha256；
 2. 自签工具只从各自官方网站下载；
 3. 不安装陌生人发来的“魔改 IPA”；
 4. 不购买来路不明的共享企业证书；
@@ -859,8 +879,8 @@ App 本身是否需要联网取决于 App 功能。
 7. 打开 LocalDevVPN 并连接；
 8. 打开 SideStore，用刚才同一个 Apple 账户登录；
 9. 在 **My Apps** 里先点 SideStore 自己的剩余天数，完成第一次刷新；
-10. Safari 打开本项目 GitHub Releases，下载 `.ipa`；
-11. 在 SideStore 中导入这个 IPA 并安装；
+10. Safari 打开本项目 GitHub Releases，下载 `Quareia-…….ipa`；
+11. 在 SideStore 中导入这个 IPA 并安装，主屏幕出现「Quareia」即成功；
 12. 以后保留 SideStore + LocalDevVPN。SideStore 会定期尝试在后台刷新 App；
 13. 偶尔看一下 My Apps 的剩余天数；如果只剩 1～2 天还没自动刷新，就连接 Wi-Fi、打开 LocalDevVPN，手动点一下刷新即可，通常仍然**不需要电脑**。
 
