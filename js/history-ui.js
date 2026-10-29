@@ -27,10 +27,32 @@
       : value[field];
   }
 
-  function currentSpread(record) {
+  function currentSpread(record, customResolver) {
+    if (!record || record.layoutMode === "freeform" || !record.spreadId) return null;
+    if (typeof customResolver === "function") {
+      var resolved = customResolver(record);
+      if (resolved && resolved.id === record.spreadId && Array.isArray(resolved.positions)) {
+        return resolved;
+      }
+    }
     if (typeof getSpreadById !== "function") return null;
     var spread = getSpreadById(record.deckType, record.spreadId);
-    return spread && spread.id === record.spreadId ? spread : null;
+    return spread && spread.id === record.spreadId && Array.isArray(spread.positions) ? spread : null;
+  }
+
+  function canRenderActualSpread(record, spread) {
+    return Boolean(
+      record &&
+      record.layoutMode !== "freeform" &&
+      spread &&
+      Array.isArray(spread.positions) &&
+      spread.positions.length > 0 &&
+      Array.isArray(record.cards) &&
+      record.cards.length > 0 &&
+      record.cards.every(function (card) {
+        return Number.isInteger(card.slotIndex) && Boolean(spread.positions[card.slotIndex]);
+      })
+    );
   }
 
   function currentDeck(record) {
@@ -40,14 +62,14 @@
     return [];
   }
 
-  function displaySpreadName(record) {
+  function displaySpreadName(record, customResolver) {
     if (record && record.layoutMode === "freeform") return t("history.freeBoard");
-    var spread = currentSpread(record);
+    var spread = currentSpread(record, customResolver);
     return localized(spread, "name") || record.spreadName;
   }
 
-  function displayPositionName(record, card) {
-    var spread = currentSpread(record);
+  function displayPositionName(record, card, customResolver) {
+    var spread = currentSpread(record, customResolver);
     var position = spread && spread.positions && spread.positions[card.slotIndex];
     return localized(position, "name") || card.positionName;
   }
@@ -148,6 +170,8 @@
     var store = options.store;
     var recordsApi = options.recordsApi || globalThis.DivinationHistoryRecords;
     var createSnapshot = options.createSnapshot;
+    var resolveSpread = options.resolveSpread;
+    var actualLayoutOpen = false;
     var available = false;
     var readingComplete = false;
     var storeReady = null;
@@ -227,6 +251,7 @@
     }
 
     function showListView() {
+      actualLayoutOpen = false;
       selectedRecordId = null;
       selectedRecord = null;
       if (elements.list) elements.list.hidden = false;
@@ -245,13 +270,13 @@
         item.className = "history-list-item";
         var openButton = button("", "history-record-open");
         openButton.setAttribute("aria-label", t("history.viewAria", {
-          spread: displaySpreadName(record),
+          spread: displaySpreadName(record, resolveSpread),
           time: formatTime(record.createdAt)
         }));
 
         var heading = document.createElement("span");
         heading.className = "history-record-title";
-        heading.textContent = displaySpreadName(record);
+        heading.textContent = displaySpreadName(record, resolveSpread);
         var meta = document.createElement("span");
         meta.className = "history-record-meta";
         meta.textContent = formatTime(record.createdAt) + " · " +
@@ -260,6 +285,7 @@
         openButton.appendChild(heading);
         openButton.appendChild(meta);
         openButton.addEventListener("click", function () {
+          actualLayoutOpen = false;
           showDetail(record);
         });
         item.appendChild(openButton);
@@ -271,7 +297,7 @@
       var item = document.createElement("li");
       item.className = "history-detail-card";
       var name = document.createElement("h4");
-      name.textContent = card.positionNumber + ". " + displayPositionName(record, card);
+      name.textContent = card.positionNumber + ". " + displayPositionName(record, card, resolveSpread);
       var cardName = document.createElement("p");
       var orientation = card.orientation === "reversed"
         ? t("history.orientation.reversed")
@@ -375,6 +401,176 @@
       return element;
     }
 
+    function getCardInterpretation(record, card, sourceCard) {
+      if (!sourceCard) return { keywords: [], meaning: "" };
+      var showReversed = record.orientationMode === "mixed" && card.orientation === "reversed";
+      return {
+        keywords: localized(sourceCard, showReversed ? "reversedKeywords" : "uprightKeywords") || [],
+        meaning: localized(sourceCard, showReversed ? "reversedMeaning" : "uprightMeaning") || ""
+      };
+    }
+
+    function renderActualSpreadCard(record, card, spread, boardStacking) {
+      var position = spread.positions[card.slotIndex];
+      var posNumber = position && position.number ? position.number : card.positionNumber;
+      var posName = displayPositionName(record, card, resolveSpread);
+      var cardName = displayCardName(record, card);
+      var orientationLabel = card.orientation === "reversed"
+        ? t("history.orientation.reversed")
+        : t("history.orientation.upright");
+      var cardStacking = Boolean(boardStacking && card.layer);
+      var sourceCard = currentDeck(record).filter(function (item) {
+        return item.id === card.cardId;
+      })[0] || null;
+      var interpretation = getCardInterpretation(record, card, sourceCard);
+
+      var cardEl = document.createElement("div");
+      cardEl.className = "spread-card revealed history-spread-card" +
+        (cardStacking ? " overview-stack-card stack-layer-" + card.layer : "");
+      cardEl.setAttribute("role", "listitem");
+      cardEl.setAttribute("data-slot-index", String(card.slotIndex));
+      if (cardStacking) cardEl.setAttribute("data-layer", card.layer);
+      cardEl.style.gridColumn = position.column + " / span " + (position.columnSpan || 1);
+      cardEl.style.gridRow = position.row + " / span " + (position.rowSpan || 1);
+      cardEl.style.setProperty(
+        "--position-offset-x",
+        (cardStacking ? (card.layer === "major" ? -8 : 8) : (position.offsetX || 0)) + "%"
+      );
+      cardEl.style.setProperty(
+        "--position-offset-y",
+        (cardStacking ? (card.layer === "major" ? -10 : 12) : (position.offsetY || 0)) + "%"
+      );
+      cardEl.style.setProperty("--position-rotation", (position.rotation || 0) + "deg");
+      cardEl.style.zIndex = String(posNumber + (cardStacking && card.layer === "minor" ? 100 : 0));
+
+      var flipButton = document.createElement("button");
+      flipButton.className = "spread-card-flip";
+      flipButton.type = "button";
+
+      var inner = document.createElement("div");
+      inner.className = "spread-card-inner";
+
+      var back = document.createElement("div");
+      back.className = "spread-card-face spread-card-back" +
+        (record.deckType === "mystagogus" ? " spread-card-back-m" : "") +
+        (record.deckType === "lxxxi" ? " spread-card-back-lxxxi" : "");
+      var meaningPanel = document.createElement("div");
+      meaningPanel.className = "spread-card-meaning";
+      meaningPanel.appendChild(
+        textElement("span", "spread-card-meaning-kicker", posNumber + ". " + posName + " · " + t("app.meaningTitle"))
+      );
+      meaningPanel.appendChild(textElement("strong", "spread-card-meaning-name", cardName));
+      if (interpretation.keywords.length) {
+        meaningPanel.appendChild(
+          textElement("span", "spread-card-meaning-keywords", interpretation.keywords.join(" · "))
+        );
+      }
+      meaningPanel.appendChild(textElement("span", "spread-card-meaning-text", interpretation.meaning));
+      back.appendChild(meaningPanel);
+
+      var front = document.createElement("div");
+      front.className = "spread-card-face spread-card-front" +
+        (card.orientation === "reversed" ? " reversed" : "");
+      if (sourceCard && sourceCard.image) {
+        var faceImg = document.createElement("img");
+        faceImg.className = "card-image" +
+          (card.orientation === "reversed" ? " reversed" : "") +
+          (record.deckType === "mystagogus" ? " card-image-m" : "") +
+          (record.deckType === "lxxxi" ? " card-image-lxxxi" : "");
+        faceImg.src = sourceCard.image;
+        faceImg.alt = cardName;
+        faceImg.loading = "lazy";
+        faceImg.decoding = "async";
+        front.appendChild(faceImg);
+      }
+      var posBadge = textElement("span", "history-spread-pos-badge", String(posNumber));
+      posBadge.setAttribute("title", posNumber + ". " + posName);
+      front.appendChild(posBadge);
+
+      var caption = document.createElement("div");
+      caption.className = "spread-card-caption";
+      if (cardStacking) {
+        caption.appendChild(
+          textElement(
+            "span",
+            "stack-layer-caption",
+            card.layer === "major" ? t("app.layerMajorCaption") : t("app.layerMinorCaption")
+          )
+        );
+      }
+      caption.appendChild(textElement("span", "name", cardName));
+      caption.appendChild(textElement("span", "ori " + card.orientation, orientationLabel));
+      front.appendChild(caption);
+
+      inner.appendChild(back);
+      inner.appendChild(front);
+      flipButton.appendChild(inner);
+      cardEl.appendChild(flipButton);
+
+      function syncFlipAria() {
+        var meaningVisible = cardEl.classList.contains("meaning-visible");
+        var layerLabel = cardStacking
+          ? " · " + (card.layer === "major" ? t("app.layerMajorBase") : t("app.layerMinorTop"))
+          : "";
+        flipButton.setAttribute(
+          "aria-label",
+          t(meaningVisible ? "app.meaningAria" : "app.revealedAria", {
+            number: posNumber,
+            position: posName,
+            layer: layerLabel,
+            card: cardName,
+            orientation: orientationLabel
+          })
+        );
+        flipButton.setAttribute("aria-pressed", String(meaningVisible));
+      }
+
+      flipButton.addEventListener("click", function () {
+        cardEl.classList.toggle("meaning-visible");
+        syncFlipAria();
+      });
+      syncFlipAria();
+      return cardEl;
+    }
+
+    function renderActualSpreadBoard(record, spread) {
+      var section = document.createElement("section");
+      section.className = "history-actual-layout";
+      section.setAttribute("aria-label", t("history.actualLayoutAria"));
+
+      var hint = textElement("p", "history-actual-layout-hint", t("history.actualLayoutHint"));
+      section.appendChild(hint);
+
+      var boardStacking = record.overviewMethod === "stacked" || record.cards.some(function (card) {
+        return Boolean(card.layer);
+      });
+      var boardScroll = document.createElement("div");
+      boardScroll.className = "spread-board-scroll history-spread-board-scroll" +
+        (spread.isCustom ? " custom-spread-board" : "");
+
+      var grid = document.createElement("div");
+      grid.className = "spread-grid history-spread-grid" +
+        (boardStacking ? " overview-stacking" : "") +
+        (spread.isCustom ? " custom-spread-layout" : "");
+      grid.setAttribute("role", "list");
+      grid.style.setProperty("--spread-columns", String(spread.columns));
+      grid.style.setProperty("--spread-rows", String(spread.rows));
+      grid.style.setProperty("--spread-min-width", Math.max(280, spread.columns * 76) + "px");
+
+      var orderedCards = record.cards.slice().sort(function (a, b) {
+        if (a.slotIndex !== b.slotIndex) return a.slotIndex - b.slotIndex;
+        if (a.layer === b.layer) return 0;
+        return a.layer === "major" ? -1 : 1;
+      });
+      orderedCards.forEach(function (card) {
+        grid.appendChild(renderActualSpreadCard(record, card, spread, boardStacking));
+      });
+
+      boardScroll.appendChild(grid);
+      section.appendChild(boardScroll);
+      return section;
+    }
+
     function showDetail(record) {
       selectedRecordId = record.id;
       selectedRecord = record;
@@ -385,7 +581,7 @@
       elements.deleteButton.hidden = false;
       elements.detailTitle.textContent = record.layoutMode === "freeform"
         ? t("history.freeBoardDetail")
-        : displaySpreadName(record);
+        : displaySpreadName(record, resolveSpread);
       elements.detailBody.replaceChildren();
 
       var definitions = document.createElement("dl");
@@ -409,14 +605,60 @@
         return;
       }
 
+      var spread = currentSpread(record, resolveSpread);
+      var positionsHeader = document.createElement("div");
+      positionsHeader.className = "history-positions-head";
       var cardsHeading = document.createElement("h3");
       cardsHeading.textContent = t("history.completePositions");
+      positionsHeader.appendChild(cardsHeading);
+
+      var actualLayoutSection = null;
+      if (canRenderActualSpread(record, spread)) {
+        var actualLayoutBtn = button(
+          t(actualLayoutOpen ? "history.hideActualLayout" : "history.actualLayout"),
+          "btn btn-secondary btn-mini history-actual-layout-btn" + (actualLayoutOpen ? " is-active" : "")
+        );
+        actualLayoutBtn.setAttribute("aria-expanded", String(actualLayoutOpen));
+        actualLayoutSection = renderActualSpreadBoard(record, spread);
+        actualLayoutSection.hidden = !actualLayoutOpen;
+        actualLayoutBtn.addEventListener("click", function () {
+          actualLayoutOpen = !actualLayoutOpen;
+          actualLayoutSection.hidden = !actualLayoutOpen;
+          actualLayoutBtn.classList.toggle("is-active", actualLayoutOpen);
+          actualLayoutBtn.setAttribute("aria-expanded", String(actualLayoutOpen));
+          actualLayoutBtn.textContent = t(
+            actualLayoutOpen ? "history.hideActualLayout" : "history.actualLayout"
+          );
+          var boardScroll = actualLayoutSection.querySelector(".spread-board-scroll");
+          if (actualLayoutOpen && boardScroll && typeof requestAnimationFrame === "function") {
+            requestAnimationFrame(function () {
+              boardScroll.scrollLeft = Math.max(
+                0,
+                (boardScroll.scrollWidth - boardScroll.clientWidth) / 2
+              );
+            });
+          }
+        });
+        positionsHeader.appendChild(actualLayoutBtn);
+      }
       var cards = document.createElement("ol");
       cards.className = "history-detail-cards";
       record.cards.forEach(function (card) {
         cards.appendChild(renderCard(record, card));
       });
-      elements.detailBody.appendChild(cardsHeading);
+      elements.detailBody.appendChild(positionsHeader);
+      if (actualLayoutSection) {
+        elements.detailBody.appendChild(actualLayoutSection);
+        var activeScroll = actualLayoutSection.querySelector(".spread-board-scroll");
+        if (actualLayoutOpen && activeScroll && typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(function () {
+            activeScroll.scrollLeft = Math.max(
+              0,
+              (activeScroll.scrollWidth - activeScroll.clientWidth) / 2
+            );
+          });
+        }
+      }
       elements.detailBody.appendChild(cards);
       elements.back.focus();
     }
@@ -662,6 +904,7 @@
   return {
     init: init,
     createSerialTaskQueue: createSerialTaskQueue,
-    calculateFreeformPreviewLayout: calculateFreeformPreviewLayout
+    calculateFreeformPreviewLayout: calculateFreeformPreviewLayout,
+    canRenderActualSpread: canRenderActualSpread
   };
 });

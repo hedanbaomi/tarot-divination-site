@@ -1620,7 +1620,14 @@
           recordsApi: globalThis.DivinationHistoryRecords
         }),
         recordsApi: globalThis.DivinationHistoryRecords,
-        createSnapshot: createCurrentHistoryRecord
+        createSnapshot: createCurrentHistoryRecord,
+        resolveSpread: function (record) {
+          if (!record || !record.spreadId) return null;
+          var custom = customSpreadsUi && customSpreadsUi.getById(record.spreadId);
+          if (custom && customSpreadSupportsDeck(custom, record.deckType)) return custom;
+          var preset = getSpreadById(record.deckType, record.spreadId);
+          return preset && preset.id === record.spreadId ? preset : null;
+        }
       });
     }
     if (globalThis.DivinationFreeBoardUi) {
