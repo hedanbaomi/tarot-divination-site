@@ -50,7 +50,7 @@ test("website uses the branded dialog for spread and history confirmations", fun
 test("root page pins the web-announcement resource cache versions", function () {
   var html = read(surface.html);
   assert.match(html, /src="js\/i18n\.js\?v=20260820-custom-spread-window-final"/);
-  assert.match(html, /href="css\/styles\.css\?v=20260820-custom-spread-window-final"/);
+  assert.match(html, /href="css\/styles\.css\?v=20261103-grove-merged"/);
   assert.match(html, /src="js\/announcements\.js\?v=1"/);
 });
 

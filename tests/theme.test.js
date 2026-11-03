@@ -25,7 +25,7 @@ function i18nSourceBlock(source, locale) {
 test("theme boot script applies a closed allow-list before styles load", function () {
   var bootStart = html.indexOf("<script>");
   var bootEnd = html.indexOf("</script>");
-  var cssLink = html.indexOf('href="css/styles.css?v=20260820-custom-spread-window-final"');
+  var cssLink = html.indexOf('href="css/styles.css?v=20261103-grove-merged"');
   assert.ok(bootStart > 0 && bootEnd > bootStart);
   assert.ok(cssLink > bootEnd, "FOUC boot must run before styles.css");
   var boot = html.slice(bootStart, bootEnd);
@@ -57,7 +57,7 @@ test("settings expose four theme swatches with bilingual names", function () {
     });
   });
   assert.match(html, /role="radiogroup"/);
-  assert.match(html, /src="js\/theme\.js\?v=20260813-themes"/);
+  assert.match(html, /src="js\/theme\.js\?v=20261103-grove-merged"/);
 });
 
 test("theme helper persists a valid id and rejects unknown values", function () {
@@ -210,4 +210,19 @@ test("ember moon is a copper blood moon using the shared CSS crater texture", fu
   assert.match(css, /@media\s*\(max-width:\s*480px\)[\s\S]*?\.sky-moon\s*\{[^}]*var\(--moon-glow-near\)/);
   assert.doesNotMatch(css, /html\[data-theme="ember"\] \.sky-moon\s*\{/);
   assert.match(css, /\.sky-moon\s*\{[^}]*width:\s*82px/);
+});
+
+test("grove merges lifted woodland background, sage panels, gold-rimmed keys, and emerald tarot backs", function () {
+  var groveStart = css.indexOf('html[data-theme="grove"]');
+  var groveRuleEnd = css.indexOf("}", groveStart);
+  var groveTokens = css.slice(groveStart, groveRuleEnd + 1);
+  assert.equal(theme.THEME_COLORS.grove, "#31483c");
+  assert.match(groveTokens, /--bg-primary:\s*#31483c/);
+  assert.match(groveTokens, /--bg-page:[\s\S]*?#587058 0%,\s*#405b49 42%,\s*#31483c 78%,\s*#2a4035 100%/);
+  assert.match(groveTokens, /--panel-bg:\s*linear-gradient\(180deg,\s*rgba\(73,\s*91,\s*74,\s*0\.94\)/);
+  assert.match(groveTokens, /--tarot-back-from:\s*#2d5c4a/);
+  assert.match(groveTokens, /--grove-gold-rim:\s*#e2c270/);
+  assert.match(css, /html\[data-theme="grove"\] \.btn-secondary,[\s\S]*?border:\s*1\.5px solid var\(--grove-gold-rim\)/);
+  assert.match(css, /html\[data-theme="grove"\] \.deck-card:not\(\.deck-card-m\):not\(\.deck-card-lxxxi\)/);
+  assert.doesNotMatch(css, /html\[data-theme="grove"\][^{]*(?<!:not\()\.(?:deck-card-m|deck-card-lxxxi|spread-card-back-m|spread-card-back-lxxxi|card-image-m|card-image-lxxxi)\b/);
 });

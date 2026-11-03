@@ -122,7 +122,7 @@ test("Android keeps theme switching in the hamburger menu, not reading setup", f
   assert.match(menu, /data-theme-id="parchment"/);
   assert.match(menu, /data-theme-id="ember"/);
   assert.match(menu, /data-theme-id="grove"/);
-  assert.match(html, /src="js\/theme\.js\?v=20260813-themes"/);
+  assert.match(html, /src="js\/theme\.js\?v=20261103-grove-merged"/);
   assert.match(html, /quareia-divination-theme/);
   assert.match(i18n, /"settings\.theme": "界面主题"/);
   assert.match(i18n, /"theme\.parchment": "羊皮纸晨光"/);
@@ -136,7 +136,7 @@ test("Android parchment reading and history panels use theme tokens, not night n
   var css = read("app/src/main/assets/www/css/styles.css");
   var freeBoard = read("app/src/main/assets/www/css/free-board.css");
   var html = read("app/src/main/assets/www/index.html");
-  assert.match(html, /href="css\/styles\.css\?v=20260820-custom-spread-window-final"/);
+  assert.match(html, /href="css\/styles\.css\?v=20261103-grove-merged"/);
   assert.match(css, /\.position-guide\s*\{[^}]*background:\s*var\(--panel-bg\)/);
   assert.match(css, /\.result-card\s*\{[^}]*background:\s*var\(--panel-bg\)/);
   assert.match(css, /\.history-list-item\s*\{[^}]*background:\s*var\(--bg-card\)/);

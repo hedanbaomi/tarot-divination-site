@@ -8,7 +8,7 @@
     celestial: "#060919",
     parchment: "#efe4cc",
     ember: "#140a08",
-    grove: "#07140f"
+    grove: "#31483c"
   };
   var initialized = false;
   var theme = readStoredTheme();

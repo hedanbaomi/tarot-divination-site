@@ -98,8 +98,8 @@ html[data-theme="celestial"] {
   --swatch-parchment-b: #7a5a28;
   --swatch-ember-a: #2a1610;
   --swatch-ember-b: #e08a48;
-  --swatch-grove-a: #0e241c;
-  --swatch-grove-b: #c6b06a;
+  --swatch-grove-a: #587058;
+  --swatch-grove-b: #e2c270;
 }
 
 html[data-theme="parchment"] {
@@ -256,77 +256,250 @@ html[data-theme="ember"] {
 
 html[data-theme="grove"] {
   color-scheme: dark;
-  --bg-primary: #07140f;
-  --bg-secondary: #0e241c;
-  --bg-card: #163028;
-  --bg-card-back: #0a1c16;
-  --bg-card-rgb: 22, 48, 40;
-  --accent: #c6b06a;
-  --accent-rgb: 198, 176, 106;
-  --accent-light: #e4d6a0;
-  --accent-deep: #8a7840;
-  --accent-soft: rgba(198, 176, 106, 0.14);
-  --accent-border: rgba(198, 176, 106, 0.38);
-  --text-primary: #e8f0e4;
-  --text-secondary: #8fbfa8;
-  --text-muted: #8fbfa8;
-  --border: #2a4a3c;
+  /* 主题背景与面板承接根目录柔和林雾鼠尾草色调，并对背景色彩明度做适度提亮 */
+  --bg-primary: #31483c;
+  --bg-secondary: #425b4b;
+  --bg-card: #43584a;
+  --bg-card-back: #18352a;
+  --neutral-dark: #304638;
+  --neutral-contain: #293d33;
+  --bg-card-rgb: 67, 88, 74;
+  --accent: #dcc384;
+  --accent-rgb: 220, 195, 132;
+  --accent-light: #f2e3b7;
+  --accent-deep: #bba264;
+  --accent-soft: rgba(220, 195, 132, 0.14);
+  --accent-border: #e2c270;
+  --text: #f2f3e7;
+  --text-primary: #f2f3e7;
+  --text-secondary: #ccd7c2;
+  --text-muted: #ccd7c2;
+  --border: #70816a;
   --upright-color: #8fd6ae;
   --reversed-color: #e9929a;
-  --shadow: 0 10px 28px rgba(2, 12, 8, 0.55);
-  --glow-gold: 0 0 18px rgba(198, 176, 106, 0.22);
+  --shadow: 0 10px 28px rgba(12, 22, 16, 0.26);
+  --glow-gold: 0 0 18px rgba(220, 195, 132, 0.24);
   --bg-page:
-    radial-gradient(130% 100% at 50% -10%, #16382c 0%, #0c221a 42%, #07140f 78%, #040c08 100%),
-    #07140f;
-  --panel-bg: linear-gradient(180deg, rgba(18, 44, 34, 0.76), rgba(8, 22, 16, 0.76));
-  --panel-bg-alt: linear-gradient(180deg, rgba(22, 52, 40, 0.78), rgba(8, 22, 16, 0.76));
-  --panel-border: rgba(198, 176, 106, 0.22);
-  --select-trigger-bg: linear-gradient(135deg, rgba(22, 48, 40, 0.96), rgba(10, 28, 22, 0.98));
+    radial-gradient(130% 100% at 50% -10%, #587058 0%, #405b49 42%, #31483c 78%, #2a4035 100%),
+    #31483c;
+  --panel-bg: linear-gradient(180deg, rgba(73, 91, 74, 0.94), rgba(52, 72, 58, 0.94));
+  --panel-bg-alt: linear-gradient(180deg, rgba(83, 99, 78, 0.94), rgba(58, 78, 61, 0.94));
+  --panel-border: rgba(220, 195, 132, 0.42);
+  --select-trigger-bg: linear-gradient(135deg, #2a4736, #203c2e);
   --control-inset: inset 0 1px 0 rgba(210, 230, 200, 0.08);
-  --choice-option-bg: rgba(14, 36, 28, 0.82);
-  --choice-option-border: rgba(198, 176, 106, 0.22);
-  --choice-option-selected-bg: linear-gradient(135deg, rgba(80, 110, 70, 0.45), rgba(10, 28, 22, 0.92));
+  --choice-option-bg: #3d5342;
+  --choice-option-border: rgba(226, 194, 112, 0.72);
+  --choice-option-selected-bg: linear-gradient(135deg, #526544, #304c36);
   --choice-option-selected-color: #f4ecd4;
-  --btn-accent-from: #e4d6a0;
-  --btn-accent-mid: #c6b06a;
-  --btn-accent-to: #8a7840;
-  --btn-accent-text: #1c1808;
-  --btn-secondary-bg: rgba(22, 48, 40, 0.55);
-  --title-from: #e8dcac;
-  --title-mid: #c6b06a;
-  --title-to: #8a7840;
-  --title-glow: 0 0 22px rgba(198, 176, 106, 0.32);
-  --dialog-bg: linear-gradient(180deg, #163028 0%, #0a1c16 100%);
+  /* 按键金边与墨玉立体高光令牌 */
+  --grove-key-bg: linear-gradient(165deg, #234f3f 0%, #173a2d 56%, #122e24 100%);
+  --grove-key-bg-hover: linear-gradient(165deg, #2a5d4a 0%, #1d4737 56%, #16372b 100%);
+  --grove-gold-rim: #e2c270;
+  --grove-gold-rim-muted: rgba(226, 194, 112, 0.78);
+  --grove-gold-rim-bright: #f7e4a6;
+  --grove-key-shadow:
+    inset 0 1px 0 rgba(255, 244, 206, 0.30),
+    inset 0 -1px 0 rgba(8, 22, 16, 0.44),
+    0 3px 10px rgba(14, 19, 15, 0.26);
+  --btn-accent-from: #3f6045;
+  --btn-accent-mid: #2d4c37;
+  --btn-accent-to: #203d2c;
+  --btn-accent-text: #fff0c7;
+  --btn-secondary-bg: #234131;
+  --title-from: #fff0c7;
+  --title-mid: #dcc384;
+  --title-to: #bba264;
+  --title-glow: 0 0 22px rgba(220, 195, 132, 0.32);
+  --dialog-bg: linear-gradient(180deg, #4b604d 0%, #344b3c 100%);
   --dialog-card-bg:
-    radial-gradient(circle at 50% -15%, rgba(198, 176, 106, 0.18), transparent 45%),
-    linear-gradient(165deg, rgba(18, 44, 34, 0.98), rgba(6, 18, 14, 0.99));
+    radial-gradient(circle at 50% -15%, rgba(220, 195, 132, 0.18), transparent 45%),
+    linear-gradient(165deg, #4b604d, #344b3c);
   --overlay-scrim:
-    radial-gradient(circle at 50% 12%, rgba(40, 100, 80, 0.22), transparent 38%),
-    rgba(2, 10, 8, 0.84);
-  --tarot-back-from: #245044;
-  --tarot-back-mid: #0e241c;
-  --switch-from: #3a8a6a;
-  --switch-to: #246850;
-  --language-border: rgba(143, 214, 174, 0.42);
-  --language-color: #b8e8d0;
+    radial-gradient(circle at 50% 12%, rgba(140, 162, 114, 0.20), transparent 38%),
+    rgba(22, 34, 26, 0.58);
+  /* 塔罗纯 CSS 牌背采用墨玉双金线版本 */
+  --tarot-back-from: #2d5c4a;
+  --tarot-back-mid: #1c3d31;
+  --switch-from: #4d7350;
+  --switch-to: #31563a;
+  --language-border: #e2c270;
+  --language-color: #f6e7bb;
   --moon-hi: #f0ead0;
   --moon-mid: #d8c888;
   --moon-lo: #a89858;
-  --moon-edge: #8a7840;
-  --moon-glow-near: rgba(198, 176, 106, 0.32);
-  --moon-glow-mid: rgba(80, 140, 110, 0.16);
-  --moon-glow-far: rgba(40, 90, 70, 0.12);
-  --moon-opacity: 0.92;
+  --moon-edge: #bba264;
+  --moon-glow-near: rgba(220, 195, 132, 0.34);
+  --moon-glow-mid: rgba(96, 156, 122, 0.18);
+  --moon-glow-far: rgba(54, 108, 82, 0.12);
+  --moon-opacity: 0.94;
   --moon-maria: 140, 148, 96;
   --moon-maria-hi: 168, 172, 110;
   --moon-shade: rgba(18, 32, 22, 0.42);
   --moon-lit: rgba(236, 234, 206, 0.26);
-  --nebula-1: rgba(40, 110, 80, 0.22);
-  --nebula-2: rgba(30, 80, 70, 0.18);
-  --nebula-3: rgba(20, 70, 50, 0.16);
-  --nebula-4: rgba(80, 140, 100, 0.12);
+  --nebula-1: rgba(168, 184, 118, 0.20);
+  --nebula-2: rgba(136, 164, 128, 0.17);
+  --nebula-3: rgba(174, 164, 110, 0.14);
+  --nebula-4: rgba(182, 196, 138, 0.13);
   --sky-opacity: 1;
   --meteor-peak: 1;
+}
+
+/* Grove: 根目录设置面板质感 × 墨玉真金镶边按键与牌背 */
+html[data-theme="grove"] .btn-secondary,
+html[data-theme="grove"] .btn-mini,
+html[data-theme="grove"] .header-actions .language-toggle,
+html[data-theme="grove"] .announcement-action,
+html[data-theme="grove"] .history-icon-btn,
+html[data-theme="grove"] .custom-spread-window-btn,
+html[data-theme="grove"] .custom-spread-preview-position,
+html[data-theme="grove"] .free-board-pile-card,
+html[data-theme="grove"] .menu-toggle,
+html[data-theme="grove"] .menu-close,
+html[data-theme="grove"] .menu-action {
+  background: var(--grove-key-bg);
+  border: 1.5px solid var(--grove-gold-rim);
+  color: var(--accent-light);
+  box-shadow: var(--grove-key-shadow);
+}
+
+html[data-theme="grove"] .menu-action {
+  color: var(--text-primary);
+}
+
+html[data-theme="grove"] .settings-toggle {
+  border: 1px solid rgba(226, 194, 112, 0.62);
+  border-radius: var(--radius);
+}
+
+html[data-theme="grove"] .theme-swatch {
+  border: 1.5px solid rgba(226, 194, 112, 0.58);
+}
+
+html[data-theme="grove"] .themed-select-trigger,
+html[data-theme="grove"] .choice-option,
+html[data-theme="grove"] .custom-spread-tab {
+  border: 1.5px solid var(--grove-gold-rim-muted);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 244, 206, 0.16),
+    0 2px 8px rgba(12, 20, 15, 0.20);
+}
+
+html[data-theme="grove"] .setting-group select,
+html[data-theme="grove"] .history-filter select,
+html[data-theme="grove"] .custom-spread-field select,
+html[data-theme="grove"] .custom-spread-position-field select {
+  border: 1.5px solid var(--grove-gold-rim-muted);
+}
+
+html[data-theme="grove"] .theme-swatch.is-active,
+html[data-theme="grove"] .choice-option.selected,
+html[data-theme="grove"] .custom-spread-tab.is-active,
+html[data-theme="grove"] .custom-spread-window-btn[aria-pressed="true"],
+html[data-theme="grove"] .history-actual-layout-btn.is-active {
+  border: 1.5px solid var(--grove-gold-rim-bright);
+  box-shadow:
+    0 0 0 2px rgba(247, 228, 166, 0.24),
+    inset 0 1px 0 rgba(255, 248, 220, 0.30);
+}
+
+html[data-theme="grove"] .btn-accent {
+  border: 1.5px solid var(--grove-gold-rim-bright);
+  box-shadow:
+    0 4px 14px rgba(12, 22, 16, 0.28),
+    inset 0 1px 0 rgba(255, 246, 212, 0.34),
+    inset 0 -1px 0 rgba(8, 22, 16, 0.38);
+}
+
+html[data-theme="grove"] .btn-accent:disabled {
+  opacity: 0.64;
+}
+
+html[data-theme="grove"] .btn-switch-arcana {
+  border: 1.5px solid var(--grove-gold-rim);
+  box-shadow:
+    0 4px 14px rgba(18, 42, 33, 0.34),
+    inset 0 1px 0 rgba(255, 244, 206, 0.28);
+}
+
+html[data-theme="grove"] .history-danger-btn,
+html[data-theme="grove"] .confirm-danger-btn {
+  border: 1.5px solid #e6c17a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 204, 0.24),
+    0 3px 10px rgba(18, 12, 12, 0.26);
+}
+
+html[data-theme="grove"] .spread-card .remove-btn {
+  border: 1.5px solid #f2d78e;
+}
+
+@media (hover: hover) {
+  html[data-theme="grove"] .btn-secondary:not(:disabled):hover,
+  html[data-theme="grove"] .btn-mini:not(:disabled):hover,
+  html[data-theme="grove"] .header-actions .language-toggle:not(:disabled):hover,
+  html[data-theme="grove"] .announcement-action:hover,
+  html[data-theme="grove"] .history-icon-btn:hover,
+  html[data-theme="grove"] .custom-spread-window-btn:hover,
+  html[data-theme="grove"] .free-board-pile-card:hover,
+  html[data-theme="grove"] .menu-toggle:hover,
+  html[data-theme="grove"] .menu-close:hover,
+  html[data-theme="grove"] .menu-action:hover {
+    background: var(--grove-key-bg-hover);
+    border-color: var(--grove-gold-rim-bright);
+    box-shadow:
+      0 0 14px rgba(226, 194, 112, 0.30),
+      inset 0 1px 0 rgba(255, 248, 220, 0.40);
+  }
+
+  html[data-theme="grove"] .btn-accent:not(:disabled):hover,
+  html[data-theme="grove"] .themed-select-trigger:not(:disabled):hover,
+  html[data-theme="grove"] .theme-swatch:hover,
+  html[data-theme="grove"] .choice-option:not(:disabled):hover,
+  html[data-theme="grove"] .custom-spread-tab:hover {
+    border-color: var(--grove-gold-rim-bright);
+    box-shadow:
+      0 0 12px rgba(226, 194, 112, 0.24),
+      inset 0 1px 0 rgba(255, 248, 220, 0.28);
+  }
+}
+
+/* 塔罗纯 CSS 牌背（严格排除 M 牌与 LXXXI 真实牌背）采用墨玉底 + 双层真金线框 */
+html[data-theme="grove"] .deck-card:not(.deck-card-m):not(.deck-card-lxxxi),
+html[data-theme="grove"] .spread-card-back:not(.spread-card-back-m):not(.spread-card-back-lxxxi) {
+  border-color: rgba(226, 194, 112, 0.68);
+  box-shadow:
+    0 4px 12px rgba(12, 18, 14, 0.42),
+    inset 0 0 0 3px rgba(17, 40, 31, 0.86),
+    inset 0 0 0 4.5px rgba(226, 194, 112, 0.34);
+}
+
+html[data-theme="grove"] .spread-card-back:not(.spread-card-back-m):not(.spread-card-back-lxxxi) .pos-num,
+html[data-theme="grove"] .stack-layer-badge,
+html[data-theme="grove"] .history-spread-pos-badge {
+  background: rgba(22, 48, 38, 0.84);
+  border-color: rgba(226, 194, 112, 0.68);
+}
+
+html[data-theme="grove"] .draw-rule-badge {
+  background: rgba(25, 52, 41, 0.82);
+  border-color: rgba(226, 194, 112, 0.50);
+  color: #f2e5be;
+}
+
+html[data-theme="grove"] .spread-card-meaning {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(220, 195, 132, 0.20), transparent 46%),
+    linear-gradient(165deg, #3c5243, #26392e 76%);
+}
+
+html[data-theme="grove"] .spread-card-meaning-keywords {
+  color: #f2e3b7;
+}
+
+html[data-theme="grove"] .announcement-dialog::backdrop,
+html[data-theme="grove"] .history-dialog::backdrop,
+html[data-theme="grove"] .custom-spread-dialog::backdrop {
+  background: var(--overlay-scrim);
 }
 
 html { -webkit-text-size-adjust: 100%; }
