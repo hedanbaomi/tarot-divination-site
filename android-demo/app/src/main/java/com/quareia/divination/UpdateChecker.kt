@@ -34,6 +34,8 @@ internal data class ReleaseInfo(
     val contentType: String,
     /** Normalized lowercase digest, including the `sha256:` prefix. */
     val sha256Digest: String,
+    /** Plain-text release changelog extracted safely from GitHub Release `body`. */
+    val releaseNotes: String = "",
 )
 
 /** Result of an update check: a newer release, no newer release, or failure. */
@@ -272,6 +274,8 @@ internal object ReleaseJsonParser {
             throw ReleaseDataException("APK download URL is not a trusted HTTPS URL")
         }
 
+        val rawNotes = if (json.isNull("body")) "" else json.optString("body", "")
+
         return ReleaseInfo(
             tagName = tagName,
             assetName = name,
@@ -279,7 +283,74 @@ internal object ReleaseJsonParser {
             sizeBytes = size,
             contentType = asset.optString("content_type"),
             sha256Digest = digest,
+            releaseNotes = ReleaseNotesFormatter.toPlainText(rawNotes),
         )
+    }
+}
+
+/**
+ * Converts GitHub Release markdown notes into clean, bounded plain text so
+ * native dialogs never interpret HTML or remote links.
+ */
+internal object ReleaseNotesFormatter {
+
+    private const val MAX_NOTES_CHARS = 4_000
+    private val GENERIC_HEADER_REGEX = Regex(
+        "^#{1,6}\\s*(?:更新内容|更新日志|版本更新|release\\s*notes?|what'?s\\s*new|changelog)\\s*:?\\s*$",
+        RegexOption.IGNORE_CASE,
+    )
+    private val HEADING_REGEX = Regex("^#{1,6}\\s+(.+?)\\s*$")
+    private val NESTED_BULLET_REGEX = Regex("^\\s{2,}[-*+]\\s+(.+?)\\s*$")
+    private val TOP_BULLET_REGEX = Regex("^\\s?[-*+]\\s+(.+?)\\s*$")
+    private val MARKDOWN_LINK_REGEX = Regex("\\[([^\\]]+)]\\([^)]+\\)")
+    private val BOLD_ITALIC_REGEX = Regex("(\\*\\*|__)(.+?)\\1")
+    private val INLINE_CODE_REGEX = Regex("`([^`]+)`")
+    private val MULTI_BLANK_LINES = Regex("\\n{3,}")
+
+    fun toPlainText(raw: String?): String {
+        if (raw.isNullOrBlank()) return ""
+        val bounded = raw.take(MAX_NOTES_CHARS)
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+
+        val cleanedLines = mutableListOf<String>()
+        for (line in bounded.split('\n')) {
+            if (cleanedLines.isEmpty() && line.isBlank()) continue
+            if (cleanedLines.isEmpty() && GENERIC_HEADER_REGEX.matches(line.trim())) continue
+
+            val transformed = when {
+                NESTED_BULLET_REGEX.matches(line) ->
+                    "  ◦ " + stripInlineMarkdown(NESTED_BULLET_REGEX.find(line)!!.groupValues[1])
+                TOP_BULLET_REGEX.matches(line) ->
+                    "• " + stripInlineMarkdown(TOP_BULLET_REGEX.find(line)!!.groupValues[1])
+                HEADING_REGEX.matches(line.trim()) ->
+                    stripInlineMarkdown(HEADING_REGEX.find(line.trim())!!.groupValues[1])
+                else -> stripInlineMarkdown(line.trimEnd())
+            }
+            cleanedLines += transformed
+        }
+
+        return cleanedLines.joinToString("\n")
+            .replace(MULTI_BLANK_LINES, "\n\n")
+            .trim()
+    }
+
+    private fun stripInlineMarkdown(text: String): String = text
+        .replace(MARKDOWN_LINK_REGEX, "$1")
+        .replace(BOLD_ITALIC_REGEX, "$2")
+        .replace(INLINE_CODE_REGEX, "$1")
+}
+
+/** Human-readable byte formatting for APK size badges and download progress. */
+internal object ByteFormatter {
+
+    fun format(bytes: Long): String {
+        val safe = bytes.coerceAtLeast(0L)
+        return when {
+            safe < 1024L -> "$safe B"
+            safe < 1024L * 1024L -> String.format(java.util.Locale.US, "%.1f KB", safe / 1024.0)
+            else -> String.format(java.util.Locale.US, "%.1f MB", safe / (1024.0 * 1024.0))
+        }
     }
 }
 

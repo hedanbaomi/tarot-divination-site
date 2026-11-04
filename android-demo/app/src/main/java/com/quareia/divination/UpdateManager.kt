@@ -21,28 +21,25 @@ import java.util.WeakHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Drives the in-app update flow end to end: check GitHub Releases, confirm
- * with the user, download the APK into app-private storage, verify it
- * completely (size, SHA-256, package parse, package name, versionCode and
- * signer certificate), then hand it to the system installer.
+ * Drives the in-app update flow end to end: check GitHub Releases, present the
+ * custom theme-matched update card, download the APK into app-private storage
+ * with live progress and cancellation support, verify it completely (size,
+ * SHA-256, package parse, package name, versionCode and signer certificate),
+ * then hand it to the system installer.
  *
  * Threading and lifecycle:
  *  - every network and file operation runs on a single background executor;
- *  - all dialogs, toasts, progress updates and the installer launch are
+ *  - all custom dialogs, toasts, progress updates and the installer launch are
  *    posted to the main thread;
  *  - one [UpdateFlow] is bound to one activity via a [LifecycleEventObserver];
- *    when the activity is destroyed the flow is cancelled, any `.part` file
- *    is deleted and no UI on the old window is touched afterwards;
- *  - an in-flight guard rejects duplicate checks or downloads.
- *
- * Install permission continuation: when the user confirms and the download
- * finishes, the APK is verified and saved as pending. If the app can already
- * install packages, the system installer opens immediately; otherwise the
- * user is sent to the system setting and the pending state (tag, digest,
- * size) is persisted. When the app is next resumed with the permission
- * granted, the cached APK is re-verified and installed automatically.
+ *    when the activity is destroyed the flow is cancelled, any open dialog is
+ *    dismissed, any `.part` file is deleted and no UI on the old window is
+ *    touched afterwards;
+ *  - a token-scoped active-operation guard rejects duplicate checks/downloads
+ *    while letting user cancellation release the lock immediately.
  */
 internal object UpdateManager {
 
@@ -272,9 +269,10 @@ internal class UpdateFlow(
     private val deps: UpdateDependencies,
 ) {
 
-    private val inFlight = AtomicBoolean(false)
+    private val activeOp = AtomicReference<Any?>(null)
     private val cancelled = AtomicBoolean(false)
     private val waitingForPermission = AtomicBoolean(false)
+    private var activeDialog: ThemedUpdateDialog? = null
 
     private val observer = LifecycleEventObserver { _, event ->
         when (event) {
@@ -301,66 +299,96 @@ internal class UpdateFlow(
         get() = File(updateDir, UpdateManager.UPDATE_FILE_NAME + ".part")
 
     /**
-     * Checks for an update and reacts. Manual checks always give feedback
-     * ("up to date" vs "check failed"); silent startup checks only surface a
-     * genuinely newer release and stay quiet otherwise.
+     * Checks for an update and reacts. Manual checks show a custom themed
+     * checking card and always give feedback ("up to date" vs "check failed");
+     * silent startup checks only surface a genuinely newer release.
      */
     internal fun checkAndPrompt(manual: Boolean) {
-        if (!inFlight.compareAndSet(false, true)) return
-        val progress = if (manual && !isDead) {
-            AlertDialogBuilder(activity, activity.getString(R.string.update_checking))
+        val opToken = Any()
+        if (!activeOp.compareAndSet(null, opToken)) return
+        if (isDead) {
+            activeOp.compareAndSet(opToken, null)
+            return
+        }
+        val checkCancelled = AtomicBoolean(false)
+        val dialog = if (manual) {
+            obtainDialog().also { dlg ->
+                dlg.showChecking(
+                    onCancel = {
+                        checkCancelled.set(true)
+                        activeOp.compareAndSet(opToken, null)
+                        dismissActiveDialog(dlg)
+                    },
+                )
+            }
         } else {
             null
         }
         deps.executor.execute {
-            val currentVersion = runCatching {
-                activity.packageManager.getPackageInfo(activity.packageName, 0).versionName
-            }.getOrNull().orEmpty()
+            val currentVersion = installedVersionName()
             val result = checkSync(deps.source, currentVersion)
             deps.mainHandler.post {
-                inFlight.set(false)
-                if (cancelled.get() || isDead) return@post
-                progress?.dismiss()
+                val ownsOp = activeOp.compareAndSet(opToken, null)
+                if (!ownsOp || checkCancelled.get() || cancelled.get() || isDead) {
+                    if (cancelled.get() || isDead) dismissActiveDialog(dialog)
+                    return@post
+                }
                 when (result) {
                     is UpdateCheckResult.Available -> {
                         if (!manual && deps.pending.wasPrompted(result.release.tagName)) {
+                            dismissActiveDialog(dialog)
                             return@post
                         }
                         deps.pending.rememberPrompted(result.release.tagName)
-                        confirmUpdate(result.release)
+                        confirmUpdate(result.release, currentVersion, existingDialog = dialog)
                     }
-                    UpdateCheckResult.UpToDate -> if (manual) toast(R.string.update_up_to_date)
-                    UpdateCheckResult.Failed -> if (manual) toast(R.string.update_check_failed)
+                    UpdateCheckResult.UpToDate -> {
+                        dismissActiveDialog(dialog)
+                        if (manual) toast(R.string.update_up_to_date)
+                    }
+                    UpdateCheckResult.Failed -> {
+                        dismissActiveDialog(dialog)
+                        if (manual) toast(R.string.update_check_failed)
+                    }
                 }
             }
         }
     }
 
-    /** Downloads [release], verifies it completely, then installs or defers. */
-    internal fun downloadAndInstall(release: ReleaseInfo) {
-        if (!inFlight.compareAndSet(false, true)) return
+    /** Downloads [release] inside the themed card, verifies it, then installs or defers. */
+    internal fun downloadAndInstall(
+        release: ReleaseInfo,
+        existingDialog: ThemedUpdateDialog? = null,
+    ) {
+        val opToken = Any()
+        if (!activeOp.compareAndSet(null, opToken)) return
         if (isDead) {
-            inFlight.set(false)
+            activeOp.compareAndSet(opToken, null)
             return
         }
-        val dialog = AlertDialogBuilder(
-            activity,
-            activity.getString(R.string.update_downloading, 0),
-            titleRes = R.string.update_available_title,
-            cancelable = false,
+        val downloadCancelled = AtomicBoolean(false)
+        val dialog = existingDialog ?: obtainDialog()
+        dialog.showDownloading(
+            release = release,
+            onCancelDownload = {
+                downloadCancelled.set(true)
+                activeOp.compareAndSet(opToken, null)
+                dismissActiveDialog(dialog)
+                toast(R.string.update_download_cancelled)
+            },
         )
         deps.executor.execute {
+            val isAborted = { cancelled.get() || downloadCancelled.get() }
             val downloaded = try {
                 deps.downloader.download(
                     release,
                     partFile,
                     apkFile,
-                    cancelled = { cancelled.get() },
+                    cancelled = isAborted,
                     onProgress = { progress ->
-                        val percent = (progress.fraction * 100).toInt().coerceIn(0, 100)
                         deps.mainHandler.post {
-                            if (!cancelled.get() && !isDead) {
-                                dialog.setMessage(activity.getString(R.string.update_downloading, percent))
+                            if (!isAborted() && !isDead && activeOp.get() === opToken) {
+                                dialog.updateDownloadProgress(progress)
                             }
                         }
                     },
@@ -368,22 +396,38 @@ internal class UpdateFlow(
             } catch (_: Throwable) {
                 null
             }
-            val outcome = if (downloaded != null) {
-                val installed = deps.metaReader.installedMeta()
-                when (deps.verifier.verify(downloaded, installed, UpdateManager.EXPECTED_PACKAGE_NAME)) {
-                    is ApkVerifyResult.Success -> DownloadOutcome.Ready(downloaded)
-                    else -> {
-                        runCatching { downloaded.delete() }
-                        DownloadOutcome.VerificationFailed
+            val outcome = when {
+                isAborted() -> {
+                    if (downloaded != null) runCatching { downloaded.delete() }
+                    DownloadOutcome.Cancelled
+                }
+                downloaded != null -> {
+                    deps.mainHandler.post {
+                        if (!isAborted() && !isDead && activeOp.get() === opToken) {
+                            dialog.showVerifying(release)
+                        }
+                    }
+                    val installed = deps.metaReader.installedMeta()
+                    when (deps.verifier.verify(downloaded, installed, UpdateManager.EXPECTED_PACKAGE_NAME)) {
+                        is ApkVerifyResult.Success -> DownloadOutcome.Ready(downloaded)
+                        else -> {
+                            runCatching { downloaded.delete() }
+                            DownloadOutcome.VerificationFailed
+                        }
                     }
                 }
-            } else {
-                DownloadOutcome.DownloadFailed
+                else -> DownloadOutcome.DownloadFailed
             }
             deps.mainHandler.post {
-                inFlight.set(false)
-                if (cancelled.get() || isDead) return@post
-                dialog.dismiss()
+                val ownsOp = activeOp.compareAndSet(opToken, null)
+                if (!ownsOp || isAborted() || isDead) {
+                    if (isAborted() && outcome is DownloadOutcome.Ready) {
+                        runCatching { outcome.apk.delete() }
+                    }
+                    if (cancelled.get() || isDead) dismissActiveDialog(dialog)
+                    return@post
+                }
+                dismissActiveDialog(dialog)
                 when (outcome) {
                     is DownloadOutcome.Ready -> {
                         deps.pending.save(release.tagName, release.sha256Digest, release.sizeBytes)
@@ -391,6 +435,7 @@ internal class UpdateFlow(
                     }
                     DownloadOutcome.DownloadFailed -> toast(R.string.update_download_failed)
                     DownloadOutcome.VerificationFailed -> toast(R.string.update_verification_failed)
+                    DownloadOutcome.Cancelled -> Unit
                 }
             }
         }
@@ -399,10 +444,11 @@ internal class UpdateFlow(
     /** Called on every ON_RESUME: continues a pending install when possible. */
     private fun onResume() {
         val pending = deps.pending.load() ?: return
-        if (!inFlight.compareAndSet(false, true)) return
+        val opToken = Any()
+        if (!activeOp.compareAndSet(null, opToken)) return
 
         if (!deps.installer.canInstallUnknownSources()) {
-            inFlight.set(false)
+            activeOp.compareAndSet(opToken, null)
             if (waitingForPermission.getAndSet(false)) {
                 toast(R.string.update_permission_denied)
             }
@@ -423,8 +469,8 @@ internal class UpdateFlow(
                 ResumeOutcome.Invalid
             }
             deps.mainHandler.post {
-                inFlight.set(false)
-                if (cancelled.get() || isDead) return@post
+                val ownsOp = activeOp.compareAndSet(opToken, null)
+                if (!ownsOp || cancelled.get() || isDead) return@post
                 when (outcome) {
                     ResumeOutcome.Ready -> {
                         if (deps.installer.launchInstaller(cached)) {
@@ -447,6 +493,7 @@ internal class UpdateFlow(
 
     private fun onDestroy() {
         cancelled.set(true)
+        dismissActiveDialog()
         runCatching { activity.lifecycle.removeObserver(observer) }
         runCatching { partFile.delete() }
         if (deps.ownsExecutor) deps.executor.shutdownNow()
@@ -456,20 +503,41 @@ internal class UpdateFlow(
     /** Detaches the flow without touching the activity (test teardown). */
     internal fun forceStop() {
         cancelled.set(true)
+        dismissActiveDialog()
         runCatching { activity.lifecycle.removeObserver(observer) }
     }
 
-    private fun confirmUpdate(release: ReleaseInfo) {
+    private fun confirmUpdate(
+        release: ReleaseInfo,
+        currentVersionName: String,
+        existingDialog: ThemedUpdateDialog? = null,
+    ) {
         if (isDead) return
-        AlertDialogBuilder(
-            activity,
-            activity.getString(R.string.update_available_message, release.tagName),
-            titleRes = R.string.update_available_title,
-            positiveRes = R.string.update_yes,
-            onPositive = { downloadAndInstall(release) },
-            negativeRes = R.string.update_later,
+        val dialog = existingDialog ?: obtainDialog()
+        dialog.showAvailable(
+            release = release,
+            currentVersionName = currentVersionName,
+            onConfirm = { downloadAndInstall(release, existingDialog = dialog) },
+            onLater = { dismissActiveDialog(dialog) },
         )
     }
+
+    private fun obtainDialog(): ThemedUpdateDialog {
+        val current = activeDialog
+        if (current != null && current.isShowing) return current
+        return ThemedUpdateDialog(activity).also { activeDialog = it }
+    }
+
+    private fun dismissActiveDialog(dialog: ThemedUpdateDialog? = activeDialog) {
+        if (dialog != null) {
+            runCatching { dialog.dismiss() }
+            if (activeDialog === dialog) activeDialog = null
+        }
+    }
+
+    private fun installedVersionName(): String = runCatching {
+        activity.packageManager.getPackageInfo(activity.packageName, 0).versionName
+    }.getOrNull().orEmpty()
 
     private fun launchOrAskPermission(apk: File) {
         if (deps.installer.canInstallUnknownSources()) {
@@ -503,50 +571,19 @@ internal class UpdateFlow(
 
     private fun toast(messageRes: Int) {
         if (isDead) return
-        Toast.makeText(activity, messageRes, Toast.LENGTH_LONG).show()
+        val localized = AppLocale.contextFor(activity)
+        Toast.makeText(activity, localized.getString(messageRes), Toast.LENGTH_LONG).show()
     }
 
     private sealed class DownloadOutcome {
         data class Ready(val apk: File) : DownloadOutcome()
         data object DownloadFailed : DownloadOutcome()
         data object VerificationFailed : DownloadOutcome()
+        data object Cancelled : DownloadOutcome()
     }
 
     private sealed class ResumeOutcome {
         data object Ready : ResumeOutcome()
         data object Invalid : ResumeOutcome()
-    }
-}
-
-/** Small helper so the update flow always builds dialogs on the main thread. */
-private class AlertDialogBuilder(
-    activity: ComponentActivity,
-    message: String,
-    titleRes: Int? = null,
-    cancelable: Boolean = true,
-    positiveRes: Int? = null,
-    onPositive: (() -> Unit)? = null,
-    negativeRes: Int? = null,
-) {
-    private val dialog: android.app.AlertDialog
-
-    init {
-        val builder = android.app.AlertDialog.Builder(activity)
-        if (titleRes != null) builder.setTitle(titleRes)
-        builder.setMessage(message)
-        builder.setCancelable(cancelable)
-        if (positiveRes != null) {
-            builder.setPositiveButton(positiveRes) { _, _ -> onPositive?.invoke() }
-        }
-        if (negativeRes != null) builder.setNegativeButton(negativeRes, null)
-        dialog = builder.show()
-    }
-
-    fun dismiss() {
-        runCatching { dialog.dismiss() }
-    }
-
-    fun setMessage(message: String) {
-        runCatching { dialog.setMessage(message) }
     }
 }

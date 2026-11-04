@@ -72,9 +72,10 @@ class MainActivity : ComponentActivity() {
             ?: UUID.randomUUID().toString().replace("-", "")
         restorePendingHistoryExport(savedInstanceState)
 
-        // Edge-to-edge; the WebView theme later paints matching system bars.
+        // Edge-to-edge; start with the persisted theme so cold start matches.
+        val initialPalette = AppTheme.paletteFor(this)
         WindowCompat.setDecorFitsSystemWindows(window, true)
-        applyThemeChrome("#060919", light = false)
+        AppTheme.applySystemBars(window, initialPalette)
 
         // Serve bundled assets over a virtual https origin. The default host
         // is treated as a secure context, which the web app needs for fetch().
@@ -85,7 +86,7 @@ class MainActivity : ComponentActivity() {
         )
 
         webView = WebView(this).apply {
-            setBackgroundColor(Color.parseColor("#060919"))
+            setBackgroundColor(initialPalette.pageBg)
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true            // localStorage powers the history feature
@@ -127,7 +128,7 @@ class MainActivity : ComponentActivity() {
         // Keeping native chrome out of the page prevents a second, mismatched
         // navigation layer from covering the web UI.
         val root = FrameLayout(this).apply {
-            setBackgroundColor(Color.parseColor("#060919"))
+            setBackgroundColor(initialPalette.pageBg)
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -386,6 +387,7 @@ class MainActivity : ComponentActivity() {
         "https://${APP_HOST}${PROTECTED_PREFIX}${lxxxiRouteToken}"
 
     internal fun applyThemeChrome(color: String, light: Boolean) {
+        AppTheme.recordFromChromeColor(this, color, light)
         val parsed = try {
             Color.parseColor(color)
         } catch (_: IllegalArgumentException) {

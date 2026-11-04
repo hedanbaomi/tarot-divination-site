@@ -36,27 +36,21 @@ class AboutActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // The web homepage persists the user's explicit language choice through
-        // AppLocale. Without a choice this context maps the system language to
-        // the same Chinese-or-English policy as the web UI.
+        // AppLocale, and its active theme through AppTheme.
         val localized = AppLocale.contextFor(this)
+        val palette = AppTheme.paletteFor(this)
+        val density = resources.displayMetrics.density
 
         WindowCompat.setDecorFitsSystemWindows(window, true)
-        @Suppress("DEPRECATION")
-        window.statusBarColor = Color.parseColor("#090d1e")
-        @Suppress("DEPRECATION")
-        window.navigationBarColor = Color.parseColor("#090d1e")
-        val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.isAppearanceLightStatusBars = false
-        controller.isAppearanceLightNavigationBars = false
+        AppTheme.applySystemBars(window, palette)
 
-        val bg = Color.parseColor("#090d1e")
-        val primary = Color.parseColor("#E8E6F0")
-        val accent = Color.parseColor("#C9A86A")
-        val muted = Color.parseColor("#9A97AE")
+        val primary = palette.textPrimary
+        val accent = palette.accent
+        val muted = palette.textSecondary
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(bg)
+            background = palette.pageGradientDrawable()
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -64,7 +58,7 @@ class AboutActivity : ComponentActivity() {
         }
 
         val scroll = android.widget.ScrollView(this).apply {
-            setBackgroundColor(bg)
+            setBackgroundColor(Color.TRANSPARENT)
             isFillViewport = true
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -126,6 +120,8 @@ class AboutActivity : ComponentActivity() {
                 localized.getString(R.string.telemetry_switch_off)
             }
             setTextColor(primary)
+            thumbTintList = palette.switchThumbTintList()
+            trackTintList = palette.switchTrackTintList()
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, dip(4), 0, dip(14))
             setOnCheckedChangeListener { view, checked ->
@@ -148,9 +144,7 @@ class AboutActivity : ComponentActivity() {
 
         // Check for updates: shows the installed version and lets the user
         // fetch and install the newest release from GitHub Releases inside
-        // the app. This is the only place the native UI makes an update
-        // request; the startup check in MainActivity stays silent until a
-        // newer version actually exists.
+        // the app via the themed update modal.
         container.addView(headingText(localized.getString(R.string.update_section_title), accent))
         container.addView(
             bodyText(
@@ -163,63 +157,107 @@ class AboutActivity : ComponentActivity() {
                 primary,
             )
         )
-        val checkUpdate = TextView(this).apply {
-            text = localized.getString(R.string.update_check)
-            setTextColor(accent)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setPadding(0, dip(4), 0, dip(14))
-            setOnClickListener {
-                UpdateManager.checkAndPrompt(this@AboutActivity, manual = true)
-            }
+        val checkUpdate = actionChip(localized.getString(R.string.update_check), palette, density) {
+            UpdateManager.checkAndPrompt(this@AboutActivity, manual = true)
         }
-        container.addView(checkUpdate)
+        container.addView(
+            checkUpdate,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dip(2)
+                bottomMargin = dip(14)
+            },
+        )
 
         // Announcements: info announcements never pop up at launch; they are
         // read here. The manual refresh forces a network check.
         container.addView(headingText(localized.getString(R.string.announcements_section_title), accent))
-        val openAnnouncements = TextView(this).apply {
-            text = localized.getString(R.string.announcements_open)
-            setTextColor(accent)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setPadding(0, dip(4), 0, dip(14))
-            setOnClickListener {
-                startActivity(Intent(this@AboutActivity, AnnouncementsActivity::class.java))
-            }
+        val openAnnouncements = actionChip(localized.getString(R.string.announcements_open), palette, density) {
+            startActivity(Intent(this@AboutActivity, AnnouncementsActivity::class.java))
         }
-        container.addView(openAnnouncements)
+        container.addView(
+            openAnnouncements,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dip(2)
+                bottomMargin = dip(14)
+            },
+        )
 
         // Verbatim English note (authoritative) + Chinese reference translation.
         container.addView(headingText(localized.getString(R.string.about_quote_label), accent))
         val quote = TextView(this).apply {
             setTextColor(primary)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            setLineSpacing(dip(2).toFloat(), 1f)
-            setPadding(dip(12), dip(10), dip(12), dip(10))
+            setLineSpacing(dip(2).toFloat(), 1.06f)
+            setPadding(dip(14), dip(12), dip(14), dip(12))
+            background = palette.surfaceDrawable(density, radiusDp = 12f)
             text = localized.getString(
                 R.string.about_quote_display,
                 localized.getString(R.string.about_quote_en),
                 localized.getString(R.string.about_quote_cite)
             )
         }
-        quote.setBackgroundColor(Color.parseColor("#141633"))
-        container.addView(quote)
+        container.addView(
+            quote,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dip(8) },
+        )
 
         container.addView(bodyText(localized.getString(R.string.about_quote_zh), muted))
 
         val close = TextView(this).apply {
             text = localized.getString(R.string.about_close)
-            setTextColor(accent)
+            setTextColor(palette.secondaryBtnText)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setPadding(0, dip(10), 0, dip(6))
+            minHeight = dip(46)
+            minimumHeight = dip(46)
+            setPadding(dip(18), dip(10), dip(18), dip(10))
+            background = palette.secondaryButtonDrawable(density, radiusDp = 12f)
             setOnClickListener { finish() }
         }
-        container.addView(close)
+        container.addView(
+            close,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dip(12)
+                bottomMargin = dip(8)
+            },
+        )
 
         scroll.addView(container)
         root.addView(scroll)
         setContentView(root)
+    }
+
+    private fun actionChip(
+        label: String,
+        palette: ThemePalette,
+        density: Float,
+        onClick: () -> Unit,
+    ): TextView = TextView(this).apply {
+        text = label
+        setTextColor(palette.secondaryBtnText)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+        gravity = Gravity.CENTER_VERTICAL
+        minHeight = dip(42)
+        minimumHeight = dip(42)
+        setPadding(dip(16), dip(9), dip(16), dip(9))
+        background = palette.secondaryButtonDrawable(density, radiusDp = 11f)
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { onClick() }
     }
 
     private fun sectionTitle(text: String, color: Int, accent: Int): LinearLayout =
@@ -229,7 +267,10 @@ class AboutActivity : ComponentActivity() {
                 this.text = text
                 setTextColor(color)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                typeface = android.graphics.Typeface.create(
+                    android.graphics.Typeface.SERIF,
+                    android.graphics.Typeface.BOLD,
+                )
                 setPadding(0, dip(4), 0, dip(10))
             })
             // A thin accent rule under the title.

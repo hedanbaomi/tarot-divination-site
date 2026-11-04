@@ -3,9 +3,11 @@ package com.quareia.divination
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.util.TypedValue
+import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -24,23 +26,21 @@ class AnnouncementsActivity : ComponentActivity() {
 
     private lateinit var container: LinearLayout
     private lateinit var hint: TextView
+    private lateinit var palette: ThemePalette
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val localized = AppLocale.contextFor(this)
+        palette = AppTheme.paletteFor(this)
+        val density = resources.displayMetrics.density
+
         WindowCompat.setDecorFitsSystemWindows(window, true)
-        @Suppress("DEPRECATION")
-        window.statusBarColor = Color.parseColor("#090d1e")
-        @Suppress("DEPRECATION")
-        window.navigationBarColor = Color.parseColor("#090d1e")
-        val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.isAppearanceLightStatusBars = false
-        controller.isAppearanceLightNavigationBars = false
+        AppTheme.applySystemBars(window, palette)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#090d1e"))
+            background = palette.pageGradientDrawable()
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -48,7 +48,7 @@ class AnnouncementsActivity : ComponentActivity() {
         }
 
         val scroll = android.widget.ScrollView(this).apply {
-            setBackgroundColor(Color.parseColor("#090d1e"))
+            setBackgroundColor(Color.TRANSPARENT)
             isFillViewport = true
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -64,15 +64,15 @@ class AnnouncementsActivity : ComponentActivity() {
         container.addView(
             TextView(this).apply {
                 text = localized.getString(R.string.announcements_title)
-                setTextColor(Color.parseColor("#E8E6F0"))
+                setTextColor(palette.textPrimary)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
                 setPadding(0, dip(4), 0, dip(10))
             }
         )
 
         val hint = TextView(this).apply {
-            setTextColor(Color.parseColor("#9A97AE"))
+            setTextColor(palette.textSecondary)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setPadding(0, 0, 0, dip(8))
         }
@@ -81,13 +81,25 @@ class AnnouncementsActivity : ComponentActivity() {
 
         val refresh = TextView(this).apply {
             text = localized.getString(R.string.announcements_refresh)
-            setTextColor(Color.parseColor("#C9A86A"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setPadding(0, dip(2), 0, dip(14))
+            setTextColor(palette.secondaryBtnText)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER_VERTICAL
+            minHeight = dip(42)
+            minimumHeight = dip(42)
+            setPadding(dip(16), dip(9), dip(16), dip(9))
+            background = palette.secondaryButtonDrawable(density, radiusDp = 11f)
+            isClickable = true
+            isFocusable = true
             setOnClickListener { refreshAnnouncements() }
         }
-        container.addView(refresh)
+        container.addView(
+            refresh,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dip(16) },
+        )
 
         this.container = container
 
@@ -129,7 +141,7 @@ class AnnouncementsActivity : ComponentActivity() {
         if (list.isEmpty()) {
             val empty = TextView(this).apply {
                 text = localized.getString(R.string.announcements_empty)
-                setTextColor(Color.parseColor("#9A97AE"))
+                setTextColor(palette.textSecondary)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setPadding(0, dip(8), 0, dip(8))
             }
@@ -138,15 +150,18 @@ class AnnouncementsActivity : ComponentActivity() {
         }
 
         list.forEach { announcement ->
-            container.addView(itemView(announcement, localized))
+            container.addView(
+                itemView(announcement, localized),
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { bottomMargin = dip(12) },
+            )
         }
     }
 
     private fun itemView(announcement: Announcement, localized: android.content.Context): TextView {
-        val primary = Color.parseColor("#E8E6F0")
-        val accent = Color.parseColor("#C9A86A")
-        val muted = Color.parseColor("#9A97AE")
-
+        val density = resources.displayMetrics.density
         val severityLabel = when (announcement.severity) {
             "update" -> localized.getString(R.string.announcement_severity_update)
             "important" -> localized.getString(R.string.announcement_severity_important)
@@ -168,22 +183,21 @@ class AnnouncementsActivity : ComponentActivity() {
                 append(announcement.body)
             }
             if (actionText != null) {
-                append("\n")
+                append("\n\n✦ ")
                 append(actionText)
             }
         }
         val view = TextView(this).apply {
             this.text = text
-            setTextColor(primary)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setLineSpacing(dip(2).toFloat(), 1f)
-            setPadding(dip(12), dip(10), dip(12), dip(10))
+            setTextColor(palette.textPrimary)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
+            setLineSpacing(dip(3).toFloat(), 1.08f)
+            setPadding(dip(14), dip(12), dip(14), dip(12))
+            background = palette.surfaceDrawable(density, radiusDp = 13f)
         }
-        view.setBackgroundColor(Color.parseColor("#141633"))
-        (view.layoutParams as? LinearLayout.LayoutParams)?.bottomMargin = dip(10)
 
         if (actionText != null) {
-            view.setTextColor(if (announcement.severity == "update") accent else primary)
+            view.setTextColor(if (announcement.severity == "update") palette.badgeText else palette.textPrimary)
             view.setOnClickListener {
                 if (announcement.severity == "update") {
                     UpdateManager.checkAndPrompt(this, manual = true)
