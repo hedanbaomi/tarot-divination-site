@@ -28,10 +28,10 @@ test("the admin page contains exactly one inline script", () => {
   assert.equal(scripts.length, 1);
 });
 
-test("the admin page has exactly three named dashboard sections", () => {
+test("the admin page has four named dashboard sections", () => {
   const sections = [...ADMIN_PAGE_HTML.matchAll(/<section\b[^>]*\bid="([^"]+)"/g)]
     .map((match) => match[1]);
-  assert.deepEqual(sections, ["announcementsView", "currentStatsView", "historyView"]);
+  assert.deepEqual(sections, ["announcementsView", "currentStatsView", "historyView", "webHistoryView"]);
   assert.match(ADMIN_PAGE_HTML, /1\. 公告管理/);
   assert.match(ADMIN_PAGE_HTML, /2\. 当前活跃版本（D1）/);
   assert.match(ADMIN_PAGE_HTML, /3\. 历史遥测（Analytics Engine）/);

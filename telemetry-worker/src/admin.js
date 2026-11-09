@@ -14,6 +14,7 @@ import { validateAnnouncementInput } from "./validation.js";
 import { activeWindowCounts, versionDistribution } from "./stats.js";
 import { ADMIN_PAGE_HTML } from "./admin-page.js";
 import { handleAnalytics } from "./analytics.js";
+import { handleWebHistory } from "./web-history.js";
 
 const ADMIN_SECURITY_HEADERS = securityHeaders();
 
@@ -81,6 +82,9 @@ export async function handleAdminApi(request, env, pathname) {
   // the existing announcements/stats behaviour, and vice versa.
   if (parts[0] === "analytics" && parts.length === 1) {
     return handleAnalytics(request, env);
+  }
+  if (parts[0] === "web-history" && parts.length === 1) {
+    return handleWebHistory(request, env);
   }
 
   if (!hasD1Binding(env)) {
