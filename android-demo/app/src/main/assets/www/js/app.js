@@ -16,6 +16,7 @@
   // Guards anonymous telemetry: a finished spread reports reading_completed at
   // most once until the spread is cleared/changed, regardless of repeated flips.
   var readingReported = false;
+  var freeBoardReadingReported = false;
 
   var el = {};
   var historyUiController = null;
@@ -903,6 +904,9 @@
     }
     renderSpreadMeta();
     renderResults();
+    if (isReadingComplete() && spread.every(function (card) { return card.revealed; })) {
+      notifyReadingCompleted();
+    }
   }
 
   function removeEntry(entry, keyboardTriggered) {
@@ -952,13 +956,28 @@
   function notifyReadingCompleted() {
     if (readingReported) return;
     readingReported = true;
-    var bridge = globalThis.androidTelemetry;
-    if (!bridge || typeof bridge.isEnabled !== "function" || !bridge.isEnabled()) return;
     try {
+      var bridge = globalThis.androidTelemetry;
+      if (!bridge || typeof bridge.isEnabled !== "function" || !bridge.isEnabled()) return;
       bridge.logReadingCompleted(deckType, spread.length);
     } catch (_error) {
       // Telemetry must never affect the reading; swallow any failure.
     }
+  }
+
+  function notifyFreeBoardReadingCompleted(state, reason) {
+    if (!state || !Array.isArray(state.cards)) return;
+    if (state.cards.length === 0 || (reason === "draw" && state.cards.length === 1)) {
+      freeBoardReadingReported = false;
+    }
+    if (reason !== "reveal-all" || !state.cards.length || freeBoardReadingReported) return;
+    freeBoardReadingReported = true;
+    try {
+      var bridge = globalThis.androidTelemetry;
+      if (bridge && bridge.isEnabled()) {
+        bridge.logReadingCompleted(state.settings.deckType, state.cards.length);
+      }
+    } catch (_error) { /* Statistics must never interrupt a reading. */ }
   }
 
   function renderSpreadMeta() {
@@ -1638,6 +1657,7 @@
         recordsApi: globalThis.DivinationHistoryRecords,
         platform: "android",
         getBackImage: deckBackImage,
+        onChange: notifyFreeBoardReadingCompleted,
         allDecks: allDecksForFreeBoard(),
         getHistoryController: function () { return historyUiController; },
         onRestoreState: function (state) {

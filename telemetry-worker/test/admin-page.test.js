@@ -61,6 +61,27 @@ test("the admin page exposes Mini Game as an announcement target and analytics f
   assert.match(ADMIN_PAGE_HTML, /微信版本/);
 });
 
+test("selecting web in the real platform change handler reloads web statistics", () => {
+  const [script] = extractInlineScripts(ADMIN_PAGE_HTML);
+  const start = script.indexOf('$("historyPlatform").addEventListener("change"');
+  const end = script.indexOf('$("refreshHistory")', start);
+  assert.ok(start >= 0 && end > start);
+  let change;
+  let reloads = 0;
+  const select = { value: "web", addEventListener(name, fn) { assert.equal(name, "change"); change = fn; } };
+  const state = { historyPlatform: "all" };
+  vm.runInNewContext(script.slice(start, end), {
+    $: () => select, state, loadAnalytics: () => { reloads++; }
+  });
+  change();
+  assert.equal(state.historyPlatform, "web");
+  assert.equal(reloads, 1);
+  select.value = "unknown";
+  change();
+  assert.equal(state.historyPlatform, "web");
+  assert.equal(reloads, 1);
+});
+
 test("the admin page stays DOM-only and has no external page resources", () => {
   assert.doesNotMatch(ADMIN_PAGE_HTML, /innerHTML/i);
   assert.doesNotMatch(ADMIN_PAGE_HTML, /<script\b[^>]*\bsrc\s*=|<link\b[^>]*\bhref\s*=/i);

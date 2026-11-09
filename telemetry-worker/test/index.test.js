@@ -137,7 +137,7 @@ test("Analytics Engine arrays use the fixed order and one index", async () => {
       "reading_completed", "a".repeat(64), "lxxxi", "GB", "GB-ENG", "England",
       "2.4.6", "en-US", "android", ""
     ],
-    doubles: [8, 34],
+    doubles: [8, 34, 0],
     indexes: ["a".repeat(64)]
   }]);
 });
@@ -151,7 +151,7 @@ test("non-reading events use empty deck and zero card-count slots", async () => 
   assert.deepEqual(analytics.points[0].blobs, [
     "install_seen", "b".repeat(64), "", "TW", "", "", "1.0", "zh-CN", "android", ""
   ]);
-  assert.deepEqual(analytics.points[0].doubles, [0, 35]);
+  assert.deepEqual(analytics.points[0].doubles, [0, 35, 0]);
   assert.deepEqual(analytics.points[0].indexes, ["b".repeat(64)]);
 });
 
@@ -287,7 +287,7 @@ test("region names are capped and forbidden geo fields are never written", async
       "install_seen", "f".repeat(64), "", "US", "US-CA", "R".repeat(64), "1.0", "zh-CN",
       "android", ""
     ],
-    doubles: [0, 35],
+    doubles: [0, 35, 0],
     indexes: ["f".repeat(64)]
   }));
 });
@@ -436,7 +436,7 @@ test("mini-program events omit Android fields and retain only platform-safe read
 
   assert.equal(response.status, 204);
   assert.deepEqual(analytics.points[0].blobs.slice(8), ["miniprogram", "trial"]);
-  assert.deepEqual(analytics.points[0].doubles, [5, 0]);
+  assert.deepEqual(analytics.points[0].doubles, [5, 0, 0]);
   const serialized = JSON.stringify(analytics.points[0]);
   assert.doesNotMatch(serialized, /card_name|card_id|question|history/);
 });
@@ -469,6 +469,7 @@ test("mini-game events use their own platform and the same closed WeChat environ
   assert.equal(response.status, 204);
   assert.deepEqual(analytics.points[0].blobs.slice(8), ["minigame", "release"]);
   assert.equal(analytics.points[0].doubles[1], 0);
+  assert.equal(analytics.points[0].doubles[2], 0);
 
   const invalid = { ...event, env_version: "production" };
   assert.match(await (await post(invalid, makeEnv())).text(), /invalid_env_version/);

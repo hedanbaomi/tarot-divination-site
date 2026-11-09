@@ -1,6 +1,84 @@
 # Quareia Telemetry Worker deployment record
 
-## Current status
+## 2026-11-09: authorized unified telemetry release
+
+- Worker source: `a0df351de0b0a00200893ed8bc9da74377dd41f0`.
+- Deployed Worker version: `2230754f-fe46-4c5b-b8f3-e56c0830e154` on the existing
+  `telemetry.luotianyi.fun` domain. Existing bindings and variables were preserved.
+- Remote migration `0004_web_platform.sql` applied successfully; already-applied
+  `0003_ios_platform.sql` was not replayed. Per-platform record counts and the
+  iOS-major aggregate were identical immediately before and after migration.
+  A pre-deployment D1 Time Travel bookmark was recorded locally.
+- Clean release gate: 198 web/Android tests and 148 Worker tests passed, followed
+  by local migrations 0001–0004 and a Worker dry-run. DSH / DeepSeek V4.1 Flash
+  independently reviewed the reconciled native-platform and migration paths and
+  found no blocking issue.
+- Live backend checks passed: `/health`, allowed-origin POST preflight, web/iOS
+  admin options, admin security headers and JavaScript parsing. The existing
+  `/v1/ios-update` unconfigured 404 response is preserved.
+- Website delivery uses GitHub Pages from `main` at `/`. Publication and final
+  browser acceptance are tracked in [release PR #3](https://github.com/hedanbaomi/tarot-divination-site/pull/3).
+  This release does not publish a new Android or iOS binary.
+
+## 2026-11-09: unified web telemetry, pre-release validation
+
+This revision adds `platform=web`, the `web_visit` counter, the guarded web
+collector, and combined web/mobile admin displays. The following validation was
+completed locally before the authorized production release recorded above.
+
+The authorized release preflight subsequently found that production already
+runs the iOS Worker code and `0003_ios_platform.sql`, from the historical
+`b228954` source line, while main did not contain them. The matching Worker
+modules and original iOS migration were restored before deployment. The web
+migration is therefore `0004_web_platform.sql` and preserves `ios_major` and all
+native client rows. The existing `/v1/ios-update` route is preserved; its
+pre-release production response was the unconfigured `ios_update_unavailable`
+404. No iOS application source or signing configuration is part of this change.
+
+After this compatibility reconciliation, 148 Worker tests passed alongside the
+198 web/Android JavaScript tests. Production source and schema were checked
+read-only before applying any migration.
+The downloaded deployed bundle exactly matched a fresh build of `b228954`
+after normalizing line endings and the source-map footer, confirming the source
+baseline used for this compatibility reconciliation.
+
+Local validation completed on 2026-11-09:
+
+- Web/Android JavaScript suites: 198/198 passed; Worker suites: 132/132 passed.
+- A fresh temporary dependency install via `npm ci --no-audit --no-fund`,
+  Worker tests, local Wrangler D1 migrations 0001–0003, and `wrangler deploy
+  --dry-run` all passed. Populated migration tests preserve Android/WeChat rows,
+  timestamps, primary key uniqueness and both indexes.
+- A localhost-only preview using synthetic Analytics data and in-memory D1
+  verified the real web collector → Worker → admin flow, manual/bulk reveal,
+  web platform and 7-day filtering, persistent opt-out and same-document visit
+  deduplication after turning statistics back on. The preview substitutes its
+  local transport/origin; production CORS is covered by request-level tests.
+- Independent read-only DSH / DeepSeek V4.1 Flash review completed. Its confirmed
+  same-document duplicate-visit finding was fixed and verified by regression
+  tests and the browser preview. No production authenticated API or physical
+  device acceptance was performed.
+
+Release procedure:
+
+1. Run the clean-checkout `npm ci` gate and local tests described in README.
+2. Verify production has all prior migrations, then apply
+   `0004_web_platform.sql` before enabling the new Worker or website collector.
+   It copies old install rows and preserves the primary key and both indexes.
+3. Deploy the Worker and verify its health and allowed-origin preflight; confirm
+   the existing Analytics read configuration is present without exposing secrets.
+4. Publish the website assets (`index.html`, `js/app.js`, `js/i18n.js`, and
+   `js/web-telemetry.js`) together. The backend must be ready first.
+5. The Android JS assets also align manual-flip and Free Board completion. These
+   corrections require a future Android app build/release to reach installed apps;
+   existing clients' event schema remains compatible throughout.
+
+Rollback: restore the previous Worker and website asset revision; leave the
+additive platform migration in place so already collected web rows survive.
+Existing Android and WeChat rows remain compatible. Do not remove statistics or
+reverse the table migration as part of routine rollback.
+
+## Historical deployment notes (2026-07 / 2026-08)
 
 - Status: first authorized deployment completed; Worker remains deployed.
 - Endpoint: `https://telemetry.luotianyi.fun`

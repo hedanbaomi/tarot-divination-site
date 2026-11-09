@@ -1,7 +1,7 @@
 # Quareia Telemetry Worker
 
-Anonymous, opt-out usage-statistics ingest for the **Quareia Divination Android
-app, WeChat Mini Program, and WeChat Mini Game**. It stores aggregate signals only: active-device events, deck usage, and
+Anonymous, opt-out usage-statistics ingest for the **Quareia Divination Android/iOS
+apps, website, WeChat Mini Program, and WeChat Mini Game**. It stores aggregate signals only: active-device events, website visits, deck usage, and
 completed-reading counts. It never stores raw IP addresses, request bodies,
 card faces, card names, orientations, spread layouts, questions, notes, or
 local history.
@@ -44,13 +44,14 @@ Every event must carry these fields:
 | Field | Type | Notes |
 |---|---|---|
 | `schema_version` | int | Must be exactly `1`. |
-| `event` | string | `install_seen`, `daily_active`, `reading_completed`, or `app_active`. |
+| `event` | string | `install_seen`, `daily_active`, `reading_completed`, `app_active`, or web-only `web_visit`. |
 | `install_hash` | string | 64-character lowercase hexadecimal pseudonymous per-install identifier; never an account ID or device fingerprint. |
-| `app_version` | string | Android app version name, or the WeChat runtime release version (`0.0.0` when unavailable). |
+| `app_version` | string | Android/iOS app version name, web collector release (`web-1`), or the WeChat runtime release version (`0.0.0` when unavailable). |
 | `locale` | string | BCP-47 language tag, such as `zh-CN`. |
-| `platform` | string | Optional for backward compatibility; omitted means `android`. Otherwise `android`, `miniprogram`, or `minigame`. |
-| `env_version` | string | Required for `miniprogram` and `minigame`: `develop`, `trial`, or `release`. Omitted for Android. |
-| `android_major` | int | Android only, inclusive range `1..100`; must be omitted by both WeChat runtimes. |
+| `platform` | string | Optional for backward compatibility; omitted means `android`. Otherwise `android`, `ios`, `web`, `miniprogram`, or `minigame`. |
+| `env_version` | string | Required for `miniprogram` and `minigame`: `develop`, `trial`, or `release`. Omitted for Android, iOS and web. |
+| `android_major` | int | Android only, inclusive range `1..100`; must be omitted by iOS, web and both WeChat runtimes. |
+| `ios_major` | int | iOS only, inclusive range `1..100`; must be omitted by Android, web and both WeChat runtimes. |
 
 `reading_completed` additionally carries:
 
@@ -63,7 +64,7 @@ Every event must carry these fields:
 
 | Field | Type | Notes |
 |---|---|---|
-| `version_code` | int | Required for Android (`1..2147483647`); must be omitted by a WeChat client. The server owns the internal `0` sentinel. |
+| `version_code` | int | Required for Android/iOS (`1..2147483647`); must be omitted by web and WeChat clients. The server owns the internal `0` sentinel. |
 
 Any field not listed above is rejected with HTTP `400`. This includes card IDs,
 card names, orientations, positions, questions, notes, history, raw IP, and
@@ -92,16 +93,19 @@ at all.
 
 ## D1 schema
 
-See `migrations/0001_init.sql` and `migrations/0002_miniprogram_platform.sql`. Two tables:
+See migrations `0001_init.sql`, `0002_miniprogram_platform.sql`,
+`0003_ios_platform.sql`, and `0004_web_platform.sql`. The existing production iOS
+migration is retained verbatim; the fourth migration adds web while preserving
+all Android/iOS/WeChat rows, `ios_major`, timestamps and both indexes. Two tables:
 
 - `announcements` — id, revision (incremented on every edit/publish/withdraw),
   status (`draft`/`published`/`withdrawn`), severity
   (`info`/`important`/`update`), zh/en title/body/button, optional HTTPS-only
-  `action_url`, platform (`all`/`android`/`web`/`miniprogram`/`minigame`), min/max `version_code`,
+  `action_url`, platform (`all`/`android`/`ios`/`web`/`miniprogram`/`minigame`), min/max `version_code`,
   `starts_at`/`ends_at` (epoch seconds, `0` = unlimited), `created_at`,
   `updated_at`. All content is plain text; the client never renders HTML.
 - `install_state` — `install_hash` (primary key), `app_version`,
-  `version_code`, `locale`, `android_major`, `platform`, `env_version`,
+  `version_code`, `locale`, `android_major`, `ios_major`, `platform`, `env_version`,
   `first_seen_at`, `last_seen_at`. Existing rows migrate as `platform=android`.
   No raw IP, IP digest, User-Agent, device model, city, card, spread, question,
   note, or history is ever stored. The daily cron deletes rows inactive for
@@ -114,7 +118,7 @@ GET /v1/announcements?platform=android&version_code=4&locale=zh-CN
 ```
 
 Returns only announcements that are `published`, already started, not expired,
-and matching the platform (`android`/`web`/`miniprogram`/`minigame`, plus `all`) and version range.
+and matching the platform (`android`/`ios`/`web`/`miniprogram`/`minigame`, plus `all`) and version range.
 Results are ordered by severity (`update` > `important` > `info`), then publish
 time, then id. The response is a stable schema:
 
@@ -155,10 +159,54 @@ strings, logs, or client storage other than `sessionStorage` in the admin page.
 | `POST` | `/admin/api/announcements/:id/publish` | Set `published`; `revision` bumps. |
 | `POST` | `/admin/api/announcements/:id/withdraw` | Set `withdrawn`; `revision` bumps. |
 | `GET` | `/admin/api/stats` | Active installs in the last 24h/7d/30d windows, per-window version distributions grouped by platform, WeChat environment, and app version, plus `platform_distribution` and `known_installs_90d`. A `version_code` of `0` is labelled legacy/unknown only for Android; WeChat rows use their `app_version` and environment. |
-| `GET` | `/admin/api/analytics?window=24h\|7d\|30d&platform=all\|android\|miniprogram\|minigame` | Read-only historical Analytics Engine summary and distributions. Window and platform are strict allow-lists, so the admin can inspect either WeChat runtime's active, deck and coarse geographic distributions without accepting arbitrary SQL, fields, or table names. |
+| `GET` | `/admin/api/analytics?window=24h\|7d\|30d&platform=all\|android\|ios\|web\|miniprogram\|minigame` | Read-only historical Analytics Engine summary and distributions. Window and platform are strict allow-lists; all platforms are combined by default and can be filtered without accepting arbitrary SQL, fields, or table names. |
 
-Statistics wording is always "活跃安装数/活跃设备数" (active installs /
-active devices), never exact user counts: the numbers come from 6-hourly
+### Unified website and mobile statistics
+
+The website collector `../js/web-telemetry.js` runs only under
+`https://hedanbaomi.github.io/tarot-divination-site/`. It uses a random,
+SHA-256-derived browser identifier stored locally; it does not fingerprint the
+device, use an account ID, or link the browser to a mobile installation.
+
+- `web_visit`: one accepted report per visible document load, including refresh;
+  returning to the same document does not add a visit. This is a page-view count,
+  not a unique-visitor count. Failed reports may retry on a later visibility change.
+- `install_seen`: first successful report for that browser's local identifier.
+- `app_active`: at most one successful client report per six hours, also recorded
+  in the same D1 table as mobile activity. Returning to the page or reading again
+  refreshes activity when due. Browser storage clearing creates a new identifier.
+- `reading_completed`: only deck type and card count, with the same completion
+  hooks in web and the updated Android assets. Preset/custom spreads count once
+  after a complete spread is explicitly revealed (all-at-once or manual flips).
+  Free Board counts once on Reveal All until a new/cleared board. Restoring or
+  viewing history does not emit an event. Old Android releases retain their old hooks.
+
+The admin shows combined active clients (mobile installs + web browsers), a
+platform breakdown, a web platform filter, website visits and completed readings.
+Counts are estimates; different devices/browsers are not deduplicated into people.
+Local markers are best effort across simultaneous tabs. Web counts start only
+after this collector is deployed; past Cloudflare Web Analytics visits cannot be
+reconstructed from these events. Existing Cloudflare Web Analytics performance
+collection stays separate; its totals need not match this opt-out collector.
+
+The footer has a bilingual disclosure and an off/on switch for unified usage
+statistics. Turning it off cancels pending/in-flight work, clears its local
+identifier and delivery markers, and persists the opt-out. Previously accepted
+aggregate events remain until normal retention expiry. The original Cloudflare
+Web Analytics performance beacon is separate and is not controlled by this switch.
+With unavailable storage, this collector does not run. No URL, referrer,
+question, card identity or history is included in event payloads. The Worker
+continues to derive coarse country/province/state from connection metadata.
+
+Only `/v1/events` enables CORS for the exact GitHub Pages origin above; OPTIONS
+allows POST with Content-Type only, without cookies or credentials. Unknown
+browser origins are rejected. Native requests without Origin remain supported.
+CORS is a browser boundary, not authentication against forged native clients;
+the existing closed schema, size limits and rate limits still apply. Admin CORS
+and authentication are unchanged.
+
+Combined statistics use "活跃客户端数"; platform rows use active mobile
+installs or active web browsers, never exact user counts. The numbers come from 6-hourly
 anonymous `app_active` and `daily_active` reports and are an estimate, not a
 precise audience.
 
@@ -221,9 +269,10 @@ The worker writes one data point for each accepted event. Arrays are positional:
 |  | `blob7` | `app_version` |
 |  | `blob8` | `locale` |
 |  | `blob9` | `platform`; historical empty slots are interpreted as `android` by admin analytics |
-|  | `blob10` | WeChat `env_version`, or `""` for Android |
+|  | `blob10` | WeChat `env_version`, or `""` for Android/iOS/web |
 | `doubles` | `double1` | `card_count`, or `0` for non-reading events |
-|  | `double2` | `android_major`, or `0` for a WeChat client |
+|  | `double2` | `android_major`, or `0` for an iOS/web/WeChat client |
+|  | `double3` | `ios_major`, or `0` for a non-iOS client (preserved production mapping) |
 | `indexes` | `index1` | `install_hash` — the only index |
 
 Analytics Engine currently accepts an ordered array with one sampling index;

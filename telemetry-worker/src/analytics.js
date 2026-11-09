@@ -20,6 +20,7 @@ const EVENT_TYPES = Object.freeze([
   "install_seen",
   "daily_active",
   "app_active",
+  "web_visit",
   "reading_completed"
 ]);
 
@@ -32,6 +33,8 @@ const WINDOW_SPECS = Object.freeze({
 const PLATFORM_FILTERS = Object.freeze({
   all: "",
   android: "if(blob9 = '', 'android', blob9) = 'android'",
+  ios: "blob9 = 'ios'",
+  web: "blob9 = 'web'",
   miniprogram: "blob9 = 'miniprogram'",
   minigame: "blob9 = 'minigame'"
 });
@@ -104,7 +107,7 @@ function timeFilter(interval) {
 function queryTemplates(interval, platform = "all") {
   const platformFilter = PLATFORM_FILTERS[platform];
   const filter = timeFilter(interval) + (platformFilter ? ` AND ${platformFilter}` : "");
-  const eventFilter = "blob1 IN ('install_seen', 'daily_active', 'app_active', 'reading_completed')";
+  const eventFilter = "blob1 IN ('install_seen', 'daily_active', 'app_active', 'reading_completed', 'web_visit')";
 
   return {
     event_totals: `
@@ -671,6 +674,7 @@ function buildAnalyticsResponse(window, parsed) {
     window_seconds: WINDOW_SPECS[window].seconds,
     generated_at: nowSec(),
     install_seen: installSeen,
+    web_visit: eventTotals ? eventTotals.find((row) => row.event === "web_visit").count : null,
     active_estimate: parsed.activeEstimate,
     active_estimate_meta: {
       estimated: true,

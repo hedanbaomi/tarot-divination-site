@@ -126,6 +126,24 @@ test("mini-game platform filter matches minigame and all only", async () => {
   );
 });
 
+test("iOS platform filter matches ios and all and uses the real build range", async () => {
+  const db = createMockD1();
+  insertAnnouncement(db, { platform: "ios", min_version_code: 42, max_version_code: 42 });
+  insertAnnouncement(db, { platform: "all" });
+  insertAnnouncement(db, { platform: "android" });
+
+  const response = await getAnnouncements(db, "platform=ios&version_code=42&locale=en-US");
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.deepEqual(
+    data.announcements.map((announcement) => announcement.platform).sort(),
+    ["all", "ios"]
+  );
+  assert.equal((await getAnnouncements(db, "platform=ios&version_code=41")).status, 200);
+  const wrongBuild = await (await getAnnouncements(db, "platform=ios&version_code=41")).json();
+  assert.deepEqual(wrongBuild.announcements.map((announcement) => announcement.platform), ["all"]);
+});
+
 test("version range filter applies min and max version_code", async () => {
   const db = createMockD1();
   insertAnnouncement(db, { min_version_code: 0, max_version_code: 2147483647 });
@@ -311,7 +329,7 @@ test("public GET never requires install_hash and rejects no params", async () =>
 
 test("invalid platform and version_code parameters return 400", async () => {
   const db = createMockD1();
-  assert.equal((await getAnnouncements(db, "platform=ios")).status, 400);
+  assert.equal((await getAnnouncements(db, "platform=desktop")).status, 400);
   assert.equal((await getAnnouncements(db, "version_code=abc")).status, 400);
   assert.equal((await getAnnouncements(db, "version_code=-1")).status, 400);
 });

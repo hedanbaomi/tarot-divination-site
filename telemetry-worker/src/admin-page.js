@@ -117,6 +117,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
           <div><label>平台</label><select id="fPlatform">
             <option value="all">all</option>
             <option value="android">android</option>
+            <option value="ios">ios</option>
             <option value="web">web</option>
             <option value="miniprogram">miniprogram · 微信小程序</option>
             <option value="minigame">minigame · 微信小游戏端</option>
@@ -151,7 +152,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
 
     <section id="currentStatsView" aria-labelledby="currentStatsHeading">
       <h2 id="currentStatsHeading" class="section-title">2. 当前活跃版本（D1）</h2>
-      <p class="muted section-intro">来自 D1 的当前活跃安装与最近上报版本；与历史遥测独立加载。</p>
+      <p class="muted section-intro">来自 D1 的手机活跃安装、网页活跃浏览器与最近上报版本。同一人在不同设备或浏览器中分别计数，清除浏览器存储会重置标识；与历史遥测独立加载。</p>
       <div class="row">
         <button id="refreshStats">刷新统计</button>
         <span class="muted" id="statsHint"></span>
@@ -179,6 +180,8 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
         <select id="historyPlatform">
           <option value="all">全部</option>
           <option value="android">Android</option>
+          <option value="ios">iOS</option>
+          <option value="web">网页版</option>
           <option value="miniprogram">微信小程序</option>
           <option value="minigame">微信小游戏端</option>
         </select>
@@ -494,9 +497,9 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     var cards = $("windowCards");
     cards.textContent = "";
     var labels = [
-      ["active_24h", "最近 24 小时活跃安装数"],
-      ["active_7d", "最近 7 天活跃安装数"],
-      ["active_30d", "最近 30 天活跃安装数"]
+      ["active_24h", "最近 24 小时活跃客户端数"],
+      ["active_7d", "最近 7 天活跃客户端数"],
+      ["active_30d", "最近 30 天活跃客户端数"]
     ];
     labels.forEach(function (pair) {
       var card = document.createElement("div");
@@ -514,7 +517,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
 
     var hint = $("statsHint");
     hint.textContent = "数据更新时间 " + new Date(data.generated_at * 1000).toLocaleString() +
-      " · 已知安装总数（最近 90 天）：" + data.known_installs_90d +
+      " · 已知客户端总数（最近 90 天）：" + data.known_installs_90d +
       "（活跃设备数按 6 小时窗口上报估算，非精确用户人数）";
 
     var list = $("versionList");
@@ -543,10 +546,11 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
           ? "未知/旧客户端"
           : platform === "android"
             ? "versionCode " + row.version_code
-            : "微信版本";
+            : platform === "ios" ? "build " + row.version_code
+              : platform === "web" ? "网页版本" : "微信版本";
         label.textContent = historyPlatformLabel(platform) + environment + " · " +
           versionLabel + " · " + (row.app_version || "?") +
-          " · " + row.installs + " 个安装 · " + row.percent + "%";
+          " · " + row.installs + (platform === "web" ? " 个浏览器 · " : " 个安装 · ") + row.percent + "%";
         var bar = document.createElement("div");
         bar.className = "bar";
         var fill = document.createElement("div");
@@ -580,8 +584,8 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
         var environment = (row.platform === "miniprogram" || row.platform === "minigame") && row.env_version
           ? " · " + row.env_version
           : "";
-        line.textContent = row.platform + environment + " · " + row.installs +
-          " 个活跃安装 · " + row.percent + "%";
+        line.textContent = historyPlatformLabel(row.platform) + environment + " · " + row.installs +
+          (row.platform === "web" ? " 个活跃浏览器 · " : " 个活跃安装 · ") + row.percent + "%";
         block.appendChild(line);
       });
       if (rows.length === 0) {
@@ -652,6 +656,8 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
 
   function historyPlatformLabel(value) {
     if (value === "android") return "Android";
+    if (value === "ios") return "iOS";
+    if (value === "web") return "网页版";
     if (value === "miniprogram") return "微信小程序";
     if (value === "minigame") return "微信小游戏端";
     return "全部平台";
@@ -725,10 +731,11 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     cards.textContent = "";
     var failed = Array.isArray(data.failed_sections) ? data.failed_sections : [];
     [
-      ["安装上报", "event_totals", data.install_seen, "暂不可用"],
-      ["完成阅读", "event_totals", data.reading_completed, "暂不可用"],
+      ["首次使用上报", "event_totals", data.install_seen, "暂不可用"],
+      ["网页访问次数", "event_totals", data.web_visit, "暂不可用"],
+      ["完成解牌", "event_totals", data.reading_completed, "暂不可用"],
       ["活跃估算", "active_estimate", data.active_estimate, "暂不可用"],
-      ["完成阅读平均抽牌数", "reading_metrics", data.reading_completed_average_card_count, "平均牌数暂不可用"]
+      ["完成解牌平均抽牌数", "reading_metrics", data.reading_completed_average_card_count, "平均牌数暂不可用"]
     ].forEach(function (item) {
       var unavailable = failed.indexOf(item[1]) !== -1 ? item[3] : null;
       cards.appendChild(makeSummaryCard(item[0], item[2], unavailable));
@@ -1023,7 +1030,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
   $("historyWindow30d").addEventListener("click", function () { selectHistoryWindow("30d"); });
   $("historyPlatform").addEventListener("change", function () {
     var value = $("historyPlatform").value;
-    if (["all", "android", "miniprogram", "minigame"].indexOf(value) === -1) return;
+    if (["all", "android", "ios", "web", "miniprogram", "minigame"].indexOf(value) === -1) return;
     state.historyPlatform = value;
     loadAnalytics();
   });

@@ -13,14 +13,15 @@ const SELECT_STATE =
 
 const UPSERT_STATE = `
   INSERT INTO install_state
-    (install_hash, app_version, version_code, locale, android_major, platform, env_version,
-     first_seen_at, last_seen_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (install_hash, app_version, version_code, locale, android_major, ios_major,
+     platform, env_version, first_seen_at, last_seen_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(install_hash) DO UPDATE SET
     app_version = excluded.app_version,
     version_code = excluded.version_code,
     locale = excluded.locale,
     android_major = excluded.android_major,
+    ios_major = excluded.ios_major,
     platform = excluded.platform,
     env_version = excluded.env_version,
     last_seen_at = excluded.last_seen_at
@@ -30,11 +31,11 @@ const UPSERT_STATE = `
  * Records an install-activity event (app_active or legacy daily_active) in
  * install_state. Returns "written" or "deduped".
  *
- *  - Android app_active carries the real version_code and always wins: it overwrites
+ *  - Android/iOS app_active carries the real version_code and always wins: it overwrites
  *    a legacy row's app_version/version_code, moving the install into the new
  *    version group while preserving first_seen_at. Dedupe applies only to the
  *    same version_code within 6 hours.
- *  - legacy daily_active (no version_code, stored as 0) never downgrades a
+ *  - legacy Android daily_active (no version_code, stored as 0) never downgrades a
  *    row that already has a real version_code: it only refreshes locale,
  *    android_major and last_seen_at, respecting the 6-hour rule.
  *  - version-code-free rows (legacy Android or mini program) also compare
@@ -49,18 +50,19 @@ export async function recordInstallActivity(env, event) {
   const incomingCode = Number.isInteger(event.version_code) ? event.version_code : 0;
   const platform = event.platform || "android";
   const envVersion = event.env_version || "";
-  const isVersionedAndroidActive = platform === "android" && incomingCode > 0;
+  const isNativePlatform = platform === "android" || platform === "ios";
+  const isVersionedNativeActive = isNativePlatform && incomingCode > 0;
   const existing = await env.DB.prepare(SELECT_STATE).bind(event.install_hash).first();
 
   if (!existing) {
     await env.DB.prepare(UPSERT_STATE)
       .bind(event.install_hash, event.app_version, incomingCode, event.locale,
-        event.android_major, platform, envVersion, now, now)
+        event.android_major, event.ios_major, platform, envVersion, now, now)
       .run();
     return "written";
   }
 
-  if (isVersionedAndroidActive) {
+  if (isVersionedNativeActive) {
     if (
       existing.platform === platform &&
       existing.env_version === envVersion &&
@@ -72,18 +74,19 @@ export async function recordInstallActivity(env, event) {
     }
     await env.DB.prepare(UPSERT_STATE)
       .bind(event.install_hash, event.app_version, incomingCode, event.locale,
-        event.android_major, platform, envVersion, now, now)
+        event.android_major, event.ios_major, platform, envVersion, now, now)
       .run();
     return "written";
   }
 
-  // Legacy daily_active hitting an install already recorded by a newer client:
-  // never downgrade app_version/version_code; only refresh time fields.
-  if (platform === "android" && existing.platform === "android" && existing.version_code > 0) {
+  // An unversioned native active event hitting a real-build row never downgrades
+  // it. This preserves the legacy Android daily_active compatibility contract.
+  if (isNativePlatform && existing.platform === platform && existing.version_code > 0) {
     if (now - existing.last_seen_at < ACTIVE_DEDUPE_SECONDS) return "deduped";
     await env.DB.prepare(
-      "UPDATE install_state SET locale = ?, android_major = ?, last_seen_at = ? WHERE install_hash = ?"
-    ).bind(event.locale, event.android_major, now, event.install_hash).run();
+      "UPDATE install_state SET locale = ?, android_major = ?, ios_major = ?, last_seen_at = ? " +
+        "WHERE install_hash = ?"
+    ).bind(event.locale, event.android_major, event.ios_major, now, event.install_hash).run();
     return "written";
   }
 
@@ -99,7 +102,7 @@ export async function recordInstallActivity(env, event) {
   }
   await env.DB.prepare(UPSERT_STATE)
     .bind(event.install_hash, event.app_version, 0, event.locale,
-      event.android_major, platform, envVersion, now, now)
+      event.android_major, event.ios_major, platform, envVersion, now, now)
     .run();
   return "written";
 }

@@ -411,13 +411,44 @@ test("platform analytics groups active installs and falls back old empty slots t
   assert.match(queries.platform, /app_active/);
 });
 
+test("web visits and completed readings appear in combined and web history summaries", async () => {
+  for (const platform of ["all", "web"]) {
+    const calls = installDefaultAnalyticsFetch({ onCall: ({ init }) => {
+      const sql = String(init.body);
+      if (platform === "web") assert.match(sql, /blob9 = 'web'/);
+      if (sql.includes("GROUP BY event")) return upstreamResponse([
+        { event: "web_visit", count: 12 },
+        { event: "reading_completed", count: platform === "web" ? 3 : 8 },
+        { event: "app_active", count: 4 }
+      ]);
+      if (sql.includes("COUNT(DISTINCT index1) AS active_estimate")) return upstreamResponse([{ active_estimate: 2 }]);
+      if (sql.includes("avg_card_count")) return upstreamResponse([{ avg_card_count: 3 }]);
+      if (sql.includes("utc_day")) return upstreamResponse([{ utc_day: "2026-11-09", count: 19 }]);
+      return upstreamResponse([]);
+    } });
+    const response = await worker.fetch(makeRequest(
+      `https://telemetry.test/admin/api/analytics?window=7d&platform=${platform}`, { token: ADMIN_TOKEN }
+    ), analyticsEnv());
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.web_visit, 12);
+    assert.equal(body.reading_completed, platform === "web" ? 3 : 8);
+    assert.equal(body.platform, platform);
+    assert.equal(body.partial, false);
+    assert.ok(calls.length > 0);
+    assert.equal(body.distributions.event.rows.find((row) => row.value === "web_visit").count, 12);
+  }
+});
+
 test("analytics platform filter is closed and scopes every fixed query", async () => {
   const allQueries = buildAnalyticsQueries("24h", "all");
   const androidQueries = buildAnalyticsQueries("24h", "android");
   const miniQueries = buildAnalyticsQueries("24h", "miniprogram");
   const gameQueries = buildAnalyticsQueries("24h", "minigame");
   assert.ok(allQueries && androidQueries && miniQueries && gameQueries);
-  assert.equal(buildAnalyticsQueries("24h", "web"), null);
+  const webQueries = buildAnalyticsQueries("24h", "web");
+  Object.values(webQueries).forEach((sql) => assert.match(sql, /blob9 = 'web'/));
+  assert.equal(buildAnalyticsQueries("24h", "unknown"), null);
   Object.values(androidQueries).forEach((sql) => {
     assert.match(sql, /if\(blob9 = '', 'android', blob9\) = 'android'/);
   });
@@ -457,7 +488,7 @@ test("analytics platform filter is closed and scopes every fixed query", async (
   gameCalls.forEach(({ init }) => assert.match(String(init.body), /blob9 = 'minigame'/));
 
   const invalid = await worker.fetch(
-    makeRequest("https://telemetry.test/admin/api/analytics?window=24h&platform=web", {
+    makeRequest("https://telemetry.test/admin/api/analytics?window=24h&platform=unknown", {
       token: ADMIN_TOKEN,
       ip: "198.51.100.45"
     }),
@@ -467,7 +498,7 @@ test("analytics platform filter is closed and scopes every fixed query", async (
   assert.deepEqual(await invalid.json(), {
     error: "invalid_platform",
     module: "analytics",
-    allowed_platforms: ["all", "android", "miniprogram", "minigame"]
+    allowed_platforms: ["all", "android", "ios", "web", "miniprogram", "minigame"]
   });
 });
 
