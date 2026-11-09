@@ -81,6 +81,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
       <button id="navAnnouncements" type="button">公告管理</button>
       <button id="navCurrentStats" type="button">当前活跃版本</button>
       <button id="navHistory" type="button">历史遥测</button>
+      <button id="navWebHistory" type="button">网页历史访问</button>
     </div>
     <button id="logout" class="danger">退出</button>
   </nav>
@@ -205,6 +206,17 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
         </div>
       </div>
     </section>
+    <section id="webHistoryView" aria-labelledby="webHistoryHeading">
+      <h2 id="webHistoryHeading" class="section-title">4. 网页历史访问（Cloudflare）</h2>
+      <p class="muted section-intro">上线统一统计前的网页访问归档，独立于上方手机与网页实时遥测。页面浏览量和访问次数均为 Cloudflare 抽样估算，已排除机器人；不代表独立用户，也不能还原解牌次数。</p>
+      <button id="refreshWebHistory" type="button">刷新网页历史访问</button>
+      <p id="webHistoryHint" class="muted" role="status" aria-live="polite">正在加载网页历史访问……</p>
+      <div id="webHistoryContent" style="display:none">
+        <div id="webHistoryCards" class="grid history-summary"></div>
+        <p class="notice warning">按 UTC 日归档；本区不受上方平台和时间筛选影响，不与上线后的访问混加。未返回样本的日期不等于无人访问。</p>
+        <details class="card"><summary>查看每日历史访问</summary><div id="webHistoryTable" class="trend-wrap"></div></details>
+      </div>
+    </section>
   </div>
 </main>
 <script>
@@ -216,7 +228,8 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     editingId: null,
     historyWindow: "24h",
     historyPlatform: "all",
-    analyticsRequestId: 0
+    analyticsRequestId: 0,
+    webHistoryRequestId: 0
   };
   var analyticsWindows = ["24h", "7d", "30d"];
 
@@ -267,6 +280,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     loadAnnouncements();
     loadStats();
     loadAnalytics();
+    loadWebHistory();
   }
 
   function makeBadge(text, cls) {
@@ -596,6 +610,60 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
       }
       platformList.appendChild(block);
     });
+  }
+
+  function loadWebHistory() {
+    var requestId = ++state.webHistoryRequestId;
+    $("webHistoryContent").style.display = "none";
+    $("webHistoryHint").textContent = "正在加载网页历史访问……";
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 10000) : null;
+    api("/admin/api/web-history", { isolated: true, signal: controller ? controller.signal : undefined })
+      .then(function (response) {
+        if (!response.ok) throw new Error("unavailable");
+        return response.json();
+      }).then(function (data) {
+        if (requestId !== state.webHistoryRequestId) return;
+        if (!data || data.module !== "web_history" || !data.available) throw new Error("unavailable");
+        if (!data.imported) {
+          $("webHistoryHint").textContent = "尚未导入网页历史访问。";
+          return;
+        }
+        var cards = $("webHistoryCards");
+        cards.textContent = "";
+        cards.appendChild(makeSummaryCard("历史页面浏览量（估算）", data.pageviews));
+        cards.appendChild(makeSummaryCard("历史访问次数（估算，非人数）", data.visits));
+        var lastDay = new Date(Date.parse(data.cutoff_utc) - 86400000).toISOString().slice(0, 10);
+        $("webHistoryHint").textContent = data.host + data.path + " · " + data.from_utc.slice(0, 10) + " 至 " + lastDay +
+          "（UTC） · " + data.coverage_days + " 天 / " + data.days_with_samples + " 天有返回样本 · 导出于 " + new Date(data.exported_at).toLocaleString();
+        var container = $("webHistoryTable");
+        container.textContent = "";
+        var table = document.createElement("table");
+        var caption = document.createElement("caption");
+        caption.textContent = "Cloudflare 每日网页历史访问（估算）";
+        table.appendChild(caption);
+        var head = document.createElement("thead"), header = document.createElement("tr");
+        ["UTC 日期", "页面浏览量", "访问次数", "样本状态"].forEach(function (label) {
+          var cell = document.createElement("th");
+          cell.setAttribute("scope", "col"); cell.textContent = label; header.appendChild(cell);
+        });
+        head.appendChild(header); table.appendChild(head);
+        var body = document.createElement("tbody");
+        data.rows.forEach(function (row) {
+          var tr = document.createElement("tr");
+          [row.utc_day, row.has_samples ? formatMetric(row.pageviews) : "—", row.has_samples ? formatMetric(row.visits) : "—",
+            row.has_samples ? "已返回样本" : "未返回样本"].forEach(function (value) {
+            var cell = document.createElement("td"); cell.textContent = value; tr.appendChild(cell);
+          });
+          body.appendChild(tr);
+        });
+        table.appendChild(body); container.appendChild(table);
+        $("webHistoryContent").style.display = "block";
+      }).catch(function () {
+        if (requestId !== state.webHistoryRequestId) return;
+        $("webHistoryContent").style.display = "none";
+        $("webHistoryHint").textContent = "网页历史访问暂不可用，请稍后重试；其他统计独立加载。";
+      }).then(function () { if (timeoutId !== null) clearTimeout(timeoutId); });
   }
 
   function loadAnalytics() {
@@ -1025,6 +1093,10 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
   });
   $("refreshList").addEventListener("click", loadAnnouncements);
   $("refreshStats").addEventListener("click", loadStats);
+  $("navWebHistory").addEventListener("click", function () {
+    $("webHistoryView").scrollIntoView({ block: "start" });
+  });
+  $("refreshWebHistory").addEventListener("click", loadWebHistory);
   $("historyWindow24h").addEventListener("click", function () { selectHistoryWindow("24h"); });
   $("historyWindow7d").addEventListener("click", function () { selectHistoryWindow("7d"); });
   $("historyWindow30d").addEventListener("click", function () { selectHistoryWindow("30d"); });

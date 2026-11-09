@@ -312,6 +312,43 @@ The worker sends exactly one index and the fixed blob/double order above.
   DOM APIs, the worker passes it through verbatim, and the Android client
   renders it as plain text (never HTML).
 
+## Cloudflare Web Analytics archive
+
+`GET /admin/api/web-history` uses the existing admin authentication and returns
+only the latest fully published aggregate snapshot. It is independent of the
+Analytics Engine windows and live `web_visit` / reading counters. The admin page
+labels the archived page views and visits as estimates, excludes bots, and never
+interprets them as unique people, installs, or completed readings.
+
+Migration `0005_web_analytics_history.sql` adds two archive tables without
+changing existing tables. Export source files and generated SQL belong under
+ignored `.local/web-analytics-backfill-*/`, never in Git. They contain only
+aggregate dashboard results and source metadata, never request headers or tokens.
+
+The offline operator tool validates site/path/bot filters, complete contiguous
+UTC-day coverage, per-batch path totals and time-series totals, unique buckets,
+and the pre-launch cutoff `2026-11-09T00:00:00Z`. It refuses results on the
+dashboard's inclusive end boundary, so adjacent export batches cannot overlap.
+Hourly results are reduced to UTC days. Dates with no returned samples remain
+explicitly marked; their stored zero is not a claim of zero actual traffic.
+
+```bash
+node tools/web-history-import.mjs .local/web-analytics-backfill-DATE/source.json
+node tools/web-history-import.mjs .local/web-analytics-backfill-DATE/source.json --sql .local/web-analytics-backfill-DATE/import.sql
+# After clean local validation and in an authorized backfill window:
+npx wrangler d1 migrations apply quareia --remote
+npx wrangler d1 execute quareia --remote --file .local/web-analytics-backfill-DATE/import.sql
+```
+
+The final SQL statement publishes only a snapshot whose day count and both
+totals reconcile. Re-running the same export resumes missing rows and does not
+increment totals or reset publication time. A newer export replaces the displayed
+snapshot rather than being added to it. Verify the final SELECT has a non-null
+`published_at`, then query the read-only endpoint. Preserve the export for audit.
+Rollback hides the specific import by setting its `published_at` to NULL; leave
+the additive schema and existing live data intact. The UI can also be rolled back
+to the previous Worker version. Neither operation reconstructs old reading events.
+
 ## Reproducible local checks
 
 No Cloudflare binding is needed for the test suite; the tests run the real
