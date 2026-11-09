@@ -117,6 +117,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
           <div><label>平台</label><select id="fPlatform">
             <option value="all">all</option>
             <option value="android">android</option>
+            <option value="ios">ios</option>
             <option value="web">web</option>
             <option value="miniprogram">miniprogram · 微信小程序</option>
             <option value="minigame">minigame · 微信小游戏端</option>
@@ -179,6 +180,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
         <select id="historyPlatform">
           <option value="all">全部</option>
           <option value="android">Android</option>
+          <option value="ios">iOS</option>
           <option value="web">网页版</option>
           <option value="miniprogram">微信小程序</option>
           <option value="minigame">微信小游戏端</option>
@@ -544,7 +546,8 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
           ? "未知/旧客户端"
           : platform === "android"
             ? "versionCode " + row.version_code
-            : platform === "web" ? "网页版本" : "微信版本";
+            : platform === "ios" ? "build " + row.version_code
+              : platform === "web" ? "网页版本" : "微信版本";
         label.textContent = historyPlatformLabel(platform) + environment + " · " +
           versionLabel + " · " + (row.app_version || "?") +
           " · " + row.installs + (platform === "web" ? " 个浏览器 · " : " 个安装 · ") + row.percent + "%";
@@ -653,6 +656,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
 
   function historyPlatformLabel(value) {
     if (value === "android") return "Android";
+    if (value === "ios") return "iOS";
     if (value === "web") return "网页版";
     if (value === "miniprogram") return "微信小程序";
     if (value === "minigame") return "微信小游戏端";
@@ -1026,7 +1030,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
   $("historyWindow30d").addEventListener("click", function () { selectHistoryWindow("30d"); });
   $("historyPlatform").addEventListener("change", function () {
     var value = $("historyPlatform").value;
-    if (["all", "android", "web", "miniprogram", "minigame"].indexOf(value) === -1) return;
+    if (["all", "android", "ios", "web", "miniprogram", "minigame"].indexOf(value) === -1) return;
     state.historyPlatform = value;
     loadAnalytics();
   });

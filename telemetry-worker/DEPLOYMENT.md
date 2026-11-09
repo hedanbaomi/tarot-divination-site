@@ -1,10 +1,26 @@
 # Quareia Telemetry Worker deployment record
 
-## 2026-11-09: unified web telemetry, local revision
+## 2026-11-09: unified web telemetry, pre-release validation
 
 This revision adds `platform=web`, the `web_visit` counter, the guarded web
 collector, and combined web/mobile admin displays. It has **not been deployed**.
 No production data or Cloudflare configuration was changed in this task.
+
+The authorized release preflight subsequently found that production already
+runs the iOS Worker code and `0003_ios_platform.sql`, from the historical
+`b228954` source line, while main did not contain them. The matching Worker
+modules and original iOS migration were restored before deployment. The web
+migration is therefore `0004_web_platform.sql` and preserves `ios_major` and all
+native client rows. The existing `/v1/ios-update` route is preserved; its
+pre-release production response was the unconfigured `ios_update_unavailable`
+404. No iOS application source or signing configuration is part of this change.
+
+After this compatibility reconciliation, 148 Worker tests passed alongside the
+198 web/Android JavaScript tests. Production source and schema were checked
+read-only before applying any migration.
+The downloaded deployed bundle exactly matched a fresh build of `b228954`
+after normalizing line endings and the source-map footer, confirming the source
+baseline used for this compatibility reconciliation.
 
 Local validation completed on 2026-11-09:
 
@@ -27,7 +43,7 @@ For a separately authorized release:
 
 1. Run the clean-checkout `npm ci` gate and local tests described in README.
 2. Verify production has all prior migrations, then apply
-   `0003_web_platform.sql` before enabling the new Worker or website collector.
+   `0004_web_platform.sql` before enabling the new Worker or website collector.
    It copies old install rows and preserves the primary key and both indexes.
 3. Deploy the Worker and verify its health and allowed-origin preflight; confirm
    the existing Analytics read configuration is present without exposing secrets.

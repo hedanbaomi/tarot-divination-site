@@ -498,7 +498,7 @@ test("analytics platform filter is closed and scopes every fixed query", async (
   assert.deepEqual(await invalid.json(), {
     error: "invalid_platform",
     module: "analytics",
-    allowed_platforms: ["all", "android", "web", "miniprogram", "minigame"]
+    allowed_platforms: ["all", "android", "ios", "web", "miniprogram", "minigame"]
   });
 });
 

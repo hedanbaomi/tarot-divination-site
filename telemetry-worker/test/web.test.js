@@ -77,9 +77,12 @@ test("browser visits, active browsers and readings reach the shared worker and a
   assert.equal(reading.init.credentials, "omit");
   const mobile = makeEvent("app_active", { version_code: 4 });
   assert.equal((await worker.fetch(makeRequest("https://telemetry.test/v1/events", { method: "POST", body: mobile }), env)).status, 204);
+  const ios = makeEvent("app_active", { platform: "ios", ios_major: 17, version_code: 1 });
+  delete ios.android_major;
+  assert.equal((await worker.fetch(makeRequest("https://telemetry.test/v1/events", { method: "POST", body: ios }), env)).status, 204);
   const stats = await (await worker.fetch(makeRequest("https://telemetry.test/admin/api/stats", { token: "test-admin-token" }), env)).json();
-  assert.equal(stats.windows.active_24h.count, 2);
-  assert.deepEqual(stats.platform_distribution.active_24h.map((row) => [row.platform, row.installs]), [["android", 1], ["web", 1]]);
+  assert.equal(stats.windows.active_24h.count, 3);
+  assert.deepEqual(stats.platform_distribution.active_24h.map((row) => [row.platform, row.installs]), [["android", 1], ["ios", 1], ["web", 1]]);
   const nextPage = browser({ env, store: page.store });
   await settle();
   assert.deepEqual(nextPage.calls.map((call) => call.event.event), ["web_visit"]);
@@ -88,7 +91,7 @@ test("browser visits, active browsers and readings reach the shared worker and a
   page.listeners.visibilitychange();
   await settle();
   assert.equal(page.calls.at(-1).event.event, "app_active");
-  assert.equal(db.all("SELECT * FROM install_state").length, 2);
+  assert.equal(db.all("SELECT * FROM install_state").length, 3);
 });
 
 test("collector stays off in local/native contexts, without storage, and after opt-out", async () => {
@@ -168,7 +171,7 @@ test("events CORS permits the production website and never enables admin CORS", 
 test("web schema rejects native fields and content; other platforms cannot emit web_visit", async () => {
   const env = makeEnv({ db: createMockD1(), analytics: mockAnalytics() });
   const web = { schema_version: 1, platform: "web", event: "app_active", install_hash: "a".repeat(64), app_version: "web-1", locale: "en" };
-  for (const extra of [{ android_major: 0 }, { android_major: null }, { version_code: 0 }, { env_version: "release" }, { question: "secret" }, { card_ids: [] }]) {
+  for (const extra of [{ android_major: 0 }, { android_major: null }, { ios_major: 0 }, { ios_major: null }, { version_code: 0 }, { env_version: "release" }, { question: "secret" }, { card_ids: [] }]) {
     const response = await worker.fetch(makeRequest("https://telemetry.test/v1/events", { method: "POST", body: { ...web, ...extra } }), env);
     assert.equal(response.status, 400, JSON.stringify(extra));
   }

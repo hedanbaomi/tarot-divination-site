@@ -38,11 +38,14 @@ import { nowMs, setClockForTesting, resetClock } from "./clock.js";
 import { handleAnnouncements, publicAnnouncementHeaders } from "./announcements.js";
 import { recordInstallActivity, cleanupInactiveInstalls } from "./stats.js";
 import { handleAdminPage, handleAdminVerify, handleAdminApi } from "./admin.js";
+import { handleIOSUpdate } from "./ios-update.js";
 
 const SCHEMA_VERSION = 1;
 const MAX_BODY_BYTES = 1024;
 const ANDROID_MAJOR_MIN = 1;
 const ANDROID_MAJOR_MAX = 100;
+const IOS_MAJOR_MIN = 1;
+const IOS_MAJOR_MAX = 100;
 const MAX_VERSION_CODE = 2147483647;
 
 // Allow-listed events and their extra fields. Anything else is rejected.
@@ -65,10 +68,11 @@ const BASE_FIELDS = {
   locale: "string",
   platform: "optional_string",
   env_version: "optional_string",
-  android_major: "optional_int"
+  android_major: "optional_int",
+  ios_major: "optional_int"
 };
 
-const TELEMETRY_PLATFORMS = new Set(["android", "web", "miniprogram", "minigame"]);
+const TELEMETRY_PLATFORMS = new Set(["android", "ios", "web", "miniprogram", "minigame"]);
 const WEB_ORIGIN = "https://hedanbaomi.github.io";
 const WECHAT_ENV_VERSIONS = new Set(["develop", "trial", "release"]);
 
@@ -156,6 +160,10 @@ export default {
         return json({ error: "rate_limited" }, 429, publicAnnouncementHeaders(request));
       }
       return handleAnnouncements(request, env);
+    }
+
+    if (request.method === "GET" && url.pathname === "/v1/ios-update") {
+      return handleIOSUpdate(env);
     }
 
     if (request.method === "GET" && url.pathname === "/admin") {
@@ -355,6 +363,22 @@ function validateEvent(event) {
         value.android_major < ANDROID_MAJOR_MIN || value.android_major > ANDROID_MAJOR_MAX) {
       return { ok: false, error: "invalid_android_major" };
     }
+    if (value.ios_major !== undefined) {
+      return { ok: false, error: "invalid_ios_major" };
+    }
+    value.ios_major = 0;
+  } else if (value.platform === "ios") {
+    if (value.env_version !== "") {
+      return { ok: false, error: "invalid_env_version" };
+    }
+    if (value.android_major !== undefined) {
+      return { ok: false, error: "invalid_android_major" };
+    }
+    if (!Number.isInteger(value.ios_major) ||
+        value.ios_major < IOS_MAJOR_MIN || value.ios_major > IOS_MAJOR_MAX) {
+      return { ok: false, error: "invalid_ios_major" };
+    }
+    value.android_major = 0;
   } else {
     if (value.platform === "web" ? value.env_version !== "" : !WECHAT_ENV_VERSIONS.has(value.env_version)) {
       return { ok: false, error: "invalid_env_version" };
@@ -365,7 +389,11 @@ function validateEvent(event) {
     if (value.android_major !== undefined) {
       return { ok: false, error: "invalid_android_major" };
     }
+    if (value.ios_major !== undefined) {
+      return { ok: false, error: "invalid_ios_major" };
+    }
     value.android_major = 0;
+    value.ios_major = 0;
   }
 
   // install_hash must be a 64-char lowercase hex SHA-256 digest.
@@ -390,13 +418,13 @@ function validateEvent(event) {
   }
 
   if (type === "app_active") {
-    if (value.platform === "android" &&
+    if ((value.platform === "android" || value.platform === "ios") &&
         (!Number.isInteger(value.version_code) ||
          value.version_code < 1 ||
          value.version_code > MAX_VERSION_CODE)) {
       return { ok: false, error: "invalid_version_code" };
     }
-    if (value.platform !== "android") {
+    if (value.platform !== "android" && value.platform !== "ios") {
       // Android version_code has no counterpart in a Mini Program/Mini Game.
       // The server owns the 0 sentinel; clients must omit the field.
       if (value.version_code !== undefined) {
@@ -454,7 +482,8 @@ function writeDataPoint(env, event, geo) {
   ];
   const doubles = [
     event.event === "reading_completed" ? Number(event.card_count) : 0,
-    Number(event.android_major)
+    Number(event.android_major),
+    Number(event.ios_major)
   ];
   const indexes = [event.install_hash];
 
