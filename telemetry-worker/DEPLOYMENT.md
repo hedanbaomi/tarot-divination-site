@@ -1,5 +1,34 @@
 # Quareia Telemetry Worker deployment record
 
+## 2026-11-09: Cloudflare Web Analytics historical backfill
+
+- Source: `64a2548f5f782f747832eea4d9ecceb86395a287`; deployed Worker version
+  `a99bbdb4-5e5d-4367-b510-44cd90a84384` on the existing custom domain, preserving
+  existing variables and bindings with `--keep-vars`.
+- Applied additive migration `0005_web_analytics_history.sql`, then imported the
+  validated aggregate dashboard snapshot. Its day count, page-view total and visit
+  total reconciled with the exported source; exactly one snapshot was published.
+  Existing per-platform client aggregates and announcement count/revisions matched
+  their pre-import values. A D1 Time Travel bookmark was saved before import.
+- Export coverage starts on the site-creation UTC day and ends before
+  `2026-11-09T00:00:00Z`. Archived figures retain Cloudflare's bot exclusion and
+  sampling semantics. The separate admin panel does not combine them with live
+  users, installs, visits or readings. Days without returned samples are marked.
+- Validation: 171 Worker tests passed after clean `npm ci`; local Wrangler
+  migrations, actual aggregate import and deployment dry-run passed. Browser
+  inspection verified summary values, all date rows, repeat refresh and independence
+  from the live-history filters. DSH / DeepSeek V4.1 Flash completed independent
+  source review with no blocking findings; a bounded native follow-up found none
+  in the migration/import/auth paths either.
+- Production checks: health, admin security headers/inline JavaScript, exact admin
+  HTML match, unauthenticated history denial, event preflight, and unchanged iOS
+  update response passed. The production D1 snapshot was checked directly; the
+  authenticated visual check used the same snapshot and Worker in local preview.
+- Export, import SQL, before/after evidence and screenshot remain in ignored local
+  files. No source data or credentials were committed. Rollback may unpublish the
+  specific archive snapshot or restore the previous Worker; leave live data and
+  additive schema intact.
+
 ## 2026-11-09: authorized unified telemetry release
 
 - Worker source: `a0df351de0b0a00200893ed8bc9da74377dd41f0`.
