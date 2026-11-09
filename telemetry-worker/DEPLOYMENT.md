@@ -1,10 +1,30 @@
 # Quareia Telemetry Worker deployment record
 
+## 2026-11-09: authorized unified telemetry release
+
+- Worker source: `a0df351de0b0a00200893ed8bc9da74377dd41f0`.
+- Deployed Worker version: `2230754f-fe46-4c5b-b8f3-e56c0830e154` on the existing
+  `telemetry.luotianyi.fun` domain. Existing bindings and variables were preserved.
+- Remote migration `0004_web_platform.sql` applied successfully; already-applied
+  `0003_ios_platform.sql` was not replayed. Per-platform record counts and the
+  iOS-major aggregate were identical immediately before and after migration.
+  A pre-deployment D1 Time Travel bookmark was recorded locally.
+- Clean release gate: 198 web/Android tests and 148 Worker tests passed, followed
+  by local migrations 0001–0004 and a Worker dry-run. DSH / DeepSeek V4.1 Flash
+  independently reviewed the reconciled native-platform and migration paths and
+  found no blocking issue.
+- Live backend checks passed: `/health`, allowed-origin POST preflight, web/iOS
+  admin options, admin security headers and JavaScript parsing. The existing
+  `/v1/ios-update` unconfigured 404 response is preserved.
+- Website delivery uses GitHub Pages from `main` at `/`. Publication and final
+  browser acceptance are tracked in [release PR #3](https://github.com/hedanbaomi/tarot-divination-site/pull/3).
+  This release does not publish a new Android or iOS binary.
+
 ## 2026-11-09: unified web telemetry, pre-release validation
 
 This revision adds `platform=web`, the `web_visit` counter, the guarded web
-collector, and combined web/mobile admin displays. It has **not been deployed**.
-No production data or Cloudflare configuration was changed in this task.
+collector, and combined web/mobile admin displays. The following validation was
+completed locally before the authorized production release recorded above.
 
 The authorized release preflight subsequently found that production already
 runs the iOS Worker code and `0003_ios_platform.sql`, from the historical
@@ -39,7 +59,7 @@ Local validation completed on 2026-11-09:
   tests and the browser preview. No production authenticated API or physical
   device acceptance was performed.
 
-For a separately authorized release:
+Release procedure:
 
 1. Run the clean-checkout `npm ci` gate and local tests described in README.
 2. Verify production has all prior migrations, then apply
@@ -58,7 +78,7 @@ additive platform migration in place so already collected web rows survive.
 Existing Android and WeChat rows remain compatible. Do not remove statistics or
 reverse the table migration as part of routine rollback.
 
-## Current status
+## Historical deployment notes (2026-07 / 2026-08)
 
 - Status: first authorized deployment completed; Worker remains deployed.
 - Endpoint: `https://telemetry.luotianyi.fun`
