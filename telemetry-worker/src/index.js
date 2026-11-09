@@ -49,6 +49,7 @@ const MAX_VERSION_CODE = 2147483647;
 const EVENT_DEFS = {
   install_seen: {},
   daily_active: {},
+  web_visit: {},
   reading_completed: { deck_type: "string", card_count: "int" },
   app_active: { version_code: "optional_int" }
 };
@@ -67,7 +68,8 @@ const BASE_FIELDS = {
   android_major: "optional_int"
 };
 
-const TELEMETRY_PLATFORMS = new Set(["android", "miniprogram", "minigame"]);
+const TELEMETRY_PLATFORMS = new Set(["android", "web", "miniprogram", "minigame"]);
+const WEB_ORIGIN = "https://hedanbaomi.github.io";
 const WECHAT_ENV_VERSIONS = new Set(["develop", "trial", "release"]);
 
 // Default rate limits (per worker instance / in-memory; reset on redeploy/restart).
@@ -125,8 +127,28 @@ export default {
       return json({ ok: true }, 200);
     }
 
-    if (request.method === "POST" && url.pathname === "/v1/events") {
-      return handleEvents(request, env);
+    if (url.pathname === "/v1/events") {
+      const origin = request.headers.get("origin");
+      if (origin && origin !== WEB_ORIGIN) return json({ error: "origin_not_allowed" }, 403);
+      const headers = { "Cache-Control": "no-store", "Vary": "Origin" };
+      if (origin === WEB_ORIGIN) headers["Access-Control-Allow-Origin"] = WEB_ORIGIN;
+      if (request.method === "OPTIONS") {
+        const requestedHeaders = (request.headers.get("access-control-request-headers") || "")
+          .toLowerCase().split(",").map((value) => value.trim()).filter(Boolean);
+        if (origin !== WEB_ORIGIN || request.headers.get("access-control-request-method") !== "POST" ||
+            requestedHeaders.some((value) => value !== "content-type")) {
+          return json({ error: "preflight_not_allowed" }, 403, headers);
+        }
+        return new Response(null, { status: 204, headers: {
+          ...headers, "Access-Control-Allow-Methods": "POST",
+          "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "600"
+        } });
+      }
+      if (request.method === "POST") {
+        const response = await handleEvents(request, env);
+        for (const [name, value] of Object.entries(headers)) response.headers.set(name, value);
+        return response;
+      }
     }
 
     if (request.method === "GET" && url.pathname === "/v1/announcements") {
@@ -321,6 +343,10 @@ function validateEvent(event) {
     return { ok: false, error: "invalid_platform" };
   }
 
+  if (type === "web_visit" && value.platform !== "web") {
+    return { ok: false, error: "invalid_event_platform" };
+  }
+
   if (value.platform === "android") {
     if (value.env_version !== "") {
       return { ok: false, error: "invalid_env_version" };
@@ -330,7 +356,7 @@ function validateEvent(event) {
       return { ok: false, error: "invalid_android_major" };
     }
   } else {
-    if (!WECHAT_ENV_VERSIONS.has(value.env_version)) {
+    if (value.platform === "web" ? value.env_version !== "" : !WECHAT_ENV_VERSIONS.has(value.env_version)) {
       return { ok: false, error: "invalid_env_version" };
     }
     // Android API level has no meaning in either WeChat runtime. Require the
@@ -370,7 +396,7 @@ function validateEvent(event) {
          value.version_code > MAX_VERSION_CODE)) {
       return { ok: false, error: "invalid_version_code" };
     }
-    if (value.platform === "miniprogram" || value.platform === "minigame") {
+    if (value.platform !== "android") {
       // Android version_code has no counterpart in a Mini Program/Mini Game.
       // The server owns the 0 sentinel; clients must omit the field.
       if (value.version_code !== undefined) {

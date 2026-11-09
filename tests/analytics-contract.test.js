@@ -141,7 +141,9 @@ test("the bilingual privacy notice is present in the footer attribution area", f
   assert.ok(en.indexOf("does not collect email addresses") !== -1, "en privacy states it does not collect email");
 });
 
-test("no additional analytics, tracking, email capture, or custom telemetry is wired up", function () {
+test("only Cloudflare performance and the guarded unified collector are wired up", function () {
+  assert.equal((html.match(/js\/web-telemetry\.js/g) || []).length, 1);
+  assert.equal(/js\/web-telemetry\.js/.test(androidHtml), false);
   assert.equal(/google[\s-]?analytics|googletagmanager|gtag\(/i.test(html), false, "no Google Analytics");
   assert.equal(/facebook\.com\/tr|connect\.facebook\.net/i.test(html), false, "no Facebook pixel");
   assert.equal(/hotjar|mixpanel|segment\.io|amplitude/i.test(html), false, "no other analytics SDKs");
@@ -154,6 +156,6 @@ test("no additional analytics, tracking, email capture, or custom telemetry is w
     "the guarded module must contain one Cloudflare beacon source"
   );
   assert.equal(/type=["']?email["']?/i.test(html), false, "no email input fields");
-  // No custom telemetry endpoint or RUM submit beyond the beacon itself.
+  // The unified collector owns its endpoint; markup contains no handwritten RUM submit.
   assert.equal(/\/cdn-cgi\/rum/i.test(html), false, "no hand-written RUM endpoint in markup");
 });

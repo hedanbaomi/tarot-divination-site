@@ -13,6 +13,8 @@
   var pile = [];       // remaining face-down cards (shuffled)
   var spread = [];      // drawn cards: { uid, card, orientation, revealed, slotIndex, layer? }
   var uidCounter = 0;
+  var readingReported = false;
+  var freeBoardReadingReported = false;
 
   var el = {};
   var historyUiController = null;
@@ -401,6 +403,7 @@
     }
     currentPhase = "major";
     spread = [];
+    readingReported = false;
     buildPile();
     renderSpreadCards();
     renderDeckSpread();
@@ -897,6 +900,9 @@
     }
     renderSpreadMeta();
     renderResults();
+    if (isReadingComplete() && spread.every(function (card) { return card.revealed; })) {
+      notifyReadingCompleted();
+    }
   }
 
   function removeEntry(entry, keyboardTriggered) {
@@ -932,9 +938,35 @@
     pending.forEach(function (entry, i) {
       setTimeout(function () { revealEntry(entry); }, i * 80);
     });
-    if (historyUiController && isReadingComplete()) {
-      historyUiController.saveCompletedReading();
+    if (isReadingComplete()) {
+      if (historyUiController) historyUiController.saveCompletedReading();
+      notifyReadingCompleted();
     }
+  }
+
+  // A full spread explicitly revealed, through Reveal All or individual flips.
+  function notifyReadingCompleted() {
+    if (readingReported) return;
+    readingReported = true;
+    try {
+      var telemetry = globalThis.DivinationWebTelemetry;
+      if (telemetry && telemetry.isEnabled()) telemetry.logReadingCompleted(deckType, spread.length);
+    } catch (_error) { /* Statistics must never interrupt a reading. */ }
+  }
+
+  function notifyFreeBoardReadingCompleted(state, reason) {
+    if (!state || !Array.isArray(state.cards)) return;
+    if (state.cards.length === 0 || (reason === "draw" && state.cards.length === 1)) {
+      freeBoardReadingReported = false;
+    }
+    if (reason !== "reveal-all" || !state.cards.length || freeBoardReadingReported) return;
+    freeBoardReadingReported = true;
+    try {
+      var telemetry = globalThis.DivinationWebTelemetry;
+      if (telemetry && telemetry.isEnabled()) {
+        telemetry.logReadingCompleted(state.settings.deckType, state.cards.length);
+      }
+    } catch (_error) { /* Statistics must never interrupt a reading. */ }
   }
 
   function renderSpreadMeta() {
@@ -1615,6 +1647,7 @@
         recordsApi: globalThis.DivinationHistoryRecords,
         platform: "web",
         getBackImage: deckBackImage,
+        onChange: notifyFreeBoardReadingCompleted,
         allDecks: allDecksForFreeBoard(),
         getHistoryController: function () { return historyUiController; },
         onRestoreState: function (state) {

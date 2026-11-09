@@ -11,6 +11,35 @@ const migrations = path.join(
   "migrations"
 );
 
+test("web migration preserves every legacy row, announcement and index", () => {
+  const db = new DatabaseSync(":memory:");
+  for (const name of ["0001_init.sql", "0002_miniprogram_platform.sql"]) {
+    db.exec(readFileSync(path.join(migrations, name), "utf8"));
+  }
+  for (const [index, platform] of ["android", "miniprogram", "minigame"].entries()) {
+    db.prepare(`INSERT INTO install_state
+      (install_hash, app_version, version_code, locale, android_major,
+       first_seen_at, last_seen_at, platform, env_version)
+      VALUES (?, '1.2.0', ?, 'zh-CN', ?, 10, 20, ?, ?)`)
+      .run(String(index).repeat(64), index === 0 ? 4 : 0, index === 0 ? 35 : 0,
+        platform, index === 0 ? "" : "release");
+  }
+  db.exec("INSERT INTO announcements (id, created_at, updated_at) VALUES (7, 10, 20)");
+  const before = db.prepare("SELECT * FROM install_state ORDER BY install_hash").all();
+  db.exec(readFileSync(path.join(migrations, "0003_web_platform.sql"), "utf8"));
+  assert.deepEqual(db.prepare("SELECT * FROM install_state ORDER BY install_hash").all(), before);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM announcements WHERE id=7").get().n, 1);
+  const indexes = db.prepare("PRAGMA index_list(install_state)").all().map((row) => row.name);
+  for (const name of ["idx_install_state_last_seen", "idx_install_state_platform_last_seen"]) assert.ok(indexes.includes(name));
+  const insert = db.prepare(`INSERT INTO install_state
+    (install_hash, app_version, version_code, locale, android_major, first_seen_at, last_seen_at, platform)
+    VALUES (?, 'web-1', 0, 'en', 0, 10, 20, ?)`);
+  assert.doesNotThrow(() => insert.run("w".repeat(64), "web"));
+  assert.throws(() => insert.run("x".repeat(64), "unknown"));
+  assert.throws(() => insert.run("w".repeat(64), "web"), /UNIQUE/);
+  db.close();
+});
+
 test("WeChat platform migration preserves old rows and accepts Mini Program and Mini Game", () => {
   const db = new DatabaseSync(":memory:");
   db.exec(readFileSync(path.join(migrations, "0001_init.sql"), "utf8"));

@@ -1,5 +1,47 @@
 # Quareia Telemetry Worker deployment record
 
+## 2026-11-09: unified web telemetry, local revision
+
+This revision adds `platform=web`, the `web_visit` counter, the guarded web
+collector, and combined web/mobile admin displays. It has **not been deployed**.
+No production data or Cloudflare configuration was changed in this task.
+
+Local validation completed on 2026-11-09:
+
+- Web/Android JavaScript suites: 198/198 passed; Worker suites: 132/132 passed.
+- A fresh temporary dependency install via `npm ci --no-audit --no-fund`,
+  Worker tests, local Wrangler D1 migrations 0001–0003, and `wrangler deploy
+  --dry-run` all passed. Populated migration tests preserve Android/WeChat rows,
+  timestamps, primary key uniqueness and both indexes.
+- A localhost-only preview using synthetic Analytics data and in-memory D1
+  verified the real web collector → Worker → admin flow, manual/bulk reveal,
+  web platform and 7-day filtering, persistent opt-out and same-document visit
+  deduplication after turning statistics back on. The preview substitutes its
+  local transport/origin; production CORS is covered by request-level tests.
+- Independent read-only DSH / DeepSeek V4.1 Flash review completed. Its confirmed
+  same-document duplicate-visit finding was fixed and verified by regression
+  tests and the browser preview. No production authenticated API or physical
+  device acceptance was performed.
+
+For a separately authorized release:
+
+1. Run the clean-checkout `npm ci` gate and local tests described in README.
+2. Verify production has all prior migrations, then apply
+   `0003_web_platform.sql` before enabling the new Worker or website collector.
+   It copies old install rows and preserves the primary key and both indexes.
+3. Deploy the Worker and verify its health and allowed-origin preflight; confirm
+   the existing Analytics read configuration is present without exposing secrets.
+4. Publish the website assets (`index.html`, `js/app.js`, `js/i18n.js`, and
+   `js/web-telemetry.js`) together. The backend must be ready first.
+5. The Android JS assets also align manual-flip and Free Board completion. These
+   corrections require a future Android app build/release to reach installed apps;
+   existing clients' event schema remains compatible throughout.
+
+Rollback: restore the previous Worker and website asset revision; leave the
+additive platform migration in place so already collected web rows survive.
+Existing Android and WeChat rows remain compatible. Do not remove statistics or
+reverse the table migration as part of routine rollback.
+
 ## Current status
 
 - Status: first authorized deployment completed; Worker remains deployed.
