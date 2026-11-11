@@ -4,7 +4,7 @@
    - 按住拖动：移动天体并带动旋转（横向位移映射为转角）
    - 松手：惯性滑行 + 自转角速度，摩擦力衰减，边缘轻弹，随后恢复 idle
    - 主题切换只换外观，物理与月亮相同
-   - 轻点十次/一分钟：月亮刻纹五官淡入再睁眼；羊皮纸太阳闭眼并淡出到无脸底图
+   - 长按五秒：月亮刻纹五官淡入再睁眼；羊皮纸太阳闭眼并淡出到无脸底图
    - rAF 驱动、passive 监听、仅 transform；touch-action:none 由 CSS 保证
    - prefers-reduced-motion：关闭自转/浮动/惯性，仅保留直接拖动；脸状态无动画
    ========================================================================== */
@@ -29,10 +29,9 @@
   var ANG_FRICTION = 0.985;      // 角速度摩擦（每 16.7ms）
   var BOUNCE = 0.42;             // 边缘反弹保留速度
   var V_CAP = 2.2;               // 松手速度上限 px/ms
-  var TAP_SLOP = 12;             // 超过则视为拖动，不计入轻点彩蛋
+  var TAP_SLOP = 12;             // 超过则视为拖动，不计入轻点
   var TAP_MS = 500;
-  var TAP_WINDOW = 60000;
-  var TAP_NEED = 10;
+  var LONG_MS = 5000;            // 长按五秒触发彩蛋
   var FACE_WAKE_MS = 900;        // 与 CSS 淡入对齐后再睁眼
   var FACE_SLEEP_MS = 1000;      // 闭眼同时淡出
 
@@ -57,7 +56,8 @@
   var lastT = 0;
   var downT = 0;
   var maxDist = 0;
-  var taps = [];
+  var longTimer = 0;
+  var longFired = false;
   var faceTimer = 0;
 
   function isSunTheme() {
@@ -77,7 +77,8 @@
       clearTimeout(faceTimer);
       faceTimer = 0;
     }
-    taps = [];
+    cancelLong();
+    longFired = false;
     setFace(defaultFace());
   }
   function wakeFace() {
@@ -98,24 +99,33 @@
       faceTimer = 0;
     }, FACE_SLEEP_MS);
   }
-  function registerTap() {
+  /* 长按彩蛋：天体本来的脸醒来 / 睡去 */
+  function triggerEgg() {
     var state = faceState();
     if (state === "waking" || state === "sleeping") return;
-    var def = defaultFace();
-    if (state !== def) {
-      if (def === "shown") wakeFace();
-      else sleepFace();
-      taps = [];
-      return;
+    if (navigator.vibrate) {
+      try { navigator.vibrate([14, 40, 14]); } catch (err) { /* noop */ }
     }
-    var now = Date.now();
-    taps.push(now);
-    taps = taps.filter(function (t) { return now - t <= TAP_WINDOW; });
-    if (taps.length >= TAP_NEED) {
-      taps = [];
-      if (def === "shown") sleepFace();
-      else wakeFace();
+    moon.classList.add("is-egg");
+    setTimeout(function () { moon.classList.remove("is-egg"); }, 900);
+    if (state === "shown") sleepFace();
+    else wakeFace();
+  }
+  function cancelLong() {
+    if (longTimer) {
+      clearTimeout(longTimer);
+      longTimer = 0;
     }
+  }
+  function armLong() {
+    cancelLong();
+    longFired = false;
+    longTimer = setTimeout(function () {
+      longTimer = 0;
+      if (!dragging || maxDist >= TAP_SLOP) return;
+      longFired = true;
+      triggerEgg();
+    }, LONG_MS);
   }
   resetFace();
 
@@ -157,6 +167,7 @@
     maxDist = 0;
     vx = 0;
     vy = 0;
+    armLong();
     if (moon.setPointerCapture && e.pointerId != null) {
       try { moon.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
     }
@@ -174,6 +185,7 @@
     }
     angle += (e.clientX - lastMX) * SPIN_PER_PX;
     maxDist = Math.max(maxDist, Math.hypot(e.clientX - startPX, e.clientY - startPY));
+    if (maxDist >= TAP_SLOP) cancelLong();
     lastMX = e.clientX;
     lastMY = e.clientY;
     lastMoveT = now;
@@ -191,7 +203,50 @@
     angVel = vx * SPIN_PER_PX;
     if (rm) { vx = 0; vy = 0; angVel = 0; }
     var held = performance.now() - downT;
-    if (maxDist < TAP_SLOP && held < TAP_MS) registerTap();
+    cancelLong();
+    if (longFired) {
+      longFired = false;
+      return;
+    }
+    if (maxDist < TAP_SLOP && held < TAP_MS) {
+      cycleTheme();
+    }
+  }
+
+  /* ---------- tap the moon to cycle themes ---------- */
+  var toast = document.getElementById("themeToast");
+  var toastTimer = 0;
+
+  function themeLabel(id) {
+    var swatch = document.querySelector('[data-theme-id="' + id + '"]');
+    if (swatch) {
+      var spans = swatch.querySelectorAll("span");
+      for (var i = 0; i < spans.length; i++) {
+        if (!spans[i].classList.contains("theme-swatch-preview")) {
+          var text = spans[i].textContent.trim();
+          if (text) return text;
+        }
+      }
+    }
+    return id;
+  }
+
+  function flashTheme(name) {
+    if (!toast) return;
+    toast.textContent = name;
+    toast.classList.add("is-on");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove("is-on"); }, 1500);
+  }
+
+  function cycleTheme() {
+    var api = window.DivinationTheme;
+    if (!api || !api.THEMES || !api.THEMES.length) return;
+    var list = api.THEMES;
+    var cur = api.getTheme ? api.getTheme() : document.documentElement.getAttribute("data-theme");
+    var idx = list.indexOf(cur);
+    var next = list[(idx + 1) % list.length];
+    if (api.setTheme(next)) flashTheme(themeLabel(next));
   }
 
   moon.addEventListener("pointerdown", onDown, { passive: true });
@@ -199,6 +254,12 @@
   moon.addEventListener("pointerup", onUp, { passive: true });
   moon.addEventListener("pointercancel", onUp, { passive: true });
   moon.addEventListener("lostpointercapture", onUp, { passive: true });
+  moon.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+      e.preventDefault();
+      cycleTheme();
+    }
+  });
 
   window.addEventListener("resize", function () {
     measure();

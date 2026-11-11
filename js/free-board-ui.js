@@ -203,6 +203,7 @@
     };
 
     var platform = options.platform === "android" ? "android" : "web";
+    var zoomEnabled = options.zoomEnabled !== false;
 
     var stateController = null;
     var context = null;
@@ -717,6 +718,24 @@
       }], "draw");
     }
 
+    /* drop a card straight onto a board coordinate (dragged out of the fan) */
+    function drawAt(cardId, point) {
+      if (!stateController || !point) return null;
+      var state = getState();
+      if (state.remainingPile.indexOf(cardId) === -1) return null;
+      var type = deckTypeFromState(state);
+      var orientation = state.settings.orientationMode === "mixed" && type === "tarot" &&
+        Math.random() > 0.5 ? "reversed" : "upright";
+      return mutate("draw", [cardId, {
+        orientation: orientation,
+        x: Math.round(Number(point.x) || 0),
+        y: Math.round(Number(point.y) || 0),
+        boardRotation: 0,
+        revealed: false,
+        meaningVisible: false
+      }], "draw");
+    }
+
     function revealAll() {
       if (!stateController || getState().cards.length === 0) return Promise.resolve(null);
       mutate("revealAll", [], "reveal-all");
@@ -1210,6 +1229,8 @@
       hasCards: function () { return Boolean(getState() && getState().cards.length); },
       isActive: function () { return Boolean(stateController); },
       draw: draw,
+      drawAt: drawAt,
+      rotate: rotate,
       revealAll: revealAll,
       undo: function () { return mutate("undo", [], "undo"); },
       redo: function () { return mutate("redo", [], "redo"); },

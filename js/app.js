@@ -354,8 +354,18 @@
 
   function applyLayoutUi() {
     var freeform = isFreeform();
+    var tableArea = document.getElementById("tableArea");
+    /* the fan stays on the table in freeform: it is the card source */
+    if (tableArea) {
+      tableArea.style.display = "";
+      tableArea.classList.toggle("is-freeform", freeform);
+    }
     if (el.deckArea) el.deckArea.style.display = freeform ? "none" : "";
     if (el.spreadArea) el.spreadArea.style.display = freeform ? "none" : "";
+    var spreadActions = document.querySelector(".spread-actions");
+    if (spreadActions) spreadActions.style.display = freeform ? "none" : "";
+    var deckCta = document.getElementById("deckCta");
+    if (deckCta) deckCta.style.display = freeform ? "none" : "";
     if (el.positionGuide) el.positionGuide.hidden = freeform;
     if (el.resultsSection) el.resultsSection.style.display = freeform ? "none" : "";
     updateOverviewMethodUi();
@@ -370,6 +380,7 @@
     if (freeBoardUi && typeof freeBoardUi.setVisible === "function") {
       freeBoardUi.setVisible(freeform);
     }
+    if (freeform) renderFreeformFan();
   }
 
   function orderedSpreadEntries() {
@@ -464,8 +475,38 @@
   }
 
   // ---------- Deck spread (pick any card) ----------
+  /* freeform keeps the fan on the table: it renders the board's remaining pile */
+  function renderFreeformFan() {
+    if (!el.deckSpread) return;
+    el.deckSpread.innerHTML = "";
+    var boardState = freeBoardUi && freeBoardUi.getState ? freeBoardUi.getState() : null;
+    var remaining = boardState && boardState.remainingPile ? boardState.remainingPile : [];
+    el.deckSpread.classList.toggle("empty", remaining.length === 0);
+    if (!remaining.length) {
+      el.deckSpread.textContent = t("app.deckEmpty");
+      if (el.deckRemaining) el.deckRemaining.textContent = t("app.remaining", { count: 0 });
+      return;
+    }
+    remaining.forEach(function (cardId, index) {
+      var cardEl = document.createElement("button");
+      cardEl.type = "button";
+      cardEl.className = "deck-card deck-card-free";
+      cardEl.setAttribute("data-card-id", cardId);
+      cardEl.setAttribute("data-pile-index", String(index));
+      cardEl.setAttribute("aria-label", t("freeBoard.pileAria"));
+      if (isNonTarotDeck()) cardEl.appendChild(createBackArtImage("deck-card-back-img"));
+      el.deckSpread.appendChild(cardEl);
+    });
+    if (el.deckRemaining) {
+      el.deckRemaining.textContent = t("app.remaining", { count: remaining.length });
+    }
+  }
+
   function renderDeckSpread() {
-    if (isFreeform()) return;
+    if (isFreeform()) {
+      renderFreeformFan();
+      return;
+    }
     var prevScroll = el.deckSpread.scrollLeft;
     el.deckSpread.innerHTML = "";
     var stacking = isOverviewStacking();
@@ -1225,7 +1266,9 @@
     if (!isFreeform() && spread.length === 0 && freeBoardCards === 0) {
       return Promise.resolve(true);
     }
-    if (!globalThis.DivinationDialog) return Promise.resolve(false);
+    if (!globalThis.DivinationDialog) {
+      return Promise.resolve(globalThis.confirm ? globalThis.confirm(message) : true);
+    }
     return globalThis.DivinationDialog.request({
       kicker: t("confirm.kicker"),
       title: t("confirm.title"),
@@ -1472,12 +1515,11 @@
       item.appendChild(meaning);
       el.positionGuideList.appendChild(item);
     });
-    el.positionGuide.open = false;
+    el.positionGuide.open = true;
   }
 
   async function handleShuffle() {
     if (isFreeform()) {
-      if (!(await confirmIfSpread(t("confirm.shuffle")))) return;
       if (freeBoardUi && typeof freeBoardUi.getContext === "function") {
         var boardContext = freeBoardUi.getContext();
         if (boardContext) {
@@ -1495,6 +1537,9 @@
     }
     if (!(await confirmIfSpread(t("confirm.shuffle")))) return;
     resetDeck();
+    window.requestAnimationFrame(function () {
+      globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
+    });
   }
 
   async function handleLayoutModeChange() {
@@ -1619,7 +1664,7 @@
     el.shuffleBtn.addEventListener("click", handleShuffle);
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);
-    el.clearBtn.addEventListener("click", handleShuffle);
+    if (el.clearBtn) el.clearBtn.addEventListener("click", handleShuffle);
     globalThis.addEventListener("quareia:languagechange", handleLanguageChange);
     if (globalThis.DivinationHistoryUi &&
         globalThis.DivinationHistoryStore &&
@@ -1646,8 +1691,12 @@
         draftApi: globalThis.DivinationFreeBoardDraft,
         recordsApi: globalThis.DivinationHistoryRecords,
         platform: "web",
+        zoomEnabled: false,
         getBackImage: deckBackImage,
-        onChange: notifyFreeBoardReadingCompleted,
+        onChange: function (state, reason) {
+          notifyFreeBoardReadingCompleted(state, reason);
+          if (isFreeform()) renderFreeformFan();
+        },
         allDecks: allDecksForFreeBoard(),
         getHistoryController: function () { return historyUiController; },
         onRestoreState: function (state) {
@@ -1661,10 +1710,22 @@
         }
       });
     }
+    /* fan → board: double tap a fan card drops it where you touched */
+    globalThis.addEventListener("quareia:board-draw", function (event) {
+      if (!isFreeform() || !freeBoardUi || !freeBoardUi.drawAt) return;
+      var detail = event.detail || {};
+      freeBoardUi.drawAt(detail.cardId, detail.point);
+    });
+    /* board card: long press steps the angle */
+    globalThis.addEventListener("quareia:board-rotate", function (event) {
+      if (!isFreeform() || !freeBoardUi || !freeBoardUi.rotate) return;
+      var detail = event.detail || {};
+      freeBoardUi.rotate(detail.cardId, detail.degrees);
+    });
+
     var restoredFreeBoard = freeBoardUi && typeof freeBoardUi.restoreDraftIfAvailable === "function"
       ? freeBoardUi.restoreDraftIfAvailable()
-      : null;
-    if (restoredFreeBoard) {
+      : null;    if (restoredFreeBoard) {
       syncStateFromFreeBoard(restoredFreeBoard);
       layoutMode = "freeform";
       applyDeckUi();

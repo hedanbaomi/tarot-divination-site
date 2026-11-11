@@ -3,12 +3,15 @@
 
   var STORAGE_KEY = "quareia-divination-theme";
   var DEFAULT_THEME = "celestial";
-  var THEMES = ["celestial", "parchment", "ember", "grove"];
+  var THEMES = ["celestial", "parchment", "ember", "grove", "jade", "dusk", "ash"];
   var THEME_COLORS = {
     celestial: "#060919",
     parchment: "#efe4cc",
     ember: "#140a08",
-    grove: "#31483c"
+    grove: "#31483c",
+    jade: "#eef1e9",
+    dusk: "#140f1e",
+    ash: "#121214"
   };
   var initialized = false;
   var theme = readStoredTheme();
@@ -29,7 +32,7 @@
     if (meta) meta.setAttribute("content", color);
     try {
       if (global.androidThemeChrome && typeof global.androidThemeChrome.set === "function") {
-        global.androidThemeChrome.set(color, id === "parchment" ? "1" : "0");
+        global.androidThemeChrome.set(color, (id === "parchment" || id === "jade") ? "1" : "0");
       }
     } catch (_error) {}
   }
