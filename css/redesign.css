@@ -2837,3 +2837,30 @@ html.ui2 .free-board-card.is-rotating {
 html.ui2 .deck-card-free {
   cursor: grab;
 }
+
+/* ---------- the carved face on every moon theme ---------- */
+/* the three newer themes reuse the celestial carving so the easter egg shows there too */
+html.ui2[data-theme="jade"] .sky-face-art[data-theme-face="celestial"],
+html.ui2[data-theme="dusk"] .sky-face-art[data-theme-face="celestial"],
+html.ui2[data-theme="ash"] .sky-face-art[data-theme-face="celestial"] {
+  display: block;
+}
+html.ui2[data-theme="jade"] .sky-face-art { mix-blend-mode: multiply; }
+html.ui2[data-theme="dusk"] .sky-face-art,
+html.ui2[data-theme="ash"] .sky-face-art { mix-blend-mode: overlay; }
+
+html.ui2 .sky-moon {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+html.ui2 .sky-moon.is-holding {
+  outline: 2px solid rgba(var(--accent-rgb), 0.32);
+  outline-offset: 8px;
+  filter: brightness(1.08) saturate(1.05);
+}
+html.ui2 .sky-moon.is-egg {
+  filter: brightness(1.2) saturate(1.1);
+}

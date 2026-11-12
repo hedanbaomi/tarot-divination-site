@@ -32,6 +32,7 @@
   var TAP_SLOP = 12;             // 超过则视为拖动，不计入轻点
   var TAP_MS = 500;
   var LONG_MS = 5000;            // 长按五秒触发彩蛋
+  var LONG_SLOP = 22;            // 长按期间允许的手抖范围（比轻点宽松）
   var FACE_WAKE_MS = 900;        // 与 CSS 淡入对齐后再睁眼
   var FACE_SLEEP_MS = 1000;      // 闭眼同时淡出
 
@@ -58,6 +59,7 @@
   var maxDist = 0;
   var longTimer = 0;
   var longFired = false;
+  var holdHint = 0;
   var faceTimer = 0;
 
   function isSunTheme() {
@@ -100,14 +102,25 @@
     }, FACE_SLEEP_MS);
   }
   /* 长按彩蛋：天体本来的脸醒来 / 睡去 */
+  function eggText(wasShown) {
+    var api = window.DivinationI18n;
+    var key = wasShown ? "egg.sleep" : "egg.wake";
+    if (api && typeof api.t === "function") {
+      var text = api.t(key);
+      if (text && text !== key) return text;
+    }
+    return wasShown ? "它闭上了眼睛" : "它睁开了眼睛";
+  }
   function triggerEgg() {
     var state = faceState();
     if (state === "waking" || state === "sleeping") return;
     if (navigator.vibrate) {
       try { navigator.vibrate([14, 40, 14]); } catch (err) { /* noop */ }
     }
+    clearHoldHint();
     moon.classList.add("is-egg");
     setTimeout(function () { moon.classList.remove("is-egg"); }, 900);
+    flashTheme(eggText(state === "shown"));
     if (state === "shown") sleepFace();
     else wakeFace();
   }
@@ -117,12 +130,27 @@
       longTimer = 0;
     }
   }
+  /* 按住 220ms 后给一点视觉反馈，否则用户不知道计时开始了 */
+  function armHoldHint() {
+    if (holdHint) clearTimeout(holdHint);
+    holdHint = setTimeout(function () {
+      holdHint = 0;
+      moon.classList.add("is-holding");
+    }, 220);
+  }
+  function clearHoldHint() {
+    if (holdHint) {
+      clearTimeout(holdHint);
+      holdHint = 0;
+    }
+    moon.classList.remove("is-holding");
+  }
   function armLong() {
     cancelLong();
     longFired = false;
     longTimer = setTimeout(function () {
       longTimer = 0;
-      if (!dragging || maxDist >= TAP_SLOP) return;
+      if (!dragging || maxDist >= LONG_SLOP) return;
       longFired = true;
       triggerEgg();
     }, LONG_MS);
@@ -168,6 +196,7 @@
     vx = 0;
     vy = 0;
     armLong();
+    armHoldHint();
     if (moon.setPointerCapture && e.pointerId != null) {
       try { moon.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
     }
@@ -185,7 +214,7 @@
     }
     angle += (e.clientX - lastMX) * SPIN_PER_PX;
     maxDist = Math.max(maxDist, Math.hypot(e.clientX - startPX, e.clientY - startPY));
-    if (maxDist >= TAP_SLOP) cancelLong();
+    if (maxDist >= LONG_SLOP) { cancelLong(); clearHoldHint(); }
     lastMX = e.clientX;
     lastMY = e.clientY;
     lastMoveT = now;
@@ -193,7 +222,16 @@
   }
 
   function onUp() {
-    if (!dragging) return;
+    clearHoldHint();
+    var held = downT ? performance.now() - downT : 0;
+    if (!dragging) {
+      /* 计时被 pointercancel 打断后迟到的 pointerup：够久就照样触发 */
+      if (!longFired && held >= LONG_MS - 80) {
+        longFired = true;
+        triggerEgg();
+      }
+      return;
+    }
     dragging = false;
     moon.classList.remove("dragging");
     if (vx > V_CAP) vx = V_CAP;
@@ -202,10 +240,15 @@
     else if (vy < -V_CAP) vy = -V_CAP;
     angVel = vx * SPIN_PER_PX;
     if (rm) { vx = 0; vy = 0; angVel = 0; }
-    var held = performance.now() - downT;
     cancelLong();
     if (longFired) {
       longFired = false;
+      return;
+    }
+    /* 有些浏览器在 5 秒左右抛 pointercancel 打断计时，这里补一次 */
+    if (held >= LONG_MS - 80 && maxDist < LONG_SLOP) {
+      longFired = true;
+      triggerEgg();
       return;
     }
     if (maxDist < TAP_SLOP && held < TAP_MS) {
@@ -254,6 +297,9 @@
   moon.addEventListener("pointerup", onUp, { passive: true });
   moon.addEventListener("pointercancel", onUp, { passive: true });
   moon.addEventListener("lostpointercapture", onUp, { passive: true });
+  /* 长按期间不要弹系统菜单 / 不要拖走图片，否则 pointercancel 会打断计时 */
+  moon.addEventListener("contextmenu", function (e) { e.preventDefault(); }, { passive: false });
+  moon.addEventListener("dragstart", function (e) { e.preventDefault(); }, { passive: false });
   moon.addEventListener("keydown", function (e) {
     if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
       e.preventDefault();
