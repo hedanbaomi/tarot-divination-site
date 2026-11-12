@@ -650,5 +650,15 @@
   <p class="card-meaning-keywords" data-meaning-keywords></p>
   <p class="card-meaning-text" data-meaning-text></p>
 </div>
+<!-- ?smoke=1 时加载浏览器冒烟测试（tests/smoke-runner.js），平时不加载 -->
+<script>
+  (function () {
+    if (!/[?&]smoke=1/.test(location.search)) return;
+    var script = document.createElement("script");
+    script.src = "tests/smoke-runner.js?v=20261112-smoke5";
+    script.defer = true;
+    document.body.appendChild(script);
+  })();
+</script>
 </body>
 </html>
