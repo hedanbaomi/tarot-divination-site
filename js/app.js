@@ -1427,7 +1427,7 @@
     renderSpreadMeta();
   }
 
-  function confirmIfSpread(message) {
+  function confirmIfSpread(message, cancelLabel) {
     var freeBoardCards = freeBoardUi && typeof freeBoardUi.getCardCount === "function"
       ? freeBoardUi.getCardCount()
       : 0;
@@ -1445,7 +1445,7 @@
       kicker: t("confirm.kicker"),
       title: t("confirm.title"),
       message: message,
-      cancelLabel: t("confirm.cancel"),
+      cancelLabel: cancelLabel || t("confirm.cancel"),
       proceedLabel: t("confirm.proceed")
     });
   }
@@ -1699,14 +1699,14 @@
   async function handleShuffle() {
     if (isFreeform()) {
       /* ask first only when cards are already laid out on the table */
-      if (freeDrawn.length && !(await confirmIfSpread(t("confirm.shuffle")))) return;
+      if (freeDrawn.length && !(await confirmIfSpread(t("confirm.shuffle"), t("confirm.keep")))) return;
       resetDeck();
       window.requestAnimationFrame(function () {
         globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
       });
       return;
     }
-    if (!(await confirmIfSpread(t("confirm.shuffle")))) return;
+    if (!(await confirmIfSpread(t("confirm.shuffle"), t("confirm.keep")))) return;
     resetDeck();
     window.requestAnimationFrame(function () {
       globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
