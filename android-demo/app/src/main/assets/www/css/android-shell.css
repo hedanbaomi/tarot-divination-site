@@ -11,6 +11,37 @@
   margin-top: 0;
 }
 
+/* The drawer belongs to the top-right corner. Reading controls start on the next row. */
+html.ui2 .masthead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px 16px;
+  padding-top: 14px;
+}
+html.ui2 .masthead .settings-open-btn {
+  grid-column: 1;
+  justify-self: start;
+  min-height: var(--tap);
+  border: 1px solid var(--accent);
+}
+html.ui2 .sky-moon {
+  top: calc(var(--tap) + 32px);
+}
+
+html.ui2 .theme-swatch[data-theme-id="jade"] {
+  --swatch-a: var(--swatch-jade-a);
+  --swatch-b: var(--swatch-jade-b);
+}
+html.ui2 .theme-swatch[data-theme-id="dusk"] {
+  --swatch-a: var(--swatch-dusk-a);
+  --swatch-b: var(--swatch-dusk-b);
+}
+html.ui2 .theme-swatch[data-theme-id="ash"] {
+  --swatch-a: var(--swatch-ash-a);
+  --swatch-b: var(--swatch-ash-b);
+}
+
 .menu-toggle {
   width: var(--tap);
   height: var(--tap);

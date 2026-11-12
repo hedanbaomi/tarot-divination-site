@@ -42,6 +42,7 @@
       "theme.parchment": "羊皮纸晨光",
       "theme.ember": "余烬圣堂",
       "theme.grove": "密林祭坛",
+      "theme.groveLight": "密林祭坛（明亮版）",
     "theme.jade": "青玉纸",
     "theme.dusk": "暮紫",
     "theme.ash": "素灰",
@@ -54,6 +55,9 @@
       "mode.upright": "全正位",
       "mode.mixed": "正逆位混合",
       "settings.layoutMode": "布局方式",
+      "settings.pageVersion": "页面版本",
+      "settings.useClassic": "切回旧版",
+      "settings.useModern": "切回新版",
       "layout.preset": "预设牌阵",
       "layout.freeform": "自由画板",
       "settings.arcana": "牌组筛选",
@@ -372,6 +376,7 @@
       ,"freeBoard.settingsSummary": "自由画板：可从当前牌组与筛选结果中任意抽牌，不设固定牌位或目标张数。"
       ,"freeBoard.title": "自由画板"
       ,"freeBoard.open": "自由画板"
+      ,"freeBoard.backToPreset": "返回预设牌阵"
       ,"freeBoard.openHint": "牌堆以扇形摊在桌上，不套用任何牌阵，想抽哪张抽哪张。", "freeBoard.cardHiddenAria": "第 {index} 张牌，未翻开", "freeBoard.cardAria": "第 {index} 张牌，{name}，{orientation}", "freeBoard.slotName": "自由牌位",
   "freeBoard.angleTitle": "角度", "freeBoard.drawnAria": "已抽出的牌"
       ,"freeBoard.toolbarAria": "自由画板控制"
@@ -472,6 +477,7 @@
       "theme.parchment": "Parchment Dawn",
       "theme.ember": "Ember Sanctum",
       "theme.grove": "Verdant Grove",
+      "theme.groveLight": "Verdant Grove (Bright)",
     "theme.jade": "Jade Paper",
     "theme.dusk": "Dusk Violet",
     "theme.ash": "Ash",
@@ -484,6 +490,9 @@
       "mode.upright": "Upright only",
       "mode.mixed": "Upright and reversed",
       "settings.layoutMode": "Layout",
+      "settings.pageVersion": "Site version",
+      "settings.useClassic": "Switch to classic",
+      "settings.useModern": "Switch to the new version",
       "layout.preset": "Preset spread",
       "layout.freeform": "Free Board",
       "settings.arcana": "Card pool",
@@ -801,6 +810,7 @@
       "freeBoard.settingsSummary": "Free Board: draw any card from the current deck and filter; there are no fixed positions or target count.",
       "freeBoard.title": "Free Board",
       "freeBoard.open": "Free board",
+      "freeBoard.backToPreset": "Return to preset spread",
       "freeBoard.openHint": "The deck fans out on the table with no spread applied.", "freeBoard.cardHiddenAria": "Card {index}, face down", "freeBoard.cardAria": "Card {index}, {name}, {orientation}", "freeBoard.slotName": "Free slot",
   "freeBoard.angleTitle": "Angle", "freeBoard.drawnAria": "Drawn cards",
       "freeBoard.toolbarAria": "Free Board controls",
@@ -868,6 +878,12 @@
       "history.duplicateFreeBoard": "This Free Board was just saved; no duplicate was created."
     }
   };
+
+  if (global.QuareiaClassicMessages) {
+    supported.forEach(function (lang) {
+      Object.assign(messages[lang], global.QuareiaClassicMessages[lang]);
+    });
+  }
 
   function readStoredLocale() {
     try {

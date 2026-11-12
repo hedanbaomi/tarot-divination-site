@@ -10,7 +10,7 @@
   <script>
     (function () {
       try {
-        var allowed = { celestial: 1, parchment: 1, ember: 1, grove: 1, jade: 1, dusk: 1, ash: 1 };
+        var allowed = { celestial: 1, parchment: 1, ember: 1, grove: 1, "grove-light": 1, jade: 1, dusk: 1, ash: 1 };
         var stored = localStorage.getItem("quareia-divination-theme");
         document.documentElement.setAttribute("data-theme", allowed[stored] ? stored : "celestial");
       } catch (e) {
@@ -18,10 +18,11 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="css/styles.css?v=20261103-grove-merged">
+  <script src="js/page-version.js?v=20261112-classic"></script>
+  <link rel="stylesheet" href="css/styles.css?v=20261112-sun-shadow">
   <link rel="stylesheet" href="css/free-board.css?v=20261112-review5">
   <link rel="stylesheet" href="css/custom-spreads.css?v=20261112-review5">
-  <link rel="stylesheet" href="css/redesign.css?v=20261112-arc8">
+  <link rel="stylesheet" href="css/redesign.css?v=20261113-rubber2">
 </head>
 <body>
   <div class="sky-moon" id="skyMoon" role="button" tabindex="0"
@@ -112,7 +113,7 @@
           <button class="free-draw-btn" id="freeRedoBtn" type="button" disabled
             aria-label="重做" data-i18n-aria-label="freeBoard.redo" title="重做">↷</button>
         </div>
-        <div class="free-draw-cards" id="freeDrawCards" role="list"
+        <div class="free-draw-cards" id="freeDrawCards" role="group"
           aria-label="已抽出的牌" data-i18n-aria-label="freeBoard.drawnAria"></div>
       </div>
 
@@ -433,6 +434,11 @@
               <span class="theme-swatch-preview" aria-hidden="true"></span>
               <span data-i18n="theme.grove">密林祭坛</span>
             </button>
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="grove-light"
+              aria-checked="false">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.groveLight">密林祭坛（明亮版）</span>
+            </button>
             <button type="button" class="theme-swatch" role="radio" data-theme-id="jade"
               aria-checked="false">
               <span class="theme-swatch-preview" aria-hidden="true"></span>
@@ -492,6 +498,10 @@
             先铺 13 张大阿卡那，再将 13 张小阿卡那叠在对应牌位。
           </p>
         </div>
+        <div class="setting-group setting-group-version">
+          <span class="setting-label" data-i18n="settings.pageVersion">页面版本</span>
+          <a class="btn-mini" id="switchPageVersion" href="classic.html" data-i18n="settings.useClassic">切回旧版</a>
+        </div>
         <div class="setting-group setting-group-spread">
           <label for="spreadSelect" data-i18n="settings.spread">预设牌阵</label>
           <select id="spreadSelect" aria-describedby="spreadSettingSummary"></select>
@@ -500,7 +510,7 @@
             <button class="btn btn-secondary" id="customSpreadOpenBtn" type="button" aria-haspopup="dialog" data-i18n="customSpread.open"></button>
             <button class="btn btn-secondary" id="freeBoardOpenBtn" type="button"
               data-i18n="freeBoard.open">自由画板</button>
-            <p class="setting-summary" data-i18n="freeBoard.openHint"></p>
+            <p class="setting-summary" id="freeBoardOpenHint" data-i18n="freeBoard.openHint"></p>
           </div>
         </div>
       </div>
@@ -573,8 +583,8 @@
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js?v=20261112-review5"></script>
   <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js?v=20261112-review5"></script>
-  <script src="js/theme.js?v=20261112-review5"></script>
+  <script src="js/i18n.js?v=20261112-grove-light"></script>
+  <script src="js/theme.js?v=20261112-grove-light"></script>
   <script src="js/announcements.js?v=1"></script>
   <script src="js/dialogs.js?v=20261112-review5"></script>
   <script src="js/custom-selects.js?v=20260820-custom-spread-window-final"></script>
@@ -585,9 +595,9 @@
   <script src="js/history-records.js?v=20261112-review5"></script>
   <script src="js/history-store.js"></script>
   <script src="js/history-ui.js?v=20261112-review5"></script>
-  <script src="js/free-board-ui.js?v=20261112-review5"></script>
-  <script src="js/app.js?v=20261112-flow3"></script>
-  <script src="js/deck-ring.js?v=20261112-arc8"></script>
+  <script src="js/free-board-ui.js?v=20261112-classic"></script>
+  <script src="js/app.js?v=20261112-layout-return"></script>
+  <script src="js/deck-ring.js?v=20261113-rubber2"></script>
   <div class="spread-popover" id="spreadPopover" hidden role="dialog" aria-modal="false"
     aria-label="牌阵设置" data-i18n-aria-label="spread.settings">
     <div class="spread-popover-head">
@@ -596,7 +606,7 @@
     </div>
     <div class="spread-popover-body" id="spreadPopoverBody"></div>
   </div>
-  <script src="js/spread-settings.js?v=20261112-review5"></script>
+  <script src="js/spread-settings.js?v=20261112-layout-return"></script>
   <script src="js/segmented.js?v=20261112-review5"></script>
   <script src="js/celestial-sky.js?v=20261112-egg3" defer></script>
   <script src="js/web-analytics.js"></script>
@@ -655,7 +665,7 @@
   (function () {
     if (!/[?&]smoke=1/.test(location.search)) return;
     var script = document.createElement("script");
-    script.src = "tests/smoke-runner.js?v=20261112-smoke5";
+    script.src = "tests/smoke-runner.js?v=20261112-sun-shadow";
     script.defer = true;
     document.body.appendChild(script);
   })();

@@ -11,7 +11,10 @@
       global.DivinationTelemetryNotice,
       global.DivinationCustomSpreadUi,
       global.DivinationHistoryUi,
-      global.DivinationMenu
+      global.DivinationMenu,
+      global.DivinationCardOverlays,
+      global.DivinationSpreadSettings,
+      global.DivinationAdvancedSettings
     ];
     for (var i = 0; i < handlers.length; i += 1) {
       var handler = handlers[i];

@@ -133,9 +133,7 @@
   step("翻面后能看到牌意", function () {
     var flip = q("#spreadGrid .spread-card-flip");
     if (!flip) throw new Error("没有可点的牌");
-    flip.click();          // 第一次：翻面
-    sleep(60);
-    flip.click();          // 第二次：打开牌意
+    flip.click(); // 上一步已经开牌，再点一次打开牌意。
     return wait("牌意面板", function () {
       var panel = document.getElementById("cardMeaningPanel");
       return panel && !panel.hidden && panel.textContent.trim().length > 8;
@@ -152,8 +150,13 @@
     if (!select) throw new Error("找不到布局选择");
     select.value = "freeform";
     select.dispatchEvent(new Event("change", { bubbles: true }));
-    return wait("自由画板状态", function () {
-      return document.querySelector(".table-area.is-freeform");
+    return wait("切换布局确认", function () {
+      return q("#confirmDialog[open]");
+    }).then(function () {
+      q("#confirmProceedBtn").click();
+      return wait("自由画板状态", function () {
+        return document.querySelector(".table-area.is-freeform");
+      });
     }).then(function () {
       return sleep(120);
     });
@@ -168,7 +171,10 @@
     }).then(function () {
       var drawn = q(".free-table-card");
       drawn.click();
-      return sleep(80);
+      return wait("自由画板解读和历史保存", function () {
+        return qa("#resultsList .result-card").length === 1 &&
+          q("#historySaveStatus").textContent === window.DivinationI18n.t("history.savedFreeBoard");
+      });
     }).then(function () {
       if (!q(".free-table-card.revealed")) throw new Error("翻面没有生效");
       var undo = document.getElementById("freeUndoBtn");
@@ -177,6 +183,26 @@
       return wait("牌回到牌堆", function () {
         return qa(".free-table-card").length === 0;
       });
+    });
+  });
+
+  step("在牌阵设置返回原牌阵，并恢复未完成的画板", function () {
+    var spread = q("#spreadSelect").value;
+    q("#deckSpread .deck-card").click();
+    var drawnId = q(".free-table-card").dataset.cardId;
+    q("#spreadSettingsBtn").click();
+    q("#spreadPopover #freeBoardOpenBtn").click();
+    if (q("#confirmDialog[open]") || q("#layoutModeSelect").value !== "preset" ||
+        q("#spreadSelect").value !== spread || !q("#freeDraw").hidden) {
+      throw new Error("返回预设牌阵没有直接切回原来的牌阵");
+    }
+    q("#spreadSettingsBtn").click();
+    q("#spreadPopover #freeBoardOpenBtn").click();
+    return wait("恢复之前的画板", function () {
+      var card = q(".free-table-card");
+      return q("#layoutModeSelect").value === "freeform" && card && card.dataset.cardId === drawnId;
+    }).then(function () {
+      q("#freeUndoBtn").click();
     });
   });
 
@@ -200,6 +226,26 @@
     return wait("主题变化", function () {
       return document.documentElement.getAttribute("data-theme") !== before;
     });
+  });
+
+  step("羊皮纸太阳的阴影跟随光芒轮廓", function () {
+    var moon = q("#skyMoon");
+    var theme = window.DivinationTheme;
+    var previous = theme.getTheme();
+    var classes = moon.className;
+    try {
+      theme.setTheme("parchment");
+      ["", "is-holding", "is-egg"].forEach(function (state) {
+        moon.classList.remove("is-holding", "is-egg");
+        if (state) moon.classList.add(state);
+        if (getComputedStyle(moon).boxShadow !== "none") {
+          throw new Error("太阳容器出现了方形阴影：" + (state || "静止"));
+        }
+      });
+    } finally {
+      moon.className = classes;
+      theme.setTheme(previous);
+    }
   });
 
   step("高级设置能打开", function () {

@@ -254,6 +254,7 @@ html[data-theme="ember"] {
   --meteor-peak: 1;
 }
 
+html.ui2[data-theme="grove-light"],
 html[data-theme="grove"] {
   color-scheme: dark;
   /* 主题背景与面板承接根目录柔和林雾鼠尾草色调，并对背景色彩明度做适度提亮 */
@@ -464,6 +465,8 @@ html[data-theme="grove"] .spread-card .remove-btn {
 }
 
 /* 塔罗纯 CSS 牌背（严格排除 M 牌与 LXXXI 真实牌背）采用墨玉底 + 双层真金线框 */
+html.ui2[data-theme="grove-light"] .deck-card:not(.deck-card-m):not(.deck-card-lxxxi):not(:has(img)),
+html.ui2[data-theme="grove-light"] .spread-card-back:not(.spread-card-back-m):not(.spread-card-back-lxxxi),
 html[data-theme="grove"] .deck-card:not(.deck-card-m):not(.deck-card-lxxxi),
 html[data-theme="grove"] .spread-card-back:not(.spread-card-back-m):not(.spread-card-back-lxxxi) {
   border-color: rgba(226, 194, 112, 0.68);
@@ -668,7 +671,8 @@ html[data-theme="parchment"] .sky-moon {
   box-shadow: none;
   opacity: 1;
   overflow: visible;
-  filter: drop-shadow(0 2px 6px rgba(72, 48, 16, 0.28));
+  --sun-shadow: drop-shadow(0 2px 6px rgba(72, 48, 16, 0.28));
+  filter: var(--sun-shadow);
 }
 html[data-theme="parchment"] .sky-moon::before,
 html[data-theme="parchment"] .sky-moon::after {
@@ -734,6 +738,7 @@ html[data-theme="ember"] .sky-face-art {
 }
 html[data-theme="celestial"] .sky-face-art[data-theme-face="celestial"],
 html[data-theme="ember"] .sky-face-art[data-theme-face="ember"],
+html.ui2[data-theme="grove-light"] .sky-face-art[data-theme-face="grove"],
 html[data-theme="grove"] .sky-face-art[data-theme-face="grove"] {
   display: block;
 }
@@ -1075,6 +1080,17 @@ html[data-theme="parchment"] body::after {
   animation: none;
 }
 .setting-group { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
+.setting-group-version {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.setting-group-version .btn-mini {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.2;
+  text-decoration: none;
+}
 .setting-group label,
 .setting-group .setting-label {
   font-size: 0.72rem;

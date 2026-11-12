@@ -19,7 +19,9 @@ import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -48,6 +50,11 @@ class MainActivity : ComponentActivity() {
 
     internal companion object {
         internal const val HOME_URL = "https://appassets.androidplatform.net/assets/www/index.html"
+        internal const val CLASSIC_URL = "https://appassets.androidplatform.net/assets/www/classic.html"
+
+        internal fun isReadingPage(url: String?): Boolean =
+            url == HOME_URL || url == CLASSIC_URL || url == "$HOME_URL?view=modern"
+
         internal const val APP_HOST = "appassets.androidplatform.net"
         internal const val PROTECTED_PREFIX = "/_m/"
         private const val STATE_LXXXI_ROUTE_TOKEN = "lxxxiRouteToken"
@@ -74,7 +81,7 @@ class MainActivity : ComponentActivity() {
 
         // Edge-to-edge; start with the persisted theme so cold start matches.
         val initialPalette = AppTheme.paletteFor(this)
-        WindowCompat.setDecorFitsSystemWindows(window, true)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         AppTheme.applySystemBars(window, initialPalette)
 
         // Serve bundled assets over a virtual https origin. The default host
@@ -133,6 +140,14 @@ class MainActivity : ComponentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val safe = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or
+                    WindowInsetsCompat.Type.ime(),
+            )
+            view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
+            WindowInsetsCompat.CONSUMED
         }
         root.addView(
             webView,
@@ -235,7 +250,7 @@ class MainActivity : ComponentActivity() {
         // app-lifetime signals. WebView can call this for subresources and
         // repeated navigations; the controller also deduplicates in flight.
         override fun onPageFinished(view: WebView?, url: String?) {
-            if (url != HOME_URL) return
+            if (!isReadingPage(url)) return
             val homePage = view ?: return
             homePage.evaluateJavascript(
                 "window.__qMediaBase = ${org.json.JSONObject.quote(protectedImageBaseUrl())};" +

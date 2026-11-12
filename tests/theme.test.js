@@ -13,7 +13,7 @@ var themeSource = fs.readFileSync(path.join(root, "js", "theme.js"), "utf8");
 var theme = require("../js/theme.js");
 
 var THEMES = ["celestial", "parchment", "ember", "grove"];
-var ALL_THEMES = THEMES.concat(["jade", "dusk", "ash"]);
+var ALL_THEMES = THEMES.concat(["grove-light", "jade", "dusk", "ash"]);
 
 function i18nSourceBlock(source, locale) {
   var start = source.indexOf('"' + locale + '": {');
@@ -26,13 +26,13 @@ function i18nSourceBlock(source, locale) {
 test("theme boot script applies a closed allow-list before styles load", function () {
   var bootStart = html.indexOf("<script>");
   var bootEnd = html.indexOf("</script>");
-  var cssLink = html.indexOf('href="css/styles.css?v=20261103-grove-merged"');
+  var cssLink = html.indexOf('href="css/styles.css?');
   assert.ok(bootStart > 0 && bootEnd > bootStart);
   assert.ok(cssLink > bootEnd, "FOUC boot must run before styles.css");
   var boot = html.slice(bootStart, bootEnd);
   assert.match(boot, /quareia-divination-theme/);
-  THEMES.forEach(function (id) {
-    assert.match(boot, new RegExp(id + ": 1"));
+  ALL_THEMES.forEach(function (id) {
+    assert.match(boot, new RegExp('"?' + id + '"?: 1'));
   });
   assert.match(boot, /setAttribute\("data-theme"/);
   assert.doesNotMatch(boot, /innerHTML/);
@@ -52,7 +52,8 @@ test("settings expose the theme swatches with bilingual names", function () {
       "theme.celestial",
       "theme.parchment",
       "theme.ember",
-      "theme.grove"
+      "theme.grove",
+      "theme.groveLight"
     ].forEach(function (key) {
       assert.ok(block.indexOf('"' + key + '"') !== -1, locale + " missing " + key);
     });
@@ -70,6 +71,14 @@ test("theme helper persists a valid id and rejects unknown values", function () 
   assert.equal(theme.getTheme(), "celestial");
   assert.equal(theme.setTheme("not-a-theme"), false);
   assert.equal(theme.getTheme(), "celestial");
+});
+
+test("the bright Grove variant follows dark Grove and shares the original lifted palette", function () {
+  assert.equal(theme.THEMES[theme.THEMES.indexOf("grove") + 1], "grove-light");
+  assert.equal(theme.THEME_COLORS["grove-light"], theme.THEME_COLORS.grove);
+  assert.match(css, /html\.ui2\[data-theme="grove-light"\],\s*html\[data-theme="grove"\]\s*\{/);
+  var classic = fs.readFileSync(path.join(root, "classic.html"), "utf8");
+  assert.doesNotMatch(classic, /data-theme-id="grove-light"/);
 });
 
 test("theme tokens restyle chrome without filtering protected card faces", function () {

@@ -60,30 +60,18 @@
     if (event.key === "Escape" && !popover.hidden) close();
   });
 
-  /* "自由画板": flip the layout mode and hand the user a blank canvas */
-  function openFreeBoard() {
+  function toggleLayout() {
     var select = document.getElementById("layoutModeSelect");
-    if (select && select.value !== "freeform") {
-      select.value = "freeform";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    }
+    if (!select) return;
+    select.value = select.value === "freeform" ? "preset" : "freeform";
     close();
-    var area = document.getElementById("freeBoardArea");
-    if (!area) return;
-    window.setTimeout(function () {
-      if (area.hidden) return;
-      area.scrollIntoView({ behavior: "smooth", block: "start" });
-      var pile = document.getElementById("freeBoardPile");
-      var first = pile && pile.querySelector("button");
-      if (first && first.focus) {
-        try { first.focus({ preventScroll: true }); } catch (_error) { first.focus(); }
-      }
-    }, 80);
+    btn.focus({ preventScroll: true });
+    select.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   group.addEventListener("click", function (event) {
     if (event.target.closest && event.target.closest("#freeBoardOpenBtn")) {
-      openFreeBoard();
+      toggleLayout();
     }
   });
 })();

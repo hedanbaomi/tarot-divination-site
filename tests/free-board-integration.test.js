@@ -37,14 +37,14 @@ test("the free board builds its own full pool and keeps a restored draft in orde
   assert.match(app, /if \(isFreeform\(\)\) \{/);
   assert.match(app, /pile = shuffle\(freeformDeckCards\(\)\)/);
   assert.match(app, /function shuffle\(deck\)[\s\S]*Math\.floor\(Math\.random\(\) \* \(i \+ 1\)\)/);
-  assert.match(app, /function restoreFreeformDraft\(\)/);
+  assert.match(app, /function restoreFreeformDraft\(resumeParked\)/);
   assert.match(app, /removeAllDrawnCardsFromPile|remainingPile/);
 });
 
 test("a restored draft syncs the deck and select labels without dispatching change", function () {
   var app = read("js/app.js");
-  var start = app.indexOf("var restoredCards = restoreFreeformDraft()");
-  var end = app.indexOf("} else {", start);
+  var start = app.indexOf("function showRestoredFreeform()");
+  var end = app.indexOf("function init()", start);
   var branch = app.slice(start, end);
   assert.match(app, /function syncSelectControls\(\)/);
   assert.match(app, /function syncCustomSelectVisuals\(\)[\s\S]*DivinationCustomSelects\.sync\(\)/);
@@ -60,7 +60,7 @@ test("the spread settings stay usable in the free board", function () {
   var settings = read("js/spread-settings.js");
   assert.match(app, /el\.spreadSettingGroup\) el\.spreadSettingGroup\.style\.display = ""/);
   assert.doesNotMatch(app, /el\.spreadSettingGroup\.style\.display = freeform \? "none"/);
-  assert.match(settings, /function openFreeBoard\(\)/);
+  assert.match(settings, /function toggleLayout\(\)/);
   assert.match(settings, /freeBoardOpenBtn/);
 });
 

@@ -374,6 +374,7 @@
       if (draftAutosave || !draftApi || typeof draftApi.createAutosave !== "function") return;
       draftAutosave = draftApi.createAutosave({
         storage: options.storage,
+        key: options.draftKey,
         modelApi: modelApi,
         debounceMs: options.draftDebounceMs,
         onError: function () { setStatus(t("freeBoard.draftSaveFailed"), true); }
@@ -779,7 +780,7 @@
         selectedCardId = null;
         if (draftAutosave) draftAutosave.discard();
         else if (draftApi && typeof draftApi.discard === "function") {
-          draftApi.discard(options.storage);
+          draftApi.discard(options.storage, { key: options.draftKey });
         }
         clearBoard();
         // clearBoard emits a normal change event and therefore schedules the
@@ -787,7 +788,7 @@
         // autosave, so remove the key once more after the reset.
         if (draftAutosave) draftAutosave.discard();
         else if (draftApi && typeof draftApi.discard === "function") {
-          draftApi.discard(options.storage);
+          draftApi.discard(options.storage, { key: options.draftKey });
         }
         setStatus(t("freeBoard.draftDiscarded"), false);
         return true;
@@ -1095,12 +1096,15 @@
       if (elements.discard) elements.discard.addEventListener("click", discardDraft);
       if (root && typeof root.addEventListener === "function") {
         root.addEventListener("quareia:mediaready", refreshMedia);
+        root.addEventListener("pagehide", function () {
+          if (draftAutosave) draftAutosave.flush().catch(function () { /* onError reports the failure */ });
+        });
       }
     }
 
     function loadDraft() {
       if (!draftApi || typeof draftApi.readResult !== "function") return null;
-      var result = draftApi.readResult(options.storage, { modelApi: modelApi });
+      var result = draftApi.readResult(options.storage, { key: options.draftKey, modelApi: modelApi });
       invalidDraft = Boolean(result.invalid);
       if (result.invalid) {
         setStatus(t("freeBoard.draftInvalid"), true);
@@ -1138,7 +1142,7 @@
         if (typeof options.onRestoreState === "function") options.onRestoreState(state);
         return state;
       } catch (_error) {
-        if (draftApi && typeof draftApi.discard === "function") draftApi.discard(options.storage);
+        if (draftApi && typeof draftApi.discard === "function") draftApi.discard(options.storage, { key: options.draftKey });
         invalidDraft = true;
         setStatus(t("freeBoard.draftInvalid"), true);
         if (typeof options.onDraftInvalid === "function") options.onDraftInvalid();

@@ -31,6 +31,8 @@
   var lutKey = "";
   var ringCardW = 0;
   var pull = 0;
+  var pullSide = 0;
+  var springRaf = 0;
   /* how many cards the arc can hold without them squashing into each other;
      recomputed from the real arc length on every layout */
   var lastVis = 0;
@@ -95,7 +97,9 @@
   /* 拉到两端之外的橡皮筋：RUBBER 是幅度系数，RUBBER_POW 小于 1 时越拉越紧 */
   var RUBBER_POW = 0.55;
   /* 拉到头时整片牌弧最多挪动的像素：越大越松 */
-  var PULL_PX = 92;
+  var PULL_PX = 78;
+  /* 橡胶感沿弧线传：从最底下那张牌一路收到弧顶（0.5 = 半条弧），不再只动底部一小撮 */
+  var RUBBER_EDGE = 0.5;
 
   /* 拖动时几何量不会变：缓存一帧内反复测量，避免每帧强制重排 */
   var geomCache = null;
@@ -165,7 +169,7 @@
     var vis = lastVis;
     var K = Math.max(1, Math.min(vis, n) - 1);
     var max = maxSlide();
-    if (!dragging) pull = 0;
+    if (!dragging && !springRaf) pull = 0;
     if (slide < 0) {
       slide = 0;
     } else if (slide > max) {
@@ -190,12 +194,18 @@
       card.style.setProperty("--tx", x.toFixed(1) + "px");
       card.style.setProperty("--ty", y.toFixed(1) + "px");
       card.style.setProperty("--rot", a.toFixed(2) + "deg");
+      /* 拉到两端之外时，只有靠近这一端的牌跟着手指走，越靠边越多，弧中间不动 */
+      var edgeDist = pullSide < 0 ? u : 1 - u;
+      var stretch = 0;
+      if (pull && edgeDist < RUBBER_EDGE) {
+        var k = 1 - edgeDist / RUBBER_EDGE;
+        stretch = pull * Math.pow(k, 1.5);
+      }
+      card.style.translate = stretch ? stretch.toFixed(1) + "px 0px" : "";
       card.style.opacity = card.disabled ? "0.35" : "1";
       card.style.pointerEvents = "auto";
       card.style.setProperty("--z", String(1000 + Math.round(u * 1000)));
     }
-    /* 拉到头后整片牌弧跟着手指挪一点，松手归位 */
-    ring.style.transform = pull ? "translateX(" + pull.toFixed(1) + "px)" : "";
     if (!dragging) syncFanNav();
   }
 
@@ -336,7 +346,13 @@
     return true;
   }
 
+  /* 从牌阵里铺开的牌上按下时交给它们自己处理，不启动扇形拖动 */
+  function isSpreadTarget(event) {
+    return event.target.closest && event.target.closest(".spread-grid, .spread-card, .spread-slot, #spreadGrid");
+  }
+
   function onDown(event) {
+    if (isSpreadTarget(event)) return;
     if (event.button !== undefined && event.button !== 0) return;
     if (event.target.closest && event.target.closest(".spread-settings-btn")) return;
     if (raf) {
@@ -347,12 +363,18 @@
     if (pageRaf) {
       window.cancelAnimationFrame(pageRaf);
       pageRaf = 0;
-    }    dragging = true;
+    }
+    dragging = true;
     pointerId = event.pointerId;
     startX = event.clientX;
     startSlide = slide;
     moved = 0;
     velocity = 0;
+    if (springRaf) {
+      window.cancelAnimationFrame(springRaf);
+      springRaf = 0;
+    }
+    pull = 0;
     stage.classList.add("is-dragging");
     setActive(nearestCard(event.clientX, event.clientY, 36));
     window.addEventListener("pointermove", onMove);
@@ -367,17 +389,42 @@
     var perPixel = 1 / (lut ? lut.total : 400);
     var raw = startSlide - dx * perPixel;
     var max = maxSlide();
-    /* 索引本身不允许越界；越界的那部分换算成整片牌弧的位移，
-       拉得越远越紧，松手由 CSS 过渡弹回去（橡胶感） */
+    /* 索引本身不允许越界；越界的那部分换算成“靠边那几张牌”的位移，
+       拉得越远越紧，松手弹回去（橡胶感） */
     var clamped = raw < 0 ? 0 : raw > max ? max : raw;
     var over = raw - clamped;
     if (over > 1.2) over = 1.2;
     else if (over < -1.2) over = -1.2;
     /* 跟着手指走：往右拉，整片弧也往右挪 */
-    pull = over === 0 ? 0 : (over < 0 ? 1 : -1) * Math.pow(Math.abs(over), RUBBER_POW) * PULL_PX;
+    pullSide = over < 0 ? -1 : 1;
+    pull = over === 0 ? 0 : pullSide * -1 * Math.pow(Math.abs(over), RUBBER_POW) * PULL_PX;
     velocity = clamped - slide;
     slide = clamped;
     layout();
+  }
+
+  /* 松手：靠边那几张牌弹回原位。只动这几张，所以用 rAF 自己做缓动，
+     不依赖 CSS 过渡（扇形牌上的 transition 被 reset 成 none 了）。 */
+  function springBack() {
+    if (!pull) return;
+    var from = pull;
+    var t0 = 0;
+    function step(now) {
+      if (!t0) t0 = now;
+      var t = Math.min(1, (now - t0) / 380);
+      var eased = 1 - Math.pow(1 - t, 3);
+      pull = from * (1 - eased);
+      if (t >= 1) {
+        pull = 0;
+        springRaf = 0;
+        layout();
+        return;
+      }
+      layout();
+      springRaf = window.requestAnimationFrame(step);
+    }
+    if (springRaf) window.cancelAnimationFrame(springRaf);
+    springRaf = window.requestAnimationFrame(step);
   }
 
   function onUp(event) {
@@ -389,7 +436,7 @@
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onUp);
     var max = maxSlide();
-    pull = 0;
+    springBack();
     if (slide < 0 || slide > max) {
       suppressClickUntil = Date.now() + 400;
       startInertia();
@@ -413,7 +460,7 @@
       var inPlane = event.target.closest ? event.target.closest(".table-plane") : null;
       if (!inPlane) return;
       /* 牌阵里已铺开的牌（含叠放的两层）自己处理点击，别被近邻判断抢走 */
-      if (event.target.closest && event.target.closest(".spread-grid, .spread-card, .spread-slot, #spreadGrid")) return;
+      if (isSpreadTarget(event)) return;
       /* 洗牌动画期间牌被藏起来了，但这条命中逻辑仍然会找到最近的牌并合成点击 */
       if (ring.classList.contains("is-shuffling")) {
         event.stopPropagation();

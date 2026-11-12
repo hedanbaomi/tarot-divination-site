@@ -744,6 +744,17 @@
       return saveRecord(record, { kind: "preset" });
     }
 
+    function saveFreeformReading(input) {
+      var record;
+      try {
+        record = recordsApi.buildFreeformLayoutRecord(input);
+      } catch (_error) {
+        setTranslatedStatus(elements.saveStatus, "history.saveSnapshotError", null, true);
+        return null;
+      }
+      return saveRecord(record, { kind: "freeform" });
+    }
+
     async function deleteSelected() {
       if (!available || !selectedRecordId) return;
       if (!(await requestDeletion(t("history.deleteConfirm")))) return;
@@ -903,6 +914,7 @@
     var controller = {
       updateSaveAvailability: updateSaveAvailability,
       saveCompletedReading: saveCurrentReading,
+      saveFreeformReading: saveFreeformReading,
       saveRecord: saveRecord,
       refresh: refreshList,
       refreshLanguage: refreshLanguage,

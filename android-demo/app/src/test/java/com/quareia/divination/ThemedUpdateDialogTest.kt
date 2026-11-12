@@ -97,15 +97,15 @@ class ThemedUpdateDialogTest {
 
         val jsonWithNullBody = """
             {
-              "tag_name": "v1.5.0",
+              "tag_name": "v1.6.0",
               "draft": false,
               "prerelease": false,
               "body": null,
               "assets": [{
-                "name": "QuareiaDivination-v1.5.0.apk",
+                "name": "QuareiaDivination-v1.6.0.apk",
                 "size": 23167206,
                 "digest": "sha256:${"ab".repeat(32)}",
-                "browser_download_url": "https://github.com/hedanbaomi/tarot-divination-site/releases/download/v1.5.0/QuareiaDivination-v1.5.0.apk",
+                "browser_download_url": "https://github.com/hedanbaomi/tarot-divination-site/releases/download/v1.6.0/QuareiaDivination-v1.6.0.apk",
                 "content_type": "application/vnd.android.package-archive"
               }]
             }
@@ -122,7 +122,7 @@ class ThemedUpdateDialogTest {
             val dialog = ThemedUpdateDialog(activity)
             dialog.showAvailable(
                 release = release,
-                currentVersionName = "1.4.2",
+                currentVersionName = "1.5.0",
                 onConfirm = {},
                 onLater = { dialog.dismiss() },
             )
@@ -132,8 +132,8 @@ class ThemedUpdateDialogTest {
             assertEquals(themeId, dialog.palette.id)
             assertEquals(ThemedUpdateDialog.State.AVAILABLE, dialog.state)
             assertEquals("22.1 MB", dialog.badgeTextView.text.toString())
-            assertTrue(dialog.versionBannerView.text.toString().contains("1.4.2"))
-            assertTrue(dialog.versionBannerView.text.toString().contains("v1.5.0"))
+            assertTrue(dialog.versionBannerView.text.toString().contains("1.5.0"))
+            assertTrue(dialog.versionBannerView.text.toString().contains("v1.6.0"))
             assertTrue(dialog.notesTextView.text.toString().contains("新增主题化更新下载界面"))
 
             if (themeId == ThemeId.GROVE) {
@@ -193,8 +193,8 @@ class ThemedUpdateDialogTest {
                     downloadStarted.countDown()
                     allowDownloadFinish.await(5, TimeUnit.SECONDS)
                     if (cancelled()) {
-                        sawCancelled.set(true)
                         partFile.delete()
+                        sawCancelled.set(true)
                         return null
                     }
                     return destination
@@ -223,7 +223,7 @@ class ThemedUpdateDialogTest {
         // Tap "取消下载" -> cancels cleanly, dismisses dialog, shows cancel toast (not failure).
         checkingDialog.secondaryActionView.performClick()
         allowDownloadFinish.countDown()
-        idleUntil { sawCancelled.get() }
+        idleUntil { sawCancelled.get() && ShadowToast.getTextOfLatestToast() == AppLocale.contextFor(activity).getString(R.string.update_download_cancelled) }
         idleMainLooper()
 
         assertFalse(checkingDialog.isShowing)
@@ -326,9 +326,9 @@ class ThemedUpdateDialogTest {
     private fun sampleRelease(notes: String): ReleaseInfo {
         val size = 23_167_206L
         return ReleaseInfo(
-            tagName = "v1.5.0",
-            assetName = "QuareiaDivination-v1.5.0.apk",
-            downloadUrl = "https://github.com/hedanbaomi/tarot-divination-site/releases/download/v1.5.0/QuareiaDivination-v1.5.0.apk",
+            tagName = "v1.6.0",
+            assetName = "QuareiaDivination-v1.6.0.apk",
+            downloadUrl = "https://github.com/hedanbaomi/tarot-divination-site/releases/download/v1.6.0/QuareiaDivination-v1.6.0.apk",
             sizeBytes = size,
             contentType = "application/vnd.android.package-archive",
             sha256Digest = "sha256:${"ab".repeat(32)}",

@@ -11,8 +11,7 @@ import androidx.core.view.WindowCompat
 import java.util.Locale
 
 /**
- * Mirrors the four user-selectable web themes (`celestial`, `parchment`,
- * `ember`, `grove`) on the Android native layer so update dialogs,
+ * Mirrors the bundled web themes on the Android native layer so update dialogs,
  * announcement dialogs, and the native About / Announcements screens match
  * the user's chosen aesthetic without exposing any new WebView bridge surface.
  */
@@ -20,24 +19,27 @@ internal enum class ThemeId(val wireId: String) {
     CELESTIAL("celestial"),
     PARCHMENT("parchment"),
     EMBER("ember"),
-    GROVE("grove");
+    GROVE("grove"), // classic and the bright Grove variant use the same palette
+    DARK_GROVE("dark-grove"),
+    JADE("jade"),
+    DUSK("dusk"),
+    ASH("ash");
 
     companion object {
-        fun fromId(raw: String?): ThemeId = when (raw?.trim()?.lowercase(Locale.ROOT)) {
-            "parchment" -> PARCHMENT
-            "ember" -> EMBER
-            "grove" -> GROVE
-            else -> CELESTIAL
-        }
+        fun fromId(raw: String?): ThemeId =
+            entries.firstOrNull { it.wireId == raw?.trim()?.lowercase(Locale.ROOT) } ?: CELESTIAL
 
         fun fromChromeSignal(colorHex: String?, isLight: Boolean): ThemeId {
-            if (isLight) return PARCHMENT
             return when (colorHex?.trim()?.lowercase(Locale.ROOT)) {
                 "#efe4cc" -> PARCHMENT
                 "#140a08" -> EMBER
                 "#31483c", "#07140f" -> GROVE
+                "#0d1511" -> DARK_GROVE
+                "#eef1e9" -> JADE
+                "#140f1e" -> DUSK
+                "#121214" -> ASH
                 "#060919" -> CELESTIAL
-                else -> CELESTIAL
+                else -> if (isLight) PARCHMENT else CELESTIAL
             }
         }
     }
@@ -227,7 +229,35 @@ internal object AppTheme {
         controller.isAppearanceLightNavigationBars = palette.isLight
     }
 
+    private fun modernPalette(
+        id: ThemeId, pageHex: String, surfaceHex: String, raisedHex: String,
+        accentHex: String, textHex: String, mutedHex: String, light: Boolean = false,
+    ): ThemePalette {
+        val page = Color.parseColor(pageHex)
+        val surface = Color.parseColor(surfaceHex)
+        val raised = Color.parseColor(raisedHex)
+        val accent = Color.parseColor(accentHex)
+        val text = Color.parseColor(textHex)
+        val muted = Color.parseColor(mutedHex)
+        val line = Color.argb(120, Color.red(accent), Color.green(accent), Color.blue(accent))
+        return palette(if (light) ThemeId.PARCHMENT else ThemeId.CELESTIAL).copy(
+            id = id, pageTopBg = surface, pageBg = page, cardTopBg = raised, cardBottomBg = surface,
+            cardBorder = line, surfaceBg = raised, surfaceBorder = line,
+            accent = accent, accentLight = accent, textPrimary = text, textSecondary = muted,
+            badgeBg = raised, badgeBorder = line, badgeText = accent,
+            primaryBtnStart = accent, primaryBtnMid = accent, primaryBtnEnd = accent,
+            primaryBtnPressedStart = muted, primaryBtnPressedEnd = muted, primaryBtnText = page,
+            primaryBtnBorder = accent, secondaryBtnBg = surface, secondaryBtnPressedBg = raised,
+            secondaryBtnBorder = line, secondaryBtnText = text, progressTrackBg = raised,
+            progressTrackBorder = line, progressFillStart = muted, progressFillMid = accent, progressFillEnd = accent,
+        )
+    }
+
     fun palette(id: ThemeId): ThemePalette = when (id) {
+        ThemeId.DARK_GROVE -> modernPalette(id, "#0d1511", "#16211b", "#1b2821", "#c8b174", "#e9ecd9", "#b3b9a1")
+        ThemeId.JADE -> modernPalette(id, "#eef1e9", "#f8faf5", "#f1f5ec", "#2f6b58", "#1a2a24", "#46584f", light = true)
+        ThemeId.DUSK -> modernPalette(id, "#140f1e", "#1a1426", "#211a2e", "#b8a2e6", "#ece7f6", "#b6aec9")
+        ThemeId.ASH -> modernPalette(id, "#121214", "#17171a", "#1d1d21", "#cfc9ba", "#e8e5df", "#b0aca4")
         ThemeId.CELESTIAL -> ThemePalette(
             id = ThemeId.CELESTIAL,
             isLight = false,
