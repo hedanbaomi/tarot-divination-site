@@ -2869,23 +2869,27 @@ html.ui2 .sky-moon.is-egg {
 }
 
 /* ---------------------------------------------------------------
-   §23 free form draw tray — drawn cards on the left + undo / redo
+   §23 freeform drawn cards — draggable, flippable, on the table
    --------------------------------------------------------------- */
+html.ui2 .table-area { position: relative; }
+
 html.ui2 .free-draw {
-  display: flex;
-  align-items: flex-start;
-  gap: 18px;
-  margin: 2px 0 18px;
-  min-height: 112px;
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
 }
 
 html.ui2 .free-draw[hidden] { display: none !important; }
 
 html.ui2 .free-draw-rail {
+  position: absolute;
+  left: 0;
+  bottom: 4px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-top: 4px;
+  pointer-events: auto;
 }
 
 html.ui2 .free-draw-btn {
@@ -2893,7 +2897,7 @@ html.ui2 .free-draw-btn {
   height: 34px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: rgba(var(--veil-rgb), .55);
+  background: rgba(var(--veil-rgb), .72);
   color: var(--text-secondary);
   font-size: 16px;
   line-height: 1;
@@ -2914,39 +2918,52 @@ html.ui2 .free-draw-btn:disabled {
 }
 
 html.ui2 .free-draw-cards {
-  display: flex;
-  align-items: flex-start;
-  min-height: 102px;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
-html.ui2 .free-draw-card {
-  width: 68px;
-  height: 102px;
-  flex: 0 0 auto;
-  margin-right: -28px;
-  border-radius: 5px;
-  border: 1px solid var(--line);
-  background:
-    radial-gradient(120% 90% at 50% 16%, rgba(var(--accent-rgb), .10), transparent 62%),
-    repeating-linear-gradient(45deg, rgba(236, 226, 206, .05) 0 1px, transparent 1px 7px),
-    linear-gradient(160deg, #1a1822, #0d0c11);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, .45);
-  animation: freeDrawIn .3s cubic-bezier(.2, .7, .2, 1) both;
+/* the drawn card is a real .spread-card, so it keeps the deck art, the back
+   and the caption of a dealt card — only its placement is free */
+html.ui2 .free-table-card {
+  position: absolute;
+  width: 92px;
+  height: 138px;
+  border: 0;
+  background: none;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .5));
 }
 
-html.ui2 .free-draw-card:last-child { margin-right: 0; }
+html.ui2 .free-table-card:active { cursor: grabbing; }
 
-@keyframes freeDrawIn {
-  from { opacity: 0; transform: translateX(-14px) rotate(-3deg); }
-  to { opacity: 1; transform: none; }
+html.ui2 .free-table-card .spread-card-inner {
+  width: 100%;
+  height: 100%;
+}
+
+html.ui2 .free-table-card .spread-card-face,
+html.ui2 .free-table-card .spread-card-inner {
+  border-radius: 6px;
+}
+
+html.ui2 .free-table-card .card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+html.ui2 .free-table-card .spread-card-caption {
+  font-size: 10px;
+  padding: 6px 8px;
 }
 
 @media (max-width: 640px) {
-  html.ui2 .free-draw { gap: 12px; min-height: 96px; }
-  html.ui2 .free-draw-card { width: 58px; height: 87px; margin-right: -24px; }
-  html.ui2 .free-draw-cards { min-height: 87px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html.ui2 .free-draw-card { animation: none; }
+  html.ui2 .free-table-card { width: 74px; height: 111px; }
+  html.ui2 .free-table-card .spread-card-caption { font-size: 9px; padding: 4px 6px; }
 }
