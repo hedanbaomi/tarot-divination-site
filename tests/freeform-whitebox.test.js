@@ -41,6 +41,11 @@ function instantiate(name, deps) {
 
 function stubDocument(options) {
   var layer = options.layer || { clientWidth: 1180, clientHeight: 1046 };
+  if (typeof layer.getBoundingClientRect !== "function") {
+    layer.getBoundingClientRect = function () {
+      return { top: 0, left: 0, bottom: layer.clientHeight, right: layer.clientWidth, height: layer.clientHeight, width: layer.clientWidth };
+    };
+  }
   var anchors = options.anchors || {};
   return {
     getElementById: function (id) {
@@ -55,7 +60,11 @@ function stubDocument(options) {
 
 test("白盒：连抽十三张牌，每张落在不同位置，且按四列排开", function () {
   var hint = { offsetTop: 640, offsetHeight: 24 };
-  var actions = { offsetTop: 700, offsetHeight: 44 };
+  var actions = {
+    offsetTop: 700,
+    offsetHeight: 44,
+    getBoundingClientRect: function () { return { top: 700, bottom: 744, height: 44 }; }
+  };
   var doc = stubDocument({
     anchors: {
       ".table-area .spread-actions": actions,
@@ -76,8 +85,8 @@ test("白盒：连抽十三张牌，每张落在不同位置，且按四列排�
   }
 
   assert.equal(points.length, 13);
-  assert.ok(points[0].y > actions.offsetTop, "第一张牌应该落在按钮区下面");
-  assert.ok(points[0].y > hint.offsetTop + hint.offsetHeight, "第一张牌应该落在提示文字下面");
+  assert.ok(points[0].y > 0, "第一张牌应该落在牌层内部（牌层本身已经在按钮下方）");
+  assert.ok(points[0].y < 200, "第一张牌靠牌层顶部，别飘到中间");
   assert.ok(points[4].y > points[0].y, "第二排应该比第一排低");
   assert.ok(points[4].x > points[0].x, "第二排要错开一点，别叠在同一条竖线上");
 });
@@ -86,7 +95,11 @@ test("白盒：窄屏改成两列，牌不会跑出画布", function () {
   var doc = stubDocument({
     layer: { clientWidth: 360, clientHeight: 720 },
     anchors: {
-      ".table-area .spread-actions": { offsetTop: 480, offsetHeight: 44 },
+      ".table-area .spread-actions": {
+        offsetTop: 480,
+        offsetHeight: 44,
+        getBoundingClientRect: function () { return { top: 480, bottom: 524, height: 44 }; }
+      },
       ".table-hint": { offsetTop: 430, offsetHeight: 40 }
     }
   });

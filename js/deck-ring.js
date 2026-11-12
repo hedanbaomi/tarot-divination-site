@@ -123,9 +123,15 @@
     var gap = w < 620 ? 46 : 66;
     var cf = w < 620 ? 1.08 : 0.86;
     var h = Math.round(ry + gap + 42 + ch * cf + 24);
+    var cy = h - 24 - ch * cf;
+    if (count === 0) {
+      /* 自由模式没有牌阵：牌弧的下沿要留够空间，别压住下面那行提示 */
+      var halfCard = (w < 620 ? 102 : 117) / 2 + 16;
+      h = Math.max(h, Math.round(cy + halfCard));
+    }
     stage.style.setProperty("--ring-rx", rx + "px");
     stage.style.setProperty("--ring-ry", ry + "px");
-    stage.style.setProperty("--ring-cy", h - 24 - ch * cf + "px");
+    stage.style.setProperty("--ring-cy", cy + "px");
     stage.style.minHeight = h + 44 + "px";
     buildLut(rx, ry);
     return { rx: rx, ry: ry };
@@ -382,6 +388,8 @@
          (牌阵设置) and everything else must keep their own click */
       var inPlane = event.target.closest ? event.target.closest(".table-plane") : null;
       if (!inPlane) return;
+      /* 牌阵里已铺开的牌（含叠放的两层）自己处理点击，别被近邻判断抢走 */
+      if (event.target.closest && event.target.closest(".spread-grid, .spread-card, .spread-slot, #spreadGrid")) return;
       /* 洗牌动画期间牌被藏起来了，但这条命中逻辑仍然会找到最近的牌并合成点击 */
       if (ring.classList.contains("is-shuffling")) {
         event.stopPropagation();
