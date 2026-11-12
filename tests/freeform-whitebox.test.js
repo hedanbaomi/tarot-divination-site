@@ -203,40 +203,76 @@ test("白盒：一键开牌在自由画板里跟着已抽出的牌走", function
   assert.equal(button.disabled, false, "预设牌阵下不应该改自由画板的按钮");
 });
 
-test("白盒：草稿里的角度字段和卡片数据能对上", function () {
-  var payloads = [];
-  var freeDrawn = [
-    { id: "major-00", x: 120, y: 640, revealed: true, orientation: "upright", angle: 15 },
-    { id: "major-01", x: 220, y: 640, revealed: false, orientation: "reversed", angle: -30 }
-  ];
-  var doc = stubDocument({});
-  var payload = instantiate("freeformDraftPayload", {
-    document: doc,
-    freeDrawn: freeDrawn,
-    layoutMode: "freeform",
-    deckType: "tarot",
-    deckId: "tarot",
-    deckName: "塔罗牌",
-    selectedDeck: null,
-    pile: [],
-    freeformDeckCards: function () { return []; },
-    activeDeckCards: function () { return []; },
-    orientationMode: "mixed",
-    filterMode: "mixed",
-    t: function (key) { return key; },
-    freeformHistoryCards: function () { return []; }
+test("draft round trip preserves card placement, orientation, angle and undo order", function () {
+  var deck = ["a", "b", "c"].map(function (id) { return { id: id, deck: "tarot" }; });
+  var state = {
+    deckType: "tarot", mode: "mixed", arcanaFilter: "mixed", pile: deck.slice(),
+    freeDrawn: [{ id: "b", x: 151, y: 123, angle: -30, orientation: "reversed", revealed: true }],
+    freeRedo: [], FREEFORM_DRAFT_KEY: "draft", legacyViewport: null,
+    freeBoardDeckName: function () { return "Tarot"; },
+    allDecksForFreeBoard: function () { return { tarot: deck }; },
+    freeformDeckCards: function () { return deck; },
+    freeDefaultPoint: function () { return { x: 120, y: 92 }; },
+    renderFreeformFan: function () {}, scheduleFreeformDraft: function () {}
+  };
+  var vm = require("node:vm");
+  var definitions = ["freeformDraftPayload", "restoreFreeformDraft", "freeRemainingIds", "undoFreeDraw", "redoFreeDraw"];
+  state.isFreeform = function () { return true; };
+  vm.runInNewContext(definitions.map(grab).join("\n"), state);
+  var draft = state.freeformDraftPayload();
+  state.window = { localStorage: { getItem: function () { return JSON.stringify(draft); } } };
+  state.pile = [];
+  state.freeDrawn = [];
+  assert.equal(state.restoreFreeformDraft(), 1);
+  assert.deepEqual(Object.assign({}, state.freeDrawn[0]),
+    { id: "b", x: 151, y: 123, angle: -30, orientation: "reversed", revealed: true });
+  assert.equal(state.legacyViewport, null);
+  assert.deepEqual(Array.from(state.freeRemainingIds()), ["a", "c"]);
+  state.undoFreeDraw();
+  assert.deepEqual(Array.from(state.freeRemainingIds()), ["a", "b", "c"]);
+  state.redoFreeDraw();
+  assert.deepEqual(Array.from(state.freeRemainingIds()), ["a", "c"]);
+
+  draft.remainingPile = [];
+  draft.deck.cardIds = [];
+  assert.equal(state.restoreFreeformDraft(), 1);
+  assert.equal(state.freeRemainingIds().length, 0);
+  state.undoFreeDraw();
+  assert.deepEqual(Array.from(state.freeRemainingIds()), ["b"]);
+});
+
+test("bulk and individual reveals save the same validated Tarot reading exactly once", function () {
+  var records = require("../js/history-records.js");
+  [true, false].forEach(function (bulk) {
+    var saved = [], renders = 0;
+    var cards = [
+      { id: "major-16", arcana: "major", name: "塔", number: 16 },
+      { id: "minor-cups-ace", arcana: "minor", suit: "圣杯", name: "圣杯王牌" }
+    ];
+    var drawn = cards.map(function (card, index) {
+      return { id: card.id, x: 100 + index, y: 110, angle: 15, revealed: false, orientation: "reversed" };
+    });
+    var historyCards = instantiate("freeformHistoryCards", {
+      freeDrawn: drawn, localizedCardName: function (c) { return c.name; },
+      cardById: function (id) { return cards.find(function (c) { return c.id === id; }); }
+    });
+    var save = instantiate("saveFreeformHistory", {
+      freeformHistoryCards: historyCards, deckType: "tarot", mode: "mixed", arcanaFilter: "mixed",
+      freeBoardDeckName: function () { return "Tarot"; },
+      historyUiController: { saveFreeformReading: function (input) { saved.push(records.buildFreeformLayoutRecord(input)); } }
+    });
+    var reveal = instantiate("revealFreeCards", {
+      freeDrawn: drawn, renderFreeDraw: function () {}, renderResults: function () { renders++; },
+      saveFreeformDraftNow: function () {}, notifyFreeformReadingCompleted: function () {}, saveFreeformHistory: save
+    });
+    if (!bulk) { reveal([drawn[0]]); assert.equal(saved.length, 0); }
+    reveal(bulk ? drawn : [drawn[1]]);
+    reveal(drawn);
+    assert.equal(renders, bulk ? 1 : 2);
+    assert.equal(saved.length, 1);
+    assert.deepEqual(saved[0].cards.map(function (c) { return [c.arcana, c.cardName, c.orientation, c.boardRotation]; }),
+      [["major", "塔", "reversed", 15], ["minor", "圣杯王牌", "reversed", 15]]);
   });
-
-  try {
-    payloads.push(payload());
-  } catch (err) {
-    /* 依赖太多的部分跳过，只检查角度映射这一条 */
-  }
-
-  assert.equal(freeDrawn[0].angle, 15);
-  assert.equal(freeDrawn[1].angle, -30);
-  assert.match(appSource, /boardRotation: item\.angle \|\| 0/);
-  assert.match(appSource, /angle: typeof item\.boardRotation === "number" \? item\.boardRotation : 0/);
 });
 
 test("白盒：扇形点击守卫不会抢走牌阵里卡片的点击", function () {

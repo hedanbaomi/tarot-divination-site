@@ -543,37 +543,6 @@
     };
   }
 
-  /* the same .spread-card markup the spread uses, so the card art and the
-     theme (front, back, caption) are identical to a dealt card */
-  /* 草稿里的位置如果互相压住了（旧版本存下的坐标），按现在的间距重新摊开 */
-  function spreadFreeCards(w) {
-    if (!freeDrawn.length) return;
-    if (freeformRelayout) {
-      /* 旧版草稿（或旧构建）的坐标不可靠，按当前间距整排重铺一遍 */
-      freeDrawn.forEach(function (item, index) { var p = freeDefaultPoint(index); item.x = p.x; item.y = p.y; });
-      freeformRelayout = false;
-      return;
-    }
-    /* 提示文字和「一键开牌」那一行是禁区，旧草稿里的牌不能压在上面 */
-    var floorY = freeDefaultPoint(0).y;
-    freeDrawn.forEach(function (item) { if (item.y < floorY) item.y = floorY; });
-    var cw = w < 620 ? 74 : 84;
-    var ch = w < 620 ? 111 : 126;
-    var placed = [];
-    freeDrawn.forEach(function (item, index) {
-      var clash = false;
-      placed.forEach(function (p) {
-        if (Math.abs(p.x - item.x) < cw - 8 && Math.abs(p.y - item.y) < ch - 8) clash = true;
-      });
-      if (clash) {
-        var point = freeDefaultPoint(index);
-        item.x = point.x;
-        item.y = point.y;
-      }
-      placed.push({ x: item.x, y: item.y });
-    });
-  }
-
   function buildFreeTableCard(item, index) {
     var card = cardById(item.id);
     if (!card) return null;
@@ -757,10 +726,12 @@
       if (ev.key !== "Enter" && ev.key !== " " && ev.key !== "Spacebar") return;
       ev.preventDefault();
       if (item.revealed) return;
-      item.revealed = true;
-      renderFreeDraw();
-      renderResults();
-      scheduleFreeformDraft();
+      revealFreeCards([item]);
+      var button = document.querySelector('.free-table-card[data-card-id="' + item.id + '"]');
+      if (button) button.focus({ preventScroll: true });
+    });
+    el.addEventListener("click", function (ev) {
+      if (ev.detail === 0) revealFreeCards([item]);
     });
     el.addEventListener("pointerdown", function (ev) {
       if (ev.pointerType === "mouse" && ev.button !== 0) return;
@@ -782,16 +753,15 @@
         el.style.left = item.x + "px";
         el.style.top = item.y + "px";
       }
-      function onEnd() {
+      function onEnd(endEvent) {
         el.removeEventListener("pointermove", onMove);
         el.removeEventListener("pointerup", onEnd);
         el.removeEventListener("pointercancel", onEnd);
-        if (!moved && !longPressed && !item.revealed) {
-          item.revealed = true;
-          renderFreeDraw();
-          renderResults();
+        if (!moved && !longPressed && endEvent.type === "pointerup" && !item.revealed) {
+          revealFreeCards([item]);
+        } else {
+          scheduleFreeformDraft();
         }
-        scheduleFreeformDraft();
       }
       el.addEventListener("pointermove", onMove);
       el.addEventListener("pointerup", onEnd);
@@ -817,43 +787,25 @@
     var box = document.getElementById("freeDrawCards");
     if (box) {
       box.innerHTML = "";
-      /* 恢复草稿后按当前画布重新排一遍网格 */
-      if (freeformRelayout) {
-        freeDrawn.forEach(function (item, index) {
-          var point = freeDefaultPoint(index);
-          item.x = point.x;
-          item.y = point.y;
-        });
-        freeformRelayout = false;
-      }
-      var layerW = box ? box.clientWidth : 0;
-      var layerH = box ? box.clientHeight : 0;
-      var built = [];
+      var layerW = box.clientWidth;
+      var layerH = box.clientHeight;
       freeDrawn.forEach(function (item, index) {
+        if (legacyViewport && layerW && layerH) {
+          // The original board used world coordinates anchored at its center.
+          item.x = layerW / 2 + legacyViewport.panX + item.x * legacyViewport.zoom;
+          item.y = layerH / 2 + legacyViewport.panY + item.y * legacyViewport.zoom;
+        }
         if (layerW) item.x = Math.max(46, Math.min(layerW - 46, item.x));
         if (layerH) item.y = Math.max(70, Math.min(layerH - 70, item.y));
         var el = buildFreeTableCard(item, index);
         if (!el) return;
-        el.setAttribute("role", "listitem");
         el.style.zIndex = String(10 + freeIndex(item.id));
         bindFreeTableCard(el, item);
         el.style.left = item.x + "px";
         el.style.top = item.y + "px";
         box.appendChild(el);
-        built.push(el);
       });
-      /* 行距取实际渲染出来的牌高，牌排两行以上也不会互相压住 */
-      if (built.length) {
-        var cols = layerW && layerW < 620 ? 2 : 4;
-        var cardH = built[0].offsetHeight || 126;
-        var rowH = cardH + 26;
-        built.forEach(function (el, index) {
-          if (freeDrawn[index].dragged) return;
-          var y = Math.round(Math.min(layerH - 70, 92 + Math.floor(index / cols) * rowH));
-          freeDrawn[index].y = y;
-          el.style.top = y + "px";
-        });
-      }
+      if (layerW && layerH) legacyViewport = null;
     }
     var undo = document.getElementById("freeUndoBtn");
     var redo = document.getElementById("freeRedoBtn");
@@ -867,7 +819,7 @@
      画板面板移除后这块逻辑改由牌桌自己维护。 */
   var FREEFORM_DRAFT_KEY = "quareia-divination-free-board-draft-v1";
   var freeformDraftTimer = 0;
-  var freeformRelayout = false;
+  var legacyViewport = null;
 
   function isShuffleRunning() {
     var ring = el.deckSpread && el.deckSpread.closest ? el.deckSpread.closest(".deck-ring") : null;
@@ -880,7 +832,7 @@
     var decks = allDecksForFreeBoard();
     return {
       schema: "free-board/v1",
-    layout: 3,
+      layout: 3,
       version: 1,
       layoutMode: "freeform",
       cards: freeDrawn.map(function (item, index) {
@@ -969,19 +921,31 @@
     var byId = Object.create(null);
     (allDecksForFreeBoard()[type] || []).forEach(function (card) { byId[card.id] = card; });
     var drawnIds = Object.create(null);
-    draft.cards.forEach(function (item) { drawnIds[item.cardId] = true; });
+    var cards = draft.cards.filter(function (item) {
+      if (!item || !byId[item.cardId] || drawnIds[item.cardId]) return false;
+      drawnIds[item.cardId] = true;
+      return true;
+    });
     /* remainingPile 是权威值：空数组表示牌堆真的抽空了，不能回退成整副牌 */
     var remaining;
     if (Array.isArray(draft.remainingPile)) {
       remaining = draft.remainingPile.filter(function (id) { return byId[id] && !drawnIds[id]; });
     } else {
-      remaining = Object.keys(byId).filter(function (id) { return !drawnIds[id]; });
+      remaining = freeformDeckCards().map(function (card) { return card.id; })
+        .filter(function (id) { return !drawnIds[id]; });
     }
-    pile = remaining.map(function (id) { return byId[id]; });
+    // Reinsert drawn cards in their original slots so undo returns them to the fan.
+    // Older drafts may only list the remaining pile in deck.cardIds.
+    var pileIds = Array.from(new Set(remaining));
+    var missing = new Set(cards.map(function (item) { return item.cardId; }));
+    if (draft.deck && Array.isArray(draft.deck.cardIds)) {
+      draft.deck.cardIds.forEach(function (id, index) {
+        if (missing.delete(id)) pileIds.splice(index, 0, id);
+      });
+    }
+    pile = pileIds.concat(Array.from(missing)).map(function (id) { return byId[id]; });
     var restored = [];
-    draft.cards.forEach(function (item, index) {
-      var card = byId[item.cardId];
-      if (!card) return;
+    cards.forEach(function (item, index) {
       var point = freeDefaultPoint(index);
       restored.push({
         id: item.cardId,
@@ -993,7 +957,12 @@
       });
     });
     freeDrawn = restored;
-    freeformRelayout = true;  /* 位置一律按当前间距重排，旧坐标只用来记牌序 */
+    var view = draft.viewport || {};
+    legacyViewport = draft.layout === 3 ? null : {
+      panX: Number.isFinite(view.panX) ? view.panX : 0,
+      panY: Number.isFinite(view.panY) ? view.panY : 0,
+      zoom: Number.isFinite(view.zoom) && view.zoom > 0 ? view.zoom : 1
+    };
     freeRedo.length = 0;
     return freeDrawn.length;
   }
@@ -1597,17 +1566,21 @@
     restoreDeckFocus(0, keyboardTriggered);
   }
 
+  function revealFreeCards(items) {
+    if (!items.some(function (item) { return !item.revealed; })) return;
+    items.forEach(function (item) { item.revealed = true; });
+    renderFreeDraw();
+    renderResults();
+    saveFreeformDraftNow();
+    if (freeDrawn.every(function (item) { return item.revealed; })) {
+      saveFreeformHistory();
+      notifyFreeformReadingCompleted();
+    }
+  }
+
   function revealAll() {
     if (isFreeform()) {
-      if (!freeDrawn.length) return;
-      var hadHidden = freeDrawn.some(function (item) { return !item.revealed; });
-      freeDrawn.forEach(function (item) { item.revealed = true; });
-      renderFreeDraw();
-      saveFreeformDraftNow();
-      if (hadHidden) {
-        saveFreeformHistory();
-        notifyFreeformReadingCompleted();
-      }
+      revealFreeCards(freeDrawn);
       return;
     }
     var pending = spread.filter(function (e) { return !e.revealed; });
@@ -1647,7 +1620,7 @@
       var name = card ? localizedCardName(card) : "";
       return {
         cardId: item.id,
-        /* 历史校验要求牌名与唯一的 z，直接沿用摆位顺序 */
+        card: card,
         cardName: name || String(item.id),
         orientation: item.orientation || "upright",
         x: Math.round(item.x),
@@ -2069,7 +2042,7 @@
     el.arcanaFilter.value = arcanaFilter;
     /* 从自由模式里挑了一个预设牌阵：回到牌阵模式 */
     if (isFreeform()) {
-      layoutMode = "preset";
+      leaveFreeform();
       if (el.layoutModeSelect) el.layoutModeSelect.value = "preset";
       applyLayoutUi();
     }
@@ -2090,7 +2063,7 @@
     el.deckSelect.value = deckType;
     arcanaFilter = resolvedFilter;
     el.arcanaFilter.value = arcanaFilter;
-    layoutMode = "preset";
+    if (isFreeform()) leaveFreeform();
     selectedSpreadId = spreadDefinition.id;
     if (el.layoutModeSelect) el.layoutModeSelect.value = "preset";
     applyDeckUi();
@@ -2249,6 +2222,14 @@
     });
   }
 
+  function leaveFreeform() {
+    layoutMode = "preset";
+    freeDrawn.length = 0;
+    freeRedo.length = 0;
+    clearFreeformDraft();
+    renderFreeDraw();
+  }
+
   async function handleLayoutModeChange() {
     var newLayoutMode = el.layoutModeSelect.value;
     if (newLayoutMode === layoutMode) return;
@@ -2263,6 +2244,7 @@
       spread = [];
       currentPhase = "major";
       layoutMode = "freeform";
+      freeBoardReadingReported = false;
       freeDrawn = [];
       freeRedo.length = 0;
       applyDeckUi();
@@ -2276,11 +2258,7 @@
       return;
     }
 
-    layoutMode = "preset";
-    freeDrawn = [];
-    freeRedo.length = 0;
-    clearFreeformDraft();
-    renderFreeDraw();
+    leaveFreeform();
     applyDeckUi();
     applyLayoutUi();
     populateSpreadSelect();
@@ -2431,6 +2409,10 @@
   }
 
 
+
+  window.addEventListener("pagehide", function () {
+    if (freeformDraftTimer) saveFreeformDraftNow();
+  });
 
   /* 屏幕尺寸变了：把自由画板上的牌拉回可视范围 */
   window.addEventListener("resize", function () {

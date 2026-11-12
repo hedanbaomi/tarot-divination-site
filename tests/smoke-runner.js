@@ -133,9 +133,7 @@
   step("翻面后能看到牌意", function () {
     var flip = q("#spreadGrid .spread-card-flip");
     if (!flip) throw new Error("没有可点的牌");
-    flip.click();          // 第一次：翻面
-    sleep(60);
-    flip.click();          // 第二次：打开牌意
+    flip.click(); // 上一步已经开牌，再点一次打开牌意。
     return wait("牌意面板", function () {
       var panel = document.getElementById("cardMeaningPanel");
       return panel && !panel.hidden && panel.textContent.trim().length > 8;
@@ -152,8 +150,13 @@
     if (!select) throw new Error("找不到布局选择");
     select.value = "freeform";
     select.dispatchEvent(new Event("change", { bubbles: true }));
-    return wait("自由画板状态", function () {
-      return document.querySelector(".table-area.is-freeform");
+    return wait("切换布局确认", function () {
+      return q("#confirmDialog[open]");
+    }).then(function () {
+      q("#confirmProceedBtn").click();
+      return wait("自由画板状态", function () {
+        return document.querySelector(".table-area.is-freeform");
+      });
     }).then(function () {
       return sleep(120);
     });
@@ -168,7 +171,10 @@
     }).then(function () {
       var drawn = q(".free-table-card");
       drawn.click();
-      return sleep(80);
+      return wait("自由画板解读和历史保存", function () {
+        return qa("#resultsList .result-card").length === 1 &&
+          q("#historySaveStatus").textContent === window.DivinationI18n.t("history.savedFreeBoard");
+      });
     }).then(function () {
       if (!q(".free-table-card.revealed")) throw new Error("翻面没有生效");
       var undo = document.getElementById("freeUndoBtn");

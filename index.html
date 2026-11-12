@@ -112,7 +112,7 @@
           <button class="free-draw-btn" id="freeRedoBtn" type="button" disabled
             aria-label="重做" data-i18n-aria-label="freeBoard.redo" title="重做">↷</button>
         </div>
-        <div class="free-draw-cards" id="freeDrawCards" role="list"
+        <div class="free-draw-cards" id="freeDrawCards" role="group"
           aria-label="已抽出的牌" data-i18n-aria-label="freeBoard.drawnAria"></div>
       </div>
 
@@ -586,8 +586,8 @@
   <script src="js/history-store.js"></script>
   <script src="js/history-ui.js?v=20261112-review5"></script>
   <script src="js/free-board-ui.js?v=20261112-review5"></script>
-  <script src="js/app.js?v=20261112-flow3"></script>
-  <script src="js/deck-ring.js?v=20261112-rev3"></script>
+  <script src="js/app.js?v=20261112-reading-fix"></script>
+  <script src="js/deck-ring.js?v=20261112-reading-fix"></script>
   <div class="spread-popover" id="spreadPopover" hidden role="dialog" aria-modal="false"
     aria-label="牌阵设置" data-i18n-aria-label="spread.settings">
     <div class="spread-popover-head">
@@ -655,7 +655,7 @@
   (function () {
     if (!/[?&]smoke=1/.test(location.search)) return;
     var script = document.createElement("script");
-    script.src = "tests/smoke-runner.js?v=20261112-smoke5";
+    script.src = "tests/smoke-runner.js?v=20261112-reading-fix";
     script.defer = true;
     document.body.appendChild(script);
   })();

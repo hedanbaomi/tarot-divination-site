@@ -320,7 +320,12 @@
     return true;
   }
 
+  function isSpreadTarget(event) {
+    return event.target.closest && event.target.closest(".spread-grid, .spread-card, .spread-slot, #spreadGrid");
+  }
+
   function onDown(event) {
+    if (isSpreadTarget(event)) return;
     if (event.button !== undefined && event.button !== 0) return;
     if (event.target.closest && event.target.closest(".spread-settings-btn")) return;
     if (raf) {
@@ -331,7 +336,8 @@
     if (pageRaf) {
       window.cancelAnimationFrame(pageRaf);
       pageRaf = 0;
-    }    dragging = true;
+    }
+    dragging = true;
     pointerId = event.pointerId;
     startX = event.clientX;
     startSlide = slide;
@@ -389,7 +395,7 @@
       var inPlane = event.target.closest ? event.target.closest(".table-plane") : null;
       if (!inPlane) return;
       /* 牌阵里已铺开的牌（含叠放的两层）自己处理点击，别被近邻判断抢走 */
-      if (event.target.closest && event.target.closest(".spread-grid, .spread-card, .spread-slot, #spreadGrid")) return;
+      if (isSpreadTarget(event)) return;
       /* 洗牌动画期间牌被藏起来了，但这条命中逻辑仍然会找到最近的牌并合成点击 */
       if (ring.classList.contains("is-shuffling")) {
         event.stopPropagation();
@@ -493,7 +499,7 @@
   if (nextBtn) nextBtn.addEventListener("click", function () { pageFan(1); });
 
   stage.addEventListener("keydown", function (event) {
-    if (event.target !== stage && !stage.contains(event.target)) return;
+    if (event.target !== stage && !ring.contains(event.target)) return;
     if (event.key === "ArrowLeft") { pageFan(-1); event.preventDefault(); }
     else if (event.key === "ArrowRight") { pageFan(1); event.preventDefault(); }
     else if (event.key === "Home") { slide = 0; velocity = 0; layout(); event.preventDefault(); }
