@@ -186,6 +186,8 @@
     "spread.settingsClose": "关闭牌阵设置",
       "deck.initialRemaining": "剩 78 张",
       "deck.shuffle": "洗牌",
+    "deck.prev": "往前翻一张牌",
+    "deck.next": "往后翻一张牌",
       "deck.initialCta": "轻点环绕四周的任意一张牌，把它抽进中央牌阵",
       "deck.initialAria": "环形牌堆，轻点任意一张抽牌",
       "deck.switch": "切换牌组",
@@ -369,7 +371,7 @@
       ,"freeBoard.settingsSummary": "自由画板：可从当前牌组与筛选结果中任意抽牌，不设固定牌位或目标张数。"
       ,"freeBoard.title": "自由画板"
       ,"freeBoard.open": "自由画板"
-      ,"freeBoard.openHint": "牌堆以扇形摊在桌上，不套用任何牌阵，想抽哪张抽哪张。", "freeBoard.drawnAria": "已抽出的牌"
+      ,"freeBoard.openHint": "牌堆以扇形摊在桌上，不套用任何牌阵，想抽哪张抽哪张。", "freeBoard.cardHiddenAria": "第 {index} 张牌，未翻开", "freeBoard.cardAria": "第 {index} 张牌，{name}，{orientation}", "freeBoard.slotName": "自由牌位", "freeBoard.drawnAria": "已抽出的牌"
       ,"freeBoard.toolbarAria": "自由画板控制"
       ,"freeBoard.undo": "撤销"
       ,"freeBoard.undoAria": "撤销上一次自由画板操作"
@@ -612,6 +614,8 @@
     "spread.settingsClose": "Close spread settings",
       "deck.initialRemaining": "78 remaining",
       "deck.shuffle": "Shuffle",
+    "deck.prev": "Previous card",
+    "deck.next": "Next card",
       "deck.initialCta": "Tap any card in the ring to draw it into the spread",
       "deck.initialAria": "Circular card deck. Tap a card to draw.",
       "deck.switch": "Switch card pool",
@@ -794,7 +798,7 @@
       "freeBoard.settingsSummary": "Free Board: draw any card from the current deck and filter; there are no fixed positions or target count.",
       "freeBoard.title": "Free Board",
       "freeBoard.open": "Free board",
-      "freeBoard.openHint": "The deck fans out on the table with no spread applied.", "freeBoard.drawnAria": "Drawn cards",
+      "freeBoard.openHint": "The deck fans out on the table with no spread applied.", "freeBoard.cardHiddenAria": "Card {index}, face down", "freeBoard.cardAria": "Card {index}, {name}, {orientation}", "freeBoard.slotName": "Free slot", "freeBoard.drawnAria": "Drawn cards",
       "freeBoard.toolbarAria": "Free Board controls",
       "freeBoard.undo": "Undo",
       "freeBoard.undoAria": "Undo the last Free Board action",

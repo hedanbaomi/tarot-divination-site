@@ -1589,8 +1589,11 @@ html.ui2 .table-center .phase-label:empty {
   display: none;
 }
 html.ui2 .table-center .spread-board-scroll {
+  /* 7 列牌阵在 390px 上宽 550px：保留横向滚动，两端牌位才够得着 */
   padding: 0;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 html.ui2 .table-center .spread-grid {
   justify-content: center;
@@ -2127,16 +2130,10 @@ html.ui2 .deck-ring .deck-card::after {
   transition: none;
 }
 
-@keyframes ui2-slot-in {
-  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-  to { opacity: 1; transform: none; }
-}
-html.ui2 .spread-card {
-  animation: ui2-slot-in 0.26s ease-out both;
-}
-@media (prefers-reduced-motion: reduce) {
-  html.ui2 .spread-card { animation: none; }
-}
+/* the entrance animation stays in the legacy dealIn keyframes: they carry
+   the per-slot --position-offset-x/y and --position-rotation. Re-declaring
+   the transform here (ending on `transform: none`) dropped those offsets and
+   buried the base card of a stacked position. */
 
 /* preselection: the card under the cursor brightens in place (no movement, no z change) */
 html.ui2 .deck-ring .deck-card:hover,
@@ -2810,13 +2807,21 @@ html.ui2 .free-board-hint {
 }
 
 /* freeform: the fan on the table is the card source, the board is the canvas */
-html.ui2 .table-area.is-freeform .spread-actions,
 html.ui2 .table-area.is-freeform .spread-hint,
 /* 自由模式下没有牌阵，但“牌阵设置”要留着能点 */
 html.ui2 .table-area.is-freeform .spread-name,
 html.ui2 .table-area.is-freeform .card-count,
 html.ui2 .table-area.is-freeform .phase-label {
   display: none !important;
+}
+
+/* 自由模式仍要能「一键开牌」：保留牌桌底部的动作条（洗牌按钮已移到顶栏） */
+html.ui2 .table-area.is-freeform .spread-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+  padding-top: 0;
+  border-top: 0;
 }
 
 html.ui2 .table-area.is-freeform .table-stage {

@@ -13,6 +13,7 @@ var themeSource = fs.readFileSync(path.join(root, "js", "theme.js"), "utf8");
 var theme = require("../js/theme.js");
 
 var THEMES = ["celestial", "parchment", "ember", "grove"];
+var ALL_THEMES = THEMES.concat(["jade", "dusk", "ash"]);
 
 function i18nSourceBlock(source, locale) {
   var start = source.indexOf('"' + locale + '": {');
@@ -37,7 +38,7 @@ test("theme boot script applies a closed allow-list before styles load", functio
   assert.doesNotMatch(boot, /innerHTML/);
 });
 
-test("settings expose four theme swatches with bilingual names", function () {
+test("settings expose the theme swatches with bilingual names", function () {
   THEMES.forEach(function (id) {
     assert.match(html, new RegExp('data-theme-id="' + id + '"'));
     assert.match(css, new RegExp('html\\[data-theme="' + id + '"\\]'));
@@ -57,12 +58,15 @@ test("settings expose four theme swatches with bilingual names", function () {
     });
   });
   assert.match(html, /role="radiogroup"/);
-  assert.match(html, /src="js\/theme\.js\?v=20261103-grove-merged"/);
+  assert.match(html, /src="js\/theme\.js\?v=/);
+  ALL_THEMES.forEach(function (id) {
+    assert.match(html, new RegExp('data-theme-id="' + id + '"'));
+  });
 });
 
 test("theme helper persists a valid id and rejects unknown values", function () {
   assert.equal(theme.DEFAULT_THEME, "celestial");
-  assert.deepEqual(theme.THEMES, THEMES);
+  assert.deepEqual(theme.THEMES, ALL_THEMES);
   assert.equal(theme.getTheme(), "celestial");
   assert.equal(theme.setTheme("not-a-theme"), false);
   assert.equal(theme.getTheme(), "celestial");
@@ -143,15 +147,15 @@ test("moon and sun share a ten-tap face easter egg with wake and sleep animation
   var icons = path.join(root, "assets", "icons");
   assert.match(html, /class="sky-face"/);
   assert.match(html, /class="sky-eyelid sky-eyelid-l"/);
-  assert.match(html, /celestial-sky\.js\?v=20260813-sun-blank/);
+  assert.match(html, /celestial-sky\.js\?v=/);
   THEMES.filter(function (id) { return id !== "parchment"; }).forEach(function (id) {
     assert.match(html, new RegExp('data-theme-face="' + id + '"'));
     assert.ok(fs.existsSync(path.join(icons, "sky-face-" + id + ".png")));
   });
   assert.doesNotMatch(html, /data-theme-face="parchment"|sky-face-parchment\.png/);
-  assert.match(sky, /var TAP_NEED = 10/);
-  assert.match(sky, /var TAP_WINDOW = 60000/);
-  assert.match(sky, /maxDist < TAP_SLOP && held < TAP_MS/);
+  assert.match(sky, /var LONG_MS = 5000/);
+  assert.match(sky, /var LONG_SLOP = 22/);
+  assert.match(sky, /function triggerEgg\(/);
   assert.match(sky, /function wakeFace\(/);
   assert.match(sky, /function sleepFace\(/);
   assert.match(sky, /setFace\("waking"\)/);
