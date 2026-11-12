@@ -529,19 +529,17 @@
     var narrow = w < 620;
     var cols = narrow ? 2 : 4;
     var stepX = narrow ? 84 : 100;
-    var stepY = narrow ? 144 : 150;
+    /* 行距按实际牌高算，牌一多也不会压住上一行 */
+    var sample = document.querySelector(".free-table-card");
+    var cardH = (sample && sample.offsetHeight) || (narrow ? 111 : 126);
+    var stepY = cardH + (narrow ? 30 : 24);
     var col = index % cols;
     var row = Math.floor(index / cols);
-    /* 落在提示与「一键开牌」那排按钮下面，别让牌压住它们 */
-    var anchor = document.querySelector(".table-area .spread-actions") ||
-      document.querySelector(".table-hint");
-    var baseY = h * 0.62;
-    if (anchor && anchor.offsetTop) {
-      baseY = anchor.offsetTop + (anchor.offsetHeight || 0) + 84;
-    }
+    /* 牌层的顶边已经压到「一键开牌」下面了（见 renderFreeDraw），这里只排网格 */
+    var baseY = 92;
     return {
       x: Math.round(Math.min(w - 56, (narrow ? 66 : 120) + col * stepX + row * 14)),
-      y: Math.round(Math.min(h - 90, Math.max(120, baseY + row * stepY)))
+      y: Math.round(Math.min(h - 70, Math.max(70, baseY + row * stepY)))
     };
   }
 
@@ -550,6 +548,15 @@
   /* 草稿里的位置如果互相压住了（旧版本存下的坐标），按现在的间距重新摊开 */
   function spreadFreeCards(w) {
     if (!freeDrawn.length) return;
+    if (freeformRelayout) {
+      /* 旧版草稿（或旧构建）的坐标不可靠，按当前间距整排重铺一遍 */
+      freeDrawn.forEach(function (item, index) { var p = freeDefaultPoint(index); item.x = p.x; item.y = p.y; });
+      freeformRelayout = false;
+      return;
+    }
+    /* 提示文字和「一键开牌」那一行是禁区，旧草稿里的牌不能压在上面 */
+    var floorY = freeDefaultPoint(0).y;
+    freeDrawn.forEach(function (item) { if (item.y < floorY) item.y = floorY; });
     var cw = w < 620 ? 74 : 84;
     var ch = w < 620 ? 111 : 126;
     var placed = [];
@@ -808,7 +815,15 @@
     if (!wrap) return;
     wrap.hidden = !isFreeform();
     var box = document.getElementById("freeDrawCards");
+    /* 牌层从「一键开牌」下面开始，牌就永远不会压住提示和按钮 */
     if (box) {
+      var tableEl = wrap.parentNode;
+      var actionsRow = tableEl && tableEl.querySelector ? tableEl.querySelector(".spread-actions") : null;
+      if (actionsRow && wrap.getBoundingClientRect) {
+        var ar = actionsRow.getBoundingClientRect();
+        var wr = wrap.getBoundingClientRect();
+        if (ar.bottom) box.style.top = Math.round(ar.bottom - wr.top + 24) + "px";
+      }
       box.innerHTML = "";
       var layerW = box ? box.clientWidth : 0;
       spreadFreeCards(layerW);
@@ -839,6 +854,7 @@
      画板面板移除后这块逻辑改由牌桌自己维护。 */
   var FREEFORM_DRAFT_KEY = "quareia-divination-free-board-draft-v1";
   var freeformDraftTimer = 0;
+  var freeformRelayout = false;
 
   function isShuffleRunning() {
     var ring = el.deckSpread && el.deckSpread.closest ? el.deckSpread.closest(".deck-ring") : null;
@@ -851,6 +867,7 @@
     var decks = allDecksForFreeBoard();
     return {
       schema: "free-board/v1",
+    layout: 3,
       version: 1,
       layoutMode: "freeform",
       cards: freeDrawn.map(function (item, index) {
@@ -963,6 +980,7 @@
       });
     });
     freeDrawn = restored;
+    freeformRelayout = true;  /* 位置一律按当前间距重排，旧坐标只用来记牌序 */
     freeRedo.length = 0;
     return freeDrawn.length;
   }

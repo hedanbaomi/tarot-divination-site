@@ -3236,3 +3236,19 @@ html.ui2 .seg-thumb {
 html.ui2 .settings-panel .seg { background: rgba(0, 0, 0, .3); }
 html.ui2 .settings-panel .seg-btn { font-size: 13px; }
 html.ui2 .settings-panel .seg-btn.is-on { box-shadow: none; }
+
+/* 自由画板上的牌名不能溢出到隔壁牌上去 */
+html.ui2 .free-table-card .spread-card-caption {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0 4px;
+  text-align: center;
+}
+
+html.ui2 .free-table-card .spread-card-caption span.name {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
