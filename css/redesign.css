@@ -2810,9 +2810,12 @@ html.ui2 .free-board-hint {
 }
 
 /* freeform: the fan on the table is the card source, the board is the canvas */
-html.ui2 .table-area.is-freeform .spread-head,
 html.ui2 .table-area.is-freeform .spread-actions,
-html.ui2 .table-area.is-freeform .spread-hint {
+html.ui2 .table-area.is-freeform .spread-hint,
+/* 自由模式下没有牌阵，但“牌阵设置”要留着能点 */
+html.ui2 .table-area.is-freeform .spread-name,
+html.ui2 .table-area.is-freeform .card-count,
+html.ui2 .table-area.is-freeform .phase-label {
   display: none !important;
 }
 
