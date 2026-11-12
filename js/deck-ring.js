@@ -30,6 +30,7 @@
   var lut = null;
   var lutKey = "";
   var ringCardW = 0;
+  var pull = 0;
   /* how many cards the arc can hold without them squashing into each other;
      recomputed from the real arc length on every layout */
   var lastVis = 0;
@@ -91,6 +92,10 @@
 
   /* 牌弧的角跨：小于 1 时两端抬起，牌弧下沿不会压到牌阵上（1 = 完整半圆） */
   var ARC_SPREAD = 0.82;
+  /* 拉到两端之外的橡皮筋：RUBBER 是幅度系数，RUBBER_POW 小于 1 时越拉越紧 */
+  var RUBBER_POW = 0.55;
+  /* 拉到头时整片牌弧最多挪动的像素：越大越松 */
+  var PULL_PX = 92;
 
   /* 拖动时几何量不会变：缓存一帧内反复测量，避免每帧强制重排 */
   var geomCache = null;
@@ -160,11 +165,8 @@
     var vis = lastVis;
     var K = Math.max(1, Math.min(vis, n) - 1);
     var max = maxSlide();
-    if (dragging) {
-      /* onMove 已经做过橡皮筋了，这里只兜底，别每帧再衰减一次 */
-      if (slide < 0) slide = 0;
-      if (slide > max) slide = max;
-    } else if (slide < 0) {
+    if (!dragging) pull = 0;
+    if (slide < 0) {
       slide = 0;
     } else if (slide > max) {
       slide = max;
@@ -192,6 +194,8 @@
       card.style.pointerEvents = "auto";
       card.style.setProperty("--z", String(1000 + Math.round(u * 1000)));
     }
+    /* 拉到头后整片牌弧跟着手指挪一点，松手归位 */
+    ring.style.transform = pull ? "translateX(" + pull.toFixed(1) + "px)" : "";
     if (!dragging) syncFanNav();
   }
 
@@ -363,9 +367,16 @@
     var perPixel = 1 / (lut ? lut.total : 400);
     var raw = startSlide - dx * perPixel;
     var max = maxSlide();
-    var next = raw < 0 ? raw * 0.22 : raw > max ? max + (raw - max) * 0.22 : raw;
-    velocity = next - slide;
-    slide = next;
+    /* 索引本身不允许越界；越界的那部分换算成整片牌弧的位移，
+       拉得越远越紧，松手由 CSS 过渡弹回去（橡胶感） */
+    var clamped = raw < 0 ? 0 : raw > max ? max : raw;
+    var over = raw - clamped;
+    if (over > 1.2) over = 1.2;
+    else if (over < -1.2) over = -1.2;
+    /* 跟着手指走：往右拉，整片弧也往右挪 */
+    pull = over === 0 ? 0 : (over < 0 ? 1 : -1) * Math.pow(Math.abs(over), RUBBER_POW) * PULL_PX;
+    velocity = clamped - slide;
+    slide = clamped;
     layout();
   }
 
@@ -378,6 +389,7 @@
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onUp);
     var max = maxSlide();
+    pull = 0;
     if (slide < 0 || slide > max) {
       suppressClickUntil = Date.now() + 400;
       startInertia();

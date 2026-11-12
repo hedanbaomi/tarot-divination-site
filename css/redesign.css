@@ -1610,6 +1610,13 @@ html.ui2 .deck-ring {
   overflow: visible;
   pointer-events: none;
 }
+/* 拉到头时整片牌弧被手指带出去一点；松手用这条过渡弹回原位 */
+html.ui2 .deck-ring {
+  transition: transform 430ms cubic-bezier(.22, .9, .28, 1);
+}
+html.ui2 .table-stage.is-dragging .deck-ring {
+  transition: none;
+}
 html.ui2 .deck-ring.empty {
   display: grid;
   place-items: center;
