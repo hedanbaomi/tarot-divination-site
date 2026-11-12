@@ -2867,3 +2867,86 @@ html.ui2 .sky-moon.is-holding {
 html.ui2 .sky-moon.is-egg {
   filter: brightness(1.2) saturate(1.1);
 }
+
+/* ---------------------------------------------------------------
+   §23 free form draw tray — drawn cards on the left + undo / redo
+   --------------------------------------------------------------- */
+html.ui2 .free-draw {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  margin: 2px 0 18px;
+  min-height: 112px;
+}
+
+html.ui2 .free-draw[hidden] { display: none !important; }
+
+html.ui2 .free-draw-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+html.ui2 .free-draw-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(var(--veil-rgb), .55);
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: color .2s ease, border-color .2s ease;
+}
+
+html.ui2 .free-draw-btn:hover:not(:disabled) {
+  color: var(--accent-light);
+  border-color: rgba(var(--accent-rgb), .5);
+}
+
+html.ui2 .free-draw-btn:disabled {
+  opacity: .28;
+  cursor: default;
+}
+
+html.ui2 .free-draw-cards {
+  display: flex;
+  align-items: flex-start;
+  min-height: 102px;
+}
+
+html.ui2 .free-draw-card {
+  width: 68px;
+  height: 102px;
+  flex: 0 0 auto;
+  margin-right: -28px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(120% 90% at 50% 16%, rgba(var(--accent-rgb), .10), transparent 62%),
+    repeating-linear-gradient(45deg, rgba(236, 226, 206, .05) 0 1px, transparent 1px 7px),
+    linear-gradient(160deg, #1a1822, #0d0c11);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .45);
+  animation: freeDrawIn .3s cubic-bezier(.2, .7, .2, 1) both;
+}
+
+html.ui2 .free-draw-card:last-child { margin-right: 0; }
+
+@keyframes freeDrawIn {
+  from { opacity: 0; transform: translateX(-14px) rotate(-3deg); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 640px) {
+  html.ui2 .free-draw { gap: 12px; min-height: 96px; }
+  html.ui2 .free-draw-card { width: 58px; height: 87px; margin-right: -24px; }
+  html.ui2 .free-draw-cards { min-height: 87px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.ui2 .free-draw-card { animation: none; }
+}

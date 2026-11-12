@@ -10,6 +10,10 @@
   var overviewMethod = "single";   // single | stacked
   var layoutMode = "preset";       // preset | freeform
 
+  /* 自由模式：抽到左边的牌，以及撤销/重做两条栈 */
+  var freeDrawn = [];
+  var freeRedo = [];
+
   var pile = [];       // remaining face-down cards (shuffled)
   var spread = [];      // drawn cards: { uid, card, orientation, revealed, slotIndex, layer? }
   var uidCounter = 0;
@@ -404,10 +408,13 @@
 
   // Full reset: rebuild pile and clear the spread.
   function resetDeck() {
+    freeDrawn.length = 0;
+    freeRedo.length = 0;
     if (isFreeform()) {
       if (freeBoardUi && typeof freeBoardUi.reconfigure === "function") {
         freeBoardUi.reconfigure(freeBoardContext());
       }
+      renderFreeformFan();
       return;
     }
     currentPhase = "major";
@@ -474,17 +481,67 @@
 
   // ---------- Deck spread (pick any card) ----------
   /* freeform keeps the fan on the table: it renders the board's remaining pile */
+  function freeRemainingIds() {
+    var drawn = Object.create(null);
+    freeDrawn.forEach(function (id) { drawn[id] = true; });
+    return pile.filter(function (card) { return !drawn[card.id]; })
+      .map(function (card) { return card.id; });
+  }
+
+  function renderFreeDraw() {
+    var wrap = document.getElementById("freeDraw");
+    if (!wrap) return;
+    wrap.hidden = !isFreeform();
+    var box = document.getElementById("freeDrawCards");
+    if (box) {
+      box.innerHTML = "";
+      freeDrawn.forEach(function (id) {
+        var card = document.createElement("div");
+        card.className = "free-draw-card";
+        card.setAttribute("data-card-id", id);
+        card.setAttribute("role", "listitem");
+        box.appendChild(card);
+      });
+    }
+    var undo = document.getElementById("freeUndoBtn");
+    var redo = document.getElementById("freeRedoBtn");
+    if (undo) undo.disabled = freeDrawn.length === 0;
+    if (redo) redo.disabled = freeRedo.length === 0;
+  }
+
+  function drawFreeCard(cardId) {
+    if (!isFreeform() || !cardId) return;
+    if (freeDrawn.indexOf(cardId) !== -1) return;
+    if (!pile.some(function (card) { return card.id === cardId; })) return;
+    freeDrawn.push(cardId);
+    freeRedo.length = 0;
+    renderFreeformFan();
+  }
+
+  function undoFreeDraw() {
+    if (!isFreeform() || !freeDrawn.length) return;
+    freeRedo.push(freeDrawn.pop());
+    renderFreeformFan();
+  }
+
+  function redoFreeDraw() {
+    if (!isFreeform() || !freeRedo.length) return;
+    freeDrawn.push(freeRedo.pop());
+    renderFreeformFan();
+  }
+
   function renderFreeformFan() {
     if (!el.deckSpread) return;
     el.deckSpread.innerHTML = "";
     var boardState = freeBoardUi && freeBoardUi.getState ? freeBoardUi.getState() : null;
     /* 没有画板时（画板面板已移除）就退回本局自己的牌堆 */
     var remaining = boardState && boardState.remainingPile ? boardState.remainingPile
-      : pile.map(function (card) { return card.id; });
+      : freeRemainingIds();
     el.deckSpread.classList.toggle("empty", remaining.length === 0);
     if (!remaining.length) {
       el.deckSpread.textContent = t("app.deckEmpty");
       if (el.deckRemaining) el.deckRemaining.textContent = t("app.remaining", { count: 0 });
+      renderFreeDraw();
       return;
     }
     remaining.forEach(function (cardId, index) {
@@ -495,11 +552,13 @@
       cardEl.setAttribute("data-pile-index", String(index));
       cardEl.setAttribute("aria-label", t("freeBoard.pileAria"));
       if (isNonTarotDeck()) cardEl.appendChild(createBackArtImage("deck-card-back-img"));
+      cardEl.addEventListener("click", function () { drawFreeCard(cardId); });
       el.deckSpread.appendChild(cardEl);
     });
     if (el.deckRemaining) {
       el.deckRemaining.textContent = t("app.remaining", { count: remaining.length });
     }
+    renderFreeDraw();
   }
 
   function renderDeckSpread() {
@@ -1672,6 +1731,10 @@
     el.overviewMethod.addEventListener("change", handleOverviewMethodChange);
     el.spreadSelect.addEventListener("change", handleSpreadChange);
     el.shuffleBtn.addEventListener("click", handleShuffle);
+    var freeUndoBtn = document.getElementById("freeUndoBtn");
+    if (freeUndoBtn) freeUndoBtn.addEventListener("click", undoFreeDraw);
+    var freeRedoBtn = document.getElementById("freeRedoBtn");
+    if (freeRedoBtn) freeRedoBtn.addEventListener("click", redoFreeDraw);
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);
     if (el.clearBtn) el.clearBtn.addEventListener("click", handleShuffle);
