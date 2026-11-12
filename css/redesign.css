@@ -2883,11 +2883,11 @@ html.ui2 .free-draw {
 html.ui2 .free-draw[hidden] { display: none !important; }
 /* 自由模式：桌面上留出一大块空白，牌可以拖到扇形下方摆开 */
 html.ui2 .table-area.is-freeform {
-  padding-bottom: min(40vh, 360px);
+  padding-bottom: min(62vh, 640px);
 }
 
 @media (max-width: 640px) {
-  html.ui2 .table-area.is-freeform { padding-bottom: 300px; }
+  html.ui2 .table-area.is-freeform { padding-bottom: 520px; }
 }
 
 html.ui2 .free-draw-rail {
