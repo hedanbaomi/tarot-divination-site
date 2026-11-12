@@ -11,76 +11,79 @@ function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
-test("Free Board is a synthetic layout option with stable load order and no preset positions", function () {
+test("Free Board is a layout option whose resources load before the app", function () {
   var html = read("index.html");
   var app = read("js/app.js");
   var model = read("js/free-board-model.js");
   var ui = read("js/free-board-ui.js");
-  var css = read("css/free-board.css");
+  var css = read("css/redesign.css");
   assert.match(html, /id="layoutModeSelect"/);
   assert.match(html, /value="freeform"[^>]*data-i18n="layout\.freeform"/);
-  assert.ok(html.indexOf("css/free-board.css") < html.indexOf("</head>"));
   assert.ok(html.indexOf("js/free-board-model.js") < html.indexOf("js/free-board-draft.js"));
   assert.ok(html.indexOf("js/free-board-draft.js") < html.indexOf("js/history-records.js"));
-  assert.ok(html.indexOf("js/history-ui.js") < html.indexOf("js/free-board-ui.js"));
-  assert.ok(html.indexOf("js/free-board-ui.js") < html.indexOf("js/app.js"));
-  ["free-board-model.js", "free-board-draft.js", "history-records.js",
-    "history-ui.js", "free-board-ui.js"].forEach(function (asset) {
-    assert.match(html, new RegExp(asset.replace(".", "\\.") + "\\?v=20260809-free-board-v1"));
-  });
-  assert.match(html, /app\.js\?v=20260820-custom-spread-window-final/);
-  assert.match(html, /i18n\.js\?v=20260820-custom-spread-window-final/);
+  assert.ok(html.indexOf("js/history-ui.js") < html.indexOf("js/app.js"));
+  assert.doesNotMatch(model, /freeBoard|Free Board/);
+  assert.doesNotMatch(ui, /<canvas|createElement\(["']canvas/);
   assert.match(app, /var layoutMode = "preset"/);
   assert.match(app, /function freeBoardCardsForDeck\(type, filter\)/);
   assert.match(app, /return majors\.concat\(minors\)/);
   assert.match(app, /return minors\.concat\(majors\)/);
-  assert.doesNotMatch(model, /freeBoard|Free Board/);
-  assert.doesNotMatch(ui, /<canvas|createElement\(["']canvas/);
-  assert.match(ui, /style\.transform = "translate3d\("/);
-  assert.match(ui, /boardRotation \+ "deg/);
-  assert.match(ui, /data-orientation/);
-  assert.match(css, /\.free-board-viewport[\s\S]*touch-action: none/);
-  assert.match(css, /\.free-board-viewport[\s\S]*overscroll-behavior: contain/);
-  assert.doesNotMatch(css, /body\s*\{[^}]*touch-action/);
+  assert.match(css, /\.free-table-card \{/);
 });
 
-test("fresh Free Board contexts shuffle actual cards while draft restore keeps saved order", function () {
+test("the free board builds its own full pool and keeps a restored draft in order", function () {
   var app = read("js/app.js");
-  var restoreStart = app.indexOf("var restoredFreeBoard");
-  var restoreEnd = app.indexOf("\n    } else {", restoreStart);
-  var restoreBranch = app.slice(restoreStart, restoreEnd);
-
+  assert.match(app, /function freeformDeckCards\(\)/);
+  assert.match(app, /if \(isFreeform\(\)\) \{/);
+  assert.match(app, /pile = shuffle\(freeformDeckCards\(\)\)/);
   assert.match(app, /function shuffle\(deck\)[\s\S]*Math\.floor\(Math\.random\(\) \* \(i \+ 1\)\)/);
-  assert.match(app, /cards: shuffle\(freeBoardCardsForDeck\(deckType, filter\)\)/);
-  assert.match(restoreBranch, /restoreDraftIfAvailable/);
-  assert.doesNotMatch(restoreBranch, /freeBoardContext\(\)/);
+  assert.match(app, /function restoreFreeformDraft\(resumeParked\)/);
+  assert.match(app, /removeAllDrawnCardsFromPile|remainingPile/);
 });
 
-test("draft restore refreshes custom-select labels after state sync without reconfiguring", function () {
+test("a restored draft syncs the deck and select labels without dispatching change", function () {
   var app = read("js/app.js");
-  var restoreStart = app.indexOf("var restoredFreeBoard");
-  var restoreEnd = app.indexOf("\n    } else {", restoreStart);
-  var restoreBranch = app.slice(restoreStart, restoreEnd);
-  var stateIndex = restoreBranch.indexOf("syncStateFromFreeBoard");
-  var deckUiIndex = restoreBranch.indexOf("applyDeckUi");
-  var layoutUiIndex = restoreBranch.indexOf("applyLayoutUi");
-  var customSyncIndex = restoreBranch.indexOf("syncCustomSelectVisuals");
-
+  var start = app.indexOf("function showRestoredFreeform()");
+  var end = app.indexOf("function init()", start);
+  var branch = app.slice(start, end);
+  assert.match(app, /function syncSelectControls\(\)/);
   assert.match(app, /function syncCustomSelectVisuals\(\)[\s\S]*DivinationCustomSelects\.sync\(\)/);
-  assert.ok(stateIndex !== -1 && stateIndex < deckUiIndex);
-  assert.ok(deckUiIndex < layoutUiIndex && layoutUiIndex < customSyncIndex);
-  assert.doesNotMatch(restoreBranch, /dispatchEvent\(new Event\(["']change/);
+  assert.match(app, /DivinationSegmented\.sync/);
+  assert.ok(branch.indexOf("applyDeckUi") !== -1);
+  assert.ok(branch.indexOf("applyDeckUi") < branch.indexOf("applyLayoutUi"));
+  assert.ok(branch.indexOf("applyLayoutUi") < branch.indexOf("syncSelectControls"));
+  assert.doesNotMatch(branch, /dispatchEvent\(new Event\(["']change/);
 });
 
-test("Free Board hides the preset spread group and selected controls when hidden", function () {
+test("the spread settings stay usable in the free board", function () {
   var app = read("js/app.js");
-  var css = read("css/free-board.css");
-  assert.match(app, /el\.spreadSettingGroup = document\.querySelector\("\.setting-group-spread"\)/);
-  assert.match(app, /el\.spreadSettingGroup\) el\.spreadSettingGroup\.style\.display = freeform \? "none" : ""/);
-  assert.match(css, /\.free-board-selected-controls\[hidden\]\s*\{[\s\S]*display:\s*none\s*!important/);
-  assert.doesNotMatch(css, /free-board-card-toolbar/);
+  var settings = read("js/spread-settings.js");
+  assert.match(app, /el\.spreadSettingGroup\) el\.spreadSettingGroup\.style\.display = ""/);
+  assert.doesNotMatch(app, /el\.spreadSettingGroup\.style\.display = freeform \? "none"/);
+  assert.match(settings, /function toggleLayout\(\)/);
+  assert.match(settings, /freeBoardOpenBtn/);
 });
 
+test("free board reveal all saves a freeform history record", function () {
+  var app = read("js/app.js");
+  var history = read("js/history-ui.js");
+  assert.match(app, /function revealAll\(\)/);
+  assert.match(app, /saveFreeformDraftNow\(\)/);
+  assert.match(app, /function saveFreeformHistory\(\)/);
+  assert.match(app, /historyUiController\.saveFreeformReading/);
+  assert.match(history, /function saveFreeformReading\(/);
+  assert.match(history, /buildFreeformLayoutRecord/);
+  assert.match(app, /isShuffleRunning\(\)/);
+});
+
+test("destructive free board transitions use the branded confirmation seam", function () {
+  var app = read("js/app.js");
+  assert.match(app, /await confirmIfSpread\(t\("confirm\.layout"\)\)/);
+  assert.match(app, /confirmIfSpread\(t\("confirm\.shuffle"\), t\("confirm\.keep"\)\)/);
+  assert.match(app, /el\.layoutModeSelect\.value = layoutMode/);
+  assert.match(app, /DivinationDialog\.request/);
+  assert.match(app, /clearFreeformDraft\(\)/);
+});
 test("overview method is visible only for the preset Tarot overview spread", function () {
   var html = read("index.html");
   var app = read("js/app.js");
@@ -90,38 +93,7 @@ test("overview method is visible only for the preset Tarot overview spread", fun
   assert.match(html, /id="overviewMethodGroup"/);
 });
 
-test("Free Board keeps only selected-card controls and saves after reveal all", function () {
-  var html = read("index.html");
-  var app = read("js/app.js");
-  var ui = read("js/free-board-ui.js");
-  var css = read("css/free-board.css");
-  assert.doesNotMatch(html, /id="freeBoardClearBtn"/);
-  assert.doesNotMatch(html, /id="freeBoardSaveBtn"/);
-  assert.match(html, /id="freeBoardDiscardDraftBtn"[\s\S]*data-i18n="freeBoard\.clearAndDiscard"/);
-  assert.match(html, /data-card-control-action="toggle-meaning"/);
-  assert.doesNotMatch(ui, /free-board-card-toolbar/);
-  assert.match(ui, /data-draw-order/);
-  assert.match(ui, /case "toggle-meaning"/);
-  assert.match(ui, /function revealAll\(\)[\s\S]*saveHistory\(\)/);
-  assert.match(app, /platform: "web"/);
-  assert.match(app, /getBackImage: deckBackImage/);
-  assert.match(app, /if \(type === "mystagogus"\) return MYSTAGOGUS_BACK;\s*return "";/);
-  assert.match(css, /data-free-board-platform="android"/);
-});
 
-test("destructive Free Board transitions use the branded confirmation seam", function () {
-  var app = read("js/app.js");
-  var ui = read("js/free-board-ui.js");
-  assert.match(app, /await confirmIfSpread\(t\("confirm\.layout"\)\)/);
-  assert.match(app, /await confirmIfSpread\(t\("confirm\.shuffle"\)\)/);
-  assert.match(app, /el\.layoutModeSelect\.value = layoutMode/);
-  assert.match(app, /DivinationDialog\.request/);
-  assert.match(app, /if \(!isFreeform\(\) && spread\.length === 0 && freeBoardCards === 0\)/);
-  assert.doesNotMatch(ui, /requestConfirm\(t\("confirm\.freeBoardClear"\)/);
-  assert.match(ui, /requestConfirm\(t\("confirm\.freeBoardDiscard"\)/);
-  assert.match(ui, /requestConfirm\(t\("confirm\.freeBoardShuffle"\)/);
-  assert.doesNotMatch(ui, /var hasContent = getState\(\)\.cards\.length > 0/);
-});
 
 test("freeform history uses the general queued save API and DOM-only detail rendering", function () {
   var history = read("js/history-ui.js");

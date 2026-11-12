@@ -18,6 +18,9 @@ function harness(platform = "web") {
   const calls = [];
   const context = {
     spread: [], deckType: "tarot", readingReported: false, freeBoardReadingReported: false,
+    uidCounter: 3, lastSavedPresetUid: -1,
+    freeDrawn: [], freeRedo: [], scheduleFreeformDraft() {}, renderFreeformFan() {},
+    clearFreeformDraft() {}, renderFreeDraw() {},
     historyUiController: null, isReadingComplete: () => context.spread.length === context.target,
     isFreeform: () => false, setTimeout: (fn) => fn(), getSpreadEl: () => null,
     target: 3, buildPile() {}, renderSpreadCards() {}, renderDeckSpread() {}, renderSpreadMeta() {}, renderResults() {},
@@ -66,6 +69,24 @@ test("the final manual flip also completes a reading without another Reveal All 
   c.revealEntry(c.spread[2]);
   c.revealAll();
   assert.deepEqual(calls, [["tarot", 3]]);
+});
+test("a complete preset saves once for manual, bulk, and mixed flips", () => {
+  for (const path of ["manual", "bulk", "mixed"]) {
+    const { context: c } = harness();
+    let saves = 0;
+    c.historyUiController = { saveCompletedReading() { saves++; } };
+    c.spread = [{}, {}, {}];
+    if (path !== "bulk") c.revealEntry(c.spread[0]);
+    assert.equal(saves, 0);
+    if (path === "manual") c.spread.forEach(entry => c.revealEntry(entry));
+    else c.revealAll();
+    c.revealAll();
+    assert.equal(saves, 1);
+    c.spread[1] = {};
+    c.uidCounter++;
+    c.revealEntry(c.spread[1]);
+    assert.equal(saves, 2);
+  }
 });
 test("free board Reveal All counts once until cleared; moves and history restore do not count", () => {
   const { context: c, calls } = harness();

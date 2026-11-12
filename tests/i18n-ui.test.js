@@ -29,12 +29,12 @@ test("language switch and localization scripts load before interactive modules",
 test("locale helper switches complete messages and localized object fields", function () {
   i18n.setLocale("en");
   assert.equal(i18n.getLocale(), "en");
-  assert.equal(i18n.t("spread.reveal"), "Reveal & Interpret");
+  assert.equal(i18n.t("spread.reveal"), "Reveal all");
   assert.equal(i18n.t("app.remaining", { count: 12 }), "12 remaining");
   assert.equal(i18n.field({ name: "愚者", nameEn: "The Fool" }, "name"), "The Fool");
 
   i18n.setLocale("zh-CN");
-  assert.equal(i18n.t("spread.reveal"), "开牌解读");
+  assert.equal(i18n.t("spread.reveal"), "一键开牌");
   assert.equal(i18n.field({ name: "愚者", nameEn: "The Fool" }, "name"), "愚者");
 });
 
@@ -80,9 +80,9 @@ test("Free Board controls, statuses, confirmations, and accessibility labels are
   });
   assert.match(i18nSourceBlock(i18nSource, "zh-CN"), /"freeBoard\.drawOrder": "牌位\{order\}"/);
   assert.match(i18nSourceBlock(i18nSource, "en"), /"freeBoard\.drawOrder": "Position \{order\}"/);
-  assert.match(html, /freeBoard\.rotateMinus15Aria/);
+  assert.match(html, /freeBoard\.drawnAria/);
   assert.match(freeBoardUi, /freeBoard\.showMeaning/);
-  assert.match(html, /freeBoard\.removeAria/);
+  assert.match(html, /freeBoard\.openHint/);
   assert.doesNotMatch(freeBoardUi, /freeBoard\.saveAria/);
 });
 

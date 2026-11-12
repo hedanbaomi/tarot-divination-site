@@ -1,0 +1,3282 @@
+/* ==========================================================================
+   Quareia 鍗犲崪 路 UI refresh (loaded after styles.css / free-board.css /
+   custom-spreads.css)
+
+   One idea: a printed oracle on dark paper.
+   - one accent (antique gold), one ink, one paper tone
+   - hairlines + whitespace instead of gradient boxes
+   - a single primary action per view
+   - editorial serif display, calm sans body, no wide letter-spacing in Chinese
+   - the deck is the hero; settings are a quiet disclosure at the bottom
+
+   All four themes stay supported through the same token set.
+   ========================================================================== */
+
+/* ---------- 1. Tokens ---------- */
+html.ui2 {
+  --font-display: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", Georgia, serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+
+  --radius: 4px;
+  --radius-lg: 8px;
+  --tap: 44px;
+
+  --line: rgba(236, 226, 206, 0.12);
+  --line-soft: rgba(236, 226, 206, 0.07);
+  --veil-rgb: 9, 8, 12;
+  --track-bg: rgba(0, 0, 0, 0.24);
+
+  --ink: #0a090d;
+  --surface: #131219;
+  --surface-2: #1a1922;
+
+  --accent: #cba86b;
+  --accent-rgb: 203, 168, 107;
+  --accent-light: #e7d5ac;
+  --accent-deep: #8d7038;
+  --accent-soft: rgba(203, 168, 107, 0.1);
+  --accent-border: rgba(203, 168, 107, 0.3);
+  --accent-contrast: #17120a;
+
+  --text-primary: #ece5d6;
+  --text-secondary: #b3a995;
+  --text-muted: #8a8172;
+
+  --upright-color: #9dc4a6;
+  --reversed-color: #cf958c;
+
+  --bg-page:
+    radial-gradient(130% 80% at 50% -25%, #191724 0%, #0c0b11 48%, #08070b 100%),
+    #08070b;
+  --bg-primary: #0a090d;
+  --bg-secondary: #131219;
+  --bg-card: #15141b;
+  --bg-card-back: #0d0c14;
+  --bg-card-rgb: 21, 20, 27;
+  --border: var(--line);
+  --shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  --glow-gold: none;
+  --title-glow: none;
+
+  --panel-bg: transparent;
+  --panel-bg-alt: rgba(255, 255, 255, 0.02);
+  --panel-border: var(--line);
+  --select-trigger-bg: none;
+  --control-inset: none;
+  --btn-secondary-bg: transparent;
+  --btn-accent-from: var(--accent);
+  --btn-accent-mid: var(--accent);
+  --btn-accent-to: var(--accent);
+  --btn-accent-text: var(--accent-contrast);
+  --choice-option-bg: #15141b;
+  --choice-option-border: rgba(236, 226, 206, 0.1);
+  --choice-option-selected-bg: rgba(var(--accent-rgb), 0.14);
+  --choice-option-selected-color: var(--accent-light);
+  --tarot-back-from: #1d1b2b;
+  --tarot-back-mid: #131220;
+  --switch-from: #22212c;
+  --switch-to: #17161e;
+  --language-border: var(--line);
+  --language-color: var(--text-secondary);
+  --dialog-bg: #121118;
+  --dialog-card-bg: #14131a;
+  --overlay-scrim: rgba(6, 5, 9, 0.8);
+
+  --nebula-1: rgba(120, 96, 60, 0.07);
+  --nebula-2: rgba(70, 84, 120, 0.06);
+  --nebula-3: rgba(110, 72, 62, 0.05);
+  --nebula-4: rgba(60, 66, 96, 0.05);
+  --sky-opacity: 0.75;
+  --meteor-peak: 0.5;
+  --moon-hi: #f7efdb;
+  --moon-mid: #e4d1a8;
+  --moon-lo: #c9b184;
+  --moon-edge: #a58f68;
+  --moon-glow-near: rgba(240, 222, 170, 0.16);
+  --moon-glow-mid: rgba(216, 190, 130, 0.08);
+  --moon-glow-far: rgba(140, 130, 200, 0.04);
+  --moon-opacity: 0.55;
+  --moon-maria: 150, 132, 96;
+  --moon-maria-hi: 172, 150, 104;
+  --moon-shade: rgba(18, 14, 30, 0.4);
+  --moon-lit: rgba(255, 250, 230, 0.2);
+
+  --swatch-celestial-a: #131219;
+  --swatch-celestial-b: #cba86b;
+  --swatch-parchment-a: #f1e8d7;
+  --swatch-parchment-b: #8a6428;
+  --swatch-ember-a: #1a0f0a;
+  --swatch-ember-b: #d58f52;
+  --swatch-grove-a: #16241c;
+  --swatch-grove-b: #c8b174;
+  --swatch-jade-a: #eef1e9;
+  --swatch-jade-b: #2f6b58;
+  --swatch-dusk-a: #1a1426;
+  --swatch-dusk-b: #b8a2e6;
+  --swatch-ash-a: #17171a;
+  --swatch-ash-b: #cfc9ba;
+}
+
+/* Warm black ink (default) */
+html.ui2[data-theme="celestial"] {
+  color-scheme: dark;
+}
+
+/* Morning parchment */
+html.ui2[data-theme="parchment"] {
+  color-scheme: light;
+  --ink: #f1e8d7;
+  --surface: #fbf5e8;
+  --surface-2: #f6eedd;
+  --line: rgba(43, 36, 25, 0.14);
+  --line-soft: rgba(43, 36, 25, 0.08);
+  --veil-rgb: 255, 252, 245;
+  --track-bg: rgba(43, 36, 25, 0.05);
+  --accent: #8a6428;
+  --accent-rgb: 138, 100, 40;
+  --accent-light: #6d4c1b;
+  --accent-deep: #563a12;
+  --accent-soft: rgba(138, 100, 40, 0.08);
+  --accent-border: rgba(138, 100, 40, 0.34);
+  --accent-contrast: #fbf5e8;
+  --text-primary: #241f17;
+  --text-secondary: #5d5545;
+  --text-muted: #7d7462;
+  --upright-color: #3d6b4b;
+  --reversed-color: #9a4f45;
+  --bg-page:
+    radial-gradient(130% 80% at 50% -25%, #f8f1e2 0%, #f1e8d7 50%, #e9dfca 100%),
+    #f1e8d7;
+  --bg-primary: #f1e8d7;
+  --bg-secondary: #f6eedd;
+  --bg-card: #fbf5e8;
+  --bg-card-back: #f3e9d5;
+  --shadow: 0 18px 44px rgba(83, 66, 38, 0.14);
+  --panel-bg-alt: rgba(43, 36, 25, 0.03);
+  --choice-option-bg: #fbf5e8;
+  --choice-option-border: rgba(43, 36, 25, 0.14);
+  --choice-option-selected-bg: rgba(138, 100, 40, 0.1);
+  --choice-option-selected-color: #563a12;
+  --tarot-back-from: #ddc9a4;
+  --tarot-back-mid: #e9dcbf;
+  --dialog-bg: #f8f1e2;
+  --dialog-card-bg: #fbf5e8;
+  --overlay-scrim: rgba(58, 46, 26, 0.45);
+  --nebula-1: rgba(176, 146, 96, 0.16);
+  --nebula-2: rgba(196, 176, 130, 0.14);
+  --nebula-3: rgba(168, 138, 88, 0.1);
+  --nebula-4: rgba(206, 186, 140, 0.12);
+  --sky-opacity: 0.5;
+  --moon-glow-near: rgba(220, 196, 140, 0.2);
+  --moon-glow-mid: rgba(200, 176, 120, 0.08);
+  --moon-glow-far: rgba(200, 176, 120, 0.04);
+  --moon-opacity: 0.8;
+}
+
+/* Ember chapel */
+html.ui2[data-theme="ember"] {
+  color-scheme: dark;
+  --ink: #0e0806;
+  --surface: #1a100b;
+  --surface-2: #21140d;
+  --line: rgba(242, 228, 209, 0.12);
+  --line-soft: rgba(242, 228, 209, 0.07);
+  --accent: #d38c4f;
+  --accent-rgb: 211, 140, 79;
+  --accent-light: #ecc59a;
+  --accent-deep: #96602f;
+  --accent-soft: rgba(211, 140, 79, 0.1);
+  --accent-border: rgba(211, 140, 79, 0.3);
+  --accent-contrast: #1c110a;
+  --text-primary: #f2e4d1;
+  --text-secondary: #c3ab92;
+  --text-muted: #99836d;
+  --bg-page:
+    radial-gradient(130% 80% at 50% -25%, #24150e 0%, #140c08 50%, #0c0705 100%),
+    #0c0705;
+  --bg-primary: #0e0806;
+  --bg-secondary: #1a100b;
+  --bg-card: #1c120c;
+  --bg-card-back: #120a07;
+  --panel-bg-alt: rgba(255, 255, 255, 0.02);
+  --tarot-back-from: #2a1710;
+  --tarot-back-mid: #1b0f0a;
+  --dialog-bg: #170e09;
+  --dialog-card-bg: #1a110b;
+  --nebula-1: rgba(150, 76, 36, 0.1);
+  --nebula-2: rgba(110, 56, 30, 0.08);
+  --nebula-3: rgba(160, 90, 40, 0.07);
+  --nebula-4: rgba(90, 44, 22, 0.07);
+  --moon-hi: #fbeedd;
+  --moon-mid: #eccfa9;
+  --moon-lo: #d1a97c;
+  --moon-edge: #a8805a;
+}
+
+/* Grove altar */
+html.ui2[data-theme="grove"] {
+  color-scheme: dark;
+  --ink: #0d1511;
+  --surface: #16211b;
+  --surface-2: #1b2821;
+  --line: rgba(233, 236, 217, 0.12);
+  --line-soft: rgba(233, 236, 217, 0.07);
+  --accent: #c8b174;
+  --accent-rgb: 200, 177, 116;
+  --accent-light: #e3d5a8;
+  --accent-deep: #8d7940;
+  --accent-soft: rgba(200, 177, 116, 0.1);
+  --accent-border: rgba(200, 177, 116, 0.3);
+  --accent-contrast: #141a12;
+  --text-primary: #e9ecd9;
+  --text-secondary: #b3b9a1;
+  --text-muted: #8a9079;
+  --bg-page:
+    radial-gradient(130% 80% at 50% -25%, #1c2a22 0%, #111b16 50%, #0a110d 100%),
+    #0a110d;
+  --bg-primary: #0d1511;
+  --bg-secondary: #16211b;
+  --bg-card: #17241d;
+  --bg-card-back: #0f1a15;
+  --panel-bg-alt: rgba(255, 255, 255, 0.02);
+  --tarot-back-from: #1d2f25;
+  --tarot-back-mid: #12201a;
+  --dialog-bg: #131f19;
+  --dialog-card-bg: #16241d;
+  --nebula-1: rgba(64, 100, 74, 0.1);
+  --nebula-2: rgba(48, 84, 64, 0.08);
+  --nebula-3: rgba(86, 108, 60, 0.07);
+  --nebula-4: rgba(40, 70, 56, 0.07);
+  --upright-color: #a8cfae;
+  --reversed-color: #d39c92;
+  --moon-opacity: 0.65;
+}
+
+/* Use the lifted Grove palette from styles.css for the new interface. */
+html.ui2[data-theme="grove-light"] {
+  --ink: var(--bg-primary);
+  --surface: var(--bg-card);
+  --surface-2: var(--bg-secondary);
+  --line: var(--panel-border);
+  --line-soft: rgba(var(--accent-rgb), 0.22);
+  --veil-rgb: 52, 72, 58;
+  --track-bg: var(--neutral-contain);
+  --accent-contrast: var(--bg-card-back);
+}
+html.ui2 .theme-swatch[data-theme-id="grove-light"] {
+  --swatch-a: #587058;
+  --swatch-b: #e2c270;
+}
+html.ui2[data-theme="grove-light"] :is(.settings-panel, .spread-popover, .card-meaning, .free-angle) {
+  background: var(--panel-bg);
+  border-color: var(--panel-border);
+}
+html.ui2[data-theme="grove-light"] :is(.btn-mini, .btn-secondary, .spread-settings-btn, .fan-nav-btn) {
+  color: var(--accent-light);
+  background: var(--grove-key-bg);
+  border-color: var(--grove-gold-rim);
+  box-shadow: var(--grove-key-shadow);
+}
+html.ui2[data-theme="grove-light"] .btn-accent {
+  color: var(--btn-accent-text);
+  background: linear-gradient(135deg, var(--btn-accent-from), var(--btn-accent-mid), var(--btn-accent-to));
+  border-color: var(--grove-gold-rim-bright);
+}
+@media (hover: hover) {
+  html.ui2[data-theme="grove-light"] :is(.btn-mini, .btn-secondary, .spread-settings-btn, .fan-nav-btn):not(:disabled):hover {
+    background: var(--grove-key-bg-hover);
+    border-color: var(--grove-gold-rim-bright);
+  }
+}
+
+/* Jade paper (light, cool) */
+html.ui2[data-theme="jade"] {
+  color-scheme: light;
+  --ink: #eef1e9;
+  --surface: #f8faf5;
+  --surface-2: #f1f5ec;
+  --line: rgba(28, 46, 38, 0.14);
+  --line-soft: rgba(28, 46, 38, 0.08);
+  --veil-rgb: 255, 253, 247;
+  --track-bg: rgba(28, 46, 38, 0.05);
+  --accent: #2f6b58;
+  --accent-rgb: 47, 107, 88;
+  --accent-light: #1f5343;
+  --accent-deep: #17453a;
+  --accent-soft: rgba(47, 107, 88, 0.08);
+  --accent-border: rgba(47, 107, 88, 0.32);
+  --accent-contrast: #f8faf5;
+  --text-primary: #1a2a24;
+  --text-secondary: #46584f;
+  --text-muted: #6b7d74;
+  --upright-color: #2f6b58;
+  --reversed-color: #96514a;
+  --bg-page:
+    radial-gradient(130% 80% at 50% -25%, #f7faf2 0%, #eef1e9 52%, #e3eae0 100%),
+    #eef1e9;
+  --bg-primary: #eef1e9;
+  --bg-secondary: #f1f5ec;
+  --bg-card: #f8faf5;
+  --bg-card-back: #eaf0e6;
+  --bg-card-rgb: 248, 250, 245;
+  --shadow: 0 18px 44px rgba(32, 54, 44, 0.14);
+  --panel-bg-alt: rgba(28, 46, 38, 0.03);
+  --choice-option-bg: #f8faf5;
+  --choice-option-border: rgba(28, 46, 38, 0.14);
+  --choice-option-selected-bg: rgba(47, 107, 88, 0.1);
+  --choice-option-selected-color: #17453a;
+  --tarot-back-from: #bfd3c3;
+  --tarot-back-mid: #d9e6d8;
+  --dialog-bg: #f6f9f1;
+  --dialog-card-bg: #f8faf5;
+  --overlay-scrim: rgba(24, 42, 34, 0.45);
+  --nebula-1: rgba(120, 168, 140, 0.14);
+  --nebula-2: rgba(150, 186, 160, 0.12);
+  --nebula-3: rgba(96, 148, 124, 0.08);
+  --nebula-4: rgba(170, 196, 170, 0.12);
+  --sky-opacity: 0.45;
+  --moon-hi: #fdfcf6;
+  --moon-mid: #eef1e4;
+  --moon-lo: #d6e0d2;
+  --moon-edge: #aebfae;
+  --moon-glow-near: rgba(214, 226, 208, 0.2);
+  --moon-glow-mid: rgba(190, 208, 190, 0.08);
+  --moon-glow-far: rgba(150, 180, 160, 0.04);
+  --moon-opacity: 0.7;
+  --moon-maria: 120, 140, 126;
+  --moon-maria-hi: 146, 164, 148;
+  --moon-shade: rgba(24, 38, 30, 0.28);
+  --moon-lit: rgba(255, 255, 250, 0.24);
+}
+
+/* Dusk violet (dark, lilac) */
+html.ui2[data-theme="dusk"] {
+  color-scheme: dark;
+  --ink: #0f0b18;
+  --surface: #1a1426;
+  --surface-2: #211a2e;
+  --line: rgba(232, 224, 246, 0.12);
+  --line-soft: rgba(232, 224, 246, 0.07);
+  --accent: #b8a2e6;
+  --accent-rgb: 184, 162, 230;
+  --accent-light: #ddd0f6;
+  --accent-deep: #7d68ad;
+  --accent-soft: rgba(184, 162, 230, 0.1);
+  --accent-border: rgba(184, 162, 230, 0.3);
+  --accent-contrast: #140f1d;
+  --text-primary: #ece7f6;
+  --text-secondary: #b6aec9;
+  --text-muted: #8d85a0;
+  --upright-color: #a9c3ee;
+  --reversed-color: #d59fb6;
+  --bg-page:
+    radial-gradient(130% 80% at 50% -25%, #241a33 0%, #140f1e 50%, #0a0710 100%),
+    #0a0710;
+  --bg-primary: #0f0b18;
+  --bg-secondary: #1a1426;
+  --bg-card: #1c1629;
+  --bg-card-back: #131020;
+  --bg-card-rgb: 28, 22, 41;
+  --shadow: 0 20px 50px rgba(6, 4, 12, 0.5);
+  --panel-bg-alt: rgba(255, 255, 255, 0.02);
+  --choice-option-bg: #1c1629;
+  --choice-option-border: rgba(232, 224, 246, 0.1);
+  --choice-option-selected-bg: rgba(184, 162, 230, 0.14);
+  --choice-option-selected-color: #ddd0f6;
+  --tarot-back-from: #2a2140;
+  --tarot-back-mid: #1a1428;
+  --dialog-bg: #171222;
+  --dialog-card-bg: #1c1629;
+  --overlay-scrim: rgba(8, 5, 14, 0.8);
+  --nebula-1: rgba(126, 88, 176, 0.1);
+  --nebula-2: rgba(84, 76, 160, 0.08);
+  --nebula-3: rgba(160, 104, 168, 0.07);
+  --nebula-4: rgba(70, 60, 120, 0.08);
+  --moon-hi: #f8f2ff;
+  --moon-mid: #e2d6f6;
+  --moon-lo: #c2b2e0;
+  --moon-edge: #9686b4;
+  --moon-glow-near: rgba(220, 200, 255, 0.18);
+  --moon-glow-mid: rgba(170, 150, 230, 0.08);
+  --moon-glow-far: rgba(120, 110, 200, 0.05);
+  --moon-opacity: 0.6;
+  --moon-maria: 140, 124, 168;
+  --moon-maria-hi: 162, 146, 190;
+}
+
+/* Ash (dark, neutral bone) */
+html.ui2[data-theme="ash"] {
+  color-scheme: dark;
+  --ink: #0c0c0e;
+  --surface: #17171a;
+  --surface-2: #1d1d21;
+  --line: rgba(232, 230, 224, 0.12);
+  --line-soft: rgba(232, 230, 224, 0.07);
+  --accent: #cfc9ba;
+  --accent-rgb: 207, 201, 186;
+  --accent-light: #eae5d9;
+  --accent-deep: #938d7f;
+  --accent-soft: rgba(207, 201, 186, 0.1);
+  --accent-border: rgba(207, 201, 186, 0.3);
+  --accent-contrast: #14140f;
+  --text-primary: #e8e5df;
+  --text-secondary: #b0aca4;
+  --text-muted: #87837c;
+  --upright-color: #a7bfae;
+  --reversed-color: #c9a09a;
+  --bg-page:
+    radial-gradient(130% 80% at 50% -25%, #1f1f23 0%, #121214 50%, #09090b 100%),
+    #09090b;
+  --bg-primary: #0c0c0e;
+  --bg-secondary: #17171a;
+  --bg-card: #191a1d;
+  --bg-card-back: #111113;
+  --bg-card-rgb: 25, 26, 29;
+  --shadow: 0 20px 46px rgba(0, 0, 0, 0.5);
+  --panel-bg-alt: rgba(255, 255, 255, 0.025);
+  --choice-option-bg: #191a1d;
+  --choice-option-border: rgba(232, 230, 224, 0.1);
+  --choice-option-selected-bg: rgba(207, 201, 186, 0.14);
+  --choice-option-selected-color: #eae5d9;
+  --tarot-back-from: #26262c;
+  --tarot-back-mid: #17171c;
+  --dialog-bg: #141416;
+  --dialog-card-bg: #191a1d;
+  --overlay-scrim: rgba(6, 6, 8, 0.82);
+  --nebula-1: rgba(120, 120, 130, 0.07);
+  --nebula-2: rgba(90, 96, 110, 0.06);
+  --nebula-3: rgba(140, 130, 118, 0.05);
+  --nebula-4: rgba(80, 84, 96, 0.06);
+  --moon-hi: #f6f4ef;
+  --moon-mid: #dedbd3;
+  --moon-lo: #bab6ad;
+  --moon-edge: #8e8a82;
+  --moon-glow-near: rgba(230, 226, 216, 0.14);
+  --moon-glow-mid: rgba(200, 196, 186, 0.07);
+  --moon-glow-far: rgba(160, 160, 170, 0.04);
+  --moon-opacity: 0.5;
+}
+
+/* ---------- 2. Base ---------- */
+html.ui2 {
+  scroll-behavior: smooth;
+}
+html.ui2 body {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.7;
+  letter-spacing: 0;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  background-attachment: fixed;
+}
+html.ui2 h1,
+html.ui2 h2,
+html.ui2 h3,
+html.ui2 h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+html.ui2 ::selection {
+  background: rgba(var(--accent-rgb), 0.3);
+  color: var(--text-primary);
+}
+html.ui2 :focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+html.ui2 .page-wrapper {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 40px calc(64px + env(safe-area-inset-bottom));
+}
+
+/* A faint horizon at the very top instead of the floating photo moon. */
+html.ui2 .sky-moon {
+  width: 88px;
+  height: 88px;
+  top: 18px;
+  right: 40px;
+  z-index: 5;
+  opacity: calc(var(--moon-opacity) + 0.25);
+}
+/* A box glow fits the round moons. The transparent sun uses its silhouette shadow. */
+html.ui2:not([data-theme="parchment"]) .sky-moon {
+  box-shadow:
+    0 0 16px 3px var(--moon-glow-near),
+    0 0 54px 18px var(--moon-glow-mid);
+}
+
+/* ---------- 3. Masthead ---------- */
+html.ui2 .masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 26px 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+html.ui2 .masthead h1 {
+  font-size: 25px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+  text-shadow: none;
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+html.ui2 .masthead h1::before,
+html.ui2 .masthead h1::after {
+  content: none;
+  display: none;
+}
+html.ui2 .masthead .subtitle {
+  margin-top: 8px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+html.ui2 .masthead .subtitle::before,
+html.ui2 .masthead .subtitle::after {
+  content: none;
+}
+html.ui2 .masthead-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+html.ui2 .masthead-actions .btn-mini {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  box-shadow: none;
+}
+html.ui2 .masthead-actions .btn-mini:hover,
+html.ui2 .masthead-actions .btn-mini:focus-visible {
+  color: var(--text-primary);
+  background: rgba(var(--accent-rgb), 0.08);
+  box-shadow: none;
+}
+html.ui2 .masthead-actions .language-toggle {
+  color: var(--accent);
+  border-color: transparent;
+}
+html.ui2 .masthead-actions .masthead-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 8px;
+  background: var(--line);
+}
+
+/* ---------- 4. Section structure ---------- */
+html.ui2 .section-index {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+html.ui2 .section-index::before {
+  content: "";
+  width: 18px;
+  height: 1px;
+  background: var(--accent);
+  opacity: 0.6;
+}
+html.ui2 .section-index-num {
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+html.ui2 .section-heading h2,
+html.ui2 .deck-head h2,
+html.ui2 .spread-head h2 {
+  font-size: 32px;
+  line-height: 1.12;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+}
+html.ui2 .section-heading .section-sub {
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+html.ui2 .ritual {
+  display: block;
+}
+
+/* ---------- 5. Buttons ---------- */
+html.ui2 .btn {
+  min-height: 44px;
+  padding: 11px 22px;
+  border-radius: 3px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease,
+    transform 0.18s ease;
+}
+html.ui2 .btn-accent {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: none;
+  font-family: var(--font-body);
+  letter-spacing: 0.04em;
+}
+html.ui2 .btn-accent::after {
+  content: none;
+  animation: none;
+}
+html.ui2 .btn-accent:not(:disabled):hover {
+  background: var(--accent-light);
+  filter: none;
+}
+html.ui2 .btn-accent:disabled {
+  background: var(--accent);
+  opacity: 0.4;
+}
+html.ui2 .btn-secondary {
+  background: transparent;
+  border: 1px solid var(--accent-border);
+  color: var(--accent-light);
+  letter-spacing: 0.02em;
+}
+html.ui2 .btn-secondary:not(:disabled):hover {
+  background: rgba(var(--accent-rgb), 0.08);
+  border-color: var(--accent);
+  color: var(--accent-light);
+  filter: none;
+}
+html.ui2 .btn-mini {
+  min-height: 34px;
+  padding: 7px 14px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  box-shadow: none;
+}
+html.ui2 .btn-mini:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-border);
+  box-shadow: none;
+}
+html.ui2 .btn-switch-arcana {
+  background: transparent;
+  border: 1px solid var(--accent-border);
+  color: var(--accent-light);
+  box-shadow: none;
+}
+html.ui2 .history-danger-btn,
+html.ui2 .confirm-danger-btn {
+  background: transparent;
+  border: 1px solid rgba(207, 149, 140, 0.45);
+  color: var(--reversed-color);
+}
+html.ui2 .history-danger-btn:hover,
+html.ui2 .confirm-danger-btn:hover {
+  background: rgba(207, 149, 140, 0.1);
+}
+
+/* ---------- 6. Deck (the hero) ---------- */
+html.ui2 .deck-area {
+  padding: 48px 0 0;
+}
+html.ui2 .deck-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+html.ui2 .deck-tools {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 7px;
+}
+html.ui2 .deck-remaining {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+html.ui2 .deck-spread {
+  padding: 34px 0 24px;
+  min-height: 156px;
+  scrollbar-color: rgba(var(--accent-rgb), 0.3) transparent;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%);
+}
+html.ui2 .deck-spread::-webkit-scrollbar {
+  height: 2px;
+}
+html.ui2 .deck-spread::-webkit-scrollbar-thumb {
+  background: rgba(var(--accent-rgb), 0.35);
+  border-radius: 2px;
+}
+html.ui2 .deck-card {
+  width: 78px;
+  height: 117px;
+  margin-right: -24px;
+  border-radius: 5px;
+  border: 1px solid rgba(var(--accent-rgb), 0.34);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(var(--accent-rgb), 0.16) 0%, transparent 56%),
+    repeating-linear-gradient(45deg, rgba(var(--accent-rgb), 0.05) 0 4px, transparent 4px 9px),
+    linear-gradient(160deg, var(--tarot-back-from) 0%, var(--tarot-back-mid) 70%, var(--bg-card-back) 100%);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.42),
+    inset 0 0 0 3px rgba(8, 7, 11, 0.7),
+    inset 0 0 0 4px rgba(var(--accent-rgb), 0.16);
+}
+html.ui2 .deck-card::after {
+  content: "✦";
+  font-size: 0.8rem;
+  color: var(--accent);
+  opacity: 0.55;
+  text-shadow: none;
+}
+html.ui2 .deck-card:not(.disabled):hover,
+html.ui2 .deck-card:active {
+  transform: translateY(-12px);
+  border-color: var(--accent);
+  box-shadow:
+    0 18px 30px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 4px rgba(var(--accent-rgb), 0.2);
+}
+html.ui2 .deck-card:not(.disabled):hover::after,
+html.ui2 .deck-card:active::after {
+  opacity: 1;
+  text-shadow: none;
+}
+html.ui2 .deck-cta {
+  text-align: left;
+  padding-left: 1px;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+}
+html.ui2 .deck-cta.complete {
+  color: var(--accent-light);
+  text-shadow: none;
+}
+
+/* ---------- 7. Spread ---------- */
+html.ui2 .spread-area {
+  margin-top: 56px;
+  padding-top: 40px;
+  border-top: 1px solid var(--line);
+}
+html.ui2 .spread-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 26px;
+}
+html.ui2 .spread-head .card-count {
+  display: inline-block;
+  margin-left: 10px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  vertical-align: 4px;
+}
+html.ui2 .phase-label {
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+html.ui2 .phase-label::before {
+  content: none;
+}
+html.ui2 .spread-board-scroll {
+  padding: 8px 0 18px;
+}
+html.ui2 .spread-grid {
+  grid-template-columns: repeat(var(--spread-columns, 3), 88px);
+  grid-template-rows: repeat(var(--spread-rows, 1), 144px);
+  gap: 22px 20px;
+  justify-content: start;
+  margin: 0;
+}
+html.ui2 .spread-card {
+  width: 88px;
+}
+html.ui2 .spread-card-face {
+  border-radius: 5px;
+}
+html.ui2 .spread-card.revealed .spread-card-front {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+html.ui2 .spread-slot {
+  width: 88px;
+  border: 1px solid rgba(var(--accent-rgb), 0.24);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.014);
+  opacity: 1;
+  gap: 7px;
+  animation: none;
+}
+html.ui2 .spread-slot > span:first-child {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--accent);
+  opacity: 0.85;
+}
+html.ui2 .spread-slot .slot-name-zh {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+html.ui2 .spread-slot .slot-name-en {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 1;
+}
+html.ui2 .slot-draw-rule {
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+html.ui2 .spread-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-top: 26px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line-soft);
+}
+html.ui2 .spread-actions .btn {
+  flex: 0 0 auto;
+  max-width: none;
+  min-width: 172px;
+}
+html.ui2 .spread-hint {
+  margin-top: 14px;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+/* ---------- 8. Results ---------- */
+html.ui2 .results-section {
+  margin-top: 56px;
+  padding-top: 40px;
+  border-top: 1px solid var(--line);
+}
+html.ui2 .results-section > h2 {
+  margin-bottom: 4px;
+  text-align: left;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+}
+html.ui2 .results-section > h2::before,
+html.ui2 .results-section > h2::after {
+  content: none;
+}
+html.ui2 .results-list {
+  gap: 0;
+}
+html.ui2 .result-card {
+  grid-template-columns: 84px 1fr;
+  column-gap: 22px;
+  margin: 0;
+  padding: 24px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-left: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html.ui2 .result-card-image {
+  width: 84px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+html.ui2 .result-header {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+html.ui2 .result-pos {
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+html.ui2 .result-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+}
+html.ui2 .result-orientation {
+  padding: 1px 2px;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+html.ui2 .result-suit {
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+html.ui2 .result-keywords {
+  gap: 6px;
+  margin: 10px 0 10px;
+}
+html.ui2 .keyword-tag {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+html.ui2 .result-meaning {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+html.ui2 .result-pair-card {
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ---------- 9. Settings (quiet disclosure, below the reading) ---------- */
+html.ui2 .settings {
+  margin: 64px 0 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  overflow: visible;
+}
+html.ui2 .settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 62px;
+  padding: 22px 2px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: transparent;
+  border-bottom: 1px solid var(--line-soft);
+}
+html.ui2 .settings-toggle:hover {
+  background: transparent;
+  color: var(--text-primary);
+}
+html.ui2 .settings-toggle:hover .settings-chevron {
+  color: var(--accent);
+}
+html.ui2 .settings-chevron {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+html.ui2 .settings-body {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 40px;
+  padding: 4px 2px 48px;
+  animation: none;
+}
+html.ui2 .setting-group {
+  gap: 9px;
+}
+html.ui2 .setting-group label,
+html.ui2 .setting-group .setting-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+html.ui2 .setting-group select,
+html.ui2 .themed-select-trigger {
+  min-height: 42px;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background-color: var(--surface);
+  background-image: none;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  box-shadow: none;
+}
+html.ui2 .themed-select-trigger {
+  background-image: none;
+}
+html.ui2 .themed-select-trigger:hover {
+  border-color: var(--accent-border);
+}
+html.ui2 .themed-select-chevron {
+  color: var(--text-muted);
+  font-size: 14px;
+  transform: none;
+}
+html.ui2 .setting-group select:focus,
+html.ui2 .themed-select-trigger:focus-visible {
+  border-color: var(--accent);
+  box-shadow: none;
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+html.ui2 .setting-summary {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+html.ui2 .theme-swatches {
+  gap: 10px;
+}
+html.ui2 .theme-swatch {
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+html.ui2 .theme-swatch:hover {
+  border-color: var(--accent-border);
+  color: var(--text-primary);
+}
+html.ui2 .theme-swatch.is-active {
+  border-color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.07);
+  color: var(--accent-light);
+  box-shadow: none;
+}
+html.ui2 .theme-swatch-preview {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+}
+html.ui2 .custom-spread-launch .btn {
+  min-height: 38px;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+/* ---------- 10. Position guide ---------- */
+html.ui2 .position-guide {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+html.ui2 .position-guide summary {
+  padding: 20px 2px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+html.ui2 .position-guide summary::marker {
+  color: var(--text-muted);
+}
+html.ui2 .position-guide ol {
+  padding: 0 2px 32px;
+  gap: 14px 32px;
+}
+html.ui2 .position-guide li {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+html.ui2 .position-guide li strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--text-primary);
+}
+html.ui2 .position-guide li span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ---------- 11. Footer ---------- */
+html.ui2 .footer {
+  margin-top: 72px;
+  padding: 40px 0 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+}
+html.ui2 .footer::before {
+  content: none;
+  display: none;
+}
+html.ui2 .footer-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1.15fr 0.9fr;
+  gap: 56px;
+}
+html.ui2 .footer-heading {
+  margin-bottom: 14px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+html.ui2 .footer p,
+html.ui2 .footer li {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+}
+html.ui2 .footer p:last-child,
+html.ui2 .footer li:last-child {
+  margin-bottom: 0;
+}
+html.ui2 .footer .attribution {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+}
+html.ui2 .footer .attribution-list {
+  margin: 0 0 12px;
+  gap: 8px;
+}
+html.ui2 .footer .attribution-rights {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+html.ui2 .footer .attribution-quareia {
+  margin: 0 0 16px;
+}
+html.ui2 .footer .attribution-quareia a,
+html.ui2 .footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  color: var(--accent-light);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-border);
+  font-size: 14px;
+}
+html.ui2 .footer a:hover {
+  color: var(--accent);
+}
+html.ui2 .footer .attribution-quote {
+  max-width: none;
+  margin: 0 0 10px;
+  padding-left: 16px;
+  border-left: 1px solid var(--accent-border);
+  font-family: var(--font-display);
+  font-style: normal;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text-muted);
+}
+html.ui2 .footer .attribution-quote cite {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+html.ui2 .footer .attribution-quote-zh {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  opacity: 1;
+}
+html.ui2 .footer .attribution-privacy {
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--text-muted);
+  opacity: 1;
+}
+html.ui2 .footer #webTelemetryToggle {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ---------- 12. Dialogs & overlays ---------- */
+html.ui2 .history-dialog,
+html.ui2 .announcement-dialog,
+html.ui2 .custom-spread-dialog {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--dialog-bg);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6);
+  color: var(--text-primary);
+}
+html.ui2 .history-dialog-shell,
+html.ui2 .announcement-dialog-shell,
+html.ui2 .custom-spread-shell {
+  background: transparent;
+}
+html.ui2 .history-dialog-kicker,
+html.ui2 .announcement-dialog-kicker,
+html.ui2 .custom-spread-kicker,
+html.ui2 .confirm-kicker,
+html.ui2 .choice-kicker {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+html.ui2 .history-dialog h2,
+html.ui2 .announcement-dialog h2,
+html.ui2 .custom-spread-dialog h2 {
+  font-family: var(--font-display);
+  font-size: 21px;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+}
+html.ui2 .history-icon-btn {
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-secondary);
+}
+html.ui2 .history-icon-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-border);
+}
+html.ui2 .history-privacy,
+html.ui2 .custom-spread-privacy,
+html.ui2 .history-empty,
+html.ui2 .announcement-empty {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+html.ui2 .history-dialog h3,
+html.ui2 .custom-spread-dialog h3,
+html.ui2 .custom-spread-dialog h4 {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--text-primary);
+}
+html.ui2 .confirm-card,
+html.ui2 .choice-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--dialog-card-bg);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6);
+}
+html.ui2 .confirm-card h2,
+html.ui2 .choice-card h2 {
+  font-size: 21px;
+  color: var(--text-primary);
+}
+html.ui2 .confirm-symbol,
+html.ui2 .choice-symbol {
+  border: 1px solid var(--accent-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--accent);
+  box-shadow: none;
+}
+html.ui2 .choice-option {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-primary);
+}
+html.ui2 .choice-option.selected {
+  border-color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent-light);
+}
+html.ui2 .custom-spread-tabs {
+  border-bottom: 1px solid var(--line);
+}
+html.ui2 .custom-spread-tab {
+  border-radius: 0;
+  color: var(--text-muted);
+}
+html.ui2 .custom-spread-tab.is-active {
+  color: var(--accent-light);
+  border-color: var(--accent);
+  background: transparent;
+}
+html.ui2 .custom-spread-field input,
+html.ui2 .custom-spread-field select,
+html.ui2 .custom-spread-field textarea,
+html.ui2 .history-filter select,
+html.ui2 .custom-spread-code {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+}
+html.ui2 .custom-spread-window-btn {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-muted);
+}
+html.ui2 .custom-spread-window-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent-light);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+html.ui2 .themed-select-menu,
+html.ui2 .themed-select-option {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--text-primary);
+}
+html.ui2 .themed-select-option:hover,
+html.ui2 .themed-select-option.is-selected {
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent-light);
+}
+
+/* ---------- 13. Free board (secondary mode) ---------- */
+html.ui2 .free-board-toolbar .btn {
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+html.ui2 .free-board-viewport {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.015);
+}
+html.ui2 .free-board-hint,
+html.ui2 .free-board-status,
+html.ui2 .free-board-save-status {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ---------- 14. Responsive ---------- */
+@media (max-width: 1100px) {
+  html.ui2 .sky-moon {
+    width: 72px;
+    height: 72px;
+    top: 16px;
+    right: 20px;
+  }
+}
+@media (max-width: 860px) {
+  html.ui2 .page-wrapper {
+    padding: 0 24px calc(48px + env(safe-area-inset-bottom));
+  }
+  html.ui2 .masthead {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+    padding: 22px 0 16px;
+  }
+  html.ui2 .masthead h1 {
+    font-size: 21px;
+  }
+  html.ui2 .masthead-actions {
+    margin-left: -10px;
+  }
+  html.ui2 .deck-area {
+    padding-top: 36px;
+  }
+  html.ui2 .section-heading h2,
+  html.ui2 .deck-head h2,
+  html.ui2 .spread-head h2,
+  html.ui2 .results-section > h2 {
+    font-size: 25px;
+  }
+  html.ui2 .deck-head,
+  html.ui2 .spread-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+  html.ui2 .deck-tools {
+    padding-bottom: 0;
+  }
+  html.ui2 .footer-grid {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  html.ui2 .settings-body {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+@media (max-width: 560px) {
+  html.ui2 .page-wrapper {
+    padding: 0 18px calc(40px + env(safe-area-inset-bottom));
+  }
+  html.ui2 .deck-card {
+    width: 68px;
+    height: 102px;
+    margin-right: -20px;
+  }
+  html.ui2 .deck-spread {
+    min-height: 138px;
+  }
+  html.ui2 .spread-grid {
+    grid-template-columns: repeat(var(--spread-columns, 3), 74px);
+    grid-template-rows: repeat(var(--spread-rows, 1), 122px);
+    gap: 16px 14px;
+  }
+  html.ui2 .spread-card,
+  html.ui2 .spread-slot {
+    width: 74px;
+  }
+  html.ui2 .result-card {
+    grid-template-columns: 64px 1fr;
+    column-gap: 16px;
+    padding: 20px 0;
+  }
+  html.ui2 .result-card-image {
+    width: 64px;
+  }
+  html.ui2 .result-name {
+    font-size: 18px;
+  }
+  html.ui2 .result-meaning {
+    font-size: 14px;
+  }
+  html.ui2 .spread-actions {
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+  html.ui2 .spread-actions .btn {
+    width: 100%;
+  }
+  html.ui2 .theme-swatches {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.ui2 *,
+  html.ui2 *::before,
+  html.ui2 *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------- 15. The table: deck ring around the spread ---------- */
+html.ui2 .table-area {
+  padding: 48px 0 0;
+}
+html.ui2 .table-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+html.ui2 .table-head .deck-tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+html.ui2 .table-head .deck-remaining {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+html.ui2 .table-stage {
+  --ring-rx: 320px;
+  --ring-ry: 240px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 600px;
+  margin-top: 4px;
+}
+
+html.ui2 .table-center {
+  position: relative;
+  z-index: 3;
+  display: block;
+  width: auto;
+  padding: 22px 26px 26px;
+  border-radius: 5px;
+  background:
+    radial-gradient(closest-side, rgba(var(--veil-rgb), 0.92) 0%, rgba(var(--veil-rgb), 0.86) 58%, rgba(var(--veil-rgb), 0) 100%);
+}
+html.ui2 .table-center .spread-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+html.ui2 .table-center .spread-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+html.ui2 .table-center .card-count {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+html.ui2 .table-center .phase-label {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+html.ui2 .table-center .phase-label:empty {
+  display: none;
+}
+html.ui2 .table-center .spread-board-scroll {
+  /* 7 列牌阵在 390px 上宽 550px：保留横向滚动，两端牌位才够得着 */
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+html.ui2 .table-center .spread-grid {
+  justify-content: center;
+  margin: 0 auto;
+}
+
+/* the deck: a ring of cards around the spread */
+html.ui2 .deck-ring {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: visible;
+  pointer-events: none;
+}
+html.ui2 .deck-ring.empty {
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+html.ui2 .deck-ring .deck-card,
+html.ui2 .table-stage .deck-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--ring-card-w, 64px);
+  height: calc(var(--ring-card-w, 64px) * 1.5);
+  margin: 0;
+  border-radius: 4px;
+  transform:
+    translate(-50%, -50%)
+    translate(var(--tx, 0px), var(--ty, calc(-1 * var(--ring-ry, 240px) - 10px)))
+    rotate(var(--rot, 0deg));
+  transform-origin: 50% 50%;
+  pointer-events: auto;
+  transition: translate 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
+}
+html.ui2 .deck-ring .deck-card::after {
+  font-size: 10px;
+  opacity: 0.35;
+}
+html.ui2 .deck-ring .deck-card:not(.disabled):hover,
+html.ui2 .deck-ring .deck-card:not(.disabled):focus-visible {
+  translate: 0 -10px;
+  z-index: 9999 !important;
+  border-color: var(--accent);
+  box-shadow:
+    0 18px 30px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 3px rgba(8, 7, 11, 0.7),
+    inset 0 0 0 4px rgba(var(--accent-rgb), 0.28);
+}
+html.ui2 .deck-ring .deck-card:not(.disabled):hover::after,
+html.ui2 .deck-ring .deck-card:not(.disabled):focus-visible::after {
+  opacity: 0.9;
+}
+html.ui2 .deck-ring .deck-card.disabled {
+  opacity: 0.35;
+}
+
+html.ui2 .table-area .deck-cta {
+  margin-top: 4px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+html.ui2 .table-area .spread-actions {
+  margin-top: 26px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line-soft);
+  justify-content: flex-start;
+}
+html.ui2 .table-area .spread-hint {
+  margin-top: 14px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 860px) {
+  html.ui2 .table-stage {
+    min-height: 460px;
+    --ring-card-w: 50px;
+  }
+  html.ui2 .table-center {
+    padding: 16px 14px 18px;
+  }
+  html.ui2 .table-center .spread-name {
+    font-size: 15px;
+  }
+  html.ui2 .table-area .deck-cta,
+  html.ui2 .table-area .spread-hint {
+    text-align: center;
+  }
+  html.ui2 .table-area .spread-actions {
+    justify-content: center;
+  }
+}
+
+/* ring tuning */
+html.ui2 .table-center .spread-grid {
+  grid-template-columns: repeat(var(--spread-columns, 3), 116px);
+  grid-template-rows: repeat(var(--spread-rows, 1), 187px);
+  gap: 20px;
+}
+html.ui2 .table-center .spread-card,
+html.ui2 .table-center .spread-slot {
+  width: 116px;
+}
+html.ui2 .table-stage::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--ring-rx) * 2 - 150px);
+  height: calc(var(--ring-ry) * 2 - 120px);
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--line-soft);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+@media (max-width: 860px) {
+  html.ui2 .table-center {
+    padding: 10px 6px 14px;
+    background: radial-gradient(closest-side, rgba(var(--veil-rgb), 0.92) 0%, rgba(var(--veil-rgb), 0.7) 65%, rgba(var(--veil-rgb), 0) 100%);
+  }
+  html.ui2 .table-stage::before {
+    content: none;
+  }
+  html.ui2 .table-center .spread-grid {
+    grid-template-columns: repeat(var(--spread-columns, 3), 70px);
+    grid-template-rows: repeat(var(--spread-rows, 1), 116px);
+    gap: 10px;
+  }
+  html.ui2 .table-center .spread-card,
+  html.ui2 .table-center .spread-slot {
+    width: 70px;
+  }
+  html.ui2 .table-center .spread-head {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  html.ui2 .table-center .spread-name {
+    font-size: 15px;
+  }
+  html.ui2 .table-area .spread-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  html.ui2 .table-area .spread-actions .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 860px) {
+  html.ui2 .table-center .spread-head {
+    width: max-content;
+    margin: 0 auto 12px;
+    padding: 2px 0;
+    text-shadow: none;
+  }
+  html.ui2 .table-center .card-count {
+    font-size: 12px;
+  }
+}
+
+/* collapsed guide must not take space */
+html.ui2 .position-guide:not([open]) ol {
+  display: none;
+}
+html.ui2 .position-guide ol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 32px;
+  margin: 0;
+  padding: 0 2px 24px;
+  list-style: none;
+}
+html.ui2 .position-guide li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+/* ---------- 16. Top-down table: tilt + drag ---------- */
+html.ui2 .table-stage {
+  perspective: 1500px;
+  perspective-origin: 50% 46%;
+  cursor: grab;
+  touch-action: pan-y;
+}
+html.ui2 .table-stage.is-dragging {
+  cursor: grabbing;
+}
+html.ui2 .table-plane {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  transform: rotateX(32deg) translateZ(0);
+  transform-style: preserve-3d;
+}
+html.ui2 .table-stage::before {
+  content: none;
+}
+html.ui2 .table-plane::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--ring-rx) * 2 - 130px);
+  height: calc(var(--ring-ry) * 2 - 110px);
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--line-soft);
+  border-radius: 50%;
+  pointer-events: none;
+}
+html.ui2 .deck-ring .deck-card {
+  cursor: pointer;
+}
+html.ui2 .table-stage.is-dragging .deck-ring .deck-card {
+  cursor: grabbing;
+}
+@media (max-width: 860px) {
+  html.ui2 .table-stage {
+    perspective: 1100px;
+    perspective-origin: 50% 44%;
+  }
+  html.ui2 .table-plane {
+    transform: rotateX(26deg) translateZ(0);
+  }
+  html.ui2 .table-plane::before {
+    content: none;
+  }
+}
+
+html.ui2 .table-stage {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html.ui2 .table-hint {
+  margin: 2px 0 0;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+
+html.ui2 .table-plane::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--ring-rx) * 2.1);
+  height: calc(var(--ring-ry) * 2.1);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(var(--accent-rgb), 0.05) 0%, rgba(var(--accent-rgb), 0.02) 55%, rgba(0, 0, 0, 0) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* empty slots sit on the table, so they need to read as a surface */
+html.ui2 .table-center .spread-slot {
+  background: rgba(var(--veil-rgb), 0.72);
+  -webkit-backdrop-filter: blur(1px);
+  backdrop-filter: blur(1px);
+}
+
+html.ui2 .deck-ring .deck-card img {
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+html.ui2 .table-area + .settings,
+html.ui2 .settings {
+  margin-top: 56px;
+}
+
+/* ---------- 17. Table caption + spread settings popover ---------- */
+html.ui2 .table-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+html.ui2 .table-plane {
+  flex: 1 1 auto;
+  transform: rotateX(46deg) translateZ(0);
+}
+html.ui2 .table-stage .spread-head {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0 0 4px;
+}
+html.ui2 .table-stage .spread-head .spread-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--text-primary);
+}
+html.ui2 .table-stage .spread-head .card-count {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+html.ui2 .table-stage .spread-head .phase-label:empty {
+  display: none;
+}
+html.ui2 .spread-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  margin-left: 4px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+html.ui2 .spread-settings-btn:hover,
+html.ui2 .spread-settings-btn[aria-expanded="true"] {
+  color: var(--accent-light);
+  border-color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.07);
+}
+
+html.ui2 .spread-popover {
+  position: fixed;
+  z-index: 90;
+  padding: 16px 18px 18px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #121118;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.62);
+  color: var(--text-primary);
+}
+html.ui2 .spread-popover[hidden] {
+  display: none;
+}
+html.ui2 .spread-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+html.ui2 .spread-popover-close {
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+html.ui2 .spread-popover-close:hover {
+  color: var(--text-primary);
+}
+html.ui2 .spread-popover .setting-group {
+  margin: 0;
+}
+html.ui2 .spread-popover .setting-group > label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+html.ui2 .spread-popover .setting-summary {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+html.ui2 .spread-popover .custom-spread-launch {
+  margin-top: 12px;
+}
+@media (max-width: 860px) {
+  html.ui2 .table-plane {
+    transform: rotateX(42deg) translateZ(0);
+  }
+  html.ui2 .table-stage .spread-head .spread-name {
+    font-size: 15px;
+  }
+}
+
+/* ---------- 18. Upper-half fan crowning the spread ---------- */
+html.ui2 .table-stage {
+  perspective-origin: 50% 70%;
+}
+html.ui2 .table-plane {
+  display: grid;
+  justify-items: center;
+  align-items: end;
+  padding-bottom: 24px;
+}
+html.ui2 .table-plane::before {
+  content: none;
+}
+html.ui2 .deck-ring .deck-card,
+html.ui2 .table-stage .deck-card {
+  top: var(--ring-cy, 50%);
+}
+@media (max-width: 860px) {
+  html.ui2 .table-stage {
+    perspective-origin: 50% 68%;
+  }
+  html.ui2 .table-plane {
+    padding-bottom: 18px;
+  }
+}
+
+/* flatter projection reads as a table seen from above */
+html.ui2 .table-stage {
+  perspective: 2600px;
+  perspective-origin: 50% 58%;
+}
+html.ui2 .table-plane {
+  transform: rotateX(34deg) translateZ(0);
+}
+@media (max-width: 860px) {
+  html.ui2 .table-stage {
+    perspective: 1600px;
+    perspective-origin: 50% 56%;
+  }
+  html.ui2 .table-plane {
+    transform: rotateX(30deg) translateZ(0);
+  }
+}
+
+@media (max-width: 860px) {
+  html.ui2 .table-stage .spread-head {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  html.ui2 .table-stage .spread-head .card-count {
+    font-size: 12px;
+  }
+  html.ui2 .spread-settings-btn {
+    height: 26px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 900px) {
+  html.ui2 .footer-col {
+    max-width: none;
+  }
+}
+
+html.ui2 .table-plane {
+  width: calc(100% - 16px);
+  margin: 0 auto;
+}
+
+/* fan: no geometry change on hover (it used to make cards twitch) */
+html.ui2 .deck-ring .deck-card {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+html.ui2 .deck-ring .deck-card:not(.disabled):hover,
+html.ui2 .deck-ring .deck-card:not(.disabled):focus-visible {
+  translate: none;
+  border-color: var(--accent);
+  filter: brightness(1.22);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 3px rgba(8, 7, 11, 0.7),
+    inset 0 0 0 4px rgba(var(--accent-rgb), 0.45);
+}
+html.ui2 .deck-card.is-flying {
+  transition: none;
+}
+
+/* flat table: cards are 2D rectangles, no perspective welding */
+html.ui2 .table-plane {
+  transform: none;
+}
+html.ui2 .table-stage {
+  perspective: none;
+}
+/* keep the fan's left-to-right stacking, even while hovering */
+html.ui2 .deck-ring .deck-card,
+html.ui2 .deck-ring .deck-card:not(.disabled):hover,
+html.ui2 .deck-ring .deck-card:not(.disabled):focus-visible {
+  z-index: var(--z, 1000) !important;
+}
+html.ui2 .deck-ring .deck-card:not(.disabled):hover,
+html.ui2 .deck-ring .deck-card:not(.disabled):focus-visible {
+  border-color: rgba(var(--accent-rgb), 0.34);
+  filter: none;
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.42),
+    inset 0 0 0 3px rgba(8, 7, 11, 0.7),
+    inset 0 0 0 4px rgba(var(--accent-rgb), 0.16);
+}
+@media (max-width: 860px) {
+  html.ui2 .table-plane {
+    transform: none;
+  }
+}
+
+/* the fan must move exactly with the pointer: no easing, no hover motion */
+html.ui2 .deck-ring .deck-card {
+  transition: none !important;
+  animation: none !important;
+  filter: none !important;
+}
+html.ui2 .deck-ring .deck-card:not(.disabled):hover,
+html.ui2 .deck-ring .deck-card:not(.disabled):focus-visible {
+  border-color: rgba(var(--accent-rgb), 0.34) !important;
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.42),
+    inset 0 0 0 3px rgba(8, 7, 11, 0.7),
+    inset 0 0 0 4px rgba(var(--accent-rgb), 0.16) !important;
+}
+html.ui2 .deck-ring .deck-card::after {
+  transition: none;
+}
+
+/* the entrance animation stays in the legacy dealIn keyframes: they carry
+   the per-slot --position-offset-x/y and --position-rotation. Re-declaring
+   the transform here (ending on `transform: none`) dropped those offsets and
+   buried the base card of a stacked position. */
+
+/* preselection: the card under the cursor brightens in place (no movement, no z change) */
+html.ui2 .deck-ring .deck-card:hover,
+html.ui2 .deck-ring .deck-card:focus-visible {
+  border-color: rgba(var(--accent-rgb), 0.62) !important;
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(var(--accent-rgb), 0.30),
+    0 0 0 1px rgba(var(--accent-rgb), 0.18) !important;
+}
+
+
+
+/* a card is only shown once the fan has actually placed it */
+html.ui2 .deck-ring .deck-card {
+  opacity: 0;
+}
+
+/* the card the finger is on, while touching the fan */
+html.ui2 .deck-ring .deck-card.is-target {
+  border-color: rgba(var(--accent-rgb), 0.78) !important;
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(var(--accent-rgb), 0.34) !important;
+}
+
+/* hovering or pressing must never replace the fan position:
+   an older rule sets transform: translateY(-12px) on hover, which collapsed the
+   card into the fan's anchor point (the middle of the spread). */
+html.ui2 .deck-ring .deck-card,
+html.ui2 .deck-ring .deck-card:not(.disabled):hover,
+html.ui2 .deck-ring .deck-card:not(.disabled):focus-visible,
+html.ui2 .deck-ring .deck-card:active,
+html.ui2 .deck-ring .deck-card.is-target {
+  transform:
+    translate(-50%, -50%)
+    translate(var(--tx, 0px), var(--ty, calc(-1 * var(--ring-ry, 240px) - 10px)))
+    rotate(var(--rot, 0deg));
+}
+
+/* footer: sources read as a small ledger, the quote keeps the last word */
+html.ui2 .footer .source-list {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+}
+html.ui2 .footer .source-list li {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 16px;
+  padding: 13px 0;
+  border-top: 1px solid var(--line-soft);
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+html.ui2 .footer .source-tag {
+  font-size: 12px;
+  line-height: 1.7;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+}
+html.ui2 .footer .footer-lead {
+  margin: 20px 0 0;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text-primary);
+}
+html.ui2 .footer .attribution-quareia {
+  margin: 16px 0 0;
+}
+html.ui2 .footer .attribution-quote {
+  margin: 26px 0 0;
+}
+html.ui2 .footer .attribution-quote p {
+  font-size: 15px;
+  line-height: 1.85;
+}
+html.ui2 .footer .attribution-quote cite {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+html.ui2 .footer .attribution-quote-zh {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.85;
+}
+
+/* the quote closes the footer as a full-width band, so the three columns stay level */
+html.ui2 .footer .footer-quote {
+  margin-top: 64px;
+  padding-top: 34px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 34px 64px;
+  align-items: start;
+}
+html.ui2 .footer .footer-quote .attribution-quote {
+  margin: 0;
+  padding-left: 22px;
+  border-left: 1px solid rgba(var(--accent-rgb), 0.42);
+}
+html.ui2 .footer .footer-quote .attribution-quote p {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.9;
+  color: var(--text-primary);
+}
+html.ui2 .footer .footer-quote cite {
+  display: block;
+  margin-top: 16px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+html.ui2 .footer .footer-quote .attribution-quote-zh {
+  margin: 0;
+  padding-top: 4px;
+  font-size: 13px;
+  line-height: 1.95;
+  color: var(--text-muted);
+}
+@media (max-width: 860px) {
+  html.ui2 .footer .footer-quote {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+    margin-top: 44px;
+    padding-top: 24px;
+  }
+  html.ui2 .footer .footer-quote .attribution-quote p {
+    font-size: 15px;
+  }
+}
+
+/* two even columns, then the quote, then the legal footnote */
+html.ui2 .footer .footer-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.42fr);
+  gap: 40px 72px;
+}
+html.ui2 .footer .footer-foot {
+  margin-top: 48px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 6px 26px;
+  align-items: start;
+}
+html.ui2 .footer .footer-foot .footer-heading {
+  margin: 0;
+  padding-top: 1px;
+}
+html.ui2 .footer .footer-foot .attribution-privacy {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--text-muted);
+}
+@media (max-width: 860px) {
+  html.ui2 .footer .footer-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 34px;
+  }
+  html.ui2 .footer .footer-foot {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+}
+
+html.ui2 .footer .footer-foot .attribution-privacy {
+  max-width: 86ch;
+}
+
+html.ui2 .footer .footer-foot .attribution-privacy {
+  font-size: 14px;
+  line-height: 1.85;
+  max-width: 620px;
+}
+html.ui2 .footer .footer-quote .attribution-quote p {
+  font-size: 18px;
+}
+html.ui2 .footer .footer-quote .attribution-quote-zh {
+  font-size: 14px;
+}
+
+/* footer columns never inherit the old 0.66rem body size */
+html.ui2 .footer .footer-col,
+html.ui2 .footer .footer-col p,
+html.ui2 .footer .footer-col li {
+  font-size: 14px;
+  line-height: 1.8;
+}
+html.ui2 .footer .footer-col .attribution-rights {
+  display: block;
+  color: var(--text-muted);
+}
+html.ui2 .footer .footer-quote,
+html.ui2 .footer .footer-foot {
+  max-width: none;
+}
+
+/* position guide: open by default, chevron instead of the native marker */
+html.ui2 .position-guide summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+html.ui2 .position-guide summary::-webkit-details-marker,
+html.ui2 .position-guide summary::marker {
+  content: none;
+  display: none;
+}
+html.ui2 .position-guide summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  margin-right: 4px;
+  border-right: 1px solid var(--text-muted);
+  border-bottom: 1px solid var(--text-muted);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.2s ease;
+}
+html.ui2 .position-guide[open] summary::after {
+  transform: rotate(225deg) translateY(-2px);
+}
+html.ui2 .position-guide[open] summary {
+  color: var(--text-primary);
+}
+
+/* ---------- 20. Advanced settings panel (opened from the masthead) ---------- */
+html.ui2 .settings-panel {
+  position: fixed;
+  z-index: 80;
+  top: 84px;
+  left: 50%;
+  width: min(600px, calc(100vw - 32px));
+  max-height: min(76vh, 700px);
+  overflow-y: auto;
+  padding: 22px 26px 26px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  overscroll-behavior: contain;
+}
+html.ui2 .settings-panel[hidden] {
+  display: none;
+}
+html.ui2 .settings-panel-title {
+  margin: 0 0 18px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+html.ui2 .settings-panel .settings {
+  border-top: 0;
+  padding: 0;
+  margin: 0;
+}
+html.ui2 .settings-panel .settings-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 22px;
+  padding: 0;
+}
+html.ui2 .settings-panel .setting-group {
+  margin: 0;
+}
+@media (max-width: 600px) {
+  html.ui2 .settings-panel .settings-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* panel internals: no duplicate title, swatches fit the width */
+html.ui2 .settings-panel .settings-toggle {
+  display: none;
+}
+html.ui2 .settings-panel {
+  overflow-x: hidden;
+}
+html.ui2 .settings-panel #themeSwatches {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+html.ui2 .settings-panel #themeSwatches .theme-swatch {
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+}
+html.ui2 .settings-panel #themeSwatches .theme-swatch span {
+  font-size: 13px;
+  white-space: nowrap;
+}
+html.ui2 .settings-panel {
+  left: auto;
+  right: 40px;
+}
+
+/* ---------- 21. Shuffle choreography ---------- */
+html.ui2 .shuffle-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+html.ui2 .shuffle-orbit {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+html.ui2 .shuffle-layer .shuffle-clone {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  margin: 0 !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+  transform-origin: 50% 50%;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.5);
+}
+html.ui2 .deck-ring.is-shuffling .deck-card:not(.shuffle-clone) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+
+
+/* position guide rows: no boxes, just type */
+html.ui2 .position-guide ol li {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  padding: 6px 0;
+}
+
+@media (max-width: 640px) {
+  html.ui2 .position-guide ol {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+}
+
+/* ---------- multi-position switch controls (settings) ---------- */
+html.ui2 .seg {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 3px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--track-bg);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  cursor: grab;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+html.ui2 .seg::-webkit-scrollbar { display: none; }
+html.ui2 .seg.is-drag { cursor: grabbing; scroll-behavior: auto; }
+html.ui2 .seg.is-drag .seg-btn { pointer-events: none; }
+
+html.ui2 .seg-thumb {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  width: 0;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.16);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.42);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform .3s cubic-bezier(.3, .7, .15, 1),
+    width .24s ease,
+    opacity .2s ease;
+}
+html.ui2 .seg.is-ready .seg-thumb { opacity: 1; }
+
+html.ui2 .seg-btn {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color .18s ease;
+}
+html.ui2 .seg-btn:hover { color: var(--text-primary); }
+html.ui2 .seg-btn[aria-pressed="true"],
+html.ui2 .seg-btn.is-on { color: var(--accent-light); }
+html.ui2 .seg-btn:focus-visible {
+  outline: 2px solid rgba(var(--accent-rgb), 0.7);
+  outline-offset: 2px;
+}
+
+html.ui2 .seg.is-single {
+  border-color: transparent;
+  background: none;
+  padding: 0;
+  height: 30px;
+}
+html.ui2 .seg.is-single .seg-thumb { display: none; }
+html.ui2 .seg.is-single .seg-btn {
+  flex: 0 1 auto;
+  justify-content: flex-start;
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: default;
+}
+
+html.ui2 .seg.is-scroll {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 18px), transparent 100%);
+}
+html.ui2 .seg.is-scroll.at-end {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 100%);
+}
+html.ui2 .seg.is-scroll.at-start {
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 18px), transparent 100%);
+}
+html.ui2 .seg.is-scroll.at-start.at-end {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+/* ---------- the moon is the theme switch ---------- */
+html.ui2 .settings-panel .setting-group-theme { display: none !important; }
+
+html.ui2 .sky-moon {
+  cursor: grab;
+  transition: filter 0.25s ease;
+}
+html.ui2 .sky-moon:hover { filter: var(--sun-shadow,) brightness(1.12) saturate(1.06); }
+html.ui2 .sky-moon.dragging { cursor: grabbing; }
+html.ui2 .sky-moon:focus-visible {
+  outline: 2px solid rgba(var(--accent-rgb), 0.75);
+  outline-offset: 6px;
+  border-radius: 50%;
+}
+
+html.ui2 .theme-toast {
+  position: fixed;
+  right: 26px;
+  bottom: max(26px, env(safe-area-inset-bottom, 0px));
+  z-index: 70;
+  font-family: var(--font-body);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  background: rgba(20, 18, 26, 0.62);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+html.ui2 .theme-toast.is-on { opacity: 1; transform: none; }
+html[data-theme="parchment"] .theme-toast,
+html[data-theme="jade"] .theme-toast {
+  background: rgba(255, 252, 245, 0.82);
+  color: #5a4a30;
+  border-color: rgba(62, 46, 22, 0.18);
+}
+@media (max-width: 640px) {
+  html.ui2 .theme-toast {
+    right: 14px;
+    bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    font-size: 11px;
+    padding: 6px 11px;
+  }
+}
+
+/* preset-spread dropdown inside the 牌阵设置 popover */
+html.ui2 .spread-popover .setting-group-spread {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+html.ui2 .spread-popover .setting-group-spread .setting-label {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+}
+html.ui2 .spread-popover .setting-group-spread .themed-select-trigger {
+  width: 100%;
+}
+html.ui2 .spread-popover .setting-group-spread #spreadSettingSummary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+/* one action in the row now: give it a confident width */
+html.ui2 .spread-actions { justify-content: flex-start; }
+html.ui2 .spread-actions .btn { flex: 0 0 auto; min-width: 232px; }
+
+/* narrow screens: the pill strip scrolls sideways instead of truncating labels */
+@media (max-width: 560px) {
+  html.ui2 .seg {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  html.ui2 .seg::-webkit-scrollbar { display: none; }
+  html.ui2 .seg-btn {
+    flex: 0 0 auto;
+    padding: 0 12px;
+    text-overflow: clip;
+  }
+  html.ui2 .seg-thumb { transition: transform 0.24s ease, width 0.2s ease; }
+}
+
+
+/* ==========================================================================
+   §22  the free board (freeform layout)
+   ========================================================================== */
+html.ui2:not([data-theme="parchment"]) .sky-moon.is-egg {
+  box-shadow: 0 0 22px 6px var(--moon-glow-near), 0 0 72px 26px var(--moon-glow-mid);
+}
+
+html.ui2 .free-board-area {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+html.ui2 .free-board-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 18px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+html.ui2 .free-board-head h2 {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+
+html.ui2 .free-board-count {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+html.ui2 .free-board-status,
+html.ui2 .free-board-save-status {
+  min-height: 0;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+html.ui2 .free-board-toolbar {
+  gap: 8px;
+  margin: 0 0 20px;
+}
+
+html.ui2 .free-board-toolbar .btn,
+html.ui2 .free-board-selected-controls .btn {
+  min-width: 0;
+  min-height: 0;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+
+html.ui2 .free-board-viewport {
+  height: min(52vh, 520px);
+  min-height: 380px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background:
+    radial-gradient(120% 100% at 50% 40%, rgba(var(--accent-rgb), 0.06), transparent 62%),
+    rgba(var(--veil-rgb), 0.5);
+  box-shadow: none;
+}
+
+html.ui2 .free-board-viewport::before {
+  inset: 14px;
+  border: 1px dashed var(--line-soft);
+  border-radius: 4px;
+}
+
+html.ui2 .free-board-pile-area {
+  margin-top: 22px;
+}
+
+html.ui2 .free-board-pile-head {
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+html.ui2 .free-board-pile-head h3 {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+html.ui2 .free-board-pile {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+html.ui2 .free-board-hint {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.85;
+  color: var(--text-muted);
+}
+
+/* freeform: the fan on the table is the card source, the board is the canvas */
+html.ui2 .table-area.is-freeform .spread-hint,
+/* 自由模式下没有牌阵，但“牌阵设置”要留着能点 */
+html.ui2 .table-area.is-freeform .spread-name,
+html.ui2 .table-area.is-freeform .card-count,
+html.ui2 .table-area.is-freeform .phase-label {
+  display: none !important;
+}
+
+/* 自由模式仍要能「一键开牌」：保留牌桌底部的动作条（洗牌按钮已移到顶栏） */
+html.ui2 .table-area.is-freeform .spread-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+html.ui2 .table-area.is-freeform .table-stage {
+  min-height: 0;
+}
+
+html.ui2 .free-board-pile-area,
+html.ui2 .free-board-selected-controls[hidden] {
+  display: none !important;
+}
+
+html.ui2 #freeBoardResetViewBtn {
+  display: none !important;
+}
+
+html.ui2 .free-board-card.is-rotating {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+html.ui2 .deck-card-free {
+  cursor: grab;
+}
+
+/* ---------- the carved face on every moon theme ---------- */
+/* the three newer themes reuse the celestial carving so the easter egg shows there too */
+html.ui2[data-theme="jade"] .sky-face-art[data-theme-face="celestial"],
+html.ui2[data-theme="dusk"] .sky-face-art[data-theme-face="celestial"],
+html.ui2[data-theme="ash"] .sky-face-art[data-theme-face="celestial"] {
+  display: block;
+}
+html.ui2[data-theme="jade"] .sky-face-art { mix-blend-mode: multiply; }
+html.ui2[data-theme="dusk"] .sky-face-art,
+html.ui2[data-theme="ash"] .sky-face-art { mix-blend-mode: overlay; }
+
+html.ui2 .sky-moon {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+html.ui2 .sky-moon.is-holding {
+  border-radius: 50%;
+  outline: 2px solid rgba(var(--accent-rgb), 0.32);
+  outline-offset: 8px;
+  filter: var(--sun-shadow,) brightness(1.08) saturate(1.05);
+}
+html.ui2 .sky-moon.is-egg {
+  filter: var(--sun-shadow,) brightness(1.2) saturate(1.1);
+}
+
+/* ---------------------------------------------------------------
+   §23 freeform drawn cards — draggable, flippable, on the table
+   --------------------------------------------------------------- */
+html.ui2 .table-area { position: relative; }
+
+html.ui2 .free-draw { position: relative; display: block; margin: 18px 0 0; z-index: 6; pointer-events: none; }
+
+html.ui2 .free-draw[hidden] { display: none !important; }
+/* 自由模式：桌面上留出一大块空白，牌可以拖到扇形下方摆开 */
+html.ui2 .table-area.is-freeform {
+  padding-bottom: min(62vh, 640px);
+}
+
+@media (max-width: 640px) {
+  html.ui2 .table-area.is-freeform { padding-bottom: 520px; }
+}
+
+html.ui2 .free-draw-rail { position: absolute; left: 0; top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+html.ui2 .free-draw-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(var(--veil-rgb), .72);
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: color .2s ease, border-color .2s ease;
+}
+
+html.ui2 .free-draw-btn:hover:not(:disabled) {
+  color: var(--accent-light);
+  border-color: rgba(var(--accent-rgb), .5);
+}
+
+html.ui2 .free-draw-btn:disabled {
+  opacity: .28;
+  cursor: default;
+}
+
+html.ui2 .free-draw-cards { position: relative; width: 100%; height: clamp(300px, 46vh, 520px); pointer-events: none; }
+
+/* the drawn card is a real .spread-card, so it keeps the deck art, the back
+   and the caption of a dealt card — only its placement is free */
+html.ui2 .free-table-card {
+  position: absolute;
+  width: 84px;
+  height: 126px;
+  border: 0;
+  background: none;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .5));
+}
+
+html.ui2 .free-table-card:active { cursor: grabbing; }
+
+html.ui2 .free-table-card .spread-card-inner {
+  width: 100%;
+  height: 100%;
+}
+
+html.ui2 .free-table-card .spread-card-face,
+html.ui2 .free-table-card .spread-card-inner {
+  border-radius: 6px;
+}
+
+html.ui2 .free-table-card .card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+html.ui2 .free-table-card .spread-card-caption {
+  font-size: 10px;
+  padding: 6px 8px;
+}
+
+@media (max-width: 640px) {
+  html.ui2 .free-table-card { width: 74px; height: 111px; }
+  html.ui2 .free-table-card .spread-card-caption { font-size: 9px; padding: 4px 6px; }
+}
+/* ---------- fan paging arrows: sit right above the arc ---------- */
+html.ui2 .fan-nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  margin: 2px 0 12px;
+  padding: 0;
+}
+html.ui2 .fan-nav-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color .22s ease, border-color .22s ease, background-color .22s ease,
+    transform .18s cubic-bezier(.3, .7, .15, 1);
+}
+html.ui2 .fan-nav-btn svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform .22s cubic-bezier(.3, .7, .15, 1);
+}
+html.ui2 .fan-nav-btn:hover {
+  color: var(--accent-light);
+  border-color: rgba(var(--accent-rgb), .45);
+  background: rgba(var(--accent-rgb), .07);
+}
+html.ui2 .fan-nav-btn:hover svg { transform: scale(1.08); }
+html.ui2 .fan-nav-btn:active { transform: scale(.92); }
+html.ui2 .fan-nav-btn:focus-visible {
+  outline: 2px solid rgba(var(--accent-rgb), .55);
+  outline-offset: 3px;
+}
+html.ui2 .fan-nav-btn:disabled {
+  opacity: .3;
+  cursor: default;
+  border-color: var(--line-soft);
+  background: transparent;
+  color: var(--text-muted);
+}
+html.ui2 .table-area.is-freeform .fan-nav { margin-bottom: 10px; }
+@media (max-width: 560px) {
+  html.ui2 .fan-nav { gap: 16px; margin-bottom: 8px; }
+  html.ui2 .fan-nav-btn { width: 32px; height: 32px; }
+  html.ui2 .fan-nav-btn svg { width: 15px; height: 15px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.ui2 .fan-nav-btn,
+  html.ui2 .fan-nav-btn svg { transition: none; }
+}
+
+/* at the ends the paging arrow is grey and does nothing at all */
+html.ui2 .fan-nav-btn:disabled:active { transform: none; }
+html.ui2 .fan-nav-btn:disabled:hover {
+  color: var(--text-muted);
+  border-color: var(--line-soft);
+  background: transparent;
+}
+html.ui2 .fan-nav-btn:disabled:hover svg { transform: none; }
+
+/* ---------- wide spreads scroll inside the table, not the page ---------- */
+html.ui2 .table-plane > .table-center {
+  justify-self: stretch;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+html.ui2 .table-center .spread-board-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+html.ui2 .table-center .spread-grid {
+  width: max-content;
+  min-width: 100%;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+/* ---------- card meaning: a readable sheet, the card itself stays put ---------- */
+html.ui2 .spread-card-meaning { display: none !important; }
+html.ui2 .spread-card.revealed.meaning-visible {
+  transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0))
+    rotate(var(--position-rotation, 0deg));
+  z-index: 500 !important;
+  outline: 1px solid rgba(var(--accent-rgb), 0.55);
+  outline-offset: 3px;
+}
+html.ui2 .card-meaning {
+  position: fixed;
+  z-index: 120;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(70vh, 460px);
+  overflow-y: auto;
+  padding: 20px 22px 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  text-align: left;
+}
+html.ui2 .card-meaning[hidden] { display: none; }
+html.ui2 .card-meaning-kicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+html.ui2 .card-meaning-name {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 21px;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+html.ui2 .card-meaning-meta {
+  margin: 0 0 12px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+html.ui2 .card-meaning-keywords {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--accent-light);
+}
+html.ui2 .card-meaning-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.9;
+  color: var(--text-secondary);
+}
+html.ui2 .card-meaning-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+html.ui2 .card-meaning-close:hover { color: var(--accent-light); }
+@media (max-width: 560px) {
+  html.ui2 .card-meaning { padding: 18px 18px 20px; }
+  html.ui2 .card-meaning-name { font-size: 19px; }
+  html.ui2 .card-meaning-text { font-size: 14px; }
+}
+
+/* meaning state: keep showing the card FACE, the sheet carries the reading */
+html.ui2 .spread-card.revealed.meaning-visible .spread-card-inner { transform: rotateY(180deg); }
+html.ui2 .spread-card.meaning-visible .spread-card-back-art { display: block; }
+html.ui2 .spread-card.meaning-visible .spread-card-back::before,
+html.ui2 .spread-card.meaning-visible .spread-card-back::after { opacity: 1; }
+
+/* ---------- free board: angle control for a single card ---------- */
+html.ui2 .free-angle {
+  position: fixed;
+  z-index: 130;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 148px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+html.ui2 .free-angle[hidden] { display: none; }
+html.ui2 .free-angle-title {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+html.ui2 .free-angle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+html.ui2 .free-angle-row button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: none;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+html.ui2 .free-angle-row button:hover { border-color: rgba(var(--accent-rgb), 0.6); color: var(--accent-light); }
+html.ui2 .free-angle-value {
+  flex: 1;
+  text-align: center;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+html.ui2 .free-angle-reset {
+  height: 26px;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent-light);
+  font-size: 12px;
+  cursor: pointer;
+}
+html.ui2 .free-angle-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+html.ui2 .free-table-card.is-tuning { outline: 1px solid rgba(var(--accent-rgb), 0.6); outline-offset: 4px; }
+
+/* legibility floor for the small print that leaked from the legacy sheet */
+html.ui2 .free-table-card .spread-card-caption .name { font-size: 12px; }
+html.ui2 .result-source { font-size: 12px; line-height: 1.6; }
+
+/* 高级设置里，选中的那一档要一眼看出来 */
+html.ui2 .seg-btn { color: var(--text-muted); }
+html.ui2 .seg-btn.is-on { color: var(--accent-light); font-weight: 600; }
+html.ui2 .seg-thumb {
+  background: rgba(var(--accent-rgb), .26);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), .62), 0 1px 2px rgba(0, 0, 0, .28);
+}
+html.ui2 .settings-panel .seg { background: rgba(0, 0, 0, .3); }
+html.ui2 .settings-panel .seg-btn { font-size: 13px; }
+html.ui2 .settings-panel .seg-btn.is-on { box-shadow: none; }
+
+/* 自由画板上的牌名不能溢出到隔壁牌上去 */
+html.ui2 .free-table-card .spread-card-caption {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0 4px;
+  text-align: center;
+}
+
+html.ui2 .free-table-card .spread-card-caption span.name {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
