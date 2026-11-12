@@ -2878,12 +2878,7 @@ html.ui2 .sky-moon.is-egg {
    --------------------------------------------------------------- */
 html.ui2 .table-area { position: relative; }
 
-html.ui2 .free-draw {
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  pointer-events: none;
-}
+html.ui2 .free-draw { position: relative; display: block; margin: 18px 0 0; z-index: 6; pointer-events: none; }
 
 html.ui2 .free-draw[hidden] { display: none !important; }
 /* 自由模式：桌面上留出一大块空白，牌可以拖到扇形下方摆开 */
@@ -2895,10 +2890,7 @@ html.ui2 .table-area.is-freeform {
   html.ui2 .table-area.is-freeform { padding-bottom: 520px; }
 }
 
-html.ui2 .free-draw-rail {
-  position: absolute;
-  left: 0;
-  top: 56%;
+html.ui2 .free-draw-rail { position: absolute; left: 0; top: 24px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2930,11 +2922,7 @@ html.ui2 .free-draw-btn:disabled {
   cursor: default;
 }
 
-html.ui2 .free-draw-cards {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
+html.ui2 .free-draw-cards { position: relative; width: 100%; height: clamp(300px, 46vh, 520px); pointer-events: none; }
 
 /* the drawn card is a real .spread-card, so it keeps the deck art, the back
    and the caption of a dealt card — only its placement is free */

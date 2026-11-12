@@ -815,21 +815,21 @@
     if (!wrap) return;
     wrap.hidden = !isFreeform();
     var box = document.getElementById("freeDrawCards");
-    /* 牌层从「一键开牌」下面开始，牌就永远不会压住提示和按钮 */
     if (box) {
-      var tableEl = wrap.parentNode;
-      var actionsRow = tableEl && tableEl.querySelector ? tableEl.querySelector(".spread-actions") : null;
-      if (actionsRow && wrap.getBoundingClientRect) {
-        var ar = actionsRow.getBoundingClientRect();
-        var wr = wrap.getBoundingClientRect();
-        if (ar.bottom) box.style.top = Math.round(ar.bottom - wr.top + 24) + "px";
-      }
       box.innerHTML = "";
+      /* 恢复草稿后按当前画布重新排一遍网格 */
+      if (freeformRelayout) {
+        freeDrawn.forEach(function (item, index) {
+          var point = freeDefaultPoint(index);
+          item.x = point.x;
+          item.y = point.y;
+        });
+        freeformRelayout = false;
+      }
       var layerW = box ? box.clientWidth : 0;
-      spreadFreeCards(layerW);
       var layerH = box ? box.clientHeight : 0;
+      var built = [];
       freeDrawn.forEach(function (item, index) {
-        /* 换屏幕尺寸后恢复草稿：把牌拉回画布内，别跑到屏幕外 */
         if (layerW) item.x = Math.max(46, Math.min(layerW - 46, item.x));
         if (layerH) item.y = Math.max(70, Math.min(layerH - 70, item.y));
         var el = buildFreeTableCard(item, index);
@@ -840,7 +840,20 @@
         el.style.left = item.x + "px";
         el.style.top = item.y + "px";
         box.appendChild(el);
+        built.push(el);
       });
+      /* 行距取实际渲染出来的牌高，牌排两行以上也不会互相压住 */
+      if (built.length) {
+        var cols = layerW && layerW < 620 ? 2 : 4;
+        var cardH = built[0].offsetHeight || 126;
+        var rowH = cardH + 26;
+        built.forEach(function (el, index) {
+          if (freeDrawn[index].dragged) return;
+          var y = Math.round(Math.min(layerH - 70, 92 + Math.floor(index / cols) * rowH));
+          freeDrawn[index].y = y;
+          el.style.top = y + "px";
+        });
+      }
     }
     var undo = document.getElementById("freeUndoBtn");
     var redo = document.getElementById("freeRedoBtn");
