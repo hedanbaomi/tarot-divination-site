@@ -378,7 +378,8 @@
     if (el.deckArea) el.deckArea.style.display = freeform ? "none" : "";
     if (el.spreadArea) el.spreadArea.style.display = freeform ? "none" : "";
     var spreadActions = document.querySelector(".spread-actions");
-    if (spreadActions) spreadActions.style.display = freeform ? "none" : "";
+    /* 自由模式下也要能一键开牌：这排动作始终留在页面上 */
+    if (spreadActions) spreadActions.style.display = "";
     var deckCta = document.getElementById("deckCta");
     if (deckCta) deckCta.style.display = freeform ? "none" : "";
     if (el.positionGuide) el.positionGuide.hidden = freeform;
@@ -512,6 +513,11 @@
     for (var i = 0; i < pile.length; i++) {
       if (pile[i].id === id) return pile[i];
     }
+    /* 已抽出的牌不在 pile 里（草稿恢复后尤其如此），回整副牌里找 */
+    var full = freeformDeckCards();
+    for (var k = 0; k < full.length; k++) {
+      if (full[k].id === id) return full[k];
+    }
     return null;
   }
 
@@ -544,6 +550,7 @@
     el.setAttribute("data-card-id", item.id);
     el.style.left = item.x + "px";
     el.style.top = item.y + "px";
+    el.style.transform = "translate(-50%, -50%) rotate(" + (item.angle || 0) + "deg)";
     /* 未翻开的牌不给辅助技术读牌名，只报「第几张、未翻开」 */
     el.setAttribute("role", "button");
     el.setAttribute("tabindex", "0");
@@ -590,8 +597,128 @@
     return el;
   }
 
+  /* ---------- 自由画板：调整单张牌的角度 ---------- */
+  var freeAngleItem = null;
+  var freeAngleEl = null;
+
+  function freeAnglePanel() {
+    var panel = document.getElementById("freeAnglePanel");
+    if (panel) return panel;
+    panel = document.createElement("div");
+    panel.className = "free-angle";
+    panel.id = "freeAnglePanel";
+    panel.hidden = true;
+    panel.setAttribute("role", "group");
+    panel.innerHTML =
+      '<p class="free-angle-title" data-angle-title>角度</p>' +
+      '<div class="free-angle-row">' +
+      '<button type="button" data-angle-step="-15" aria-label="逆时针 15 度">↺</button>' +
+      '<span class="free-angle-value" data-angle-value>0°</span>' +
+      '<button type="button" data-angle-step="15" aria-label="顺时针 15 度">↻</button>' +
+      '</div>' +
+      '<button type="button" class="free-angle-reset" data-angle-reset>复位</button>' +
+      '<button type="button" class="free-angle-close" data-angle-close aria-label="关闭">×</button>';
+    document.body.appendChild(panel);
+    panel.addEventListener("click", function (ev) {
+      var stepBtn = ev.target.closest("[data-angle-step]");
+      if (stepBtn) {
+        ev.stopPropagation();
+        applyFreeAngle(freeAngleItem, freeAngleEl, Number(stepBtn.getAttribute("data-angle-step")));
+        return;
+      }
+      if (ev.target.closest("[data-angle-reset]")) {
+        ev.stopPropagation();
+        setFreeAngle(freeAngleItem, freeAngleEl, 0);
+        return;
+      }
+      if (ev.target.closest("[data-angle-close]")) {
+        ev.stopPropagation();
+        hideFreeAngle();
+      }
+    });
+    document.addEventListener("pointerdown", function (ev) {
+      var p = document.getElementById("freeAnglePanel");
+      if (!p || p.hidden) return;
+      if (p.contains(ev.target)) return;
+      if (freeAngleEl && freeAngleEl.contains(ev.target)) return;
+      hideFreeAngle();
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") hideFreeAngle();
+    });
+    return panel;
+  }
+
+  function hideFreeAngle() {
+    var panel = document.getElementById("freeAnglePanel");
+    if (panel) panel.hidden = true;
+    if (freeAngleEl) freeAngleEl.classList.remove("is-tuning");
+    freeAngleItem = null;
+    freeAngleEl = null;
+  }
+
+  function setFreeAngle(item, el, angle) {
+    if (!item || !el) return;
+    var normalized = ((angle % 360) + 360) % 360;
+    if (normalized > 180) normalized -= 360;
+    item.angle = normalized;
+    el.style.transform = "translate(-50%, -50%) rotate(" + normalized + "deg)";
+    var panel = document.getElementById("freeAnglePanel");
+    var value = panel && panel.querySelector("[data-angle-value]");
+    if (value) value.textContent = normalized + "°";
+    scheduleFreeformDraft();
+  }
+
+  function applyFreeAngle(item, el, delta) {
+    if (!item) return;
+    setFreeAngle(item, el, (item.angle || 0) + delta);
+  }
+
+  function openFreeAngle(el, item) {
+    var panel = freeAnglePanel();
+    var title = panel.querySelector("[data-angle-title]");
+    if (title) title.textContent = t("freeBoard.angleTitle");
+    freeAngleItem = item;
+    freeAngleEl = el;
+    el.classList.add("is-tuning");
+    var value = panel.querySelector("[data-angle-value]");
+    if (value) value.textContent = (item.angle || 0) + "°";
+    panel.hidden = false;
+    var rect = el.getBoundingClientRect();
+    var box = panel.getBoundingClientRect();
+    var left = rect.left + rect.width / 2 - box.width / 2;
+    left = Math.max(12, Math.min(window.innerWidth - box.width - 12, left));
+    var top = rect.bottom + 10;
+    if (top + box.height > window.innerHeight - 12) top = Math.max(12, rect.top - box.height - 10);
+    panel.style.left = Math.round(left) + "px";
+    panel.style.top = Math.round(top) + "px";
+  }
   function bindFreeTableCard(el, item) {
-    /* 键盘与读屏用户：Tab 到牌上，Enter / 空格翻面 */
+    var angleTimer = 0;
+    var longPressed = false;
+    /* 长按（触屏）/ 右键（鼠标）：调这张牌的角度 */
+    el.addEventListener("contextmenu", function (ev) {
+      ev.preventDefault();
+      openFreeAngle(el, item);
+    });
+    el.addEventListener("pointerdown", function (ev) {
+      longPressed = false;
+      angleTimer = window.setTimeout(function () {
+        longPressed = true;
+        openFreeAngle(el, item);
+      }, 520);
+    });
+    var cancelAngleTimer = function () {
+      if (angleTimer) window.clearTimeout(angleTimer);
+      angleTimer = 0;
+    };
+    el.addEventListener("pointerup", cancelAngleTimer);
+    el.addEventListener("pointercancel", cancelAngleTimer);
+    el.addEventListener("pointermove", function (ev) {
+      if (Math.abs(ev.movementX || 0) + Math.abs(ev.movementY || 0) > 3) cancelAngleTimer();
+    });
+
+    /* 键盘与读屏用户：Tab 到牌上，Enter / 空格翻面；R 键旋转 */
     el.addEventListener("keydown", function (ev) {
       if (ev.key !== "Enter" && ev.key !== " " && ev.key !== "Spacebar") return;
       ev.preventDefault();
@@ -625,7 +752,7 @@
         el.removeEventListener("pointermove", onMove);
         el.removeEventListener("pointerup", onEnd);
         el.removeEventListener("pointercancel", onEnd);
-        if (!moved && !item.revealed) {
+        if (!moved && !longPressed && !item.revealed) {
           item.revealed = true;
           renderFreeDraw();
           renderResults();
@@ -637,6 +764,16 @@
       el.addEventListener("pointercancel", onEnd);
       ev.preventDefault();
     });
+  }
+
+  /* 自由画板：一键开牌的可用状态跟着已抽出的牌走 */
+  function syncFreeActions() {
+    if (!isFreeform() || !el.revealBtn) return;
+    var total = freeDrawn.length;
+    var revealed = 0;
+    freeDrawn.forEach(function (item) { if (item.revealed) revealed += 1; });
+    el.revealBtn.disabled = total === 0 || revealed === total;
+    el.revealBtn.textContent = total > 0 && revealed === total ? t("app.revealedAll") : t("spread.reveal");
   }
 
   function renderFreeDraw() {
@@ -659,6 +796,7 @@
     var redo = document.getElementById("freeRedoBtn");
     if (undo) undo.disabled = freeDrawn.length === 0;
     if (redo) redo.disabled = freeRedo.length === 0;
+    syncFreeActions();
   }
 
   /* ---------- freeform draft ----------
@@ -686,7 +824,7 @@
           orientation: item.orientation || "upright",
           x: Math.round(item.x),
           y: Math.round(item.y),
-          boardRotation: 0,
+          boardRotation: item.angle || 0,
           z: index + 1,
           revealed: !!item.revealed,
           meaningVisible: false,
@@ -767,10 +905,11 @@
     (allDecksForFreeBoard()[type] || []).forEach(function (card) { byId[card.id] = card; });
     var drawnIds = Object.create(null);
     draft.cards.forEach(function (item) { drawnIds[item.cardId] = true; });
-    var remaining = Array.isArray(draft.remainingPile)
-      ? draft.remainingPile.filter(function (id) { return byId[id] && !drawnIds[id]; })
-      : [];
-    if (!remaining.length) {
+    /* remainingPile 是权威值：空数组表示牌堆真的抽空了，不能回退成整副牌 */
+    var remaining;
+    if (Array.isArray(draft.remainingPile)) {
+      remaining = draft.remainingPile.filter(function (id) { return byId[id] && !drawnIds[id]; });
+    } else {
       remaining = Object.keys(byId).filter(function (id) { return !drawnIds[id]; });
     }
     pile = remaining.map(function (id) { return byId[id]; });
@@ -784,6 +923,7 @@
         x: typeof item.x === "number" ? item.x : point.x,
         y: typeof item.y === "number" ? item.y : point.y,
         revealed: !!item.revealed,
+        angle: typeof item.boardRotation === "number" ? item.boardRotation : 0,
         orientation: item.orientation === "reversed" ? "reversed" : "upright"
       });
     });
@@ -803,6 +943,7 @@
       x: point.x,
       y: point.y,
       revealed: false,
+      angle: 0,
       orientation: orientationFor()
     });
     freeRedo.length = 0;
@@ -1130,8 +1271,15 @@
         revealEntry(entry);
         return;
       }
-      entry.meaningVisible = !entry.meaningVisible;
+      /* 牌意放到牌谱外面的浮层里读：牌本身不再被放大挤字 */
+      var same = entry.meaningVisible && meaningAnchor === cardEl;
+      entry.meaningVisible = !same;
       cardEl.classList.toggle("meaning-visible", entry.meaningVisible);
+      if (entry.meaningVisible) {
+        showCardMeaning(cardEl, entry, position);
+      } else {
+        hideCardMeaning();
+      }
       updateSpreadCardAria(cardEl, entry, position);
     });
 
@@ -1143,8 +1291,68 @@
     return cardEl;
   }
 
+  /* ---------- floating card-meaning sheet ---------- */
+  var meaningAnchor = null;
+  var meaningEntries = new WeakMap();
+
+  function hideCardMeaning() {
+    var panel = document.getElementById("cardMeaningPanel");
+    if (panel) panel.hidden = true;
+    if (meaningAnchor) {
+      meaningAnchor.classList.remove("meaning-visible");
+      var entryRef = meaningEntries.get(meaningAnchor);
+      if (entryRef) entryRef.meaningVisible = false;
+      meaningAnchor = null;
+    }
+  }
+
+  function showCardMeaning(cardEl, entry, position) {
+    var panel = document.getElementById("cardMeaningPanel");
+    if (!panel || !entry || !entry.card) return;
+    hideCardMeaning();
+    var interpretation = getEntryInterpretation(entry);
+    var setText = function (selector, value) {
+      var node = panel.querySelector(selector);
+      if (node) node.textContent = value;
+    };
+    setText("[data-meaning-kicker]", t("app.meaningTitle"));
+    setText("[data-meaning-name]", localizedCardName(entry.card));
+    setText("[data-meaning-meta]", [
+      (position.number ? position.number + '. ' : '') + position.name,
+      t(entry.orientation === "reversed" ? "orientation.reversed" : "orientation.upright")
+    ].join(" · "));
+    setText("[data-meaning-keywords]", interpretation.keywords.join(" · "));
+    setText("[data-meaning-text]", interpretation.meaning || "");
+
+    panel.hidden = false;
+    var rect = cardEl.getBoundingClientRect();
+    var box = panel.getBoundingClientRect();
+    var left = rect.left + rect.width / 2 - box.width / 2;
+    left = Math.max(12, Math.min(window.innerWidth - box.width - 12, left));
+    var top = rect.top - box.height - 12;
+    if (top < 12) top = rect.bottom + 12;
+    if (top + box.height > window.innerHeight - 12) {
+      top = Math.max(12, window.innerHeight - box.height - 12);
+    }
+    panel.style.left = Math.round(left) + "px";
+    panel.style.top = Math.round(top) + "px";
+    meaningEntries.set(cardEl, entry);
+    meaningAnchor = cardEl;
+  }
+  /* close the meaning sheet on the usual escapes */
+  document.addEventListener("pointerdown", function (event) {
+    var panel = document.getElementById("cardMeaningPanel");
+    if (!panel || panel.hidden) return;
+    if (panel.contains(event.target) || (meaningAnchor && meaningAnchor.contains(event.target))) return;
+    hideCardMeaning();
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") hideCardMeaning();
+  });
+
   function renderSpreadCards() {
     if (isFreeform()) return;
+    hideCardMeaning();
     var spreadDefinition = selectedSpread();
     var stacking = isOverviewStacking();
     var hadRenderedCards = Boolean(el.spreadGrid.querySelector(".spread-card"));
@@ -1369,12 +1577,17 @@
 
   function freeformHistoryCards() {
     return freeDrawn.map(function (item, index) {
+      var card = cardById(item.id);
+      var name = card ? localizedCardName(card) : "";
       return {
         cardId: item.id,
+        /* 历史校验要求牌名与唯一的 z，直接沿用摆位顺序 */
+        cardName: name || String(item.id),
         orientation: item.orientation || "upright",
         x: Math.round(item.x),
         y: Math.round(item.y),
-        boardRotation: 0,
+        boardRotation: item.angle || 0,
+        z: index + 1,
         revealed: !!item.revealed,
         meaningVisible: false,
         drawOrder: index + 1
@@ -1461,8 +1674,10 @@
       el.phaseLabel.style.display = "none";
     }
 
-    var empty = spread.length === 0;
-    var allRevealed = !empty && spread.every(function (e) { return e.revealed; });
+    /* 自由画板没有牌阵：以已抽出的牌来算这排动作的可用状态 */
+    var boardCards = isFreeform() ? freeDrawn : spread;
+    var empty = boardCards.length === 0;
+    var allRevealed = !empty && boardCards.every(function (e) { return e.revealed; });
     el.revealBtn.textContent = allRevealed ? t("app.revealedAll") : t("spread.reveal");
     el.revealBtn.disabled = empty || allRevealed;
     el.spreadHint.style.display = "block";
