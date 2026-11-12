@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="css/styles.css?v=20261103-grove-merged">
   <link rel="stylesheet" href="css/free-board.css?v=20261112-review5">
   <link rel="stylesheet" href="css/custom-spreads.css?v=20261112-review5">
-  <link rel="stylesheet" href="css/redesign.css?v=20261112-review5">
+  <link rel="stylesheet" href="css/redesign.css?v=20261112-nav3">
 </head>
 <body>
   <div class="sky-moon" id="skyMoon" role="button" tabindex="0"
@@ -66,12 +66,6 @@
         <div class="deck-tools">
           <span class="deck-remaining" id="deckRemaining" role="status" aria-live="polite" data-i18n="deck.initialRemaining">剩 78 张</span>
           <button class="btn-mini" id="shuffleBtn" type="button" data-i18n="deck.shuffle">洗牌</button>
-          <button class="btn-mini deck-page-btn" id="deckPrevBtn" type="button" data-i18n-aria-label="deck.prev" aria-label="上一张">
-            <span aria-hidden="true">◀</span>
-          </button>
-          <button class="btn-mini deck-page-btn" id="deckNextBtn" type="button" data-i18n-aria-label="deck.next" aria-label="下一张">
-            <span aria-hidden="true">▶</span>
-          </button>
                     <button class="btn-mini" id="switchArcanaBtn" type="button" style="display:none;" data-i18n="deck.switch">切换牌组</button>
         </div>
       </div>
@@ -84,6 +78,14 @@
           <button class="spread-settings-btn" id="spreadSettingsBtn" type="button"
             aria-haspopup="true" aria-expanded="false" aria-controls="spreadPopover">
             <span data-i18n="spread.settings">牌阵设置</span>
+          </button>
+        </div>
+        <div class="fan-nav">
+          <button class="fan-nav-btn" id="deckPrevBtn" type="button" data-i18n-aria-label="deck.prev" aria-label="上一张">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 5.5 8.2 12 15 18.5" /></svg>
+          </button>
+          <button class="fan-nav-btn" id="deckNextBtn" type="button" data-i18n-aria-label="deck.next" aria-label="下一张">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 5.5 15.8 12 9 18.5" /></svg>
           </button>
         </div>
         <div class="table-plane">
@@ -584,7 +586,7 @@
   <script src="js/history-ui.js?v=20261112-review5"></script>
   <script src="js/free-board-ui.js?v=20261112-review5"></script>
   <script src="js/app.js?v=20261112-review5"></script>
-  <script src="js/deck-ring.js?v=20261112-review5"></script>
+  <script src="js/deck-ring.js?v=20261112-nav3"></script>
   <div class="spread-popover" id="spreadPopover" hidden role="dialog" aria-modal="false"
     aria-label="牌阵设置" data-i18n-aria-label="spread.settings">
     <div class="spread-popover-head">

@@ -24,6 +24,7 @@
   var drawGuardUntil = 0;
   var syntheticClick = false;
   var raf = null;
+  var pageRaf = 0;
   var lastTime = 0;
   var WINDOW = 172;
   var lut = null;
@@ -173,6 +174,7 @@
       card.style.pointerEvents = "auto";
       card.style.setProperty("--z", String(1000 + Math.round(u * 1000)));
     }
+    if (!dragging) syncFanNav();
   }
 
   /* ---------- draw animation: the tapped card lifts out of the fan, in place ---------- */
@@ -320,7 +322,10 @@
       raf = null;
       lastTime = 0;
     }
-    dragging = true;
+    if (pageRaf) {
+      window.cancelAnimationFrame(pageRaf);
+      pageRaf = 0;
+    }    dragging = true;
     pointerId = event.pointerId;
     startX = event.clientX;
     startSlide = slide;
@@ -410,12 +415,63 @@
   );
 
   /* ---------- keyboard: the fan is not reachable by pointer only ---------- */
+  /* 翻牌堆：整圈平滑滚过去，而不是瞬移 */
+  function syncFanNav() {
+    var max = maxSlide();
+    var prev = document.getElementById("deckPrevBtn");
+    var next = document.getElementById("deckNextBtn");
+    if (prev) prev.disabled = slide <= 0.0005;
+    if (next) next.disabled = slide >= max - 0.0005;
+  }
+
   function pageFan(direction) {
     if (ring.classList.contains("is-shuffling")) return;
     var step = 1 / Math.max(1, visibleCount() - 1);
-    slide = Math.min(maxSlide(), Math.max(0, slide + direction * step));
+    var max = maxSlide();
+    var from = slide;
+    var to = Math.min(max, Math.max(0, slide + direction * step));
     velocity = 0;
-    layout();
+    if (pageRaf) {
+      window.cancelAnimationFrame(pageRaf);
+      pageRaf = 0;
+    }
+    if (Math.abs(to - from) < 0.0009) {
+      /* 已经在尽头：给一下短促的回弹，按下去有反馈 */
+      var bounceFrom = from + direction * -0.006;
+      var t0 = 0;
+      (function settle(now) {
+        if (!t0) t0 = now;
+        var p = Math.min(1, (now - t0) / 180);
+        slide = bounceFrom + (from - bounceFrom) * (1 - Math.pow(1 - p, 3));
+        layout();
+        if (p < 1) {
+          pageRaf = window.requestAnimationFrame(settle);
+        } else {
+          slide = from;
+          layout();
+          pageRaf = 0;
+          syncFanNav();
+        }
+      })(performance.now());
+      return;
+    }
+    var start = 0;
+    var dur = 320;
+    (function glide(now) {
+      if (!start) start = now;
+      var p = Math.min(1, (now - start) / dur);
+      var e = 1 - Math.pow(1 - p, 3);
+      slide = from + (to - from) * e;
+      layout();
+      if (p < 1) {
+        pageRaf = window.requestAnimationFrame(glide);
+      } else {
+        slide = to;
+        layout();
+        pageRaf = 0;
+        syncFanNav();
+      }
+    })(performance.now());
   }
 
   function drawCenteredCard() {
