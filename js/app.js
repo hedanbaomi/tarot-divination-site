@@ -18,6 +18,7 @@
   var pile = [];       // remaining face-down cards (shuffled)
   var spread = [];      // drawn cards: { uid, card, orientation, revealed, slotIndex, layer? }
   var uidCounter = 0;
+  var lastSavedPresetUid = -1;
   var readingReported = false;
   var freeBoardReadingReported = false;
 
@@ -369,6 +370,14 @@
 
   function applyLayoutUi() {
     var freeform = isFreeform();
+    var layoutButton = document.getElementById("freeBoardOpenBtn");
+    if (layoutButton) {
+      var key = freeform ? "freeBoard.backToPreset" : "freeBoard.open";
+      layoutButton.setAttribute("data-i18n", key);
+      layoutButton.textContent = t(key);
+    }
+    var hint = document.getElementById("freeBoardOpenHint");
+    if (hint) hint.hidden = freeform;
     var tableArea = document.getElementById("tableArea");
     /* the fan stays on the table in freeform: it is the card source */
     if (tableArea) {
@@ -820,6 +829,7 @@
   var FREEFORM_DRAFT_KEY = "quareia-divination-free-board-draft-v1";
   var freeformDraftTimer = 0;
   var legacyViewport = null;
+  var parkedDraft = null;
 
   function isShuffleRunning() {
     var ring = el.deckSpread && el.deckSpread.closest ? el.deckSpread.closest(".deck-ring") : null;
@@ -833,6 +843,7 @@
     return {
       schema: "free-board/v1",
       layout: 3,
+      presetSpreadId: selectedSpreadId,
       version: 1,
       layoutMode: "freeform",
       cards: freeDrawn.map(function (item, index) {
@@ -872,14 +883,17 @@
     };
   }
 
-  function saveFreeformDraftNow() {
+  function saveFreeformDraftNow(park) {
     if (!isFreeform()) return;
     if (freeformDraftTimer) {
       window.clearTimeout(freeformDraftTimer);
       freeformDraftTimer = 0;
     }
+    var draft = freeformDraftPayload();
+    if (park) draft.parked = true;
+    parkedDraft = park ? draft : null;
     try {
-      window.localStorage.setItem(FREEFORM_DRAFT_KEY, JSON.stringify(freeformDraftPayload()));
+      window.localStorage.setItem(FREEFORM_DRAFT_KEY, JSON.stringify(draft));
     } catch (_error) { /* storage disabled or full */ }
   }
 
@@ -893,6 +907,7 @@
   }
 
   function clearFreeformDraft() {
+    parkedDraft = null;
     if (freeformDraftTimer) {
       window.clearTimeout(freeformDraftTimer);
       freeformDraftTimer = 0;
@@ -901,16 +916,19 @@
   }
 
   /* -1 = nothing to restore; otherwise the number of restored cards */
-  function restoreFreeformDraft() {
-    var raw = null;
-    try { raw = window.localStorage.getItem(FREEFORM_DRAFT_KEY); } catch (_error) { raw = null; }
-    if (!raw) return -1;
-    var draft = null;
-    try { draft = JSON.parse(raw); } catch (_error) { return -1; }
+  function restoreFreeformDraft(resumeParked) {
+    var draft = resumeParked ? parkedDraft : null;
+    if (!draft) {
+      try {
+        draft = JSON.parse(window.localStorage.getItem(FREEFORM_DRAFT_KEY));
+      } catch (_error) { return -1; }
+    }
+    if (draft && Boolean(draft.parked) !== Boolean(resumeParked)) return -1;
     if (!draft || draft.layoutMode !== "freeform" || !Array.isArray(draft.cards)) return -1;
     var settings = draft.settings || {};
     var type = settings.deckType || (draft.deck && (draft.deck.deckId || draft.deck.id));
     if (type !== "tarot" && type !== "mystagogus" && type !== "lxxxi") return -1;
+    if (!resumeParked && typeof draft.presetSpreadId === "string") selectedSpreadId = draft.presetSpreadId;
     deckType = type;
     mode = settings.orientationMode === "mixed" && type === "tarot" ? "mixed" : "upright-only";
     if (type === "tarot" && [
@@ -1011,6 +1029,7 @@
       el.deckSpread.textContent = t("app.deckEmpty");
       if (el.deckRemaining) el.deckRemaining.textContent = t("app.remaining", { count: 0 });
       renderFreeDraw();
+      renderResults();
       return;
     }
     remaining.forEach(function (cardId, index) {
@@ -1524,7 +1543,7 @@
   }
 
   function revealEntry(entry) {
-    if (entry.revealed) return;
+    if (entry.revealed || spread.indexOf(entry) === -1) return;
     entry.revealed = true;
     var cardEl = getSpreadEl(entry);
     if (cardEl) {
@@ -1538,7 +1557,7 @@
     renderSpreadMeta();
     renderResults();
     if (isReadingComplete() && spread.every(function (card) { return card.revealed; })) {
-      notifyReadingCompleted();
+      completePresetReading();
     }
   }
 
@@ -1587,10 +1606,17 @@
     pending.forEach(function (entry, i) {
       setTimeout(function () { revealEntry(entry); }, i * 80);
     });
-    if (isReadingComplete()) {
-      if (historyUiController) historyUiController.saveCompletedReading();
-      notifyReadingCompleted();
+    if (isReadingComplete()) completePresetReading();
+  }
+
+  function completePresetReading() {
+    // Bulk reveal saves immediately. Its final animation and any manual flips
+    // refer to the same reading until another card is drawn.
+    if (historyUiController && lastSavedPresetUid !== uidCounter) {
+      historyUiController.saveCompletedReading();
+      lastSavedPresetUid = uidCounter;
     }
+    notifyReadingCompleted();
   }
 
   // A full spread explicitly revealed, through Reveal All or individual flips.
@@ -2222,48 +2248,58 @@
     });
   }
 
-  function leaveFreeform() {
+  function leaveFreeform(park) {
+    if (park) saveFreeformDraftNow(true);
+    else clearFreeformDraft();
     layoutMode = "preset";
     freeDrawn.length = 0;
     freeRedo.length = 0;
-    clearFreeformDraft();
     renderFreeDraw();
   }
 
   async function handleLayoutModeChange() {
     var newLayoutMode = el.layoutModeSelect.value;
     if (newLayoutMode === layoutMode) return;
-    if (!(await confirmIfSpread(t("confirm.layout")))) {
-      el.layoutModeSelect.value = layoutMode;
-      return;
-    }
-
-    if (newLayoutMode === "freeform") {
-      // Entering the board intentionally ends the current preset reading, but
-      // preserves deck, Tarot orientation, and Tarot filter selections.
-      spread = [];
-      currentPhase = "major";
-      layoutMode = "freeform";
-      freeBoardReadingReported = false;
-      freeDrawn = [];
-      freeRedo.length = 0;
+    if (newLayoutMode === "preset") {
+      leaveFreeform(true);
       applyDeckUi();
       applyLayoutUi();
-      /* 自由模式用当前牌组 / 筛选条件重新发一整副牌，不继承预设牌阵的牌池 */
-      buildPile();
-      renderFreeformFan();
-      scheduleFreeformDraft();
-      renderSpreadMeta();
-      renderResults();
+      populateSpreadSelect();
+      renderSpreadDefinition();
+      resetDeck();
+      syncSelectControls();
       return;
     }
 
-    leaveFreeform();
+    if (!(await confirmIfSpread(t("confirm.layout")))) {
+      el.layoutModeSelect.value = layoutMode;
+      syncSelectControls();
+      return;
+    }
+
+    if (restoreFreeformDraft(true) >= 0) {
+      spread = [];
+      currentPhase = "major";
+      freeBoardReadingReported = false;
+      showRestoredFreeform();
+      saveFreeformDraftNow();
+      return;
+    }
+
+    spread = [];
+    currentPhase = "major";
+    layoutMode = "freeform";
+    freeBoardReadingReported = false;
+    freeDrawn = [];
+    freeRedo.length = 0;
     applyDeckUi();
     applyLayoutUi();
-    populateSpreadSelect();
-    renderSpreadDefinition();
-    resetDeck();
+    buildPile();
+    renderFreeformFan();
+    scheduleFreeformDraft();
+    renderSpreadMeta();
+    renderResults();
+    syncSelectControls();
   }
 
   function toggleSettings() {
@@ -2329,6 +2365,19 @@
     }
   }
 
+  function showRestoredFreeform() {
+    layoutMode = "freeform";
+    el.deckSelect.value = deckType;
+    el.modeSelect.value = mode;
+    el.arcanaFilter.value = arcanaFilter;
+    el.layoutModeSelect.value = "freeform";
+    applyDeckUi();
+    populateSpreadSelect();
+    renderSpreadDefinition();
+    applyLayoutUi();
+    syncSelectControls();
+  }
+
   // ---------- Init ----------
   function init() {
     cacheElements();
@@ -2390,18 +2439,7 @@
     }
     var restoredCards = restoreFreeformDraft();
     if (restoredCards >= 0) {
-      /* 上一局自由画板还在：恢复牌池、摆位与方向，直接回到牌桌 */
-      layoutMode = "freeform";
-      if (el.deckSelect) el.deckSelect.value = deckType;
-      if (el.modeSelect) el.modeSelect.value = mode;
-      if (el.arcanaFilter) el.arcanaFilter.value = arcanaFilter;
-      if (el.layoutModeSelect) el.layoutModeSelect.value = "freeform";
-      applyDeckUi();
-      populateSpreadSelect();
-      renderSpreadDefinition();
-      applyLayoutUi();
-      renderFreeformFan();
-      syncSelectControls();
+      showRestoredFreeform();
     } else {
       applyLayoutUi();
       resetDeck();

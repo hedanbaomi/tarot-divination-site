@@ -372,6 +372,7 @@
       ,"freeBoard.settingsSummary": "自由画板：可从当前牌组与筛选结果中任意抽牌，不设固定牌位或目标张数。"
       ,"freeBoard.title": "自由画板"
       ,"freeBoard.open": "自由画板"
+      ,"freeBoard.backToPreset": "返回预设牌阵"
       ,"freeBoard.openHint": "牌堆以扇形摊在桌上，不套用任何牌阵，想抽哪张抽哪张。", "freeBoard.cardHiddenAria": "第 {index} 张牌，未翻开", "freeBoard.cardAria": "第 {index} 张牌，{name}，{orientation}", "freeBoard.slotName": "自由牌位",
   "freeBoard.angleTitle": "角度", "freeBoard.drawnAria": "已抽出的牌"
       ,"freeBoard.toolbarAria": "自由画板控制"
@@ -801,6 +802,7 @@
       "freeBoard.settingsSummary": "Free Board: draw any card from the current deck and filter; there are no fixed positions or target count.",
       "freeBoard.title": "Free Board",
       "freeBoard.open": "Free board",
+      "freeBoard.backToPreset": "Return to preset spread",
       "freeBoard.openHint": "The deck fans out on the table with no spread applied.", "freeBoard.cardHiddenAria": "Card {index}, face down", "freeBoard.cardAria": "Card {index}, {name}, {orientation}", "freeBoard.slotName": "Free slot",
   "freeBoard.angleTitle": "Angle", "freeBoard.drawnAria": "Drawn cards",
       "freeBoard.toolbarAria": "Free Board controls",

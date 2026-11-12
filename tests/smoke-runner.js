@@ -186,6 +186,26 @@
     });
   });
 
+  step("在牌阵设置返回原牌阵，并恢复未完成的画板", function () {
+    var spread = q("#spreadSelect").value;
+    q("#deckSpread .deck-card").click();
+    var drawnId = q(".free-table-card").dataset.cardId;
+    q("#spreadSettingsBtn").click();
+    q("#spreadPopover #freeBoardOpenBtn").click();
+    if (q("#confirmDialog[open]") || q("#layoutModeSelect").value !== "preset" ||
+        q("#spreadSelect").value !== spread || !q("#freeDraw").hidden) {
+      throw new Error("返回预设牌阵没有直接切回原来的牌阵");
+    }
+    q("#spreadSettingsBtn").click();
+    q("#spreadPopover #freeBoardOpenBtn").click();
+    return wait("恢复之前的画板", function () {
+      var card = q(".free-table-card");
+      return q("#layoutModeSelect").value === "freeform" && card && card.dataset.cardId === drawnId;
+    }).then(function () {
+      q("#freeUndoBtn").click();
+    });
+  });
+
   step("洗牌会清空并重新发牌", function () {
     var shuffle = document.getElementById("shuffleBtn");
     shuffle.click();

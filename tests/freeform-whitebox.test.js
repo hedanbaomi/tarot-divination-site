@@ -209,6 +209,7 @@ test("draft round trip preserves card placement, orientation, angle and undo ord
     deckType: "tarot", mode: "mixed", arcanaFilter: "mixed", pile: deck.slice(),
     freeDrawn: [{ id: "b", x: 151, y: 123, angle: -30, orientation: "reversed", revealed: true }],
     freeRedo: [], FREEFORM_DRAFT_KEY: "draft", legacyViewport: null,
+    parkedDraft: null, selectedSpreadId: "four-seasons",
     freeBoardDeckName: function () { return "Tarot"; },
     allDecksForFreeBoard: function () { return { tarot: deck }; },
     freeformDeckCards: function () { return deck; },
@@ -227,6 +228,10 @@ test("draft round trip preserves card placement, orientation, angle and undo ord
   assert.deepEqual(Object.assign({}, state.freeDrawn[0]),
     { id: "b", x: 151, y: 123, angle: -30, orientation: "reversed", revealed: true });
   assert.equal(state.legacyViewport, null);
+  draft.parked = true;
+  assert.equal(state.restoreFreeformDraft(), -1, "reload must stay in preset while a board is parked");
+  assert.equal(state.restoreFreeformDraft(true), 1, "reopening the board resumes its cards");
+  delete draft.parked;
   assert.deepEqual(Array.from(state.freeRemainingIds()), ["a", "c"]);
   state.undoFreeDraw();
   assert.deepEqual(Array.from(state.freeRemainingIds()), ["a", "b", "c"]);
