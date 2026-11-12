@@ -22,7 +22,7 @@
   <link rel="stylesheet" href="css/free-board.css?v=20261112-review5">
   <link rel="stylesheet" href="css/custom-spreads.css?v=20261112-review5">
   <link rel="stylesheet" href="css/redesign.css?v=20261112-sun-shadow">
-  <link rel="stylesheet" href="css/android-shell.css?v=1.5.0">
+  <link rel="stylesheet" href="css/android-shell.css?v=1.5.1">
 </head>
 <body>
   <div class="sky-moon" id="skyMoon" role="button" tabindex="0"
@@ -43,17 +43,15 @@
         <h1 data-i18n="site.title">Quareia 占卜</h1>
         <p class="subtitle" data-i18n="site.subtitle">QUAREIA DIVINATION · 塔罗 / Mystagogus / LXXXI</p>
       </div>
-      <div class="masthead-actions">
-        <button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false"
-          aria-controls="appMenu" aria-label="打开菜单" data-i18n-aria-label="menu.openLabel">
-          <span class="menu-toggle-bar" aria-hidden="true"></span>
-          <span class="menu-toggle-bar" aria-hidden="true"></span>
-          <span class="menu-toggle-bar" aria-hidden="true"></span>
-        </button>
-        <button class="btn-mini settings-open-btn" id="settingsOpenBtn" type="button"
-          aria-haspopup="true" aria-expanded="false" aria-controls="settingsPanel"
-          data-i18n="settings.title">高级设置</button>
-      </div>
+      <button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false"
+        aria-controls="appMenu" aria-label="打开菜单" data-i18n-aria-label="menu.openLabel">
+        <span class="menu-toggle-bar" aria-hidden="true"></span>
+        <span class="menu-toggle-bar" aria-hidden="true"></span>
+        <span class="menu-toggle-bar" aria-hidden="true"></span>
+      </button>
+      <button class="btn-mini settings-open-btn" id="settingsOpenBtn" type="button"
+        aria-haspopup="true" aria-expanded="false" aria-controls="settingsPanel"
+        data-i18n="settings.title">抽牌设置</button>
     </header>
 
     <aside class="app-menu" id="appMenu" aria-labelledby="menuTitle" aria-hidden="true">
@@ -468,12 +466,12 @@
       </section>
     </dialog>
 
-    <!-- 高级设置：从顶栏打开的浮层面板 -->
+    <!-- 抽牌设置：从顶栏打开的浮层面板 -->
     <div class="settings-panel" id="settingsPanel" hidden>
     <section class="settings" id="settings">
-      <p class="settings-panel-title" data-i18n="settings.title">高级设置</p>
+      <p class="settings-panel-title" data-i18n="settings.title">抽牌设置</p>
       <button class="settings-toggle" id="settingsToggle" aria-expanded="true" aria-controls="settingsBody" hidden>
-        <span data-i18n="settings.title">高级设置</span>
+        <span data-i18n="settings.title">抽牌设置</span>
         <span class="settings-chevron" aria-hidden="true">▾</span>
       </button>
       <div class="settings-body" id="settingsBody">
@@ -559,7 +557,7 @@
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js?v=20261112-review5"></script>
   <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js?v=20261112-grove-light"></script>
+  <script src="js/i18n.js?v=1.5.1"></script>
   <script src="js/theme.js?v=20261112-grove-light"></script>
   <script src="js/menu.js?v=1.5.0"></script>
   <script src="js/telemetry-notice.js?v=1.5.0"></script>
