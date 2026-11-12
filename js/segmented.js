@@ -169,6 +169,16 @@
     });
   }
 
+  function syncAll() {
+    SELECTS.forEach(function (id) {
+      var select = document.getElementById(id);
+      if (select) sync(select);
+    });
+  }
+
+  /* app.js 在确认框里点了「保留」时会把 select.value 改回真正的值，
+     但程序赋值不会触发 change，需要这里把胶囊同步回来 */
+  globalThis.DivinationSegmented = { sync: syncAll };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {

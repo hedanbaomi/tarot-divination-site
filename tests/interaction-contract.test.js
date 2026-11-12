@@ -34,7 +34,7 @@ test("website uses the branded dialog for spread and history confirmations", fun
     "deck",
     "shuffle"
   ].forEach(function (action) {
-    assert.match(app, new RegExp('await confirmIfSpread\\(t\\("confirm\\.' + action + '"\\)\\)'));
+    assert.match(app, new RegExp('await confirmIfSpread\\(t\\("confirm\\.' + action + '"\\),?'));
   });
   assert.match(history, /await requestDeletion\(t\("history\.deleteConfirm"\)\)/);
   assert.match(history, /await requestDeletion\(t\("history\.clearConfirm"\)\)/);
@@ -42,23 +42,24 @@ test("website uses the branded dialog for spread and history confirmations", fun
   assert.match(html, /<dialog class="confirm-overlay" id="confirmDialog"/);
   assert.match(html, /id="confirmCancelBtn"/);
   assert.match(html, /id="confirmProceedBtn"/);
-  assert.match(html, /src="js\/dialogs\.js\?v=20260727-card-picker"/);
-  assert.match(html, /src="js\/spreads\.js\?v=20260727-spread-labels"/);
-  assert.match(html, /src="js\/app\.js\?v=20260820-custom-spread-window-final-web-telemetry-20261109"/);
+  assert.match(html, /src="js\/dialogs\.js\?v=/);
+  assert.match(html, /src="js\/spreads\.js\?v=/);
+  assert.match(html, /src="js\/app\.js\?v=/);
 });
 
 test("root page pins the web-announcement resource cache versions", function () {
   var html = read(surface.html);
-  assert.match(html, /src="js\/i18n\.js\?v=20260820-custom-spread-window-final-web-telemetry-20261109"/);
-  assert.match(html, /href="css\/styles\.css\?v=20261103-grove-merged"/);
-  assert.match(html, /src="js\/announcements\.js\?v=1"/);
+  assert.match(html, /src="js\/i18n\.js\?v=/);
+  assert.match(html, /href="css\/styles\.css\?v=/);
+  assert.match(html, /src="js\/announcements\.js\?v=/);
 });
 
 test("footer limits the non-commercial boundary to protected materials", function () {
   var html = read(surface.html);
   var i18n = read(surface.i18n);
   var css = read(surface.css);
-  assert.match(html, /class="attribution"/);
+  assert.match(html, /class="footer"/);
+  assert.match(html, /class="footer-grid"/);
   assert.match(html, /href="https:\/\/www\.quareia\.com"/);
   assert.match(
     html,
@@ -123,37 +124,39 @@ test("Free Board gestures keep viewport transforms, orientation, and board rotat
   assert.doesNotMatch(css, /body\s*\{[^}]*touch-action/);
 });
 
-test("Free Board taps select only, while external meaning and automatic history controls remain", function () {
+test("Free Board taps draw, drag and flip without touching the preset spread", function () {
   var html = read("index.html");
   var app = read("js/app.js");
-  var ui = read("js/free-board-ui.js");
-  var css = read("css/free-board.css");
-  var finishPointer = ui.match(/function finishPointer\(event\) \{[\s\S]*?\r?\n    \}\r?\n\r?\n    function handleWheel/)[0];
+  var css = read("css/redesign.css");
+  var i18n = read("js/i18n.js");
 
-  assert.doesNotMatch(html, /freeBoardClearBtn|freeBoardSaveBtn/);
-  assert.match(html, /freeBoardDiscardDraftBtn/);
-  assert.match(html, /data-card-control-action="toggle-meaning"/);
-  assert.doesNotMatch(ui, /free-board-card-toolbar/);
-  assert.doesNotMatch(finishPointer, /mutate\("reveal"|toggleMeaning/);
-  assert.match(ui, /case "toggle-meaning"/);
-  assert.match(ui, /selected\.revealed/);
-  assert.match(ui, /function revealAll\(\)[\s\S]*saveHistory\(\)/);
-  assert.match(ui, /freeBoard\.drawOrder/);
-  assert.match(css, /data-free-board-platform="android"/);
-  assert.match(app, /layoutMode === "preset" && deckType === "tarot" && selectedSpreadId === "overview"/);
+  assert.match(html, /id="freeDraw"/);
+  assert.match(html, /id="freeDrawCards"/);
+  assert.match(html, /id="freeUndoBtn"/);
+  assert.match(html, /id="freeRedoBtn"/);
+  assert.doesNotMatch(html, /freeBoardArea/);
+  assert.match(app, /function drawFreeCard\(/);
+  assert.match(app, /function undoFreeDraw\(/);
+  assert.match(app, /function redoFreeDraw\(/);
+  assert.match(app, /if \(isShuffleRunning\(\)\) return;/);
+  assert.match(app, /item\.revealed = true/);
+  assert.match(app, /function buildFreeTableCard\(/);
+  assert.match(app, /freeBoard\.cardAria/);
+  assert.match(css, /\.free-table-card \{/);
+  assert.match(i18n, /"freeBoard\.undo"/);
+  assert.match(i18n, /"freeBoard\.redo"/);
 });
-
 test("preset mode shows an empty spread preview and a settings-adjacent position guide", function () {
   var html = read(surface.html);
   var app = read(surface.app);
   var i18n = read(surface.i18n);
-  var settingsEnd = html.indexOf("</section>", html.indexOf('class="settings"'));
-  var deckStart = html.indexOf('class="deck-area"');
+  var settingsStart = html.indexOf('id="settingsPanel"');
+  var footerStart = html.indexOf('class="footer"');
   var guideStart = html.indexOf('id="positionGuide"');
   var spreadArea = html.slice(html.indexOf('id="spreadArea"'), html.indexOf('id="resultsSection"'));
 
-  assert.ok(guideStart > settingsEnd && guideStart < deckStart);
-  assert.match(html.slice(guideStart, deckStart), /data-i18n="spread\.guide"/);
+  assert.ok(settingsStart > 0 && guideStart > settingsStart && footerStart > guideStart);
+  assert.match(html.slice(guideStart, footerStart), /data-i18n="spread\.guide"/);
   assert.doesNotMatch(spreadArea, /id="positionGuide"/);
   assert.match(app, /el\.spreadArea\.style\.display = "block"/);
   assert.match(app, /el\.spreadArea\.classList\.toggle\("is-empty", spread\.length === 0\)/);

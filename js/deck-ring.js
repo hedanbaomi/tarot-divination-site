@@ -377,6 +377,12 @@
          (牌阵设置) and everything else must keep their own click */
       var inPlane = event.target.closest ? event.target.closest(".table-plane") : null;
       if (!inPlane) return;
+      /* 洗牌动画期间牌被藏起来了，但这条命中逻辑仍然会找到最近的牌并合成点击 */
+      if (ring.classList.contains("is-shuffling")) {
+        event.stopPropagation();
+        event.preventDefault();
+        return;
+      }
       if (Date.now() < suppressClickUntil) {
         event.stopPropagation();
         event.preventDefault();
@@ -402,6 +408,53 @@
     },
     true
   );
+
+  /* ---------- keyboard: the fan is not reachable by pointer only ---------- */
+  function pageFan(direction) {
+    if (ring.classList.contains("is-shuffling")) return;
+    var step = 1 / Math.max(1, visibleCount() - 1);
+    slide = Math.min(maxSlide(), Math.max(0, slide + direction * step));
+    velocity = 0;
+    layout();
+  }
+
+  function drawCenteredCard() {
+    var cards = ring.querySelectorAll(".deck-card");
+    var best = null;
+    var bestDist = Infinity;
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      if (card.style.visibility === "hidden") continue;
+      var rect = card.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      var stageRect = stage.getBoundingClientRect();
+      var dist = Math.abs(cx - (stageRect.left + stageRect.width / 2)) +
+        Math.abs(cy - (stageRect.top + stageRect.height / 2)) * 0.4;
+      if (dist < bestDist) { bestDist = dist; best = card; }
+    }
+    if (best) best.click();
+  }
+
+  var prevBtn = document.getElementById("deckPrevBtn");
+  var nextBtn = document.getElementById("deckNextBtn");
+  if (prevBtn) prevBtn.addEventListener("click", function () { pageFan(-1); });
+  if (nextBtn) nextBtn.addEventListener("click", function () { pageFan(1); });
+
+  stage.addEventListener("keydown", function (event) {
+    if (event.target !== stage && !stage.contains(event.target)) return;
+    if (event.key === "ArrowLeft") { pageFan(-1); event.preventDefault(); }
+    else if (event.key === "ArrowRight") { pageFan(1); event.preventDefault(); }
+    else if (event.key === "Home") { slide = 0; velocity = 0; layout(); event.preventDefault(); }
+    else if (event.key === "End") { slide = maxSlide(); velocity = 0; layout(); event.preventDefault(); }
+    else if (event.key === "Enter") {
+      var focused = document.activeElement;
+      var isCard = focused && focused.classList && focused.classList.contains("deck-card");
+      if (isCard) return;
+      drawCenteredCard();
+      event.preventDefault();
+    }
+  });
 
   if (window.MutationObserver) {
     new MutationObserver(layout).observe(ring, { childList: true });

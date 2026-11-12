@@ -10,7 +10,7 @@
   <script>
     (function () {
       try {
-        var allowed = { celestial: 1, parchment: 1, ember: 1, grove: 1 };
+        var allowed = { celestial: 1, parchment: 1, ember: 1, grove: 1, jade: 1, dusk: 1, ash: 1 };
         var stored = localStorage.getItem("quareia-divination-theme");
         document.documentElement.setAttribute("data-theme", allowed[stored] ? stored : "celestial");
       } catch (e) {
@@ -18,10 +18,10 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="css/styles.css?v=20261103-grove-merged">
-  <link rel="stylesheet" href="css/free-board.css?v=20260813-parchment-panels">
-  <link rel="stylesheet" href="css/custom-spreads.css?v=20260820-custom-spread-window-final">
-  <link rel="stylesheet" href="css/redesign.css?v=20261112-egg4">
+  <link rel="stylesheet" href="css/styles.css?v=20261112-review5">
+  <link rel="stylesheet" href="css/free-board.css?v=20261112-review5">
+  <link rel="stylesheet" href="css/custom-spreads.css?v=20261112-review5">
+  <link rel="stylesheet" href="css/redesign.css?v=20261112-review5">
 </head>
 <body>
   <div class="sky-moon" id="skyMoon" role="button" tabindex="0"
@@ -66,11 +66,17 @@
         <div class="deck-tools">
           <span class="deck-remaining" id="deckRemaining" role="status" aria-live="polite" data-i18n="deck.initialRemaining">剩 78 张</span>
           <button class="btn-mini" id="shuffleBtn" type="button" data-i18n="deck.shuffle">洗牌</button>
-          <button class="btn-mini" id="switchArcanaBtn" type="button" style="display:none;" data-i18n="deck.switch">切换牌组</button>
+          <button class="btn-mini deck-page-btn" id="deckPrevBtn" type="button" data-i18n-aria-label="deck.prev" aria-label="上一张">
+            <span aria-hidden="true">◀</span>
+          </button>
+          <button class="btn-mini deck-page-btn" id="deckNextBtn" type="button" data-i18n-aria-label="deck.next" aria-label="下一张">
+            <span aria-hidden="true">▶</span>
+          </button>
+                    <button class="btn-mini" id="switchArcanaBtn" type="button" style="display:none;" data-i18n="deck.switch">切换牌组</button>
         </div>
       </div>
 
-      <div class="table-stage">
+      <div class="table-stage" tabindex="0" role="group" data-i18n-aria-label="table.dragHint">
         <div class="spread-head">
           <span class="spread-name" id="spreadTitle" data-i18n="spread.initialTitle">你的牌阵</span>
           <span class="card-count" id="spreadCount" data-i18n="spread.initialCount">0 / 3</span>
@@ -488,6 +494,7 @@
           <select id="spreadSelect" aria-describedby="spreadSettingSummary"></select>
           <p class="setting-summary" id="spreadSettingSummary"></p>
           <div class="custom-spread-launch">
+            <button class="btn btn-secondary" id="customSpreadOpenBtn" type="button" aria-haspopup="dialog" data-i18n="customSpread.open"></button>
             <button class="btn btn-secondary" id="freeBoardOpenBtn" type="button"
               data-i18n="freeBoard.open">自由画板</button>
             <p class="setting-summary" data-i18n="freeBoard.openHint"></p>
@@ -561,24 +568,23 @@
   <script src="js/tarot-data.js"></script>
   <script src="js/mystagogus-data.js"></script>
   <script src="js/lxxxi-data.js"></script>
-  <script src="js/spreads.js?v=20260727-spread-labels"></script>
+  <script src="js/spreads.js?v=20261112-review5"></script>
   <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js?v=20261112-egg4"></script>
-  <script>try{localStorage.setItem("quareia-divination-theme","ash")}catch(e){}</script>
-  <script src="js/theme.js?v=20261112-themes7"></script>
-  <script src="js/announcements.js?v=1"></script>
-  <script src="js/dialogs.js?v=20260727-card-picker"></script>
-  <script src="js/custom-selects.js?v=20260820-custom-spread-window-final"></script>
-  <script src="js/custom-spreads.js?v=20260820-custom-spread-window-final"></script>
-  <script src="js/custom-spread-ui.js?v=20260820-custom-spread-window-final"></script>
-  <script src="js/free-board-model.js?v=20260809-free-board-v1"></script>
-  <script src="js/free-board-draft.js?v=20260809-free-board-v1"></script>
-  <script src="js/history-records.js?v=20260809-free-board-v1"></script>
+  <script src="js/i18n.js?v=20261112-review5"></script>
+  <script src="js/theme.js?v=20261112-review5"></script>
+  <script src="js/announcements.js?v=20261112-review5"></script>
+  <script src="js/dialogs.js?v=20261112-review5"></script>
+  <script src="js/custom-selects.js?v=20261112-review5"></script>
+  <script src="js/custom-spreads.js?v=20261112-review5"></script>
+  <script src="js/custom-spread-ui.js?v=20261112-review5"></script>
+  <script src="js/free-board-model.js?v=20261112-review5"></script>
+  <script src="js/free-board-draft.js?v=20261112-review5"></script>
+  <script src="js/history-records.js?v=20261112-review5"></script>
   <script src="js/history-store.js"></script>
-  <script src="js/history-ui.js?v=20260809-free-board-v1"></script>
-  <script src="js/free-board-ui.js?v=20261112-noboard2"></script>
-  <script src="js/app.js?v=20261112-keep"></script>
-  <script src="js/deck-ring.js?v=20261112-arc32"></script>
+  <script src="js/history-ui.js?v=20261112-review5"></script>
+  <script src="js/free-board-ui.js?v=20261112-review5"></script>
+  <script src="js/app.js?v=20261112-review5"></script>
+  <script src="js/deck-ring.js?v=20261112-review5"></script>
   <div class="spread-popover" id="spreadPopover" hidden role="dialog" aria-modal="false"
     aria-label="牌阵设置" data-i18n-aria-label="spread.settings">
     <div class="spread-popover-head">
@@ -587,11 +593,11 @@
     </div>
     <div class="spread-popover-body" id="spreadPopoverBody"></div>
   </div>
-  <script src="js/spread-settings.js?v=20261112-freeboard"></script>
-  <script src="js/segmented.js?v=20261112-seg6"></script>
-  <script src="js/celestial-sky.js?v=20261112-egg4" defer></script>
+  <script src="js/spread-settings.js?v=20261112-review5"></script>
+  <script src="js/segmented.js?v=20261112-review5"></script>
+  <script src="js/celestial-sky.js?v=20261112-review5" defer></script>
   <script src="js/web-analytics.js"></script>
-  <script src="js/web-telemetry.js?v=20261109"></script>
+  <script src="js/web-telemetry.js?v=20261112-review5"></script>
   <script>
     (function () {
       var btn = document.getElementById("settingsOpenBtn");

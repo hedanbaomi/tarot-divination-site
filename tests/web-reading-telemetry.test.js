@@ -18,6 +18,8 @@ function harness(platform = "web") {
   const calls = [];
   const context = {
     spread: [], deckType: "tarot", readingReported: false, freeBoardReadingReported: false,
+    freeDrawn: [], freeRedo: [], scheduleFreeformDraft() {}, renderFreeformFan() {},
+    clearFreeformDraft() {}, renderFreeDraw() {},
     historyUiController: null, isReadingComplete: () => context.spread.length === context.target,
     isFreeform: () => false, setTimeout: (fn) => fn(), getSpreadEl: () => null,
     target: 3, buildPile() {}, renderSpreadCards() {}, renderDeckSpread() {}, renderSpreadMeta() {}, renderResults() {},
