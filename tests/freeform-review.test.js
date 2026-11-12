@@ -65,7 +65,7 @@ test("抽出来的牌按列自动排布，第 13 张不会压住第 1 张", func
   assert.match(fn, /var row = Math\.floor\(index \/ cols\)/);
   assert.doesNotMatch(fn, /row = Math\.floor\(index \/ cols\) %/);
   assert.match(fn, /var cols = narrow \? 2 : 4/);
-  assert.match(fn, /var stepY = narrow \? 144 : 150/);
+  assert.match(fn, /var stepY = cardH \+ \(narrow \? 30 : 24\)/);
 });
 
 test("未翻开的牌不向辅助技术暴露牌名，可以用键盘翻面", function () {
