@@ -671,7 +671,8 @@ html[data-theme="parchment"] .sky-moon {
   box-shadow: none;
   opacity: 1;
   overflow: visible;
-  filter: drop-shadow(0 2px 6px rgba(72, 48, 16, 0.28));
+  --sun-shadow: drop-shadow(0 2px 6px rgba(72, 48, 16, 0.28));
+  filter: var(--sun-shadow);
 }
 html[data-theme="parchment"] .sky-moon::before,
 html[data-theme="parchment"] .sky-moon::after {

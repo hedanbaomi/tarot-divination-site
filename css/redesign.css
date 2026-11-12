@@ -502,6 +502,9 @@ html.ui2 .sky-moon {
   right: 40px;
   z-index: 5;
   opacity: calc(var(--moon-opacity) + 0.25);
+}
+/* A box glow fits the round moons. The transparent sun uses its silhouette shadow. */
+html.ui2:not([data-theme="parchment"]) .sky-moon {
   box-shadow:
     0 0 16px 3px var(--moon-glow-near),
     0 0 54px 18px var(--moon-glow-mid);
@@ -2642,7 +2645,7 @@ html.ui2 .sky-moon {
   cursor: grab;
   transition: filter 0.25s ease;
 }
-html.ui2 .sky-moon:hover { filter: brightness(1.12) saturate(1.06); }
+html.ui2 .sky-moon:hover { filter: var(--sun-shadow,) brightness(1.12) saturate(1.06); }
 html.ui2 .sky-moon.dragging { cursor: grabbing; }
 html.ui2 .sky-moon:focus-visible {
   outline: 2px solid rgba(var(--accent-rgb), 0.75);
@@ -2734,8 +2737,7 @@ html.ui2 .spread-actions .btn { flex: 0 0 auto; min-width: 232px; }
 /* ==========================================================================
    §22  the free board (freeform layout)
    ========================================================================== */
-html.ui2 .sky-moon.is-egg {
-  filter: brightness(1.22) saturate(1.12);
+html.ui2:not([data-theme="parchment"]) .sky-moon.is-egg {
   box-shadow: 0 0 22px 6px var(--moon-glow-near), 0 0 72px 26px var(--moon-glow-mid);
 }
 
@@ -2902,12 +2904,13 @@ html.ui2 .sky-moon {
 }
 
 html.ui2 .sky-moon.is-holding {
+  border-radius: 50%;
   outline: 2px solid rgba(var(--accent-rgb), 0.32);
   outline-offset: 8px;
-  filter: brightness(1.08) saturate(1.05);
+  filter: var(--sun-shadow,) brightness(1.08) saturate(1.05);
 }
 html.ui2 .sky-moon.is-egg {
-  filter: brightness(1.2) saturate(1.1);
+  filter: var(--sun-shadow,) brightness(1.2) saturate(1.1);
 }
 
 /* ---------------------------------------------------------------

@@ -228,6 +228,26 @@
     });
   });
 
+  step("羊皮纸太阳的阴影跟随光芒轮廓", function () {
+    var moon = q("#skyMoon");
+    var theme = window.DivinationTheme;
+    var previous = theme.getTheme();
+    var classes = moon.className;
+    try {
+      theme.setTheme("parchment");
+      ["", "is-holding", "is-egg"].forEach(function (state) {
+        moon.classList.remove("is-holding", "is-egg");
+        if (state) moon.classList.add(state);
+        if (getComputedStyle(moon).boxShadow !== "none") {
+          throw new Error("太阳容器出现了方形阴影：" + (state || "静止"));
+        }
+      });
+    } finally {
+      moon.className = classes;
+      theme.setTheme(previous);
+    }
+  });
+
   step("高级设置能打开", function () {
     var open = document.getElementById("settingsOpenBtn");
     open.click();
