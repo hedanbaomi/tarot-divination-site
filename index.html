@@ -18,6 +18,7 @@
       }
     })();
   </script>
+  <script src="js/page-version.js?v=20261112-classic"></script>
   <link rel="stylesheet" href="css/styles.css?v=20261103-grove-merged">
   <link rel="stylesheet" href="css/free-board.css?v=20261112-review5">
   <link rel="stylesheet" href="css/custom-spreads.css?v=20261112-review5">
@@ -492,6 +493,11 @@
             先铺 13 张大阿卡那，再将 13 张小阿卡那叠在对应牌位。
           </p>
         </div>
+        <div class="setting-group">
+          <span class="setting-label" data-i18n="settings.pageVersion">页面版本</span>
+          <a class="btn btn-secondary" id="switchPageVersion" href="classic.html" data-i18n="settings.useClassic">切回旧版</a>
+          <p class="setting-summary" data-i18n="settings.versionHint">两版共用占卜历史。切换会重新打开页面，未完成的预设抽牌会清空。</p>
+        </div>
         <div class="setting-group setting-group-spread">
           <label for="spreadSelect" data-i18n="settings.spread">预设牌阵</label>
           <select id="spreadSelect" aria-describedby="spreadSettingSummary"></select>
@@ -573,7 +579,7 @@
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js?v=20261112-review5"></script>
   <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js?v=20261112-layout-return"></script>
+  <script src="js/i18n.js?v=20261112-classic"></script>
   <script src="js/theme.js?v=20261112-review5"></script>
   <script src="js/announcements.js?v=1"></script>
   <script src="js/dialogs.js?v=20261112-review5"></script>
@@ -585,7 +591,7 @@
   <script src="js/history-records.js?v=20261112-review5"></script>
   <script src="js/history-store.js"></script>
   <script src="js/history-ui.js?v=20261112-review5"></script>
-  <script src="js/free-board-ui.js?v=20261112-review5"></script>
+  <script src="js/free-board-ui.js?v=20261112-classic"></script>
   <script src="js/app.js?v=20261112-layout-return"></script>
   <script src="js/deck-ring.js?v=20261112-reading-fix"></script>
   <div class="spread-popover" id="spreadPopover" hidden role="dialog" aria-modal="false"

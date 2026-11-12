@@ -54,6 +54,10 @@
       "mode.upright": "全正位",
       "mode.mixed": "正逆位混合",
       "settings.layoutMode": "布局方式",
+      "settings.pageVersion": "页面版本",
+      "settings.useClassic": "切回旧版",
+      "settings.useModern": "切回新版",
+      "settings.versionHint": "两版共用占卜历史。切换会重新打开页面，未完成的预设抽牌会清空。",
       "layout.preset": "预设牌阵",
       "layout.freeform": "自由画板",
       "settings.arcana": "牌组筛选",
@@ -485,6 +489,10 @@
       "mode.upright": "Upright only",
       "mode.mixed": "Upright and reversed",
       "settings.layoutMode": "Layout",
+      "settings.pageVersion": "Site version",
+      "settings.useClassic": "Switch to classic",
+      "settings.useModern": "Switch to the new version",
+      "settings.versionHint": "Both versions share your reading history. Switching pages clears an unfinished preset reading.",
       "layout.preset": "Preset spread",
       "layout.freeform": "Free Board",
       "settings.arcana": "Card pool",
@@ -870,6 +878,12 @@
       "history.duplicateFreeBoard": "This Free Board was just saved; no duplicate was created."
     }
   };
+
+  if (global.QuareiaClassicMessages) {
+    supported.forEach(function (lang) {
+      Object.assign(messages[lang], global.QuareiaClassicMessages[lang]);
+    });
+  }
 
   function readStoredLocale() {
     try {

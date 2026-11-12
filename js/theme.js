@@ -13,6 +13,10 @@
     dusk: "#140f1e",
     ash: "#121214"
   };
+  var page = global.document && global.document.documentElement;
+  if (page && page.dataset && page.dataset.pageVersion === "classic") {
+    THEMES = ["celestial", "parchment", "ember", "grove"];
+  }
   var initialized = false;
   var theme = readStoredTheme();
 

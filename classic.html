@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-version="classic">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#060919">
+  <meta name="description" content="Quareia 占卜：支持塔罗、Mystagogus（M 牌）与 LXXXI 魔法牌，轻点牌堆抽牌，翻牌解读，预设牌阵与正逆位模式。">
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+  <title>Quareia 占卜 · Quareia Divination</title>
+  <script>
+    (function () {
+      try {
+        var allowed = { celestial: 1, parchment: 1, ember: 1, grove: 1 };
+        var stored = localStorage.getItem("quareia-divination-theme");
+        document.documentElement.setAttribute("data-theme", allowed[stored] ? stored : "celestial");
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "celestial");
+      }
+    })();
+  </script>
+  <script src="js/page-version.js?v=20261112-classic"></script>
+  <link rel="stylesheet" href="css/styles.css?v=20261103-grove-merged">
+  <link rel="stylesheet" href="css/free-board.css?v=20260813-parchment-panels">
+  <link rel="stylesheet" href="css/custom-spreads.css?v=20260820-custom-spread-window-final">
+</head>
+<body>
+  <div class="sky-moon" aria-hidden="true">
+    <img class="sky-sun-blank" src="assets/icons/parchment-sun-blank.png" alt="" draggable="false">
+    <img class="sky-sun" src="assets/icons/parchment-sun.png" alt="" draggable="false">
+    <div class="sky-face">
+      <img class="sky-face-art" data-theme-face="celestial" src="assets/icons/sky-face-celestial.png" alt="" draggable="false">
+      <img class="sky-face-art" data-theme-face="ember" src="assets/icons/sky-face-ember.png" alt="" draggable="false">
+      <img class="sky-face-art" data-theme-face="grove" src="assets/icons/sky-face-grove.png" alt="" draggable="false">
+      <span class="sky-eyelid sky-eyelid-l"></span>
+      <span class="sky-eyelid sky-eyelid-r"></span>
+    </div>
+  </div>
+  <div class="page-wrapper">
+    <header class="header">
+      <h1 data-i18n="site.title">Quareia 占卜</h1>
+      <p class="subtitle" data-i18n="site.subtitle">QUAREIA DIVINATION · 塔罗 / Mystagogus / LXXXI</p>
+      <div class="header-actions">
+        <button class="btn-mini language-toggle" id="languageToggle" type="button"
+          aria-label="Switch to English">EN</button>
+        <button class="btn-mini history-open-btn" id="historyOpenBtn" type="button"
+          aria-haspopup="dialog" aria-controls="historyDialog" data-i18n="history.open">占卜历史</button>
+        <button class="btn-mini announcement-open-btn" id="announcementOpenBtn" type="button"
+          aria-haspopup="dialog" aria-controls="announcementDialog" data-i18n="announcement.open">公告</button>
+      </div>
+    </header>
+
+    <!-- 设置：可折叠，默认展开 -->
+    <section class="settings" id="settings">
+      <button class="settings-toggle" id="settingsToggle" aria-expanded="true" aria-controls="settingsBody">
+        <span data-i18n="settings.title">抽牌设置</span>
+        <span class="settings-chevron" aria-hidden="true">▾</span>
+      </button>
+      <div class="settings-body" id="settingsBody">
+        <div class="setting-group setting-group-theme">
+          <span class="setting-label" id="themePickerLabel" data-i18n="settings.theme">界面主题</span>
+          <div class="theme-swatches" id="themeSwatches" role="radiogroup"
+            aria-labelledby="themePickerLabel" data-i18n-aria-label="settings.themeAria">
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="celestial"
+              aria-checked="true">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.celestial">星夜秘境</span>
+            </button>
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="parchment"
+              aria-checked="false">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.parchment">羊皮纸晨光</span>
+            </button>
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="ember"
+              aria-checked="false">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.ember">余烬圣堂</span>
+            </button>
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="grove"
+              aria-checked="false">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.grove">密林祭坛</span>
+            </button>
+          </div>
+        </div>
+        <div class="setting-group">
+          <label for="deckSelect" data-i18n="settings.deck">牌组</label>
+          <select id="deckSelect">
+            <option value="tarot" data-i18n="deck.tarotOption">塔罗牌（Rider–Waite 体系）</option>
+            <option value="mystagogus" data-i18n="deck.mystagogusOption">M 牌（Mystagogus）</option>
+            <option value="lxxxi" data-i18n="deck.lxxxiOption">LXXXI 魔法牌（奎瑞亚）</option>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label for="modeSelect" data-i18n="settings.mode">牌位模式</label>
+          <select id="modeSelect">
+            <option value="upright-only" data-i18n="mode.upright">全正位（推荐）</option>
+            <option value="mixed" data-i18n="mode.mixed">正逆位混合</option>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label for="layoutModeSelect" data-i18n="settings.layoutMode">布局方式</label>
+          <select id="layoutModeSelect">
+            <option value="preset" data-i18n="layout.preset">预设牌阵</option>
+            <option value="freeform" data-i18n="layout.freeform">自由画板</option>
+          </select>
+        </div>
+        <div class="setting-group" id="arcanaFilterGroup">
+          <label for="arcanaFilter" data-i18n="settings.arcana">牌组筛选</label>
+          <select id="arcanaFilter">
+            <option value="mixed" data-i18n="arcana.mixed">混合抽取</option>
+            <option value="major-only" data-i18n="arcana.majorOnly">仅大阿卡那</option>
+            <option value="minor-only" data-i18n="arcana.minorOnly">仅小阿卡那</option>
+            <option value="major-then-minor" data-i18n="arcana.majorThenMinor">先大后小</option>
+            <option value="minor-then-major" data-i18n="arcana.minorThenMajor">先小后大</option>
+          </select>
+        </div>
+        <div class="setting-group" id="overviewMethodGroup" style="display:none;">
+          <label for="overviewMethod" data-i18n="settings.overviewMethod">概览抽法</label>
+          <select id="overviewMethod" aria-describedby="overviewMethodSummary">
+            <option value="single" data-i18n="overview.single">单牌法（13 张）</option>
+            <option value="stacked" data-i18n="overview.stacked">分牌叠放／叠牌法（26 张）</option>
+          </select>
+          <p class="setting-summary" id="overviewMethodSummary" data-i18n="overview.summary">
+            先铺 13 张大阿卡那，再将 13 张小阿卡那叠在对应牌位。
+          </p>
+        </div>
+        <div class="setting-group">
+          <span class="setting-label" data-i18n="settings.pageVersion">页面版本</span>
+          <a class="btn btn-secondary" id="switchPageVersion" href="index.html?view=modern" data-i18n="settings.useModern">切回新版</a>
+          <p class="setting-summary" data-i18n="settings.versionHint">两版共用占卜历史。切换会重新打开页面，未完成的预设抽牌会清空。</p>
+        </div>
+        <div class="setting-group setting-group-spread">
+          <label for="spreadSelect" data-i18n="settings.spread">预设牌阵</label>
+          <select id="spreadSelect" aria-describedby="spreadSettingSummary"></select>
+          <p class="setting-summary" id="spreadSettingSummary"></p>
+          <div class="custom-spread-launch">
+            <button class="btn btn-secondary" id="customSpreadOpenBtn" type="button"
+              aria-haspopup="dialog" aria-controls="customSpreadDialog"
+              data-i18n="customSpread.open">设计或导入牌阵</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <details class="position-guide" id="positionGuide">
+      <summary data-i18n="spread.guide">牌位说明</summary>
+      <ol id="positionGuideList"></ol>
+    </details>
+
+    <!-- 牌堆：左右滑动浏览，轻点任意一张抽出 -->
+    <section class="deck-area">
+      <div class="deck-head">
+        <h2><span data-i18n="deck.heading">牌堆</span> · <span class="deck-remaining" id="deckRemaining" data-i18n="deck.initialRemaining">剩 78 张</span></h2>
+        <button class="btn-mini" id="shuffleBtn" type="button" data-i18n="deck.shuffle">🔀 洗牌</button>
+      </div>
+      <p class="deck-cta" id="deckCta" role="status" aria-live="polite" aria-atomic="true" data-i18n="deck.initialCta">左右滑动浏览牌堆，轻点任意一张牌抽出</p>
+      <div class="deck-spread" id="deckSpread" role="group" aria-label="牌堆，左右滑动浏览，轻点抽牌" data-i18n-aria-label="deck.initialAria"></div>
+      <button class="btn btn-switch-arcana" id="switchArcanaBtn" style="display:none;" data-i18n="deck.switch">切换牌组</button>
+    </section>
+
+    <section class="free-board-area" id="freeBoardArea" hidden aria-labelledby="freeBoardTitle">
+      <div class="free-board-head">
+        <h2 id="freeBoardTitle" data-i18n="freeBoard.title">自由画板</h2>
+        <span class="free-board-count" id="freeBoardCount" role="status" aria-live="polite"></span>
+      </div>
+      <p class="free-board-status" id="freeBoardStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div class="free-board-toolbar" role="group" aria-label="画板控制" data-i18n-aria-label="freeBoard.toolbarAria">
+        <button class="btn btn-secondary" id="freeBoardUndoBtn" type="button"
+          data-i18n="freeBoard.undo" data-i18n-aria-label="freeBoard.undoAria">撤销</button>
+        <button class="btn btn-secondary" id="freeBoardRedoBtn" type="button"
+          data-i18n="freeBoard.redo" data-i18n-aria-label="freeBoard.redoAria">重做</button>
+        <button class="btn btn-accent" id="freeBoardRevealAllBtn" type="button"
+          data-i18n="freeBoard.revealAll" data-i18n-aria-label="freeBoard.revealAllAria">全部开牌</button>
+        <button class="btn btn-secondary" id="freeBoardResetViewBtn" type="button"
+          data-i18n="freeBoard.resetView" data-i18n-aria-label="freeBoard.resetViewAria">重置视图</button>
+        <button class="btn btn-secondary" id="freeBoardShuffleBtn" type="button"
+          data-i18n="freeBoard.shuffle" data-i18n-aria-label="freeBoard.shuffleAria">洗牌</button>
+        <button class="btn history-danger-btn" id="freeBoardDiscardDraftBtn" type="button"
+          data-i18n="freeBoard.clearAndDiscard" data-i18n-aria-label="freeBoard.clearAndDiscardAria">清空画板并放弃草稿</button>
+      </div>
+      <div class="free-board-viewport" id="freeBoardViewport" tabindex="0" role="application"
+        aria-label="自由画板，可拖动画板与卡牌，双指缩放" data-i18n-aria-label="freeBoard.boardAria">
+        <div class="free-board-world" id="freeBoardWorld" role="list"
+          aria-label="自由画板上的卡牌" data-i18n-aria-label="freeBoard.worldAria"></div>
+      </div>
+      <div class="free-board-selected-controls" id="freeBoardSelectedControls" hidden
+        role="group" aria-label="所选卡牌控制" data-i18n-aria-label="freeBoard.selectedControlsAria">
+        <button class="btn btn-secondary" type="button" data-card-control-action="rotate-minus-15"
+          data-i18n="freeBoard.rotateMinus15" data-i18n-aria-label="freeBoard.rotateMinus15Aria">−15°</button>
+        <button class="btn btn-secondary" type="button" data-card-control-action="rotate-plus-15"
+          data-i18n="freeBoard.rotatePlus15" data-i18n-aria-label="freeBoard.rotatePlus15Aria">＋15°</button>
+        <button class="btn btn-secondary" type="button" data-card-control-action="rotate-minus-90"
+          data-i18n="freeBoard.rotateMinus90" data-i18n-aria-label="freeBoard.rotateMinus90Aria">−90°</button>
+        <button class="btn btn-secondary" type="button" data-card-control-action="rotate-plus-90"
+          data-i18n="freeBoard.rotatePlus90" data-i18n-aria-label="freeBoard.rotatePlus90Aria">＋90°</button>
+        <button class="btn btn-secondary" type="button" data-card-control-action="bring-front"
+          data-i18n="freeBoard.bringFront" data-i18n-aria-label="freeBoard.bringFrontAria">置于顶层</button>
+        <button class="btn btn-secondary" type="button" data-card-control-action="toggle-meaning"
+          data-i18n="freeBoard.showMeaning" data-i18n-aria-label="freeBoard.showMeaningAria">显示牌意</button>
+        <button class="btn history-danger-btn" type="button" data-card-control-action="remove"
+          data-i18n="freeBoard.remove" data-i18n-aria-label="freeBoard.removeAria">移除</button>
+      </div>
+      <div class="free-board-pile-area">
+        <div class="free-board-pile-head">
+          <h3 data-i18n="freeBoard.pileTitle">待抽牌堆</h3>
+          <span id="freeBoardPileRemaining" role="status" aria-live="polite"></span>
+        </div>
+        <div class="free-board-pile" id="freeBoardPile" role="list"
+          aria-label="自由画板待抽牌堆，可任意选择一张" data-i18n-aria-label="freeBoard.pileAria"></div>
+      </div>
+      <p class="free-board-hint" id="freeBoardHint" data-i18n="freeBoard.hint">
+        空白处拖动画板；拖动卡牌改变位置；轻点卡牌仅选中，不会翻牌。需要开牌时请使用“全部开牌”，再从画板外的控制区查看牌意。滚轮或双指可缩放。
+      </p>
+      <p class="free-board-save-status" id="freeBoardSaveStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+    </section>
+
+    <!-- 牌阵：抽到的牌自动排列 -->
+    <section class="spread-area" id="spreadArea" style="display:none;">
+      <div class="spread-head">
+        <h2><span id="spreadTitle" data-i18n="spread.initialTitle">你的牌阵</span> · <span class="card-count" id="spreadCount" data-i18n="spread.initialCount">0 / 3</span></h2>
+        <span class="phase-label" id="phaseLabel" role="status" aria-live="polite" aria-atomic="true"></span>
+      </div>
+      <div class="spread-board-scroll" id="spreadBoardScroll">
+        <div class="spread-grid" id="spreadGrid" role="list" aria-label="抽取的牌按所选牌阵自动排列" data-i18n-aria-label="spread.gridAria"></div>
+      </div>
+      <div class="spread-actions">
+        <button class="btn btn-accent" id="revealBtn" data-i18n="spread.reveal">开牌解读</button>
+        <button class="btn btn-secondary" id="clearBtn" data-i18n="spread.clear">重新洗牌</button>
+      </div>
+      <p class="spread-hint" id="spreadHint" data-i18n="spread.hint">轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开；开牌后再次轻点牌面可查看牌意。</p>
+    </section>
+    <p class="history-save-status" id="historySaveStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+
+    <!-- 解读结果 -->
+    <section class="results-section" id="resultsSection" style="display:none;">
+      <h2 data-i18n="results.title">解读结果</h2>
+      <div class="results-list" id="resultsList"></div>
+    </section>
+
+    <dialog class="history-dialog" id="historyDialog" aria-labelledby="historyDialogTitle"
+      aria-describedby="historyPrivacy">
+      <div class="history-dialog-shell">
+        <header class="history-dialog-header">
+          <div>
+            <p class="history-dialog-kicker" data-i18n="history.kicker">LOCAL HISTORY</p>
+            <h2 id="historyDialogTitle" data-i18n="history.title">占卜历史</h2>
+          </div>
+          <button class="history-icon-btn" id="historyCloseBtn" type="button" aria-label="关闭占卜历史" data-i18n-aria-label="history.closeLabel">×</button>
+        </header>
+
+        <p class="history-privacy" id="historyPrivacy" data-i18n="history.privacy">
+          数据仅保存在当前浏览器。清除网站数据、使用无痕模式、换设备或换浏览器都可能导致记录丢失；可导出 JSON 自行备份。本站不会上传历史，也不做遥测或追踪。
+        </p>
+
+        <div class="history-toolbar" data-view="list">
+          <div class="history-filter">
+            <label for="historyDeckFilter" data-i18n="history.filterLabel">按牌组筛选</label>
+            <select id="historyDeckFilter">
+              <option value="all" data-i18n="history.filterAll">全部牌组</option>
+              <option value="tarot" data-i18n="history.filterTarot">塔罗牌</option>
+              <option value="mystagogus" data-i18n="history.filterMystagogus">Mystagogus</option>
+              <option value="lxxxi" data-i18n="history.filterLxxxi">LXXXI 魔法牌</option>
+            </select>
+          </div>
+          <div class="history-file-actions" role="group" aria-label="历史备份" data-i18n-aria-label="history.backupAria">
+            <button class="btn btn-secondary" id="historyExportBtn" type="button" data-i18n="history.export">导出 JSON</button>
+            <input class="visually-hidden" id="historyImportInput" type="file"
+              accept=".json,application/json" tabindex="-1" aria-hidden="true">
+            <label class="btn btn-secondary history-import-label" id="historyImportLabel"
+              for="historyImportInput" role="button" tabindex="0" data-i18n="history.import">导入 JSON</label>
+          </div>
+        </div>
+
+        <p class="history-action-status" id="historyActionStatus" role="status"
+          aria-live="polite" aria-atomic="true"></p>
+
+        <section class="history-list-view" data-view="list" aria-label="占卜历史记录" data-i18n-aria-label="history.listAria">
+          <p class="history-empty" id="historyEmpty" data-i18n="history.empty">暂无保存的占卜记录。</p>
+          <ol class="history-list" id="historyList"></ol>
+          <div class="history-clear-row">
+            <button class="btn history-danger-btn" id="historyClearBtn" type="button" data-i18n="history.clear">清空全部记录</button>
+          </div>
+        </section>
+
+        <section class="history-detail" id="historyDetail" data-view="detail" hidden
+          aria-labelledby="historyDetailTitle">
+          <div class="history-detail-nav">
+            <button class="btn btn-secondary" id="historyBackBtn" type="button" data-i18n="history.back">返回历史列表</button>
+          </div>
+          <h3 id="historyDetailTitle" data-i18n="history.detailTitle">占卜记录详情</h3>
+          <div class="history-detail-body" id="historyDetailBody"></div>
+          <div class="history-delete-row">
+            <button class="btn history-danger-btn" id="historyDeleteBtn" type="button" data-i18n="history.delete">删除这条记录</button>
+          </div>
+        </section>
+      </div>
+    </dialog>
+
+    <dialog class="announcement-dialog" id="announcementDialog" aria-labelledby="announcementDialogTitle"
+      aria-describedby="announcementStatus">
+      <div class="announcement-dialog-shell">
+        <header class="announcement-dialog-header">
+          <div>
+            <p class="announcement-dialog-kicker" data-i18n="announcement.kicker">PUBLIC ANNOUNCEMENTS</p>
+            <h2 id="announcementDialogTitle" data-i18n="announcement.title">公告</h2>
+          </div>
+          <button class="history-icon-btn" id="announcementCloseBtn" type="button"
+            aria-label="关闭公告" data-i18n-aria-label="announcement.closeLabel">×</button>
+        </header>
+        <p class="announcement-dialog-status" id="announcementStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+        <ol class="announcement-list" id="announcementList" aria-label="公告列表" data-i18n-aria-label="announcement.listAria"></ol>
+        <p class="announcement-empty" id="announcementEmpty" data-i18n="announcement.empty" hidden>暂无公告。</p>
+      </div>
+    </dialog>
+
+    <dialog class="custom-spread-dialog" id="customSpreadDialog" aria-labelledby="customSpreadDialogTitle"
+      aria-describedby="customSpreadPrivacy" aria-hidden="true" data-window-mode="center">
+      <div class="custom-spread-shell">
+        <header class="custom-spread-header">
+          <div>
+            <p class="custom-spread-kicker" data-i18n="customSpread.kicker">SPREAD STUDIO</p>
+            <h2 id="customSpreadDialogTitle" data-i18n="customSpread.title">自定义牌阵工作室</h2>
+          </div>
+          <div class="custom-spread-header-actions">
+            <div class="custom-spread-window-controls" id="customSpreadWindowControls" role="group"
+              aria-label="工作室窗口位置" data-i18n-aria-label="customSpread.windowControls">
+              <button class="custom-spread-window-btn" type="button" data-studio-window-mode="left"
+                aria-pressed="false" data-i18n="customSpread.windowLeft"
+                aria-label="靠左" data-i18n-aria-label="customSpread.windowLeftLabel">左</button>
+              <button class="custom-spread-window-btn" type="button" data-studio-window-mode="center"
+                aria-pressed="true" data-i18n="customSpread.windowCenter"
+                aria-label="居中" data-i18n-aria-label="customSpread.windowCenterLabel">居中</button>
+              <button class="custom-spread-window-btn" type="button" data-studio-window-mode="right"
+                aria-pressed="false" data-i18n="customSpread.windowRight"
+                aria-label="靠右" data-i18n-aria-label="customSpread.windowRightLabel">右</button>
+              <button class="custom-spread-window-btn custom-spread-fullscreen-btn" id="customSpreadFullscreenBtn"
+                type="button" aria-pressed="false">全屏</button>
+            </div>
+            <button class="history-icon-btn" id="customSpreadCloseBtn" type="button"
+              aria-label="关闭自定义牌阵工作室" data-i18n-aria-label="customSpread.closeLabel">×</button>
+          </div>
+        </header>
+        <p class="custom-spread-privacy" id="customSpreadPrivacy"></p>
+        <div class="custom-spread-tabs" role="tablist" aria-label="自定义牌阵功能"
+          data-i18n-aria-label="customSpread.tabsAria">
+          <button class="custom-spread-tab is-active" id="customSpreadLibraryTab" type="button" role="tab"
+            aria-selected="true" aria-controls="customSpreadLibraryPanel" tabindex="0"
+            data-custom-spread-tab="library" data-i18n="customSpread.libraryTab">本次牌阵</button>
+          <button class="custom-spread-tab" id="customSpreadDesignerTab" type="button" role="tab"
+            aria-selected="false" aria-controls="customSpreadDesigner" tabindex="-1"
+            data-custom-spread-tab="designer" data-i18n="customSpread.designerTab">设计牌阵</button>
+          <button class="custom-spread-tab" id="customSpreadImportTab" type="button" role="tab"
+            aria-selected="false" aria-controls="customSpreadImportPanel" tabindex="-1"
+            data-custom-spread-tab="import" data-i18n="customSpread.importTab">导入分享码</button>
+        </div>
+        <div class="custom-spread-content">
+          <section class="custom-spread-panel" id="customSpreadLibraryPanel" role="tabpanel"
+            aria-labelledby="customSpreadLibraryTab" data-custom-spread-panel="library">
+            <div class="custom-spread-panel-head">
+              <h3 data-i18n="customSpread.libraryTitle">可用的自定义牌阵</h3>
+              <button class="btn btn-accent" id="customSpreadNewBtn" type="button"
+                data-i18n="customSpread.new">新建设计</button>
+            </div>
+            <p class="custom-spread-empty" id="customSpreadLibraryEmpty"
+              data-i18n="customSpread.libraryEmpty">还没有自定义牌阵，可新建设计或导入分享码。</p>
+            <div class="custom-spread-library" id="customSpreadLibrary"></div>
+          </section>
+
+          <section class="custom-spread-panel" data-custom-spread-panel="designer" id="customSpreadDesigner"
+            role="tabpanel" aria-labelledby="customSpreadDesignerTab" hidden>
+            <div class="custom-spread-form-grid">
+              <label class="custom-spread-field custom-spread-field-wide">
+                <span data-i18n="customSpread.name">牌阵名称</span>
+                <input id="customSpreadName" type="text" maxlength="80" autocomplete="off">
+              </label>
+              <label class="custom-spread-field custom-spread-field-wide">
+                <span data-i18n="customSpread.description">用途说明</span>
+                <textarea id="customSpreadDescription" maxlength="500"></textarea>
+              </label>
+              <label class="custom-spread-field">
+                <span data-i18n="customSpread.columns">网格列数</span>
+                <input id="customSpreadColumns" type="number" min="1" max="10" value="3">
+              </label>
+              <label class="custom-spread-field">
+                <span data-i18n="customSpread.rows">网格行数</span>
+                <input id="customSpreadRows" type="number" min="1" max="10" value="3">
+              </label>
+              <div class="custom-spread-field">
+                <label for="customSpreadDeckScope" data-i18n="customSpread.deckScope">牌组限制</label>
+                <select id="customSpreadDeckScope">
+                  <option value="any" data-i18n="customSpread.deckScopeAny">不限牌组</option>
+                  <option value="tarot-only" data-i18n="customSpread.deckScopeTarotOnly">仅塔罗</option>
+                  <option value="non-tarot-only" data-i18n="customSpread.deckScopeNonTarotOnly">仅非塔罗</option>
+                </select>
+              </div>
+              <div class="custom-spread-field">
+                <label for="customSpreadTarotMode" data-i18n="customSpread.tarotMode">塔罗抽牌模式</label>
+                <select id="customSpreadTarotMode">
+                  <option value="mixed" data-i18n="customSpread.tarotModeMixed">大阿与小阿混合</option>
+                  <option value="major-only" data-i18n="customSpread.tarotModeMajorOnly">仅大阿卡那</option>
+                  <option value="minor-only" data-i18n="customSpread.tarotModeMinorOnly">仅小阿卡那</option>
+                </select>
+              </div>
+              <div class="custom-spread-field">
+                <label for="customSpreadStackingMode" data-i18n="customSpread.stackingMode">叠牌法</label>
+                <select id="customSpreadStackingMode">
+                  <option value="single" data-i18n="customSpread.stackingModeSingle">单牌</option>
+                  <option value="major-minor" data-i18n="customSpread.stackingModeMajorMinor">大阿＋小阿叠放</option>
+                </select>
+              </div>
+            </div>
+            <div class="custom-spread-preview-wrap">
+              <div class="custom-spread-panel-head">
+                <h4 data-i18n="customSpread.preview">布局预览</h4>
+                <button class="btn btn-secondary" id="customSpreadPreviewEffectBtn" type="button"
+                  data-i18n="customSpread.previewEffect">抽牌效果预览</button>
+              </div>
+              <div class="custom-spread-preview-scroll">
+                <div class="custom-spread-preview" id="customSpreadPreview" role="group"
+                  aria-label="自定义牌阵布局预览" data-i18n-aria-label="customSpread.previewAria"></div>
+              </div>
+              <p class="custom-spread-drag-hint" id="customSpreadDragHint" data-i18n="customSpread.dragHint">
+                拖动牌位到网格单元格；十列会完整缩放显示，坐标也可手动输入。
+              </p>
+            </div>
+            <div class="custom-spread-effect-preview" id="customSpreadEffectPreview" role="dialog"
+              aria-modal="true" aria-labelledby="customSpreadEffectPreviewTitle" aria-hidden="true" hidden>
+              <section class="custom-spread-effect-card-panel">
+                <div class="custom-spread-effect-preview-head">
+                  <h3 id="customSpreadEffectPreviewTitle" data-i18n="customSpread.previewEffectTitle">抽牌效果预览</h3>
+                  <button class="history-icon-btn" id="customSpreadEffectPreviewCloseBtn" type="button"
+                    aria-label="关闭抽牌效果预览" data-i18n-aria-label="customSpread.previewEffectClose">×</button>
+                </div>
+                <div class="custom-spread-effect-preview-grid" id="customSpreadEffectPreviewContent"
+                  role="group" aria-label="抽牌效果预览内容" data-i18n-aria-label="customSpread.previewEffectAria"></div>
+              </section>
+            </div>
+            <div class="custom-spread-positions-head">
+              <h4 data-i18n="customSpread.positions">牌位</h4>
+              <button class="btn btn-secondary" id="customSpreadAddPositionBtn" type="button"
+                data-i18n="customSpread.addPosition">添加牌位</button>
+            </div>
+            <ol class="custom-spread-positions" id="customSpreadPositions"></ol>
+            <div class="custom-spread-designer-actions">
+              <button class="btn btn-accent" id="customSpreadSaveUseBtn" type="button">本次使用</button>
+              <button class="btn btn-secondary" id="customSpreadGenerateBtn" type="button"
+                data-i18n="customSpread.generateCode">生成分享码</button>
+            </div>
+            <div class="custom-spread-share">
+              <h4 data-i18n="customSpread.shareCode">分享码</h4>
+              <textarea class="custom-spread-code" id="customSpreadShareCode" readonly
+                aria-label="自定义牌阵分享码" data-i18n-aria-label="customSpread.shareCodeAria"></textarea>
+              <div class="custom-spread-share-actions">
+                <button class="btn btn-secondary" id="customSpreadCopyBtn" type="button"
+                  data-i18n="customSpread.copyCode">复制分享码</button>
+                <button class="btn btn-secondary" id="customSpreadDownloadBtn" type="button"
+                  data-i18n="customSpread.downloadCode">保存分享码文件</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="custom-spread-panel" id="customSpreadImportPanel" role="tabpanel"
+            aria-labelledby="customSpreadImportTab" data-custom-spread-panel="import" hidden>
+            <label class="custom-spread-field">
+              <span data-i18n="customSpread.importLabel">粘贴分享码</span>
+              <textarea class="custom-spread-code" id="customSpreadImportCode" maxlength="16000"
+                autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+            </label>
+            <div class="custom-spread-designer-actions">
+              <button class="btn btn-accent" id="customSpreadImportUseBtn" type="button"
+                data-i18n="customSpread.importAndUse">导入并使用</button>
+            </div>
+          </section>
+        </div>
+        <p class="custom-spread-status" id="customSpreadStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+      </div>
+    </dialog>
+
+    <dialog class="confirm-overlay" id="confirmDialog" role="alertdialog" aria-modal="true"
+      aria-labelledby="confirmDialogTitle" aria-describedby="confirmMessage" aria-hidden="true">
+      <section class="confirm-card">
+        <div class="confirm-symbol" aria-hidden="true">✦</div>
+        <p class="confirm-kicker" data-i18n="confirm.kicker">SPREAD CHANGE</p>
+        <h2 id="confirmDialogTitle" data-i18n="confirm.title">当前牌阵尚未清空</h2>
+        <p id="confirmMessage"></p>
+        <div class="confirm-actions">
+          <button class="btn btn-secondary" id="confirmCancelBtn" type="button"
+            data-i18n="confirm.cancel">保留牌阵</button>
+          <button class="btn confirm-danger-btn" id="confirmProceedBtn" type="button"
+            data-i18n="confirm.proceed">继续并清空</button>
+        </div>
+      </section>
+    </dialog>
+
+    <dialog class="choice-overlay" id="choiceDialog" aria-modal="true"
+      aria-labelledby="choiceDialogTitle" aria-hidden="true">
+      <section class="choice-card">
+        <div class="choice-symbol" aria-hidden="true">✦</div>
+        <p class="choice-kicker" id="choiceDialogKicker">纸牌选择</p>
+        <h2 id="choiceDialogTitle">请选择</h2>
+        <div class="choice-options" id="choiceOptions" role="listbox"></div>
+        <button class="btn btn-secondary choice-cancel" id="choiceCancelBtn"
+          type="button">取消</button>
+      </section>
+    </dialog>
+
+    <footer class="footer">
+      <p data-i18n="footer.note">塔罗牌意参考《21世纪的塔罗技能》与 Quareia 语境；M 牌关键词译自 Josephine McCarthy《Mystagogus》；LXXXI 牌意参考其英文说明书 · 仅供娱乐，请理性看待占卜结果</p>
+
+      <section class="attribution" aria-label="Attribution and license notice">
+        <p class="attribution-status" data-i18n="attribution.status">
+          本站为非官方工具，不暗示 Quareia 或作者为项目背书。书面许可覆盖网站与 Android，并于 2026-08-05 扩展至微信小程序；非商业限制只针对 Mystagogus/LXXXI 牌面、牌意、翻译、牌阵及相关授权材料，这些材料不得出售、设置付费墙或付费解锁、单独商业分发、转授权或纳入软件许可，商业利用须另行取得授权。该限制不是对用户原创软件、基础设施或无关服务的一般性商业禁令，也不代表任何具体商业模式已获批准。
+        </p>
+        <ul class="attribution-list">
+          <li><span data-i18n="attribution.mystagogusLabel">Mystagogus 牌面与相关文本</span><span class="attribution-rights" data-i18n="attribution.mystagogusRights">© Josephine McCarthy</span></li>
+          <li><span data-i18n="attribution.lxxxiLabel">LXXXI 魔法牌牌面与相关文本</span><span class="attribution-rights" data-i18n="attribution.lxxxiRights">© Josephine McCarthy、Stuart Littlejohn、Cassandra Beanland</span></li>
+        </ul>
+        <p class="attribution-quareia">
+          <a href="https://www.quareia.com" target="_blank" rel="noopener noreferrer" data-i18n="attribution.quareiaLink">Quareia 官网</a>
+        </p>
+        <blockquote class="attribution-quote" lang="en">
+          <p>“while digital tools for readings can be useful in an emergency, the interaction between the physical hands of the reader touching and shuffling the deck is safer, a lot more accurate and far more powerful”</p>
+          <cite data-i18n="attribution.quoteCite">— Josephine McCarthy</cite>
+        </blockquote>
+        <p class="attribution-quote-zh" data-i18n="attribution.quoteZh">
+          （中文参考译文：「虽然数字占卜工具在紧急情况下可能会有用，但占卜师用双手亲自接触和洗牌的互动更安全，准确度也更高，且力量强大得多。」原文以英文为准。）
+        </p>
+        <p class="attribution-privacy" data-i18n="privacy.analytics">
+          本站使用匿名浏览器标识，将访问量、活跃浏览器和完成解牌次数及国家/省州级地区分布汇总至与手机端共用的统计后台，可随时关闭；另使用 Cloudflare Web Analytics 统计访问量与页面性能。不收集邮箱、占卜内容、抽牌结果或本地历史记录。
+        </p>
+        <button id="webTelemetryToggle" type="button" hidden>关闭统一使用统计</button>
+      </section>
+    </footer>
+  </div>
+
+  <script src="js/tarot-data.js"></script>
+  <script src="js/mystagogus-data.js"></script>
+  <script src="js/lxxxi-data.js"></script>
+  <script src="js/spreads.js?v=20260727-spread-labels"></script>
+  <script src="js/i18n-data-en.js"></script>
+  <script src="js/classic/messages.js?v=20261112-classic"></script>
+  <script src="js/i18n.js?v=20261112-classic"></script>
+  <script src="js/theme.js?v=20261112-classic"></script>
+  <script src="js/announcements.js?v=1"></script>
+  <script src="js/dialogs.js?v=20260727-card-picker"></script>
+  <script src="js/custom-selects.js?v=20260820-custom-spread-window-final"></script>
+  <script src="js/custom-spreads.js?v=20260820-custom-spread-window-final"></script>
+  <script src="js/custom-spread-ui.js?v=20260820-custom-spread-window-final"></script>
+  <script src="js/free-board-model.js?v=20260809-free-board-v1"></script>
+  <script src="js/free-board-draft.js?v=20260809-free-board-v1"></script>
+  <script src="js/history-records.js?v=20260809-free-board-v1"></script>
+  <script src="js/history-store.js"></script>
+  <script src="js/history-ui.js?v=20260809-free-board-v1"></script>
+  <script src="js/free-board-ui.js?v=20261112-classic"></script>
+  <script src="js/classic/app.js?v=20261112-classic"></script>
+  <script src="js/classic/celestial-sky.js?v=20260813-sun-blank" defer></script>
+  <script src="js/web-analytics.js"></script>
+  <script src="js/web-telemetry.js?v=20261109"></script>
+</body>
+</html>
