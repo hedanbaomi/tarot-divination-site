@@ -10,9 +10,10 @@
   var overviewMethod = "single";   // single | stacked
   var layoutMode = "preset";       // preset | freeform
 
-  /* 自由模式：抽到左边的牌，以及撤销/重做两条栈 */
+  /* 自由模式：抽到桌上的牌，以及撤销/重做两条栈 */
   var freeDrawn = [];
   var freeRedo = [];
+  var freeZ = 10;
 
   var pile = [];       // remaining face-down cards (shuffled)
   var spread = [];      // drawn cards: { uid, card, orientation, revealed, slotIndex, layer? }
@@ -480,12 +481,117 @@
   }
 
   // ---------- Deck spread (pick any card) ----------
-  /* freeform keeps the fan on the table: it renders the board's remaining pile */
+  /* ---------- freeform: cards drawn to the table ---------- */
   function freeRemainingIds() {
     var drawn = Object.create(null);
-    freeDrawn.forEach(function (id) { drawn[id] = true; });
+    freeDrawn.forEach(function (item) { drawn[item.id] = true; });
     return pile.filter(function (card) { return !drawn[card.id]; })
       .map(function (card) { return card.id; });
+  }
+
+  function freeIndex(id) {
+    for (var i = 0; i < freeDrawn.length; i++) {
+      if (freeDrawn[i].id === id) return i;
+    }
+    return -1;
+  }
+
+  function cardById(id) {
+    for (var i = 0; i < pile.length; i++) {
+      if (pile[i].id === id) return pile[i];
+    }
+    return null;
+  }
+
+  function freeDefaultPoint(index) {
+    var layer = document.getElementById("freeDrawCards");
+    var w = (layer && layer.clientWidth) || 640;
+    var h = (layer && layer.clientHeight) || 460;
+    var col = index % 6;
+    var row = Math.floor(index / 6) % 3;
+    return {
+      x: Math.round(Math.min(w - 60, 96 + col * 62)),
+      y: Math.round(Math.max(90, h - 96 - row * 28))
+    };
+  }
+
+  /* the same .spread-card markup the spread uses, so the card art and the
+     theme (front, back, caption) are identical to a dealt card */
+  function buildFreeTableCard(item) {
+    var card = cardById(item.id);
+    if (!card) return null;
+    var el = document.createElement("div");
+    el.className = "spread-card free-table-card" + (item.revealed ? " revealed" : "");
+    el.setAttribute("data-card-id", item.id);
+    el.style.left = item.x + "px";
+    el.style.top = item.y + "px";
+
+    var inner = document.createElement("div");
+    inner.className = "spread-card-inner";
+
+    var back = document.createElement("div");
+    back.className = "spread-card-face spread-card-back" +
+      (deckType === "mystagogus" ? " spread-card-back-m" : "") +
+      (deckType === "lxxxi" ? " spread-card-back-lxxxi" : "");
+    var backArt = document.createElement("div");
+    backArt.className = "spread-card-back-art";
+    back.appendChild(backArt);
+
+    var front = document.createElement("div");
+    front.className = "spread-card-face spread-card-front";
+    var img = createCardImage(card, "card-image", "upright");
+    if (deckType === "mystagogus") img.classList.add("card-image-m");
+    if (deckType === "lxxxi") img.classList.add("card-image-lxxxi");
+    front.appendChild(img);
+    var caption = document.createElement("div");
+    caption.className = "spread-card-caption";
+    var nameEl = document.createElement("span");
+    nameEl.className = "name";
+    nameEl.textContent = localizedCardName(card);
+    caption.appendChild(nameEl);
+    front.appendChild(caption);
+
+    inner.appendChild(back);
+    inner.appendChild(front);
+    el.appendChild(inner);
+    return el;
+  }
+
+  function bindFreeTableCard(el, item) {
+    el.addEventListener("pointerdown", function (ev) {
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      var startX = ev.clientX;
+      var startY = ev.clientY;
+      var originX = item.x;
+      var originY = item.y;
+      var moved = false;
+      el.style.zIndex = String(++freeZ);
+      if (el.setPointerCapture) {
+        try { el.setPointerCapture(ev.pointerId); } catch (_e) { /* ignore */ }
+      }
+      function onMove(moveEv) {
+        var dx = moveEv.clientX - startX;
+        var dy = moveEv.clientY - startY;
+        if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
+        item.x = originX + dx;
+        item.y = originY + dy;
+        el.style.left = item.x + "px";
+        el.style.top = item.y + "px";
+      }
+      function onEnd() {
+        el.removeEventListener("pointermove", onMove);
+        el.removeEventListener("pointerup", onEnd);
+        el.removeEventListener("pointercancel", onEnd);
+        if (!moved) {
+          item.revealed = !item.revealed;
+          renderFreeDraw();
+        }
+      }
+      el.addEventListener("pointermove", onMove);
+      el.addEventListener("pointerup", onEnd);
+      el.addEventListener("pointercancel", onEnd);
+      ev.preventDefault();
+    });
   }
 
   function renderFreeDraw() {
@@ -495,12 +601,13 @@
     var box = document.getElementById("freeDrawCards");
     if (box) {
       box.innerHTML = "";
-      freeDrawn.forEach(function (id) {
-        var card = document.createElement("div");
-        card.className = "free-draw-card";
-        card.setAttribute("data-card-id", id);
-        card.setAttribute("role", "listitem");
-        box.appendChild(card);
+      freeDrawn.forEach(function (item) {
+        var el = buildFreeTableCard(item);
+        if (!el) return;
+        el.setAttribute("role", "listitem");
+        el.style.zIndex = String(10 + freeIndex(item.id));
+        bindFreeTableCard(el, item);
+        box.appendChild(el);
       });
     }
     var undo = document.getElementById("freeUndoBtn");
@@ -511,9 +618,9 @@
 
   function drawFreeCard(cardId) {
     if (!isFreeform() || !cardId) return;
-    if (freeDrawn.indexOf(cardId) !== -1) return;
-    if (!pile.some(function (card) { return card.id === cardId; })) return;
-    freeDrawn.push(cardId);
+    if (freeIndex(cardId) !== -1 || !cardById(cardId)) return;
+    var point = freeDefaultPoint(freeDrawn.length);
+    freeDrawn.push({ id: cardId, x: point.x, y: point.y, revealed: false });
     freeRedo.length = 0;
     renderFreeformFan();
   }
@@ -529,7 +636,6 @@
     freeDrawn.push(freeRedo.pop());
     renderFreeformFan();
   }
-
   function renderFreeformFan() {
     if (!el.deckSpread) return;
     el.deckSpread.innerHTML = "";
