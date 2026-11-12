@@ -509,9 +509,13 @@
     var h = (layer && layer.clientHeight) || 460;
     var col = index % 4;
     var row = Math.floor(index / 4) % 3;
+    /* land right under the table hint, so the first cards are on screen and
+       the rest of the empty table stays free for dragging */
+    var hint = document.querySelector(".table-hint");
+    var baseY = hint && hint.offsetTop ? hint.offsetTop + 96 : h * 0.62;
     return {
       x: Math.round(Math.min(w - 56, 96 + col * (w < 520 ? 62 : 96) + row * 18)),
-      y: Math.round(Math.max(120, h - 150 - row * 118))
+      y: Math.round(Math.max(120, baseY + row * 118))
     };
   }
 
