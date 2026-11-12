@@ -529,11 +529,16 @@
     var narrow = w < 620;
     var cols = narrow ? 2 : 4;
     var stepX = narrow ? 84 : 100;
-    var stepY = narrow ? 118 : 146;
+    var stepY = narrow ? 144 : 150;
     var col = index % cols;
     var row = Math.floor(index / cols);
-    var hint = document.querySelector(".table-hint");
-    var baseY = hint && hint.offsetTop ? hint.offsetTop + 96 : h * 0.62;
+    /* 落在提示与「一键开牌」那排按钮下面，别让牌压住它们 */
+    var anchor = document.querySelector(".table-area .spread-actions") ||
+      document.querySelector(".table-hint");
+    var baseY = h * 0.62;
+    if (anchor && anchor.offsetTop) {
+      baseY = anchor.offsetTop + (anchor.offsetHeight || 0) + 84;
+    }
     return {
       x: Math.round(Math.min(w - 56, (narrow ? 66 : 120) + col * stepX + row * 14)),
       y: Math.round(Math.min(h - 90, Math.max(120, baseY + row * stepY)))
@@ -542,6 +547,26 @@
 
   /* the same .spread-card markup the spread uses, so the card art and the
      theme (front, back, caption) are identical to a dealt card */
+  /* 草稿里的位置如果互相压住了（旧版本存下的坐标），按现在的间距重新摊开 */
+  function spreadFreeCards(w) {
+    if (!freeDrawn.length) return;
+    var cw = w < 620 ? 74 : 84;
+    var ch = w < 620 ? 111 : 126;
+    var placed = [];
+    freeDrawn.forEach(function (item, index) {
+      var clash = false;
+      placed.forEach(function (p) {
+        if (Math.abs(p.x - item.x) < cw - 8 && Math.abs(p.y - item.y) < ch - 8) clash = true;
+      });
+      if (clash) {
+        var point = freeDefaultPoint(index);
+        item.x = point.x;
+        item.y = point.y;
+      }
+      placed.push({ x: item.x, y: item.y });
+    });
+  }
+
   function buildFreeTableCard(item, index) {
     var card = cardById(item.id);
     if (!card) return null;
@@ -576,6 +601,8 @@
 
     var front = document.createElement("div");
     front.className = "spread-card-face spread-card-front";
+    /* 逆位要靠 front 上的 reversed 类把牌面转 180°，只给 img 加类不会转 */
+    if (item.orientation === "reversed") front.classList.add("reversed");
     if (!item.revealed) front.setAttribute("aria-hidden", "true");
     /* 方向在抽牌那一刻就定下来，翻面、重绘、撤销重做都沿用同一个结果 */
     var img = createCardImage(card, "card-image", item.orientation || "upright");
@@ -783,12 +810,20 @@
     var box = document.getElementById("freeDrawCards");
     if (box) {
       box.innerHTML = "";
+      var layerW = box ? box.clientWidth : 0;
+      spreadFreeCards(layerW);
+      var layerH = box ? box.clientHeight : 0;
       freeDrawn.forEach(function (item, index) {
+        /* 换屏幕尺寸后恢复草稿：把牌拉回画布内，别跑到屏幕外 */
+        if (layerW) item.x = Math.max(46, Math.min(layerW - 46, item.x));
+        if (layerH) item.y = Math.max(70, Math.min(layerH - 70, item.y));
         var el = buildFreeTableCard(item, index);
         if (!el) return;
         el.setAttribute("role", "listitem");
         el.style.zIndex = String(10 + freeIndex(item.id));
         bindFreeTableCard(el, item);
+        el.style.left = item.x + "px";
+        el.style.top = item.y + "px";
         box.appendChild(el);
       });
     }
@@ -2365,6 +2400,11 @@
   }
 
 
+
+  /* 屏幕尺寸变了：把自由画板上的牌拉回可视范围 */
+  window.addEventListener("resize", function () {
+    if (isFreeform() && freeDrawn.length) renderFreeDraw();
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
