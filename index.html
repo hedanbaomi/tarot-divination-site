@@ -99,61 +99,6 @@
       <p class="spread-hint" id="spreadHint" data-i18n="spread.hint">轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开；开牌后再次轻点牌面可查看牌意。</p>
     </section>
 
-    <section class="free-board-area" id="freeBoardArea" hidden aria-labelledby="freeBoardTitle">
-      <div class="free-board-head">
-        <h2 id="freeBoardTitle" data-i18n="freeBoard.title">自由画板</h2>
-        <span class="free-board-count" id="freeBoardCount" role="status" aria-live="polite"></span>
-      </div>
-      <p class="free-board-status" id="freeBoardStatus" role="status" aria-live="polite" aria-atomic="true"></p>
-      <div class="free-board-toolbar" role="group" aria-label="画板控制" data-i18n-aria-label="freeBoard.toolbarAria">
-        <button class="btn btn-secondary" id="freeBoardUndoBtn" type="button"
-          data-i18n="freeBoard.undo" data-i18n-aria-label="freeBoard.undoAria">撤销</button>
-        <button class="btn btn-secondary" id="freeBoardRedoBtn" type="button"
-          data-i18n="freeBoard.redo" data-i18n-aria-label="freeBoard.redoAria">重做</button>
-        <button class="btn btn-accent" id="freeBoardRevealAllBtn" type="button"
-          data-i18n="freeBoard.revealAll" data-i18n-aria-label="freeBoard.revealAllAria">全部开牌</button>
-        <button class="btn btn-secondary" id="freeBoardResetViewBtn" type="button"
-          data-i18n="freeBoard.resetView" data-i18n-aria-label="freeBoard.resetViewAria">重置视图</button>
-        <button class="btn btn-secondary" id="freeBoardShuffleBtn" type="button"
-          data-i18n="freeBoard.shuffle" data-i18n-aria-label="freeBoard.shuffleAria">洗牌</button>
-        <button class="btn history-danger-btn" id="freeBoardDiscardDraftBtn" type="button"
-          data-i18n="freeBoard.clearAndDiscard" data-i18n-aria-label="freeBoard.clearAndDiscardAria">清空画板并放弃草稿</button>
-      </div>
-      <div class="free-board-viewport" id="freeBoardViewport" tabindex="0" role="application"
-        aria-label="自由画板，可拖动画板与卡牌，双指缩放" data-i18n-aria-label="freeBoard.boardAria">
-        <div class="free-board-world" id="freeBoardWorld" role="list"
-          aria-label="自由画板上的卡牌" data-i18n-aria-label="freeBoard.worldAria"></div>
-      </div>
-      <div class="free-board-selected-controls" id="freeBoardSelectedControls" hidden
-        role="group" aria-label="所选卡牌控制" data-i18n-aria-label="freeBoard.selectedControlsAria">
-        <button class="btn btn-secondary" type="button" data-card-control-action="rotate-minus-15"
-          data-i18n="freeBoard.rotateMinus15" data-i18n-aria-label="freeBoard.rotateMinus15Aria">−15°</button>
-        <button class="btn btn-secondary" type="button" data-card-control-action="rotate-plus-15"
-          data-i18n="freeBoard.rotatePlus15" data-i18n-aria-label="freeBoard.rotatePlus15Aria">＋15°</button>
-        <button class="btn btn-secondary" type="button" data-card-control-action="rotate-minus-90"
-          data-i18n="freeBoard.rotateMinus90" data-i18n-aria-label="freeBoard.rotateMinus90Aria">−90°</button>
-        <button class="btn btn-secondary" type="button" data-card-control-action="rotate-plus-90"
-          data-i18n="freeBoard.rotatePlus90" data-i18n-aria-label="freeBoard.rotatePlus90Aria">＋90°</button>
-        <button class="btn btn-secondary" type="button" data-card-control-action="bring-front"
-          data-i18n="freeBoard.bringFront" data-i18n-aria-label="freeBoard.bringFrontAria">置于顶层</button>
-        <button class="btn btn-secondary" type="button" data-card-control-action="toggle-meaning"
-          data-i18n="freeBoard.showMeaning" data-i18n-aria-label="freeBoard.showMeaningAria">显示牌意</button>
-        <button class="btn history-danger-btn" type="button" data-card-control-action="remove"
-          data-i18n="freeBoard.remove" data-i18n-aria-label="freeBoard.removeAria">移除</button>
-      </div>
-      <div class="free-board-pile-area">
-        <div class="free-board-pile-head">
-          <h3 data-i18n="freeBoard.pileTitle">待抽牌堆</h3>
-          <span id="freeBoardPileRemaining" role="status" aria-live="polite"></span>
-        </div>
-        <div class="free-board-pile" id="freeBoardPile" role="list"
-          aria-label="自由画板待抽牌堆，可任意选择一张" data-i18n-aria-label="freeBoard.pileAria"></div>
-      </div>
-      <p class="free-board-hint" id="freeBoardHint" data-i18n="freeBoard.hint">
-        空白处拖动画板；拖动卡牌改变位置；轻点卡牌仅选中，不会翻牌。需要开牌时请使用“全部开牌”，再从画板外的控制区查看牌意。滚轮或双指可缩放。
-      </p>
-      <p class="free-board-save-status" id="freeBoardSaveStatus" role="status" aria-live="polite" aria-atomic="true"></p>
-    </section>
 
     <!-- 牌阵：抽到的牌自动排列 -->
 
@@ -533,7 +478,7 @@
           <p class="setting-summary" id="spreadSettingSummary"></p>
           <div class="custom-spread-launch">
             <button class="btn btn-secondary" id="freeBoardOpenBtn" type="button"
-              aria-controls="freeBoardArea" data-i18n="freeBoard.open">自由画板</button>
+              data-i18n="freeBoard.open">自由画板</button>
             <p class="setting-summary" data-i18n="freeBoard.openHint"></p>
           </div>
         </div>
@@ -620,10 +565,10 @@
   <script src="js/history-records.js?v=20260809-free-board-v1"></script>
   <script src="js/history-store.js"></script>
   <script src="js/history-ui.js?v=20260809-free-board-v1"></script>
-  <script src="js/free-board-ui.js?v=20261112-board2"></script>
+  <script src="js/free-board-ui.js?v=20261112-noboard2"></script>
   <script src="js/free-board-canvas.js?v=20261112-board2"></script>
-  <script src="js/app.js?v=20261112-board3"></script>
-  <script src="js/deck-ring.js?v=20261112-arc30"></script>
+  <script src="js/app.js?v=20261112-noboard2"></script>
+  <script src="js/deck-ring.js?v=20261112-arc31"></script>
   <div class="spread-popover" id="spreadPopover" hidden role="dialog" aria-modal="false"
     aria-label="牌阵设置" data-i18n-aria-label="spread.settings">
     <div class="spread-popover-head">
