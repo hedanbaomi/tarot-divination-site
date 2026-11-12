@@ -29,6 +29,8 @@
   var WINDOW = 172;
   var lut = null;
   var lutKey = "";
+  var ringCardW = 0;
+  var pull = 0;
   /* how many cards the arc can hold without them squashing into each other;
      recomputed from the real arc length on every layout */
   var lastVis = 0;
@@ -88,7 +90,17 @@
     return -90 + ((lo + f) * 180) / lut.N;
   }
 
+  /* 牌弧的角跨：小于 1 时两端抬起，牌弧下沿不会压到牌阵上（1 = 完整半圆） */
+  var ARC_SPREAD = 0.82;
+  /* 拉到两端之外的橡皮筋：RUBBER 是幅度系数，RUBBER_POW 小于 1 时越拉越紧 */
+  var RUBBER_POW = 0.55;
+  /* 拉到头时整片牌弧最多挪动的像素：越大越松 */
+  var PULL_PX = 92;
+
+  /* 拖动时几何量不会变：缓存一帧内反复测量，避免每帧强制重排 */
+  var geomCache = null;
   function geometry() {
+    if (dragging && geomCache) return geomCache;
     var w = stage.clientWidth || 900;
     var grid = document.getElementById("spreadGrid");
     /* the spread's real footprint, measured from its own slots (not the
@@ -128,7 +140,11 @@
       /* 自由模式没有牌阵：牌弧的下沿要留够空间，别压住下面那行提示 */
       var halfCard = (w < 620 ? 102 : 117) / 2 + 16;
       h = Math.max(h, Math.round(cy + halfCard));
+    } else if (grid) {
+      /* 有牌阵时整个弧心往上收一点：两端牌位既不压牌阵，也还留着头顶空间 */
+      cy = Math.round(cy - ry * 0.22);
     }
+
     stage.style.setProperty("--ring-rx", rx + "px");
     stage.style.setProperty("--ring-ry", ry + "px");
     stage.style.setProperty("--ring-cy", cy + "px");
@@ -142,17 +158,15 @@
     var n = cards.length;
     if (!n) return;
     var g = geometry();
-    var cw = cards[0].offsetWidth || 78;
+    var cw = ringCardW || (ringCardW = cards[0].offsetWidth || 78);
     var arcLen = (lut && lut.total) || Math.PI * ((g.rx + g.ry) / 2);
     var fit = Math.round(arcLen / (cw * 0.34));
     lastVis = Math.max(6, Math.min(40, n < fit ? n : fit));
     var vis = lastVis;
     var K = Math.max(1, Math.min(vis, n) - 1);
     var max = maxSlide();
-    if (dragging) {
-      if (slide < 0) slide = slide * 0.28;
-      if (slide > max) slide = max + (slide - max) * 0.28;
-    } else if (slide < 0) {
+    if (!dragging) pull = 0;
+    if (slide < 0) {
       slide = 0;
     } else if (slide > max) {
       slide = max;
@@ -168,7 +182,7 @@
         }
         continue;
       }
-      var a = angleAt(Math.min(1, Math.max(0, u)));
+      var a = angleAt(Math.min(1, Math.max(0, u))) * ARC_SPREAD;
       var rad = (a * Math.PI) / 180;
       var x = Math.sin(rad) * g.rx;
       var y = -Math.cos(rad) * g.ry;
@@ -180,6 +194,8 @@
       card.style.pointerEvents = "auto";
       card.style.setProperty("--z", String(1000 + Math.round(u * 1000)));
     }
+    /* 拉到头后整片牌弧跟着手指挪一点，松手归位 */
+    ring.style.transform = pull ? "translateX(" + pull.toFixed(1) + "px)" : "";
     if (!dragging) syncFanNav();
   }
 
@@ -320,12 +336,7 @@
     return true;
   }
 
-  function isSpreadTarget(event) {
-    return event.target.closest && event.target.closest(".spread-grid, .spread-card, .spread-slot, #spreadGrid");
-  }
-
   function onDown(event) {
-    if (isSpreadTarget(event)) return;
     if (event.button !== undefined && event.button !== 0) return;
     if (event.target.closest && event.target.closest(".spread-settings-btn")) return;
     if (raf) {
@@ -336,8 +347,7 @@
     if (pageRaf) {
       window.cancelAnimationFrame(pageRaf);
       pageRaf = 0;
-    }
-    dragging = true;
+    }    dragging = true;
     pointerId = event.pointerId;
     startX = event.clientX;
     startSlide = slide;
@@ -357,9 +367,16 @@
     var perPixel = 1 / (lut ? lut.total : 400);
     var raw = startSlide - dx * perPixel;
     var max = maxSlide();
-    var next = raw < 0 ? raw * 0.22 : raw > max ? max + (raw - max) * 0.22 : raw;
-    velocity = next - slide;
-    slide = next;
+    /* 索引本身不允许越界；越界的那部分换算成整片牌弧的位移，
+       拉得越远越紧，松手由 CSS 过渡弹回去（橡胶感） */
+    var clamped = raw < 0 ? 0 : raw > max ? max : raw;
+    var over = raw - clamped;
+    if (over > 1.2) over = 1.2;
+    else if (over < -1.2) over = -1.2;
+    /* 跟着手指走：往右拉，整片弧也往右挪 */
+    pull = over === 0 ? 0 : (over < 0 ? 1 : -1) * Math.pow(Math.abs(over), RUBBER_POW) * PULL_PX;
+    velocity = clamped - slide;
+    slide = clamped;
     layout();
   }
 
@@ -372,6 +389,7 @@
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onUp);
     var max = maxSlide();
+    pull = 0;
     if (slide < 0 || slide > max) {
       suppressClickUntil = Date.now() + 400;
       startInertia();
@@ -395,7 +413,7 @@
       var inPlane = event.target.closest ? event.target.closest(".table-plane") : null;
       if (!inPlane) return;
       /* 牌阵里已铺开的牌（含叠放的两层）自己处理点击，别被近邻判断抢走 */
-      if (isSpreadTarget(event)) return;
+      if (event.target.closest && event.target.closest(".spread-grid, .spread-card, .spread-slot, #spreadGrid")) return;
       /* 洗牌动画期间牌被藏起来了，但这条命中逻辑仍然会找到最近的牌并合成点击 */
       if (ring.classList.contains("is-shuffling")) {
         event.stopPropagation();
@@ -499,7 +517,7 @@
   if (nextBtn) nextBtn.addEventListener("click", function () { pageFan(1); });
 
   stage.addEventListener("keydown", function (event) {
-    if (event.target !== stage && !ring.contains(event.target)) return;
+    if (event.target !== stage && !stage.contains(event.target)) return;
     if (event.key === "ArrowLeft") { pageFan(-1); event.preventDefault(); }
     else if (event.key === "ArrowRight") { pageFan(1); event.preventDefault(); }
     else if (event.key === "Home") { slide = 0; velocity = 0; layout(); event.preventDefault(); }
@@ -613,17 +631,10 @@
       var r = W * (0.2 + ((i * 31) % 100) / 460);
       return { x: Math.cos(a) * r, y: Math.sin(a) * r * 0.4 + 26, rot: ((i * 47) % 84) - 42 };
     }
-    function pile(i) {
-      var a = (i / N) * Math.PI * 2;
-      return {
-        x: Math.cos(a) * (3 + (i % 3) * 3),
-        y: Math.sin(a) * (2 + (i % 4) * 2),
-        rot: (i % 2 ? 1 : -1) * (2 + (i % 5))
-      };
-    }
+
     function arc(i) {
       var u = N > 1 ? i / (N - 1) : 0.5;
-      var a = u * 180 - 90;
+      var a = (u * 180 - 90) * ARC_SPREAD;
       var rad = a * Math.PI / 180;
       return { x: Math.sin(rad) * rx, y: -Math.cos(rad) * ry, rot: a };
     }
@@ -646,67 +657,100 @@
       cards.push(c);
     }
 
-    var T1 = quick ? 210 : 460, T2 = quick ? 200 : 760, T3 = quick ? 110 : 220, T4 = quick ? 280 : 600, GAP = quick ? 3 : 8;
-    var fanDelay = 18;
+    /* 节奏：摊开的牌收成两摞 → 交错互插成一摞 → 压一下 → 重新摊开。
+       （原来是绕圈转 1080°，看着像转盘，不像洗牌。） */
+    var D1 = quick ? 380 : 900;      /* 收两摞、互插、合一 */
+    var D2 = quick ? 280 : 520;      /* 重新摊开 */
+    var fanGap = quick ? 5 : 12;
+    var tSettle = D1 + 30;
+    var tSettleDur = quick ? 90 : 160;
+    var tFan = tSettle + tSettleDur;
+
+    /* 整段动作抬到扇形自己的高度上：收起的牌摞落在弧心，而不是压在牌阵上 */
+    var LIFT = -Math.round(ry * 0.55);
+
+    function halfPoint(i) {
+      var side = i % 2 ? 1 : -1;
+      return {
+        x: side * cw * 1.22 + (i % 3) * 1.5,
+        y: LIFT - 6 + (i % 6) * 2.4,
+        rot: side * 8 + ((i % 5) - 2) * 1.3
+      };
+    }
+    function crossPoint(i) {
+      var side = i % 2 ? 1 : -1;
+      return {
+        x: side * cw * 0.42,
+        y: LIFT + side * ch * 0.05 + (i % 4) * 3,
+        rot: side * -4
+      };
+    }
+    function pile(i) {
+      var a = (i / N) * Math.PI * 2;
+      return {
+        x: Math.cos(a) * (8 + (i % 4) * 4),
+        y: LIFT + Math.sin(a) * (4 + (i % 3) * 2) - (i % 5) * 1.4,
+        rot: ((i % 7) - 3) * 1.5
+      };
+    }
 
     cards.forEach(function (c, i) {
       var s = scatter(i);
+      var half = halfPoint(i);
+      var cross = crossPoint(i);
       var p = pile(i);
+      var oCross = 0.58 + (i % 5) * 0.026;
       c.animate(
         [
-          { transform: tr(s), opacity: 1 },
-          { transform: tr({ x: s.x * 0.5, y: s.y * 0.5, rot: s.rot * 0.7 }), opacity: 1, offset: 0.55 },
-          { transform: tr(p), opacity: 1 }
+          { transform: tr(s), offset: 0, easing: "cubic-bezier(.36,.66,.32,1)" },
+          { transform: tr(half), offset: 0.3, easing: "cubic-bezier(.5,.1,.35,1)" },
+          { transform: tr(cross), offset: oCross, easing: "cubic-bezier(.3,.8,.3,1)" },
+          { transform: tr(p), offset: 0.9 },
+          { transform: tr(p), offset: 1 }
         ],
-        { duration: T1, delay: i * GAP, easing: "cubic-bezier(.2,.72,.3,1)", fill: "forwards" }
+        { duration: D1, fill: "forwards" }
       );
     });
 
-    var tOrbit = T1 + 180;
+    /* 合成一摞时轻轻压一下，给"整好了"一个手感 */
     orbit.animate(
       [
-        { transform: "rotate(0deg)" },
-        { transform: "rotate(" + (quick ? 120 : 1080) + "deg)" }
+        { transform: "scale(1)" },
+        { transform: "scale(1)", offset: 0.82 },
+        { transform: "scale(0.94)", offset: 0.92, easing: "cubic-bezier(.3,.8,.3,1)" },
+        { transform: "scale(1)" }
       ],
-      { duration: T2, delay: tOrbit, easing: "cubic-bezier(.5,.02,.4,1)", fill: "forwards" }
+      { duration: D1 + tSettleDur, delay: 30, fill: "forwards" }
     );
 
-    var tSettle = tOrbit + T2;
     window.setTimeout(function () {
       cards.forEach(function (c, i) {
         c.animate(
-          [{ transform: tr({ x: (i % 2 ? 0.6 : -0.6), y: (i % 3) * -0.4, rot: 0 }) }],
-          { duration: T3, easing: "ease-out", fill: "forwards" }
-        );
-      });
-    }, tSettle);
-
-    var tFan = tSettle + T3;
-    window.setTimeout(function () {
-      cards.forEach(function (c, i) {
-        c.animate(
-          [{ transform: tr(arc(i)) }],
+          [
+            { transform: tr(pile(i)) },
+            { transform: tr({ x: pile(i).x * 0.45, y: pile(i).y * 0.6, rot: pile(i).rot * 0.5 }), offset: 0.22 },
+            { transform: tr(arc(i)) }
+          ],
           {
-            duration: T4,
-            delay: i * fanDelay,
-            easing: "cubic-bezier(.16,.84,.3,1)",
+            duration: D2,
+            delay: i * fanGap,
+            easing: "cubic-bezier(.2,.86,.3,1)",
             fill: "forwards"
           }
         );
       });
     }, tFan);
 
-    var tEnd = tFan + T4 + N * fanDelay + 60;
+    var tEnd = tFan + D2 + N * fanGap + 40;
     window.setTimeout(function () {
-      layer.style.transition = "opacity .22s ease";
+      layer.style.transition = "opacity .18s ease";
       layer.style.opacity = "0";
       window.setTimeout(function () {
         ring.classList.remove("is-shuffling");
         if (layer.parentNode) layer.parentNode.removeChild(layer);
         running = false;
-      }, 240);
+      }, 200);
     }, tEnd);
   }
-
   globalThis.addEventListener("quareia:shuffled", playShuffle);
 })();

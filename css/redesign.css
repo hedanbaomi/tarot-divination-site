@@ -1629,6 +1629,9 @@ html.ui2 .table-center .phase-label:empty {
   display: none;
 }
 html.ui2 .table-center .spread-board-scroll {
+  /* 上沿留出 10px：牌右上角的移除按钮比牌面凸出 8px，不留就会被裁掉一半 */
+  padding: 10px 8px 2px;
+  margin: -10px -8px -2px;
   /* 7 列牌阵在 390px 上宽 550px：保留横向滚动，两端牌位才够得着 */
   padding: 0;
   overflow-x: auto;
@@ -1647,6 +1650,14 @@ html.ui2 .deck-ring {
   z-index: 1;
   overflow: visible;
   pointer-events: none;
+}
+
+/* 拉到头时整片牌弧被手指带出去一点；松手用这条过渡弹回原位 */
+html.ui2 .deck-ring {
+  transition: transform 430ms cubic-bezier(.22, .9, .28, 1);
+}
+html.ui2 .table-stage.is-dragging .deck-ring {
+  transition: none;
 }
 html.ui2 .deck-ring.empty {
   display: grid;
@@ -2501,6 +2512,7 @@ html.ui2 .shuffle-orbit {
   height: 0;
 }
 html.ui2 .shuffle-layer .shuffle-clone {
+  will-change: transform;
   position: absolute !important;
   left: 0 !important;
   top: 0 !important;
