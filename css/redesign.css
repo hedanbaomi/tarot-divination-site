@@ -3050,3 +3050,178 @@ html.ui2 .fan-nav-btn:disabled:hover {
   background: transparent;
 }
 html.ui2 .fan-nav-btn:disabled:hover svg { transform: none; }
+
+/* ---------- wide spreads scroll inside the table, not the page ---------- */
+html.ui2 .table-plane > .table-center {
+  justify-self: stretch;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+html.ui2 .table-center .spread-board-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+html.ui2 .table-center .spread-grid {
+  width: max-content;
+  min-width: 100%;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+/* ---------- card meaning: a readable sheet, the card itself stays put ---------- */
+html.ui2 .spread-card-meaning { display: none !important; }
+html.ui2 .spread-card.revealed.meaning-visible {
+  transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0))
+    rotate(var(--position-rotation, 0deg));
+  z-index: 500 !important;
+  outline: 1px solid rgba(var(--accent-rgb), 0.55);
+  outline-offset: 3px;
+}
+html.ui2 .card-meaning {
+  position: fixed;
+  z-index: 120;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(70vh, 460px);
+  overflow-y: auto;
+  padding: 20px 22px 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  text-align: left;
+}
+html.ui2 .card-meaning[hidden] { display: none; }
+html.ui2 .card-meaning-kicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+html.ui2 .card-meaning-name {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 21px;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+html.ui2 .card-meaning-meta {
+  margin: 0 0 12px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+html.ui2 .card-meaning-keywords {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--accent-light);
+}
+html.ui2 .card-meaning-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.9;
+  color: var(--text-secondary);
+}
+html.ui2 .card-meaning-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+html.ui2 .card-meaning-close:hover { color: var(--accent-light); }
+@media (max-width: 560px) {
+  html.ui2 .card-meaning { padding: 18px 18px 20px; }
+  html.ui2 .card-meaning-name { font-size: 19px; }
+  html.ui2 .card-meaning-text { font-size: 14px; }
+}
+
+/* meaning state: keep showing the card FACE, the sheet carries the reading */
+html.ui2 .spread-card.revealed.meaning-visible .spread-card-inner { transform: rotateY(180deg); }
+html.ui2 .spread-card.meaning-visible .spread-card-back-art { display: block; }
+html.ui2 .spread-card.meaning-visible .spread-card-back::before,
+html.ui2 .spread-card.meaning-visible .spread-card-back::after { opacity: 1; }
+
+/* ---------- free board: angle control for a single card ---------- */
+html.ui2 .free-angle {
+  position: fixed;
+  z-index: 130;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 148px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+html.ui2 .free-angle[hidden] { display: none; }
+html.ui2 .free-angle-title {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+html.ui2 .free-angle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+html.ui2 .free-angle-row button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: none;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+html.ui2 .free-angle-row button:hover { border-color: rgba(var(--accent-rgb), 0.6); color: var(--accent-light); }
+html.ui2 .free-angle-value {
+  flex: 1;
+  text-align: center;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+html.ui2 .free-angle-reset {
+  height: 26px;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent-light);
+  font-size: 12px;
+  cursor: pointer;
+}
+html.ui2 .free-angle-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+html.ui2 .free-table-card.is-tuning { outline: 1px solid rgba(var(--accent-rgb), 0.6); outline-offset: 4px; }
+
+/* legibility floor for the small print that leaked from the legacy sheet */
+html.ui2 .free-table-card .spread-card-caption .name { font-size: 12px; }
+html.ui2 .result-source { font-size: 12px; line-height: 1.6; }

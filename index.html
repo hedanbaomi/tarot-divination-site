@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="css/styles.css?v=20261103-grove-merged">
   <link rel="stylesheet" href="css/free-board.css?v=20261112-review5">
   <link rel="stylesheet" href="css/custom-spreads.css?v=20261112-review5">
-  <link rel="stylesheet" href="css/redesign.css?v=20261112-nav4">
+  <link rel="stylesheet" href="css/redesign.css?v=20261112-angle4">
 </head>
 <body>
   <div class="sky-moon" id="skyMoon" role="button" tabindex="0"
@@ -585,8 +585,8 @@
   <script src="js/history-store.js"></script>
   <script src="js/history-ui.js?v=20261112-review5"></script>
   <script src="js/free-board-ui.js?v=20261112-review5"></script>
-  <script src="js/app.js?v=20261112-review5"></script>
-  <script src="js/deck-ring.js?v=20261112-nav4"></script>
+  <script src="js/app.js?v=20261112-angle3"></script>
+  <script src="js/deck-ring.js?v=20261112-rev3"></script>
   <div class="spread-popover" id="spreadPopover" hidden role="dialog" aria-modal="false"
     aria-label="牌阵设置" data-i18n-aria-label="spread.settings">
     <div class="spread-popover-head">
@@ -641,5 +641,13 @@
   </script>
 
   <span class="theme-toast" id="themeToast" aria-live="polite"></span>
+<div class="card-meaning" id="cardMeaningPanel" hidden role="dialog" aria-modal="false" aria-label="牌意" data-i18n-aria-label="app.meaningTitle">
+  <button class="card-meaning-close" id="cardMeaningClose" type="button" aria-label="关闭" data-i18n-aria-label="app.meaningClose">×</button>
+  <p class="card-meaning-kicker" data-meaning-kicker></p>
+  <p class="card-meaning-name" data-meaning-name></p>
+  <p class="card-meaning-meta" data-meaning-meta></p>
+  <p class="card-meaning-keywords" data-meaning-keywords></p>
+  <p class="card-meaning-text" data-meaning-text></p>
+</div>
 </body>
 </html>

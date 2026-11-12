@@ -285,6 +285,7 @@
       "app.revealedAria": "位置 {number} · {position}{layer} · {card} · {orientation}。轻点查看牌意",
       "app.meaningAria": "位置 {number} · {position}{layer} · {card}的牌意。轻点返回牌面",
       "app.meaningTitle": "牌意",
+  "app.meaningClose": "关闭",
       "app.meaningHint": "轻点任意已开牌可翻到牌意面，再次轻点返回牌面。",
       "app.removeCardAria": "移除位置 {number}的这张牌",
       "app.removeLayerAria": "移除位置 {number}的{layer}",
@@ -371,7 +372,8 @@
       ,"freeBoard.settingsSummary": "自由画板：可从当前牌组与筛选结果中任意抽牌，不设固定牌位或目标张数。"
       ,"freeBoard.title": "自由画板"
       ,"freeBoard.open": "自由画板"
-      ,"freeBoard.openHint": "牌堆以扇形摊在桌上，不套用任何牌阵，想抽哪张抽哪张。", "freeBoard.cardHiddenAria": "第 {index} 张牌，未翻开", "freeBoard.cardAria": "第 {index} 张牌，{name}，{orientation}", "freeBoard.slotName": "自由牌位", "freeBoard.drawnAria": "已抽出的牌"
+      ,"freeBoard.openHint": "牌堆以扇形摊在桌上，不套用任何牌阵，想抽哪张抽哪张。", "freeBoard.cardHiddenAria": "第 {index} 张牌，未翻开", "freeBoard.cardAria": "第 {index} 张牌，{name}，{orientation}", "freeBoard.slotName": "自由牌位",
+  "freeBoard.angleTitle": "角度", "freeBoard.drawnAria": "已抽出的牌"
       ,"freeBoard.toolbarAria": "自由画板控制"
       ,"freeBoard.undo": "撤销"
       ,"freeBoard.undoAria": "撤销上一次自由画板操作"
@@ -713,6 +715,7 @@
       "app.revealedAria": "Position {number} · {position}{layer} · {card} · {orientation}. Tap to view its meaning.",
       "app.meaningAria": "Meaning of {card} in position {number}, {position}{layer}. Tap to return to the card face.",
       "app.meaningTitle": "Card meaning",
+  "app.meaningClose": "Close",
       "app.meaningHint": "Tap any revealed card to flip to its meaning. Tap again to return to the card face.",
       "app.removeCardAria": "Remove the card in position {number}",
       "app.removeLayerAria": "Remove the {layer} in position {number}",
@@ -798,7 +801,8 @@
       "freeBoard.settingsSummary": "Free Board: draw any card from the current deck and filter; there are no fixed positions or target count.",
       "freeBoard.title": "Free Board",
       "freeBoard.open": "Free board",
-      "freeBoard.openHint": "The deck fans out on the table with no spread applied.", "freeBoard.cardHiddenAria": "Card {index}, face down", "freeBoard.cardAria": "Card {index}, {name}, {orientation}", "freeBoard.slotName": "Free slot", "freeBoard.drawnAria": "Drawn cards",
+      "freeBoard.openHint": "The deck fans out on the table with no spread applied.", "freeBoard.cardHiddenAria": "Card {index}, face down", "freeBoard.cardAria": "Card {index}, {name}, {orientation}", "freeBoard.slotName": "Free slot",
+  "freeBoard.angleTitle": "Angle", "freeBoard.drawnAria": "Drawn cards",
       "freeBoard.toolbarAria": "Free Board controls",
       "freeBoard.undo": "Undo",
       "freeBoard.undoAria": "Undo the last Free Board action",

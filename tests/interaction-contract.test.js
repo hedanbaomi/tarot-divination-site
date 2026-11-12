@@ -87,18 +87,23 @@ test("footer limits the non-commercial boundary to protected materials", functio
   assert.match(css, /\.attribution-quote\b/);
 });
 
-test("revealed cards can flip between artwork and an in-place meaning panel", function () {
+test("revealed cards open a readable meaning sheet and keep their own face", function () {
   var app = read(surface.app);
-  var css = read(surface.css);
+  var css = read("css/redesign.css");
   var i18n = read(surface.i18n);
-  assert.match(app, /entry\.meaningVisible = !entry\.meaningVisible/);
-  assert.match(app, /classList\.toggle\("meaning-visible", Boolean\(entry\.meaningVisible\)\)/);
-  assert.match(app, /spread-card-meaning-text/);
+  var html = read(surface.html);
+  assert.match(app, /function showCardMeaning\(cardEl, entry, position\)/);
+  assert.match(app, /function hideCardMeaning\(\)/);
+  assert.match(app, /entry\.meaningVisible = !same/);
+  assert.match(app, /classList\.toggle\("meaning-visible", entry\.meaningVisible\)/);
   assert.match(app, /getEntryInterpretation/);
-  assert.match(css, /\.spread-card\.revealed\.meaning-visible \.spread-card-inner/);
-  assert.match(css, /rotateY\(360deg\)/);
+  assert.match(html, /id="cardMeaningPanel"/);
+  assert.match(html, /data-meaning-text/);
+  assert.match(css, /html\.ui2 \.card-meaning \{/);
+  assert.match(css, /\.spread-card\.revealed\.meaning-visible \.spread-card-inner \{ transform: rotateY\(180deg\); \}/);
+  assert.match(css, /\.spread-card-meaning \{ display: none !important; \}/);
   assert.match(i18n, /"app\.meaningAria"/);
-  assert.match(i18n, /"app\.meaningHint"/);
+  assert.match(i18n, /"app\.meaningClose"/);
 });
 
 test("Free Board gestures keep viewport transforms, orientation, and board rotation separate", function () {
