@@ -24,9 +24,9 @@ function storage() {
   };
 }
 
-test("Android bundle exposes Free Board in the platform-preserving load order", function () {
-  var html = read("index.html");
-  var app = read("js/app.js");
+test("classic Android bundle exposes Free Board in the platform-preserving load order", function () {
+  var html = read("classic.html");
+  var app = read("js/classic/app.js");
   var history = read("js/history-ui.js");
   var i18n = read("js/i18n.js");
   var css = read("css/free-board.css");
@@ -43,7 +43,7 @@ test("Android bundle exposes Free Board in the platform-preserving load order", 
   assert.ok(html.indexOf("js/free-board-model.js") < html.indexOf("js/free-board-draft.js"));
   assert.ok(html.indexOf("js/free-board-draft.js") < html.indexOf("js/history-records.js"));
   assert.ok(html.indexOf("js/history-ui.js") < html.indexOf("js/free-board-ui.js"));
-  assert.ok(html.indexOf("js/free-board-ui.js") < html.indexOf("js/app.js"));
+  assert.ok(html.indexOf("js/free-board-ui.js") < html.indexOf("js/classic/app.js"));
   assert.match(html, /js\/announcements\.js\?v=1/);
   assert.match(html, /js\/back-handler\.js\?v=20260731-overlay-back/);
   assert.match(app, /function freeBoardCardsForDeck\(type, filter\)/);
@@ -67,6 +67,23 @@ test("Android bundle exposes Free Board in the platform-preserving load order", 
   assert.doesNotMatch(css, /free-board-card-toolbar/);
   assert.match(css, /data-free-board-platform="android"/);
   assert.match(i18n, /freeBoard\.drawOrder/);
+});
+
+test("modern Android board loads with the native bridges and classic navigation", function () {
+  var html = read("index.html");
+  var app = read("js/app.js");
+  assert.match(html, /id="freeDrawCards"/);
+  assert.match(html, /id="switchPageVersion" href="classic\.html"/);
+  assert.match(read("classic.html"), /id="switchPageVersion" href="index\.html\?view=modern"/);
+  ["js/free-board-model.js", "js/history-ui.js", "js/back-handler.js", "js/app.js", "js/deck-ring.js"].reduce(
+    function (previous, file) {
+      var position = html.indexOf('src="' + file);
+      assert.ok(position > previous, file);
+      return position;
+    }, -1);
+  assert.match(app, /getLxxxiBackImage/);
+  assert.match(app, /quareia:mediaready/);
+  assert.match(app, /telemetry\.logReadingCompleted\(deckType, freeDrawn\.length\)/);
 });
 
 test("Android Free Board model keeps pile order, orientation, board rotation, and restore strict", function () {

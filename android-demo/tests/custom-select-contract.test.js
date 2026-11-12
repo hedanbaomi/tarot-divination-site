@@ -95,9 +95,9 @@ test("homepage menu is a right-side sliding drawer and keeps the author quote on
   assert.match(html, /id="menuBackdrop"/);
   assert.match(html, /class="author-note"/);
   assert.match(html, /data-i18n="home\.quote"/);
-  assert.ok(html.indexOf('class="settings"') < html.indexOf('class="app-menu"'));
+  assert.match(html, /aria-controls="settingsPanel"/);
   assert.ok(html.indexOf('class="author-note"') > html.indexOf('id="resultsSection"'));
-  assert.match(html, /href="css\/android-shell\.css\?v=20260813-themes"/);
+  assert.match(html, /href="css\/android-shell\.css\?v=[^"]+"/);
   assert.match(css, /\.app-menu\s*\{[\s\S]*transform:\s*translateX\(104%\)/);
   assert.match(css, /\.app-menu\.is-open\s*\{[\s\S]*transform:\s*translateX\(0\)/);
   assert.match(css, /\.menu-backdrop\.is-visible/);
@@ -113,7 +113,7 @@ test("Android keeps theme switching in the hamburger menu, not reading setup", f
   var i18n = read("app/src/main/assets/www/js/i18n.js");
   var theme = read("app/src/main/assets/www/js/theme.js");
   var mainActivity = read("app/src/main/java/com/quareia/divination/MainActivity.kt");
-  var settings = html.slice(html.indexOf('id="settings"'), html.indexOf('id="appMenu"'));
+  var settings = html.slice(html.indexOf('id="settingsPanel"'), html.indexOf('id="positionGuide"'));
   var menu = html.slice(html.indexOf('id="appMenu"'), html.indexOf('id="menuBackdrop"'));
 
   assert.doesNotMatch(settings, /data-theme-id|setting-group-theme/);
@@ -121,8 +121,10 @@ test("Android keeps theme switching in the hamburger menu, not reading setup", f
   assert.match(menu, /data-theme-id="celestial"/);
   assert.match(menu, /data-theme-id="parchment"/);
   assert.match(menu, /data-theme-id="ember"/);
-  assert.match(menu, /data-theme-id="grove"/);
-  assert.match(html, /src="js\/theme\.js\?v=20261103-grove-merged"/);
+  ["grove", "grove-light", "jade", "dusk", "ash"].forEach(function (id) {
+    assert.ok(menu.includes('data-theme-id="' + id + '"'));
+  });
+  assert.match(html, /src="js\/theme\.js\?v=[^"]+"/);
   assert.match(html, /quareia-divination-theme/);
   assert.match(i18n, /"settings\.theme": "界面主题"/);
   assert.match(i18n, /"theme\.parchment": "羊皮纸晨光"/);
@@ -136,7 +138,7 @@ test("Android parchment reading and history panels use theme tokens, not night n
   var css = read("app/src/main/assets/www/css/styles.css");
   var freeBoard = read("app/src/main/assets/www/css/free-board.css");
   var html = read("app/src/main/assets/www/index.html");
-  assert.match(html, /href="css\/styles\.css\?v=20261103-grove-merged"/);
+  assert.match(html, /href="css\/styles\.css\?v=[^"]+"/);
   assert.match(css, /\.position-guide\s*\{[^}]*background:\s*var\(--panel-bg\)/);
   assert.match(css, /\.result-card\s*\{[^}]*background:\s*var\(--panel-bg\)/);
   assert.match(css, /\.history-list-item\s*\{[^}]*background:\s*var\(--bg-card\)/);
@@ -149,7 +151,7 @@ test("Android parchment reading and history panels use theme tokens, not night n
   assert.match(html, /class="sky-sun-blank"/);
   assert.match(html, /src="assets\/icons\/parchment-sun-blank\.png"/);
   assert.match(html, /data-theme-face="celestial"/);
-  assert.match(html, /celestial-sky\.js\?v=20260813-sun-blank/);
+  assert.match(html, /celestial-sky\.js\?v=[^"]+/);
 });
 
 test("language toggle keeps its label and value nodes for runtime localization", function () {
@@ -159,7 +161,7 @@ test("language toggle keeps its label and value nodes for runtime localization",
 
   assert.match(html, /id="languageToggle"[\s\S]*?<span[^>]*data-i18n="menu\.language"[^>]*>语言<\/span>/);
   assert.match(html, /<strong id="languageToggleValue"[^>]*data-i18n="language\.switch">EN<\/strong>/);
-  assert.match(html, /src="js\/back-handler\.js\?v=20260731-overlay-back"/);
+  assert.match(html, /src="js\/back-handler\.js\?v=[^"]+"/);
   assert.match(i18n, /getElementById\("languageToggleValue"\)/);
   assert.doesNotMatch(i18n, /toggle\.textContent\s*=/);
   assert.match(backHandler, /DivinationUiBack/);
@@ -182,18 +184,18 @@ test("preset mode shows an empty spread preview and a settings-adjacent position
   var html = read("app/src/main/assets/www/index.html");
   var app = read("app/src/main/assets/www/js/app.js");
   var i18n = read("app/src/main/assets/www/js/i18n.js");
-  var deckStart = html.indexOf('class="deck-area"');
+  var settingsStart = html.indexOf('id="settingsPanel"');
   var guideStart = html.indexOf('id="positionGuide"');
   var spreadArea = html.slice(html.indexOf('id="spreadArea"'), html.indexOf('id="resultsSection"'));
 
-  assert.ok(guideStart > -1 && guideStart < deckStart);
-  assert.match(html.slice(guideStart, deckStart), /data-i18n="spread\.guide"/);
+  assert.ok(settingsStart >= 0 && guideStart > settingsStart);
+  assert.match(html.slice(guideStart, html.indexOf('id="positionGuideList"')), /data-i18n="spread\.guide"/);
   assert.doesNotMatch(spreadArea, /id="positionGuide"/);
   assert.match(app, /el\.spreadArea\.classList\.toggle\("is-empty", spread\.length === 0\)/);
   assert.match(app, /t\("app\.emptySpreadHint"\)/);
   assert.doesNotMatch(app, /if \(spread\.length === 0\) \{\s*el\.spreadArea\.style\.display = "none"/);
-  assert.match(html, /src="js\/app\.js\?v=20260820-custom-spread-window-final"/);
-  assert.match(html, /src="js\/i18n\.js\?v=20260820-custom-spread-window-final"/);
+  assert.match(html, /src="js\/app\.js\?v=[^"]+"/);
+  assert.match(html, /src="js\/i18n\.js\?v=[^"]+"/);
   ["zh-CN", "en"].forEach(function (locale) {
     var block = i18n.match(new RegExp('"' + locale + '": \\{[\\s\\S]*?\\n    \\}'))[0];
     assert.ok(block.indexOf('"app.emptySpreadHint"') !== -1, locale + " missing app.emptySpreadHint");

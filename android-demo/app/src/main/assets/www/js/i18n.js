@@ -32,7 +32,7 @@
       "telemetry.firstLaunchNotice": "本应用默认启用匿名使用统计，用于了解活跃设备数量和功能使用情况。统计内容包括应用版本、语言、牌组和抽牌数量；不收集问题、具体抽牌结果或本地历史。服务端会临时读取连接IP，用于限流和防止滥用。对于网络地址和地理位置数据，统计数据库仅保存由 Cloudflare 根据连接IP推断的国家代码、一级行政区代码和名称，不保存原始IP、IP摘要、城市或更精确的位置。这些位置字段可能缺失或存在偏差，不代表用户的真实居住地。可在“关于 / 版权”页面随时关闭。",
       "telemetry.manage": "打开隐私设置",
       "telemetry.acknowledge": "知道了",
-      "settings.title": "抽牌设置",
+      "settings.title": "高级设置",
       "settings.theme": "界面主题",
       "settings.themeAria": "选择界面主题",
       "theme.celestial": "星夜秘境",
@@ -40,11 +40,11 @@
       "theme.ember": "余烬圣堂",
       "theme.grove": "密林祭坛",
       "settings.deck": "牌组",
-      "deck.tarotOption": "塔罗牌（Rider–Waite 体系）",
+      "deck.tarotOption": "塔罗牌（Rider–Waite）",
       "deck.mystagogusOption": "M 牌（Mystagogus）",
       "deck.lxxxiOption": "LXXXI 魔法牌（奎瑞亚）",
       "settings.mode": "牌位模式",
-      "mode.upright": "全正位（推荐）",
+      "mode.upright": "全正位",
       "mode.mixed": "正逆位混合",
       "settings.layoutMode": "布局方式",
       "layout.preset": "预设牌阵",
@@ -174,13 +174,13 @@
       "customSpread.downloaded": "分享码文件已开始保存。",
       "deck.heading": "牌堆",
       "deck.initialRemaining": "剩 78 张",
-      "deck.shuffle": "🔀 洗牌",
-      "deck.initialCta": "左右滑动浏览牌堆，轻点任意一张牌抽出",
-      "deck.initialAria": "牌堆，左右滑动浏览，轻点抽牌",
+      "deck.shuffle": "洗牌",
+      "deck.initialCta": "轻点环绕四周的任意一张牌，把它抽进中央牌阵",
+      "deck.initialAria": "环形牌堆，轻点任意一张抽牌",
       "deck.switch": "切换牌组",
       "spread.initialTitle": "你的牌阵",
       "spread.initialCount": "0 / 3",
-      "spread.reveal": "开牌解读",
+      "spread.reveal": "一键开牌",
       "spread.clear": "重新洗牌",
       "spread.hint": "轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开；开牌后再次轻点牌面可查看牌意。",
       "spread.guide": "牌位说明",
@@ -237,9 +237,9 @@
       "app.cardsStacked": "26 张（13 组） · 分牌叠放",
       "app.remaining": "剩 {count} 张",
       "app.remainingWithPrefix": "{prefix} · 剩 {count} 张",
-      "app.deckAria.tarot": "塔罗牌堆，左右滑动浏览，轻点抽牌",
-      "app.deckAria.mystagogus": "Mystagogus 牌堆，左右滑动浏览，轻点抽牌",
-      "app.deckAria.lxxxi": "LXXXI 魔法牌堆，左右滑动浏览，轻点抽牌",
+      "app.deckAria.tarot": "塔罗牌堆，轻点抽牌",
+      "app.deckAria.mystagogus": "Mystagogus 牌堆，轻点抽牌",
+      "app.deckAria.lxxxi": "LXXXI 魔法牌堆，轻点抽牌",
       "app.deckAriaRule": "{label}；当前{rule}",
       "app.deckEmptyPhase": "这组牌已抽完，可切换牌组或重新洗牌",
       "app.deckEmpty": "牌已抽完，按「洗牌」重新开始",
@@ -293,14 +293,14 @@
       "confirm.overview": "切换概览抽法会清空当前牌阵并重新洗牌，是否继续？",
       "confirm.spread": "切换牌阵会清空当前抽牌并重新洗牌，是否继续？",
       "confirm.deck": "切换牌组会清空当前牌阵并重新洗牌，是否继续？",
-      "confirm.shuffle": "确定要重新洗牌吗？这会清空当前牌阵。",
+      "confirm.shuffle": "重新洗牌会清空桌上已抽出的牌，是否继续？",
       "confirm.layout": "切换布局会清除当前未保存的牌面内容，是否继续？",
       "confirm.freeBoardDiscard": "确定丢弃自由画板草稿并清空画板吗？此操作无法撤销。",
       "confirm.freeBoardShuffle": "重新洗牌会清空自由画板并打乱待抽牌堆，是否继续？",
       "confirm.kicker": "牌阵变更",
       "confirm.title": "当前牌阵尚未清空",
       "confirm.cancel": "保留牌阵",
-      "confirm.proceed": "继续并清空",
+      "confirm.proceed": "清空并洗牌",
       "choice.kicker": "纸牌选择",
       "choice.title": "请选择",
       "choice.cancel": "取消",
@@ -344,72 +344,111 @@
       "history.exportFailed": "导出失败，请稍后再试。",
       "history.imported": "已导入 {count} 条历史记录。",
       "history.remapped": " {count} 条重复 ID 已安全重编号。",
-      "history.importFailed": "导入失败：文件格式不正确或内容已损坏。"
-      ,"freeBoard.settingsSummary": "自由画板：可从当前牌组与筛选结果中任意抽牌，不设固定牌位或目标张数。"
-      ,"freeBoard.title": "自由画板"
-      ,"freeBoard.toolbarAria": "自由画板控制"
-      ,"freeBoard.undo": "撤销"
-      ,"freeBoard.undoAria": "撤销上一次自由画板操作"
-      ,"freeBoard.redo": "重做"
-      ,"freeBoard.redoAria": "重做上一次自由画板操作"
-      ,"freeBoard.revealAll": "全部开牌"
-      ,"freeBoard.revealAllAria": "翻开自由画板上的所有卡牌"
-      ,"freeBoard.resetView": "重置视图"
-      ,"freeBoard.resetViewAria": "将自由画板平移和缩放重置为默认"
-      ,"freeBoard.shuffle": "洗牌"
-      ,"freeBoard.shuffleAria": "清空自由画板并重新洗牌"
-      ,"freeBoard.clearAndDiscard": "清空画板并放弃草稿"
-      ,"freeBoard.clearAndDiscardAria": "清空自由画板并删除已保存草稿"
-      ,"freeBoard.boardAria": "自由画板，可拖动画板与卡牌，双指或滚轮缩放"
-      ,"freeBoard.worldAria": "自由画板上的卡牌"
-      ,"freeBoard.selectedControlsAria": "所选卡牌控制"
-      ,"freeBoard.pileTitle": "待抽牌堆"
-      ,"freeBoard.pileAria": "自由画板待抽牌堆，可任意选择一张"
-      ,"freeBoard.drawAria": "待抽牌堆第 {index} 张，共 {count} 张，轻点抽到自由画板"
-      ,"freeBoard.faceDown": "牌背"
-      ,"freeBoard.meaning": "牌意"
-      ,"freeBoard.revealed": "已开牌"
-      ,"freeBoard.unrevealed": "未开牌"
-      ,"freeBoard.cardAria": "{card}，{state}{orientation}。拖动改变位置，轻点选中"
-      ,"freeBoard.selectedControls": "当前选择：{card}"
-      ,"freeBoard.drawOrder": "牌位{order}"
-      ,"freeBoard.cardsDrawn": "已放置 {count} 张"
-      ,"freeBoard.remaining": "待抽 {count} 张"
-      ,"freeBoard.status": "已放置 {cards} 张 · 待抽 {remaining} 张"
-      ,"freeBoard.hint": "空白处拖动画板；拖动卡牌改变位置；轻点卡牌仅选中，不会翻牌。需要开牌时请使用“全部开牌”，再从画板外的控制区查看牌意。滚轮或双指可缩放。"
-      ,"freeBoard.rotateMinus15": "−15°"
-      ,"freeBoard.rotateMinus15Aria": "逆时针旋转当前卡牌 15 度"
-      ,"freeBoard.rotatePlus15": "＋15°"
-      ,"freeBoard.rotatePlus15Aria": "顺时针旋转当前卡牌 15 度"
-      ,"freeBoard.rotateMinus90": "−90°"
-      ,"freeBoard.rotateMinus90Aria": "逆时针旋转当前卡牌 90 度"
-      ,"freeBoard.rotatePlus90": "＋90°"
-      ,"freeBoard.rotatePlus90Aria": "顺时针旋转当前卡牌 90 度"
-      ,"freeBoard.bringFront": "置于顶层"
-      ,"freeBoard.bringFrontAria": "将当前卡牌置于最上层"
-      ,"freeBoard.showMeaning": "显示牌意"
-      ,"freeBoard.showMeaningAria": "查看当前已开牌的牌意"
-      ,"freeBoard.hideMeaning": "显示牌面"
-      ,"freeBoard.hideMeaningAria": "返回查看当前卡牌牌面"
-      ,"freeBoard.remove": "移除／回牌堆"
-      ,"freeBoard.removeAria": "移除当前卡牌并放回待抽牌堆"
-      ,"freeBoard.draftInvalid": "保存的自由画板草稿无效，已安全忽略。"
-      ,"freeBoard.draftSaveFailed": "自由画板草稿保存失败；当前画板仍可继续使用。"
-      ,"freeBoard.draftDiscarded": "自由画板草稿已丢弃。"
-      ,"freeBoard.saving": "正在自动保存自由画板历史…"
-      ,"freeBoard.saved": "自由画板已自动保存到占卜历史。"
-      ,"freeBoard.duplicate": "这份自由画板刚刚已经保存，无需重复保存。"
-      ,"freeBoard.saveFailed": "自由画板历史保存失败；画板仍保留在当前页面。"
-      ,"freeBoard.saveUnavailable": "本机无法保存历史；自由画板仍可正常使用。"
-      ,"history.freeBoard": "自由画板"
-      ,"history.freeBoardDetail": "自由画板记录"
-      ,"history.freeBoardPreview": "自由画板空间重建（只读）"
-      ,"history.freeBoardHidden": "牌背（未开牌）"
-      ,"history.freeBoardRevealed": "已开牌 · {orientation}"
-      ,"history.freeBoardCardState": "{card} · {state}"
-      ,"history.savingFreeBoard": "正在保存自由画板历史…"
-      ,"history.savedFreeBoard": "自由画板已保存到本机占卜历史。"
-      ,"history.duplicateFreeBoard": "这份自由画板刚刚已经保存，无需重复保存。"
+      "history.importFailed": "导入失败：文件格式不正确或内容已损坏。",
+      "freeBoard.settingsSummary": "自由画板：可从当前牌组与筛选结果中任意抽牌，不设固定牌位或目标张数。",
+      "freeBoard.title": "自由画板",
+      "freeBoard.toolbarAria": "自由画板控制",
+      "freeBoard.undo": "撤销",
+      "freeBoard.undoAria": "撤销上一次自由画板操作",
+      "freeBoard.redo": "重做",
+      "freeBoard.redoAria": "重做上一次自由画板操作",
+      "freeBoard.revealAll": "全部开牌",
+      "freeBoard.revealAllAria": "翻开自由画板上的所有卡牌",
+      "freeBoard.resetView": "重置视图",
+      "freeBoard.resetViewAria": "将自由画板平移和缩放重置为默认",
+      "freeBoard.shuffle": "洗牌",
+      "freeBoard.shuffleAria": "清空自由画板并重新洗牌",
+      "freeBoard.clearAndDiscard": "清空画板并放弃草稿",
+      "freeBoard.clearAndDiscardAria": "清空自由画板并删除已保存草稿",
+      "freeBoard.boardAria": "自由画板，可拖动画板与卡牌，双指或滚轮缩放",
+      "freeBoard.worldAria": "自由画板上的卡牌",
+      "freeBoard.selectedControlsAria": "所选卡牌控制",
+      "freeBoard.pileTitle": "待抽牌堆",
+      "freeBoard.pileAria": "自由画板待抽牌堆，可任意选择一张",
+      "freeBoard.drawAria": "待抽牌堆第 {index} 张，共 {count} 张，轻点抽到自由画板",
+      "freeBoard.faceDown": "牌背",
+      "freeBoard.meaning": "牌意",
+      "freeBoard.revealed": "已开牌",
+      "freeBoard.unrevealed": "未开牌",
+      "freeBoard.cardAria": "{card}，{state}{orientation}。拖动改变位置，轻点选中",
+      "freeBoard.selectedControls": "当前选择：{card}",
+      "freeBoard.drawOrder": "牌位{order}",
+      "freeBoard.cardsDrawn": "已放置 {count} 张",
+      "freeBoard.remaining": "待抽 {count} 张",
+      "freeBoard.status": "已放置 {cards} 张 · 待抽 {remaining} 张",
+      "freeBoard.hint": "在扇形的牌堆里双击一张牌，它就落到画板上；拖动卡牌改变位置，长按卡牌可以转动它的角度。需要开牌时用“全部开牌”。",
+      "freeBoard.rotateMinus15": "−15°",
+      "freeBoard.rotateMinus15Aria": "逆时针旋转当前卡牌 15 度",
+      "freeBoard.rotatePlus15": "＋15°",
+      "freeBoard.rotatePlus15Aria": "顺时针旋转当前卡牌 15 度",
+      "freeBoard.rotateMinus90": "−90°",
+      "freeBoard.rotateMinus90Aria": "逆时针旋转当前卡牌 90 度",
+      "freeBoard.rotatePlus90": "＋90°",
+      "freeBoard.rotatePlus90Aria": "顺时针旋转当前卡牌 90 度",
+      "freeBoard.bringFront": "置于顶层",
+      "freeBoard.bringFrontAria": "将当前卡牌置于最上层",
+      "freeBoard.showMeaning": "显示牌意",
+      "freeBoard.showMeaningAria": "查看当前已开牌的牌意",
+      "freeBoard.hideMeaning": "显示牌面",
+      "freeBoard.hideMeaningAria": "返回查看当前卡牌牌面",
+      "freeBoard.remove": "移除／回牌堆",
+      "freeBoard.removeAria": "移除当前卡牌并放回待抽牌堆",
+      "freeBoard.draftInvalid": "保存的自由画板草稿无效，已安全忽略。",
+      "freeBoard.draftSaveFailed": "自由画板草稿保存失败；当前画板仍可继续使用。",
+      "freeBoard.draftDiscarded": "自由画板草稿已丢弃。",
+      "freeBoard.saving": "正在自动保存自由画板历史…",
+      "freeBoard.saved": "自由画板已自动保存到占卜历史。",
+      "freeBoard.duplicate": "这份自由画板刚刚已经保存，无需重复保存。",
+      "freeBoard.saveFailed": "自由画板历史保存失败；画板仍保留在当前页面。",
+      "freeBoard.saveUnavailable": "本机无法保存历史；自由画板仍可正常使用。",
+      "history.freeBoard": "自由画板",
+      "history.freeBoardDetail": "自由画板记录",
+      "history.freeBoardPreview": "自由画板空间重建（只读）",
+      "history.freeBoardHidden": "牌背（未开牌）",
+      "history.freeBoardRevealed": "已开牌 · {orientation}",
+      "history.freeBoardCardState": "{card} · {state}",
+      "history.savingFreeBoard": "正在保存自由画板历史…",
+      "history.savedFreeBoard": "自由画板已保存到本机占卜历史。",
+      "history.duplicateFreeBoard": "这份自由画板刚刚已经保存，无需重复保存。",
+      "nav.settings": "设置",
+      "deck.kicker": "抽牌",
+      "spread.kicker": "牌阵",
+      "results.kicker": "解读",
+      "footer.aboutTitle": "关于本站",
+      "footer.licenseTitle": "授权与署名",
+      "footer.privacyTitle": "隐私与统计",
+      "theme.groveLight": "密林祭坛（明亮版）",
+      "theme.jade": "青玉纸",
+      "theme.dusk": "暮紫",
+      "theme.ash": "素灰",
+      "theme.toggle": "轻点月亮切换界面主题",
+      "egg.wake": "它睁开了眼睛",
+      "egg.sleep": "它闭上了眼睛",
+      "settings.pageVersion": "页面版本",
+      "settings.useClassic": "切回旧版",
+      "settings.useModern": "切回新版",
+      "table.title": "牌桌",
+      "table.dragHint": "左右拖动翻看牌堆 · 轻点任意一张牌",
+      "spread.settings": "牌阵设置",
+      "spread.settingsClose": "关闭牌阵设置",
+      "deck.prev": "往前翻一张牌",
+      "deck.next": "往后翻一张牌",
+      "footer.srcTarotTag": "塔罗",
+      "footer.srcTarot": "牌意参考《21 世纪的塔罗技能》与 Quareia 语境",
+      "footer.srcMTag": "M 牌",
+      "footer.srcM": "关键词译自 Josephine McCarthy《Mystagogus》",
+      "footer.srcLxxxiTag": "LXXXI",
+      "footer.srcLxxxi": "牌意参考其英文说明书",
+      "footer.funNote": "仅供娱乐，请理性看待占卜结果。",
+      "app.meaningClose": "关闭",
+      "confirm.keep": "保留",
+      "freeBoard.open": "自由画板",
+      "freeBoard.backToPreset": "返回预设牌阵",
+      "freeBoard.openHint": "牌堆以扇形摊在桌上，不套用任何牌阵，想抽哪张抽哪张。",
+      "freeBoard.cardHiddenAria": "第 {index} 张牌，未翻开",
+      "freeBoard.slotName": "自由牌位",
+      "freeBoard.angleTitle": "角度",
+      "freeBoard.drawnAria": "已抽出的牌"
     },
     "en": {
       "page.title": "Quareia Divination",
@@ -435,7 +474,7 @@
       "telemetry.firstLaunchNotice": "This app enables anonymous usage statistics by default to understand active device counts and feature usage. We collect app version, language, deck, and the number of cards drawn; we do not collect questions, specific draw results, or local history. The server temporarily reads the connection IP for rate limiting and abuse prevention. Of network-address and location data, the statistics database stores only the country code and first-level subdivision code and name inferred by Cloudflare from the connection IP; it does not store the raw IP address, an IP digest, a city, or more precise location data. These location fields may be missing or inaccurate and do not represent the user's actual residence. You can turn it off at any time in About / Copyright.",
       "telemetry.manage": "Open privacy settings",
       "telemetry.acknowledge": "Got it",
-      "settings.title": "Reading Setup",
+      "settings.title": "Advanced setup",
       "settings.theme": "Theme",
       "settings.themeAria": "Choose an interface theme",
       "theme.celestial": "Celestial Night",
@@ -443,11 +482,11 @@
       "theme.ember": "Ember Sanctum",
       "theme.grove": "Verdant Grove",
       "settings.deck": "Deck",
-      "deck.tarotOption": "Tarot (Rider-Waite system)",
+      "deck.tarotOption": "Tarot (Rider-Waite)",
       "deck.mystagogusOption": "Mystagogus",
       "deck.lxxxiOption": "LXXXI - The Magician's Deck",
       "settings.mode": "Orientation",
-      "mode.upright": "Upright only (recommended)",
+      "mode.upright": "Upright only",
       "mode.mixed": "Upright and reversed",
       "settings.layoutMode": "Layout",
       "layout.preset": "Preset spread",
@@ -577,13 +616,13 @@
       "customSpread.downloaded": "The share-code file is being saved.",
       "deck.heading": "Deck",
       "deck.initialRemaining": "78 remaining",
-      "deck.shuffle": "🔀 Shuffle",
-      "deck.initialCta": "Swipe to browse the deck, then tap any card to draw it",
-      "deck.initialAria": "Card deck. Swipe to browse and tap a card to draw.",
+      "deck.shuffle": "Shuffle",
+      "deck.initialCta": "Tap any card in the ring to draw it into the spread",
+      "deck.initialAria": "Circular card deck. Tap a card to draw.",
       "deck.switch": "Switch card pool",
       "spread.initialTitle": "Your Spread",
       "spread.initialCount": "0 / 3",
-      "spread.reveal": "Reveal & Interpret",
+      "spread.reveal": "Reveal all",
       "spread.clear": "Shuffle Again",
       "spread.hint": "Tap a card to reveal it, or choose “Reveal & Interpret” to turn over every card. After revealing, tap a card again to view its meaning.",
       "spread.guide": "Position guide",
@@ -640,9 +679,9 @@
       "app.cardsStacked": "26 cards (13 pairs) · Split-deck method",
       "app.remaining": "{count} remaining",
       "app.remainingWithPrefix": "{prefix} · {count} remaining",
-      "app.deckAria.tarot": "Tarot deck. Swipe to browse and tap a card to draw.",
-      "app.deckAria.mystagogus": "Mystagogus deck. Swipe to browse and tap a card to draw.",
-      "app.deckAria.lxxxi": "LXXXI deck. Swipe to browse and tap a card to draw.",
+      "app.deckAria.tarot": "Tarot deck. Tap a card to draw.",
+      "app.deckAria.mystagogus": "Mystagogus deck. Tap a card to draw.",
+      "app.deckAria.lxxxi": "LXXXI deck. Tap a card to draw.",
       "app.deckAriaRule": "{label}; current requirement: {rule}",
       "app.deckEmptyPhase": "This card pool is empty. Switch pools or shuffle again.",
       "app.deckEmpty": "The deck is empty. Choose “Shuffle” to begin again.",
@@ -696,14 +735,14 @@
       "confirm.overview": "Changing the Overview method will clear this spread and reshuffle. Continue?",
       "confirm.spread": "Changing the spread will clear the current cards and reshuffle. Continue?",
       "confirm.deck": "Changing decks will clear this spread and reshuffle. Continue?",
-      "confirm.shuffle": "Shuffle again? This will clear the current spread.",
+      "confirm.shuffle": "Shuffling again clears the cards on the table. Continue?",
       "confirm.layout": "Changing layouts will clear unsaved card content. Continue?",
       "confirm.freeBoardDiscard": "Discard the Free Board draft and clear the board? This cannot be undone.",
       "confirm.freeBoardShuffle": "Reshuffling clears the Free Board and changes the pile order. Continue?",
       "confirm.kicker": "SPREAD CHANGE",
       "confirm.title": "Your current spread is still here",
       "confirm.cancel": "Keep Spread",
-      "confirm.proceed": "Continue & Clear",
+      "confirm.proceed": "Clear & shuffle",
       "choice.kicker": "CARD PICKER",
       "choice.title": "Choose an option",
       "choice.cancel": "Cancel",
@@ -779,7 +818,7 @@
       "freeBoard.cardsDrawn": "{count} placed",
       "freeBoard.remaining": "{count} remaining",
       "freeBoard.status": "{cards} placed · {remaining} remaining",
-      "freeBoard.hint": "Drag empty space to pan; drag a card to move it; tapping a card only selects it. Use Reveal All to reveal cards, then use the controls outside the board to view meanings. Use wheel or pinch to zoom.",
+      "freeBoard.hint": "Double tap a card in the fan to drop it on the board; drag a card to move it; press and hold a card to turn it. Use Reveal all when you are ready to read the cards.",
       "freeBoard.rotateMinus15": "−15°",
       "freeBoard.rotateMinus15Aria": "Rotate the selected card counter-clockwise by 15 degrees",
       "freeBoard.rotatePlus15": "+15°",
@@ -812,9 +851,54 @@
       "history.freeBoardCardState": "{card} · {state}",
       "history.savingFreeBoard": "Saving Free Board history…",
       "history.savedFreeBoard": "Free Board saved to this device's divination history.",
-      "history.duplicateFreeBoard": "This Free Board was just saved; no duplicate was created."
+      "history.duplicateFreeBoard": "This Free Board was just saved; no duplicate was created.",
+      "nav.settings": "Settings",
+      "deck.kicker": "Draw",
+      "spread.kicker": "Spread",
+      "results.kicker": "Reading",
+      "footer.aboutTitle": "About",
+      "footer.licenseTitle": "Licence & credits",
+      "footer.privacyTitle": "Privacy & analytics",
+      "theme.groveLight": "Verdant Grove (Bright)",
+      "theme.jade": "Jade Paper",
+      "theme.dusk": "Dusk Violet",
+      "theme.ash": "Ash",
+      "theme.toggle": "Tap the moon to change theme",
+      "egg.wake": "It opens its eyes",
+      "egg.sleep": "It closes its eyes",
+      "settings.pageVersion": "Site version",
+      "settings.useClassic": "Switch to classic",
+      "settings.useModern": "Switch to the new version",
+      "table.title": "Table",
+      "table.dragHint": "Drag to browse the deck · tap a card",
+      "spread.settings": "Spread settings",
+      "spread.settingsClose": "Close spread settings",
+      "deck.prev": "Previous card",
+      "deck.next": "Next card",
+      "footer.srcTarotTag": "Tarot",
+      "footer.srcTarot": "Meanings follow Tarot Skills for the 21st Century and the Quareia context",
+      "footer.srcMTag": "M deck",
+      "footer.srcM": "Keywords translated from Mystagogus by Josephine McCarthy",
+      "footer.srcLxxxiTag": "LXXXI",
+      "footer.srcLxxxi": "Meanings follow its English companion text",
+      "footer.funNote": "For entertainment only — read the cards with a level head.",
+      "app.meaningClose": "Close",
+      "confirm.keep": "Keep",
+      "freeBoard.open": "Free board",
+      "freeBoard.backToPreset": "Return to preset spread",
+      "freeBoard.openHint": "The deck fans out on the table with no spread applied.",
+      "freeBoard.cardHiddenAria": "Card {index}, face down",
+      "freeBoard.slotName": "Free slot",
+      "freeBoard.angleTitle": "Angle",
+      "freeBoard.drawnAria": "Drawn cards"
     }
   };
+
+  if (global.QuareiaClassicMessages) {
+    supported.forEach(function (lang) {
+      Object.assign(messages[lang], global.QuareiaClassicMessages[lang]);
+    });
+  }
 
   function detectSystemLocale() {
     var language = (global.navigator && (global.navigator.language || global.navigator.userLanguage)) || "zh-CN";

@@ -11,6 +11,19 @@
   margin-top: 0;
 }
 
+html.ui2 .theme-swatch[data-theme-id="jade"] {
+  --swatch-a: var(--swatch-jade-a);
+  --swatch-b: var(--swatch-jade-b);
+}
+html.ui2 .theme-swatch[data-theme-id="dusk"] {
+  --swatch-a: var(--swatch-dusk-a);
+  --swatch-b: var(--swatch-dusk-b);
+}
+html.ui2 .theme-swatch[data-theme-id="ash"] {
+  --swatch-a: var(--swatch-ash-a);
+  --swatch-b: var(--swatch-ash-b);
+}
+
 .menu-toggle {
   width: var(--tap);
   height: var(--tap);

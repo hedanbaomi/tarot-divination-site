@@ -203,6 +203,7 @@
     };
 
     var platform = options.platform === "android" ? "android" : "web";
+    var zoomEnabled = options.zoomEnabled !== false;
 
     var stateController = null;
     var context = null;
@@ -373,6 +374,7 @@
       if (draftAutosave || !draftApi || typeof draftApi.createAutosave !== "function") return;
       draftAutosave = draftApi.createAutosave({
         storage: options.storage,
+        key: options.draftKey,
         modelApi: modelApi,
         debounceMs: options.draftDebounceMs,
         onError: function () { setStatus(t("freeBoard.draftSaveFailed"), true); }
@@ -717,6 +719,24 @@
       }], "draw");
     }
 
+    /* drop a card straight onto a board coordinate (dragged out of the fan) */
+    function drawAt(cardId, point) {
+      if (!stateController || !point) return null;
+      var state = getState();
+      if (state.remainingPile.indexOf(cardId) === -1) return null;
+      var type = deckTypeFromState(state);
+      var orientation = state.settings.orientationMode === "mixed" && type === "tarot" &&
+        Math.random() > 0.5 ? "reversed" : "upright";
+      return mutate("draw", [cardId, {
+        orientation: orientation,
+        x: Math.round(Number(point.x) || 0),
+        y: Math.round(Number(point.y) || 0),
+        boardRotation: 0,
+        revealed: false,
+        meaningVisible: false
+      }], "draw");
+    }
+
     function revealAll() {
       if (!stateController || getState().cards.length === 0) return Promise.resolve(null);
       mutate("revealAll", [], "reveal-all");
@@ -760,7 +780,7 @@
         selectedCardId = null;
         if (draftAutosave) draftAutosave.discard();
         else if (draftApi && typeof draftApi.discard === "function") {
-          draftApi.discard(options.storage);
+          draftApi.discard(options.storage, { key: options.draftKey });
         }
         clearBoard();
         // clearBoard emits a normal change event and therefore schedules the
@@ -768,7 +788,7 @@
         // autosave, so remove the key once more after the reset.
         if (draftAutosave) draftAutosave.discard();
         else if (draftApi && typeof draftApi.discard === "function") {
-          draftApi.discard(options.storage);
+          draftApi.discard(options.storage, { key: options.draftKey });
         }
         setStatus(t("freeBoard.draftDiscarded"), false);
         return true;
@@ -789,6 +809,9 @@
           allDecks: context.allDecks
         });
         reconfigure(next);
+        if (root && typeof root.dispatchEvent === "function" && typeof root.CustomEvent === "function") {
+          root.dispatchEvent(new root.CustomEvent("quareia:board-shuffle"));
+        }
         return true;
       });
     }
@@ -1073,12 +1096,15 @@
       if (elements.discard) elements.discard.addEventListener("click", discardDraft);
       if (root && typeof root.addEventListener === "function") {
         root.addEventListener("quareia:mediaready", refreshMedia);
+        root.addEventListener("pagehide", function () {
+          if (draftAutosave) draftAutosave.flush().catch(function () { /* onError reports the failure */ });
+        });
       }
     }
 
     function loadDraft() {
       if (!draftApi || typeof draftApi.readResult !== "function") return null;
-      var result = draftApi.readResult(options.storage, { modelApi: modelApi });
+      var result = draftApi.readResult(options.storage, { key: options.draftKey, modelApi: modelApi });
       invalidDraft = Boolean(result.invalid);
       if (result.invalid) {
         setStatus(t("freeBoard.draftInvalid"), true);
@@ -1116,7 +1142,7 @@
         if (typeof options.onRestoreState === "function") options.onRestoreState(state);
         return state;
       } catch (_error) {
-        if (draftApi && typeof draftApi.discard === "function") draftApi.discard(options.storage);
+        if (draftApi && typeof draftApi.discard === "function") draftApi.discard(options.storage, { key: options.draftKey });
         invalidDraft = true;
         setStatus(t("freeBoard.draftInvalid"), true);
         if (typeof options.onDraftInvalid === "function") options.onDraftInvalid();
@@ -1163,8 +1189,7 @@
       visualCards = Object.create(null);
       visualViewport = null;
       setVisible(true);
-      render();
-      scheduleDraft();
+      notifyChange("reconfigure");
       return getState();
     }
 
@@ -1210,6 +1235,8 @@
       hasCards: function () { return Boolean(getState() && getState().cards.length); },
       isActive: function () { return Boolean(stateController); },
       draw: draw,
+      drawAt: drawAt,
+      rotate: rotate,
       revealAll: revealAll,
       undo: function () { return mutate("undo", [], "undo"); },
       redo: function () { return mutate("redo", [], "redo"); },

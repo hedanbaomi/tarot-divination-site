@@ -7,9 +7,9 @@ const assert = require("node:assert/strict");
 
 const projectRoot = path.resolve(__dirname, "..");
 
-test("Android v1.4.2 uses the next installable version identity", function () {
+test("Android v1.5.0 uses the next installable version identity", function () {
   const gradle = fs.readFileSync(path.join(projectRoot, "app", "build.gradle.kts"), "utf8");
 
-  assert.match(gradle, /versionCode\s*=\s*10\b/);
-  assert.match(gradle, /versionName\s*=\s*"1\.4\.2"/);
+  assert.match(gradle, /versionCode\s*=\s*11\b/);
+  assert.match(gradle, /versionName\s*=\s*"1\.5\.0"/);
 });
