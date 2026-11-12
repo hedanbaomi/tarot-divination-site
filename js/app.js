@@ -369,10 +369,8 @@
     if (el.positionGuide) el.positionGuide.hidden = freeform;
     if (el.resultsSection) el.resultsSection.style.display = freeform ? "none" : "";
     updateOverviewMethodUi();
-    if (el.spreadSettingGroup) el.spreadSettingGroup.style.display = freeform ? "none" : "";
-    if (el.spreadSettingSummary && freeform) {
-      el.spreadSettingSummary.textContent = t("freeBoard.settingsSummary");
-    }
+    /* 自由模式下“牌阵设置”仍然可用（从这里可以换回预设牌阵） */
+    if (el.spreadSettingGroup) el.spreadSettingGroup.style.display = "";
     if (el.freeBoardArea) {
       el.freeBoardArea.hidden = !freeform;
       el.freeBoardArea.setAttribute("aria-hidden", freeform ? "false" : "true");
@@ -1363,6 +1361,12 @@
     }
     arcanaFilter = resolvedFilter;
     el.arcanaFilter.value = arcanaFilter;
+    /* 从自由模式里挑了一个预设牌阵：回到牌阵模式 */
+    if (isFreeform()) {
+      layoutMode = "preset";
+      if (el.layoutModeSelect) el.layoutModeSelect.value = "preset";
+      applyLayoutUi();
+    }
     selectedSpreadId = newSpreadId;
     applyDeckUi();
     renderSpreadDefinition();
