@@ -415,6 +415,9 @@
       if (freeBoardUi && typeof freeBoardUi.reconfigure === "function") {
         freeBoardUi.reconfigure(freeBoardContext());
       }
+      /* freeform keeps the deck on the table: a reshuffle means a freshly
+         built (and shuffled) pile, not just putting the drawn cards back */
+      buildPile();
       renderFreeformFan();
       return;
     }
@@ -1695,23 +1698,12 @@
 
   async function handleShuffle() {
     if (isFreeform()) {
-      if (freeBoardUi && typeof freeBoardUi.getContext === "function") {
-        var boardContext = freeBoardUi.getContext();
-        if (boardContext) {
-          freeBoardUi.reconfigure({
-            deckType: boardContext.deckType,
-            deckName: boardContext.deckName,
-            mode: boardContext.mode,
-            filterMode: boardContext.filterMode,
-            cards: shuffle(boardContext.cards),
-            allDecks: boardContext.allDecks
-          });
-          renderFreeformFan();
-          window.requestAnimationFrame(function () {
-            globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
-          });
-        }
-      }
+      /* ask first only when cards are already laid out on the table */
+      if (freeDrawn.length && !(await confirmIfSpread(t("confirm.shuffle")))) return;
+      resetDeck();
+      window.requestAnimationFrame(function () {
+        globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
+      });
       return;
     }
     if (!(await confirmIfSpread(t("confirm.shuffle")))) return;
