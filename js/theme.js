@@ -3,18 +3,20 @@
 
   var STORAGE_KEY = "quareia-divination-theme";
   var DEFAULT_THEME = "celestial";
-  var THEMES = ["celestial", "parchment", "ember", "grove", "jade", "dusk", "ash"];
+  var THEMES = ["celestial", "parchment", "ember", "grove", "grove-light", "jade", "dusk", "ash"];
   var THEME_COLORS = {
     celestial: "#060919",
     parchment: "#efe4cc",
     ember: "#140a08",
     grove: "#31483c",
+    "grove-light": "#31483c",
     jade: "#eef1e9",
     dusk: "#140f1e",
     ash: "#121214"
   };
   var page = global.document && global.document.documentElement;
-  if (page && page.dataset && page.dataset.pageVersion === "classic") {
+  var classic = page && page.dataset && page.dataset.pageVersion === "classic";
+  if (classic) {
     THEMES = ["celestial", "parchment", "ember", "grove"];
   }
   var initialized = false;
@@ -23,6 +25,7 @@
   function readStoredTheme() {
     try {
       var value = global.localStorage && global.localStorage.getItem(STORAGE_KEY);
+      if (classic && value === "grove-light") return "grove";
       return THEMES.indexOf(value) !== -1 ? value : DEFAULT_THEME;
     } catch (_error) {
       return DEFAULT_THEME;

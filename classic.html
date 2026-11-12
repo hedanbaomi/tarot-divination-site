@@ -12,6 +12,7 @@
       try {
         var allowed = { celestial: 1, parchment: 1, ember: 1, grove: 1 };
         var stored = localStorage.getItem("quareia-divination-theme");
+        if (stored === "grove-light") stored = "grove";
         document.documentElement.setAttribute("data-theme", allowed[stored] ? stored : "celestial");
       } catch (e) {
         document.documentElement.setAttribute("data-theme", "celestial");
@@ -19,7 +20,7 @@
     })();
   </script>
   <script src="js/page-version.js?v=20261112-classic"></script>
-  <link rel="stylesheet" href="css/styles.css?v=20261103-grove-merged">
+  <link rel="stylesheet" href="css/styles.css?v=20261112-version-switch">
   <link rel="stylesheet" href="css/free-board.css?v=20260813-parchment-panels">
   <link rel="stylesheet" href="css/custom-spreads.css?v=20260820-custom-spread-window-final">
 </head>
@@ -124,10 +125,9 @@
             先铺 13 张大阿卡那，再将 13 张小阿卡那叠在对应牌位。
           </p>
         </div>
-        <div class="setting-group">
+        <div class="setting-group setting-group-version">
           <span class="setting-label" data-i18n="settings.pageVersion">页面版本</span>
-          <a class="btn btn-secondary" id="switchPageVersion" href="index.html?view=modern" data-i18n="settings.useModern">切回新版</a>
-          <p class="setting-summary" data-i18n="settings.versionHint">两版共用占卜历史。切换会重新打开页面，未完成的预设抽牌会清空。</p>
+          <a class="btn-mini" id="switchPageVersion" href="index.html?view=modern" data-i18n="settings.useModern">切回新版</a>
         </div>
         <div class="setting-group setting-group-spread">
           <label for="spreadSelect" data-i18n="settings.spread">预设牌阵</label>
@@ -540,7 +540,7 @@
   <script src="js/i18n-data-en.js"></script>
   <script src="js/classic/messages.js?v=20261112-classic"></script>
   <script src="js/i18n.js?v=20261112-classic"></script>
-  <script src="js/theme.js?v=20261112-classic"></script>
+  <script src="js/theme.js?v=20261112-grove-light"></script>
   <script src="js/announcements.js?v=1"></script>
   <script src="js/dialogs.js?v=20260727-card-picker"></script>
   <script src="js/custom-selects.js?v=20260820-custom-spread-window-final"></script>

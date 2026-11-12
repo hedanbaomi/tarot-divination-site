@@ -252,6 +252,43 @@ html.ui2[data-theme="grove"] {
   --moon-opacity: 0.65;
 }
 
+/* Use the lifted Grove palette from styles.css for the new interface. */
+html.ui2[data-theme="grove-light"] {
+  --ink: var(--bg-primary);
+  --surface: var(--bg-card);
+  --surface-2: var(--bg-secondary);
+  --line: var(--panel-border);
+  --line-soft: rgba(var(--accent-rgb), 0.22);
+  --veil-rgb: 52, 72, 58;
+  --track-bg: var(--neutral-contain);
+  --accent-contrast: var(--bg-card-back);
+}
+html.ui2 .theme-swatch[data-theme-id="grove-light"] {
+  --swatch-a: #587058;
+  --swatch-b: #e2c270;
+}
+html.ui2[data-theme="grove-light"] :is(.settings-panel, .spread-popover, .card-meaning, .free-angle) {
+  background: var(--panel-bg);
+  border-color: var(--panel-border);
+}
+html.ui2[data-theme="grove-light"] :is(.btn-mini, .btn-secondary, .spread-settings-btn, .fan-nav-btn) {
+  color: var(--accent-light);
+  background: var(--grove-key-bg);
+  border-color: var(--grove-gold-rim);
+  box-shadow: var(--grove-key-shadow);
+}
+html.ui2[data-theme="grove-light"] .btn-accent {
+  color: var(--btn-accent-text);
+  background: linear-gradient(135deg, var(--btn-accent-from), var(--btn-accent-mid), var(--btn-accent-to));
+  border-color: var(--grove-gold-rim-bright);
+}
+@media (hover: hover) {
+  html.ui2[data-theme="grove-light"] :is(.btn-mini, .btn-secondary, .spread-settings-btn, .fan-nav-btn):not(:disabled):hover {
+    background: var(--grove-key-bg-hover);
+    border-color: var(--grove-gold-rim-bright);
+  }
+}
+
 /* Jade paper (light, cool) */
 html.ui2[data-theme="jade"] {
   color-scheme: light;

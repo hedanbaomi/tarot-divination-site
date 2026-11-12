@@ -10,7 +10,7 @@
   <script>
     (function () {
       try {
-        var allowed = { celestial: 1, parchment: 1, ember: 1, grove: 1, jade: 1, dusk: 1, ash: 1 };
+        var allowed = { celestial: 1, parchment: 1, ember: 1, grove: 1, "grove-light": 1, jade: 1, dusk: 1, ash: 1 };
         var stored = localStorage.getItem("quareia-divination-theme");
         document.documentElement.setAttribute("data-theme", allowed[stored] ? stored : "celestial");
       } catch (e) {
@@ -19,10 +19,10 @@
     })();
   </script>
   <script src="js/page-version.js?v=20261112-classic"></script>
-  <link rel="stylesheet" href="css/styles.css?v=20261103-grove-merged">
+  <link rel="stylesheet" href="css/styles.css?v=20261112-version-switch">
   <link rel="stylesheet" href="css/free-board.css?v=20261112-review5">
   <link rel="stylesheet" href="css/custom-spreads.css?v=20261112-review5">
-  <link rel="stylesheet" href="css/redesign.css?v=20261112-flow1">
+  <link rel="stylesheet" href="css/redesign.css?v=20261112-grove-light">
 </head>
 <body>
   <div class="sky-moon" id="skyMoon" role="button" tabindex="0"
@@ -434,6 +434,11 @@
               <span class="theme-swatch-preview" aria-hidden="true"></span>
               <span data-i18n="theme.grove">密林祭坛</span>
             </button>
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="grove-light"
+              aria-checked="false">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.groveLight">密林祭坛（明亮版）</span>
+            </button>
             <button type="button" class="theme-swatch" role="radio" data-theme-id="jade"
               aria-checked="false">
               <span class="theme-swatch-preview" aria-hidden="true"></span>
@@ -493,10 +498,9 @@
             先铺 13 张大阿卡那，再将 13 张小阿卡那叠在对应牌位。
           </p>
         </div>
-        <div class="setting-group">
+        <div class="setting-group setting-group-version">
           <span class="setting-label" data-i18n="settings.pageVersion">页面版本</span>
-          <a class="btn btn-secondary" id="switchPageVersion" href="classic.html" data-i18n="settings.useClassic">切回旧版</a>
-          <p class="setting-summary" data-i18n="settings.versionHint">两版共用占卜历史。切换会重新打开页面，未完成的预设抽牌会清空。</p>
+          <a class="btn-mini" id="switchPageVersion" href="classic.html" data-i18n="settings.useClassic">切回旧版</a>
         </div>
         <div class="setting-group setting-group-spread">
           <label for="spreadSelect" data-i18n="settings.spread">预设牌阵</label>
@@ -579,8 +583,8 @@
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js?v=20261112-review5"></script>
   <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js?v=20261112-classic"></script>
-  <script src="js/theme.js?v=20261112-review5"></script>
+  <script src="js/i18n.js?v=20261112-grove-light"></script>
+  <script src="js/theme.js?v=20261112-grove-light"></script>
   <script src="js/announcements.js?v=1"></script>
   <script src="js/dialogs.js?v=20261112-review5"></script>
   <script src="js/custom-selects.js?v=20260820-custom-spread-window-final"></script>
