@@ -507,11 +507,11 @@
     var layer = document.getElementById("freeDrawCards");
     var w = (layer && layer.clientWidth) || 640;
     var h = (layer && layer.clientHeight) || 460;
-    var col = index % 6;
-    var row = Math.floor(index / 6) % 3;
+    var col = index % 4;
+    var row = Math.floor(index / 4) % 3;
     return {
-      x: Math.round(Math.min(w - 60, 96 + col * 62)),
-      y: Math.round(Math.max(90, h - 96 - row * 28))
+      x: Math.round(Math.min(w - 56, 96 + col * (w < 520 ? 62 : 96) + row * 18)),
+      y: Math.round(Math.max(120, h - 150 - row * 118))
     };
   }
 
