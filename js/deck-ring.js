@@ -373,6 +373,10 @@
     "click",
     function (event) {
       if (syntheticClick) return;
+      /* only clicks inside the table plane are card picks — the caption row
+         (牌阵设置) and everything else must keep their own click */
+      var inPlane = event.target.closest ? event.target.closest(".table-plane") : null;
+      if (!inPlane) return;
       if (Date.now() < suppressClickUntil) {
         event.stopPropagation();
         event.preventDefault();
