@@ -2881,11 +2881,19 @@ html.ui2 .free-draw {
 }
 
 html.ui2 .free-draw[hidden] { display: none !important; }
+/* 自由模式：桌面上留出一大块空白，牌可以拖到扇形下方摆开 */
+html.ui2 .table-area.is-freeform {
+  padding-bottom: min(40vh, 360px);
+}
+
+@media (max-width: 640px) {
+  html.ui2 .table-area.is-freeform { padding-bottom: 300px; }
+}
 
 html.ui2 .free-draw-rail {
   position: absolute;
   left: 0;
-  bottom: 4px;
+  top: 56%;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2927,8 +2935,8 @@ html.ui2 .free-draw-cards {
    and the caption of a dealt card — only its placement is free */
 html.ui2 .free-table-card {
   position: absolute;
-  width: 92px;
-  height: 138px;
+  width: 84px;
+  height: 126px;
   border: 0;
   background: none;
   transform: translate(-50%, -50%);
