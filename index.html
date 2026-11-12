@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="css/styles.css?v=20261103-grove-merged">
   <link rel="stylesheet" href="css/free-board.css?v=20261112-review5">
   <link rel="stylesheet" href="css/custom-spreads.css?v=20261112-review5">
-  <link rel="stylesheet" href="css/redesign.css?v=20261112-cardname1">
+  <link rel="stylesheet" href="css/redesign.css?v=20261112-flow1">
 </head>
 <body>
   <div class="sky-moon" id="skyMoon" role="button" tabindex="0"
@@ -100,6 +100,11 @@
 
       <p class="table-hint" data-i18n="table.dragHint">拖动牌轮旋转 · 轻点任意一张牌</p>
 
+      <p class="deck-cta" id="deckCta" role="status" aria-live="polite" aria-atomic="true" data-i18n="deck.initialCta">轻点环绕在四周的任意一张牌，把它抽进中央牌阵。</p>
+
+      <div class="spread-actions">
+        <button class="btn btn-accent" id="revealBtn" data-i18n="spread.reveal">一键开牌</button>
+      </div>
       <div class="free-draw" id="freeDraw" hidden>
         <div class="free-draw-rail">
           <button class="free-draw-btn" id="freeUndoBtn" type="button" disabled
@@ -110,11 +115,7 @@
         <div class="free-draw-cards" id="freeDrawCards" role="list"
           aria-label="已抽出的牌" data-i18n-aria-label="freeBoard.drawnAria"></div>
       </div>
-      <p class="deck-cta" id="deckCta" role="status" aria-live="polite" aria-atomic="true" data-i18n="deck.initialCta">轻点环绕在四周的任意一张牌，把它抽进中央牌阵。</p>
 
-      <div class="spread-actions">
-        <button class="btn btn-accent" id="revealBtn" data-i18n="spread.reveal">一键开牌</button>
-      </div>
       <p class="spread-hint" id="spreadHint" data-i18n="spread.hint">轻点任意一张牌可单独翻开，或按「开牌解读」全部翻开；开牌后再次轻点牌面可查看牌意。</p>
     </section>
 
@@ -585,7 +586,7 @@
   <script src="js/history-store.js"></script>
   <script src="js/history-ui.js?v=20261112-review5"></script>
   <script src="js/free-board-ui.js?v=20261112-review5"></script>
-  <script src="js/app.js?v=20261112-clamp12"></script>
+  <script src="js/app.js?v=20261112-flow3"></script>
   <script src="js/deck-ring.js?v=20261112-rev3"></script>
   <div class="spread-popover" id="spreadPopover" hidden role="dialog" aria-modal="false"
     aria-label="牌阵设置" data-i18n-aria-label="spread.settings">
