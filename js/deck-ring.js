@@ -117,6 +117,8 @@
     rx = Math.max(rx, Math.min(w < 620 ? 126 : 196, maxRx));
     var ry = rx * (w < 620 ? 0.84 : 0.86);
     var ch = center && center.offsetHeight ? center.offsetHeight : 200;
+    /* 自由模式下没有牌阵：扇形的下沿就是舞台的下沿 */
+    if (count === 0) ch = 0;
     var gap = w < 620 ? 46 : 66;
     var cf = w < 620 ? 1.08 : 0.86;
     var h = Math.round(ry + gap + 42 + ch * cf + 24);

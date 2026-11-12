@@ -808,6 +808,9 @@
           allDecks: context.allDecks
         });
         reconfigure(next);
+        if (root && typeof root.dispatchEvent === "function" && typeof root.CustomEvent === "function") {
+          root.dispatchEvent(new root.CustomEvent("quareia:board-shuffle"));
+        }
         return true;
       });
     }
@@ -1182,8 +1185,7 @@
       visualCards = Object.create(null);
       visualViewport = null;
       setVisible(true);
-      render();
-      scheduleDraft();
+      notifyChange("reconfigure");
       return getState();
     }
 

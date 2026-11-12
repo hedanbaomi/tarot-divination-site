@@ -480,7 +480,9 @@
     if (!el.deckSpread) return;
     el.deckSpread.innerHTML = "";
     var boardState = freeBoardUi && freeBoardUi.getState ? freeBoardUi.getState() : null;
-    var remaining = boardState && boardState.remainingPile ? boardState.remainingPile : [];
+    /* 没有画板时（画板面板已移除）就退回本局自己的牌堆 */
+    var remaining = boardState && boardState.remainingPile ? boardState.remainingPile
+      : pile.map(function (card) { return card.id; });
     el.deckSpread.classList.toggle("empty", remaining.length === 0);
     if (!remaining.length) {
       el.deckSpread.textContent = t("app.deckEmpty");
@@ -1531,6 +1533,10 @@
             cards: shuffle(boardContext.cards),
             allDecks: boardContext.allDecks
           });
+          renderFreeformFan();
+          window.requestAnimationFrame(function () {
+            globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
+          });
         }
       }
       return;
@@ -1684,7 +1690,7 @@
         }
       });
     }
-    if (globalThis.DivinationFreeBoardUi) {
+    if (globalThis.DivinationFreeBoardUi && document.getElementById("freeBoardArea")) {
       freeBoardUi = globalThis.DivinationFreeBoardUi.init({
         document: document,
         modelApi: globalThis.FreeBoardModel,

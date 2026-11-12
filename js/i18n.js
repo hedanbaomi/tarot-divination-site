@@ -368,7 +368,7 @@
       ,"freeBoard.settingsSummary": "自由画板：可从当前牌组与筛选结果中任意抽牌，不设固定牌位或目标张数。"
       ,"freeBoard.title": "自由画板"
       ,"freeBoard.open": "自由画板"
-      ,"freeBoard.openHint": "空出一片画布，点一张牌放进画板，想放哪儿就放哪儿。"
+      ,"freeBoard.openHint": "牌堆以扇形摊在桌上，不套用任何牌阵，想抽哪张抽哪张。"
       ,"freeBoard.toolbarAria": "自由画板控制"
       ,"freeBoard.undo": "撤销"
       ,"freeBoard.undoAria": "撤销上一次自由画板操作"
@@ -793,7 +793,7 @@
       "freeBoard.settingsSummary": "Free Board: draw any card from the current deck and filter; there are no fixed positions or target count.",
       "freeBoard.title": "Free Board",
       "freeBoard.open": "Free board",
-      "freeBoard.openHint": "Clear the table, pick a card from the pile and drop it anywhere on the board.",
+      "freeBoard.openHint": "The deck fans out on the table with no spread applied.",
       "freeBoard.toolbarAria": "Free Board controls",
       "freeBoard.undo": "Undo",
       "freeBoard.undoAria": "Undo the last Free Board action",
