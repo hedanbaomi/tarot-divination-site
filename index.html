@@ -91,6 +91,17 @@
       </div>
 
       <p class="table-hint" data-i18n="table.dragHint">拖动牌轮旋转 · 轻点任意一张牌</p>
+
+      <div class="free-draw" id="freeDraw" hidden>
+        <div class="free-draw-rail">
+          <button class="free-draw-btn" id="freeUndoBtn" type="button" disabled
+            aria-label="撤销" data-i18n-aria-label="freeBoard.undo" title="撤销">↶</button>
+          <button class="free-draw-btn" id="freeRedoBtn" type="button" disabled
+            aria-label="重做" data-i18n-aria-label="freeBoard.redo" title="重做">↷</button>
+        </div>
+        <div class="free-draw-cards" id="freeDrawCards" role="list"
+          aria-label="已抽出的牌" data-i18n-aria-label="freeBoard.drawnAria"></div>
+      </div>
       <p class="deck-cta" id="deckCta" role="status" aria-live="polite" aria-atomic="true" data-i18n="deck.initialCta">轻点环绕在四周的任意一张牌，把它抽进中央牌阵。</p>
 
       <div class="spread-actions">
@@ -567,7 +578,7 @@
   <script src="js/history-ui.js?v=20260809-free-board-v1"></script>
   <script src="js/free-board-ui.js?v=20261112-noboard2"></script>
   <script src="js/free-board-canvas.js?v=20261112-board2"></script>
-  <script src="js/app.js?v=20261112-ff2"></script>
+  <script src="js/app.js?v=20261112-draw1"></script>
   <script src="js/deck-ring.js?v=20261112-arc32"></script>
   <div class="spread-popover" id="spreadPopover" hidden role="dialog" aria-modal="false"
     aria-label="牌阵设置" data-i18n-aria-label="spread.settings">
