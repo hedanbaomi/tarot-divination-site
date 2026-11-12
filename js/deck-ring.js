@@ -435,24 +435,11 @@
       window.cancelAnimationFrame(pageRaf);
       pageRaf = 0;
     }
+    /* 已经在尽头：按钮是灰的，按下去什么都不发生（也不再回弹） */
     if (Math.abs(to - from) < 0.0009) {
-      /* 已经在尽头：给一下短促的回弹，按下去有反馈 */
-      var bounceFrom = from + direction * -0.006;
-      var t0 = 0;
-      (function settle(now) {
-        if (!t0) t0 = now;
-        var p = Math.min(1, (now - t0) / 180);
-        slide = bounceFrom + (from - bounceFrom) * (1 - Math.pow(1 - p, 3));
-        layout();
-        if (p < 1) {
-          pageRaf = window.requestAnimationFrame(settle);
-        } else {
-          slide = from;
-          layout();
-          pageRaf = 0;
-          syncFanNav();
-        }
-      })(performance.now());
+      slide = from;
+      layout();
+      syncFanNav();
       return;
     }
     var start = 0;

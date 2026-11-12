@@ -3041,3 +3041,12 @@ html.ui2 .table-area.is-freeform .fan-nav { margin-bottom: 10px; }
   html.ui2 .fan-nav-btn,
   html.ui2 .fan-nav-btn svg { transition: none; }
 }
+
+/* at the ends the paging arrow is grey and does nothing at all */
+html.ui2 .fan-nav-btn:disabled:active { transform: none; }
+html.ui2 .fan-nav-btn:disabled:hover {
+  color: var(--text-muted);
+  border-color: var(--line-soft);
+  background: transparent;
+}
+html.ui2 .fan-nav-btn:disabled:hover svg { transform: none; }
