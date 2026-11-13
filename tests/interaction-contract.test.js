@@ -104,6 +104,11 @@ test("revealed cards open a readable meaning sheet and keep their own face", fun
   assert.match(css, /\.spread-card-meaning \{ display: none !important; \}/);
   assert.match(i18n, /"app\.meaningAria"/);
   assert.match(i18n, /"app\.meaningClose"/);
+  /* the × in the sheet has to actually close it, not just sit there */
+  assert.match(html, /id="cardMeaningClose"/);
+  assert.match(app, /var meaningCloseBtn = document\.getElementById\("cardMeaningClose"\);/);
+  /* the panel is parsed after app.js, so a direct lookup can be null: delegate too */
+  assert.match(app, /if \(event\.target\.closest\("#cardMeaningClose"\)\) hideCardMeaning\(\);/);
 });
 
 test("Free Board gestures keep viewport transforms, orientation, and board rotation separate", function () {

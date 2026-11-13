@@ -70,3 +70,23 @@ test("both locales carry the two sentences and the hint has a visible state", fu
   assert.match(css, /html\.ui2 \.table-hint\.is-edge \{/);
   assert.match(css, /html\.ui2 \.table-hint\.is-edge \{[^}]*color: var\(--accent-light\);/);
 });
+
+test("the shuffle IIFE reads the same arc span as the fan", function () {
+  var at = ring.indexOf("function playShuffle()");
+  var shuffle = ring.slice(at - 900, at);
+  assert.match(ring, /window\.DivinationDeckArc = ARC_SPREAD;/);
+  assert.match(shuffle, /var ARC_SPREAD = window\.DivinationDeckArc \|\| 0\.82;/);
+  /* the arc helper must not reach for a variable it cannot see */
+  assert.match(ring, /var a = \(u \* 180 - 90\) \* ARC_SPREAD;/);
+});
+
+test("paging: Home and End stop a glide that is still running", function () {
+  /* Arrow paging animates for 320 ms. If the user hits End during that glide,
+     the old tween finished later and wrote its own target back, so the fan
+     stopped short of the end and the chevron stayed enabled. */
+  assert.match(ring, /function stopGlide\(\) \{/);
+  assert.match(ring, /else if \(event\.key === "Home"\) \{ stopGlide\(\);/);
+  assert.match(ring, /else if \(event\.key === "End"\) \{ stopGlide\(\);/);
+  var fan = between(ring, "function pageFan(direction) {", "var start = 0;");
+  assert.match(fan, /stopGlide\(\);/);
+});

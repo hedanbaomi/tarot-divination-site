@@ -95,6 +95,8 @@
 
   /* 牌弧的角跨：小于 1 时两端抬起，牌弧下沿不会压到牌阵上（1 = 完整半圆） */
   var ARC_SPREAD = 0.82;
+  /* 洗牌动画写在下面另一个 IIFE 里，张角只有这一个来源 */
+  window.DivinationDeckArc = ARC_SPREAD;
 
   var geomCache = null;
   function geometry() {
@@ -478,6 +480,14 @@
     }, 1300);
   }
 
+  /* 停掉正在跑的翻页动画：Home/End 这种「直接跳」不能被上一帧的缓动拉回去 */
+  function stopGlide() {
+    if (pageRaf) {
+      window.cancelAnimationFrame(pageRaf);
+      pageRaf = 0;
+    }
+  }
+
   function pageFan(direction) {
     if (ring.classList.contains("is-shuffling")) return;
     var step = 1 / Math.max(1, visibleCount() - 1);
@@ -485,10 +495,7 @@
     var from = slide;
     var to = Math.min(max, Math.max(0, slide + direction * step));
     velocity = 0;
-    if (pageRaf) {
-      window.cancelAnimationFrame(pageRaf);
-      pageRaf = 0;
-    }
+    stopGlide();
     /* 已经在尽头：按钮是灰的，按下去什么都不发生（也不再回弹） */
     if (Math.abs(to - from) < 0.0009) {
       flashEdge(direction < 0 ? -1 : 1);
@@ -543,8 +550,8 @@
     if (event.target !== stage && !stage.contains(event.target)) return;
     if (event.key === "ArrowLeft") { pageFan(-1); event.preventDefault(); }
     else if (event.key === "ArrowRight") { pageFan(1); event.preventDefault(); }
-    else if (event.key === "Home") { slide = 0; velocity = 0; layout(); event.preventDefault(); }
-    else if (event.key === "End") { slide = maxSlide(); velocity = 0; layout(); event.preventDefault(); }
+    else if (event.key === "Home") { stopGlide(); slide = 0; velocity = 0; layout(); event.preventDefault(); }
+    else if (event.key === "End") { stopGlide(); slide = maxSlide(); velocity = 0; layout(); event.preventDefault(); }
     else if (event.key === "Enter") {
       var focused = document.activeElement;
       var isCard = focused && focused.classList && focused.classList.contains("deck-card");
@@ -588,6 +595,8 @@
 
 /* ---------- shuffle choreography: scatter → vortex → pile → fan out ---------- */
 (function () {
+  /* 与上面的扇形同一个张角：那个变量在本 IIFE 作用域外，读共享值 */
+  var ARC_SPREAD = window.DivinationDeckArc || 0.82;
   var btn = document.getElementById("shuffleBtn");
   var ring = document.getElementById("deckSpread");
   if (!btn || !ring) return;

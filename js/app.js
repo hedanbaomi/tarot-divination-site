@@ -1403,6 +1403,15 @@
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape") hideCardMeaning();
   });
+  var meaningCloseBtn = document.getElementById("cardMeaningClose");
+  if (meaningCloseBtn) {
+    meaningCloseBtn.addEventListener("click", function () { hideCardMeaning(); });
+  }
+  /* 面板在脚本之后才解析出来，直接绑会拿到 null；用事件委托兜住关闭按钮 */
+  document.addEventListener("click", function (event) {
+    if (!event.target || !event.target.closest) return;
+    if (event.target.closest("#cardMeaningClose")) hideCardMeaning();
+  });
 
   function renderSpreadCards() {
     if (isFreeform()) return;
