@@ -266,8 +266,13 @@ test("bulk and individual reveals save the same validated Tarot reading exactly 
       freeBoardDeckName: function () { return "Tarot"; },
       historyUiController: { saveFreeformReading: function (input) { saved.push(records.buildFreeformLayoutRecord(input)); } }
     });
+    var faces = [];
     var reveal = instantiate("revealFreeCards", {
-      freeDrawn: drawn, renderFreeDraw: function () {}, renderResults: function () { renders++; },
+      freeDrawn: drawn,
+      document: { querySelector: function (selector) { faces.push(selector); return null; } },
+      applyFreeCardFace: function () {},
+      syncFreeActions: function () {},
+      renderResults: function () { renders++; },
       saveFreeformDraftNow: function () {}, notifyFreeformReadingCompleted: function () {}, saveFreeformHistory: save
     });
     if (!bulk) { reveal([drawn[0]]); assert.equal(saved.length, 0); }
@@ -275,9 +280,31 @@ test("bulk and individual reveals save the same validated Tarot reading exactly 
     reveal(drawn);
     assert.equal(renders, bulk ? 1 : 2);
     assert.equal(saved.length, 1);
+    assert.ok(faces.length > 0, "翻牌应当按 data-card-id 找到那张牌并只更新它");
+    assert.match(faces[faces.length - 1], /\.free-table-card\[data-card-id="major-16"\]|\.free-table-card\[data-card-id="minor-cups-ace"\]/);
     assert.deepEqual(saved[0].cards.map(function (c) { return [c.arcana, c.cardName, c.orientation, c.boardRotation]; }),
       [["major", "塔", "reversed", 15], ["minor", "圣杯王牌", "reversed", 15]]);
   });
+});
+
+test("白盒：翻牌不重建画板、不重新钳制位置（防止牌「瞬移」）", function () {
+  var reveal = grab("revealFreeCards");
+  assert.doesNotMatch(reveal, /renderFreeDraw\(/, "翻牌不能再整块重绘");
+  assert.match(reveal, /applyFreeCardFace\(cardEl, item, index\)/);
+  assert.match(reveal, /syncFreeActions\(\)/);
+
+  var helper = grab("applyFreeCardFace");
+  assert.match(helper, /classList\.toggle\("revealed", !!item\.revealed\)/);
+  assert.match(helper, /front\.classList\.toggle\("reversed"/);
+  assert.match(helper, /img\.alt = item\.revealed/);
+  assert.match(helper, /nameEl\.textContent = item\.revealed/);
+  assert.match(helper, /freeBoard\.cardHiddenAria/);
+
+  var render = grab("renderFreeDraw");
+  assert.match(render, /var relayout = freeformRelayout \|\| layerW !== freeformLayerW \|\| layerH !== freeformLayerH;/);
+  assert.match(render, /if \(relayout && layerW && layerH\) \{/);
+  assert.doesNotMatch(render, /item\.x = Math\.max\(46, Math\.min\(layerW - 46/, "旧的全量钳制不能再出现");
+  assert.match(grab("restoreFreeformDraft"), /freeformRelayout = true;/);
 });
 
 test("白盒：扇形点击守卫不会抢走牌阵里卡片的点击", function () {
