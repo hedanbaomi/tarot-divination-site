@@ -25,6 +25,7 @@
   var syntheticClick = false;
   var raf = null;
   var pageRaf = 0;
+  var moveRaf = 0;
   var lastTime = 0;
   var WINDOW = 172;
   var lut = null;
@@ -100,7 +101,11 @@
 
   var geomCache = null;
   function geometry() {
-    if (dragging && geomCache) return geomCache;
+    if (dragging) {
+      if (geomCache) return geomCache;
+    } else if (geomCache) {
+      geomCache = null;
+    }
     var w = stage.clientWidth || 900;
     var grid = document.getElementById("spreadGrid");
     /* the spread's real footprint, measured from its own slots (not the
@@ -150,7 +155,10 @@
     stage.style.setProperty("--ring-cy", cy + "px");
     stage.style.minHeight = h + 44 + "px";
     buildLut(rx, ry);
-    return { rx: rx, ry: ry };
+    /* 同一次拖动内复用测量结果；拖动结束或下次按下时作废 */
+    var g = { rx: rx, ry: ry };
+    if (dragging) geomCache = g;
+    return g;
   }
 
   function layout() {
@@ -158,7 +166,10 @@
     var n = cards.length;
     if (!n) return;
     var g = geometry();
-    var cw = ringCardW || (ringCardW = cards[0].offsetWidth || 78);
+    /* 牌宽跟着断点走（64px ↔ 50px）：读一次实宽，变了就更新缓存，
+       否则缩窗后可见张数还是按旧牌宽算的 */
+    var cw = cards[0].offsetWidth || 78;
+    if (cw !== ringCardW) ringCardW = cw;
     var arcLen = (lut && lut.total) || Math.PI * ((g.rx + g.ry) / 2);
     var fit = Math.round(arcLen / (cw * 0.34));
     lastVis = Math.max(6, Math.min(40, n < fit ? n : fit));
@@ -351,6 +362,12 @@
       window.cancelAnimationFrame(pageRaf);
       pageRaf = 0;
     }
+    if (moveRaf) {
+      window.cancelAnimationFrame(moveRaf);
+      moveRaf = 0;
+    }
+    /* 每次按下都重新量几何，缓存只在这一次拖动内复用 */
+    geomCache = null;
     dragging = true;
     pointerId = event.pointerId;
     startX = event.clientX;
@@ -378,7 +395,12 @@
     else edgeSide = 0;
     velocity = clamped - slide;
     slide = clamped;
-    layout();
+    /* 一帧最多重排一次：同一帧里的移动事件全部合并进这一次 rAF */
+    if (moveRaf) return;
+    moveRaf = window.requestAnimationFrame(function () {
+      moveRaf = 0;
+      layout();
+    });
   }
 
   function onUp(event) {
@@ -389,6 +411,10 @@
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onUp);
+    if (moveRaf) {
+      window.cancelAnimationFrame(moveRaf);
+      moveRaf = 0;
+    }
     var max = maxSlide();
     if (slide < 0 || slide > max) {
       suppressClickUntil = Date.now() + 400;
@@ -408,6 +434,9 @@
     "click",
     function (event) {
       if (syntheticClick) return;
+      /* 键盘激活按钮产生的点击 detail 是 0：交给焦点元素自己处理，
+         不走下面「最近一张牌」的拾取（否则按 Enter 会误抽下一张） */
+      if (event.detail === 0) return;
       /* only clicks inside the table plane are card picks — the caption row
          (牌阵设置) and everything else must keep their own click */
       var inPlane = event.target.closest ? event.target.closest(".table-plane") : null;
@@ -452,15 +481,25 @@
     var max = maxSlide();
     var prev = document.getElementById("deckPrevBtn");
     var next = document.getElementById("deckNextBtn");
-    if (prev) prev.disabled = slide <= 0.0005;
-    if (next) next.disabled = slide >= max - 0.0005;
+    /* 尽头箭头只是「看起来禁用」：不设 disabled 属性，点它（或键盘激活它）
+       仍能触发那句「已经到牌堆开头 / 末尾了」，牌堆本身保持原位 */
+    var pEnd = slide <= 0.0005;
+    var nEnd = slide >= max - 0.0005;
+    if (prev) {
+      prev.setAttribute("aria-disabled", pEnd ? "true" : "false");
+      prev.classList.toggle("is-at-end", pEnd);
+    }
+    if (next) {
+      next.setAttribute("aria-disabled", nEnd ? "true" : "false");
+      next.classList.toggle("is-at-end", nEnd);
+    }
   }
 
   /* 已经到牌堆尽头：把牌堆下面那行提示临时换成一句“到头了”，
      1.3 秒后换回原文案；同时那一侧的翻页箭头本来就是灰的。
      不再做橡胶位移。 */
   function flashEdge(dir) {
-    if (edgeSide === dir) return;
+    /* 每次都重新提示：定时器到期时把 edgeSide 清零，下一次到尽头还能再触发 */
     edgeSide = dir;
     var el = hintEl || (hintEl = document.querySelector(".table-hint"));
     if (!el) return;
@@ -477,6 +516,7 @@
       if (!back || back === hintKey) back = "左右拖动翻看牌堆 · 轻点任意一张牌";
       el.textContent = back;
       el.classList.remove("is-edge");
+      edgeSide = 0;
     }, 1300);
   }
 
@@ -538,7 +578,7 @@
         Math.abs(cy - (stageRect.top + stageRect.height / 2)) * 0.4;
       if (dist < bestDist) { bestDist = dist; best = card; }
     }
-    if (best) best.click();
+    if (best) { pick(best); best.click(); }
   }
 
   var prevBtn = document.getElementById("deckPrevBtn");
@@ -553,9 +593,9 @@
     else if (event.key === "Home") { stopGlide(); slide = 0; velocity = 0; layout(); event.preventDefault(); }
     else if (event.key === "End") { stopGlide(); slide = maxSlide(); velocity = 0; layout(); event.preventDefault(); }
     else if (event.key === "Enter") {
-      var focused = document.activeElement;
-      var isCard = focused && focused.classList && focused.classList.contains("deck-card");
-      if (isCard) return;
+      /* 只有焦点在牌桌本身时才由这里抽牌；焦点在子按钮上（牌阵设置、箭头…）
+         时把 Enter 交给那个按钮自己处理，不再顺带抽一张 */
+      if (event.target !== stage) return;
       drawCenteredCard();
       event.preventDefault();
     }

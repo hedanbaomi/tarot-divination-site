@@ -44,16 +44,66 @@ test("dragging past an end only clamps the index and flashes the end hint", func
 
 test("flashEdge swaps the hint line for one sentence and puts it back", function () {
   var fn = between(ring, "function flashEdge(", "function pageFan(");
-  assert.match(fn, /if \(edgeSide === dir\) return;/);
+  /* no same-side early return any more: after the 1.3 s restore, the next
+     end hit must flash again (each independent action gives its own hint) */
+  assert.doesNotMatch(fn, /if \(edgeSide === dir\) return;/);
   assert.match(fn, /document\.querySelector\("\.table-hint"\)/);
   assert.match(fn, /var key = dir < 0 \? "table\.edgeStart" : "table\.edgeEnd";/);
   assert.match(fn, /el\.textContent = text;/);
   assert.match(fn, /el\.classList\.add\("is-edge"\);/);
   assert.match(fn, /el\.classList\.remove\("is-edge"\);/);
+  /* the restore must clear edgeSide so a later hit can flash again */
+  assert.match(fn, /el\.classList\.remove\("is-edge"\);\s*edgeSide = 0;/);
   assert.match(fn, /\}, 1300\);/);
   /* restoring reads the original key, so a language switch still lands right */
   assert.match(fn, /hintKey = el\.getAttribute\("data-i18n"\) \|\| "table\.dragHint";/);
   assert.match(fn, /var back = api && api\.t \? api\.t\(hintKey\) : "";/);
+});
+
+test("the end chevron looks disabled but still answers clicks with the hint", function () {
+  var fn = between(ring, "function syncFanNav()", "function pageFan(");
+  /* no disabled attribute: it would swallow the click and the keyboard
+     activation, and the reviewer's "click the grey arrow" would stay silent */
+  assert.doesNotMatch(fn, /\.disabled = /);
+  assert.match(fn, /setAttribute\("aria-disabled", pEnd \? "true" : "false"\);/);
+  assert.match(fn, /classList\.toggle\("is-at-end", pEnd\);/);
+  assert.match(fn, /setAttribute\("aria-disabled", nEnd \? "true" : "false"\);/);
+  assert.match(fn, /classList\.toggle\("is-at-end", nEnd\);/);
+  assert.match(css, /html\.ui2 \.fan-nav-btn:disabled,\r?\nhtml\.ui2 \.fan-nav-btn\.is-at-end \{/);
+  assert.match(css, /html\.ui2 \.fan-nav-btn\.is-at-end:hover svg \{ transform: none; \}/);
+});
+
+test("pointer moves merge into one layout per frame and reuse drag geometry", function () {
+  var move = between(ring, "function onMove(", "function onUp(");
+  /* the sync layout() call is gone; a single rAF is scheduled per frame */
+  assert.doesNotMatch(move, /slide = clamped;\s*layout\(\);/);
+  assert.match(move, /if \(moveRaf\) return;/);
+  assert.match(move, /moveRaf = window\.requestAnimationFrame\(function \(\) \{/);
+  var up = between(ring, "function onUp(", "stage.addEventListener(\"pointerdown\"");
+  assert.match(up, /window\.cancelAnimationFrame\(moveRaf\);/);
+  /* geometry writes its cache during a drag and invalidates it afterwards */
+  var geo = between(ring, "function geometry()", "function layout()");
+  assert.match(geo, /if \(dragging\) geomCache = g;/);
+  assert.match(geo, /else if \(geomCache\) \{\s*geomCache = null;/);
+  var down = between(ring, "function onDown(", "function onMove(");
+  assert.match(down, /geomCache = null;\s*dragging = true;/);
+});
+
+test("card width follows the breakpoint so the visible count matches a fresh load", function () {
+  var lay = between(ring, "function layout()", "function flyToSlot(");
+  /* never keep the first measured width: 64px desktop vs 50px mobile */
+  assert.doesNotMatch(lay, /ringCardW \|\| \(ringCardW = cards\[0\]\.offsetWidth/);
+  assert.match(lay, /var cw = cards\[0\]\.offsetWidth \|\| 78;/);
+  assert.match(lay, /if \(cw !== ringCardW\) ringCardW = cw;/);
+});
+
+test("Enter draws only when the table itself is focused; buttons keep their own Enter", function () {
+  var key = between(ring, "stage.addEventListener(\"keydown\"", "if (window.MutationObserver) {");
+  assert.match(key, /else if \(event\.key === "Enter"\) \{/);
+  assert.match(key, /if \(event\.target !== stage\) return;/);
+  assert.doesNotMatch(key, /var isCard = focused/);
+  /* keyboard-synthesized clicks (detail 0) must not pick a nearby card */
+  assert.match(ring, /if \(event\.detail === 0\) return;/);
 });
 
 test("pressing the paging button at an end says the same thing", function () {

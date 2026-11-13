@@ -283,7 +283,7 @@ html.ui2[data-theme="grove-light"] .btn-accent {
   border-color: var(--grove-gold-rim-bright);
 }
 @media (hover: hover) {
-  html.ui2[data-theme="grove-light"] :is(.btn-mini, .btn-secondary, .spread-settings-btn, .fan-nav-btn):not(:disabled):hover {
+  html.ui2[data-theme="grove-light"] :is(.btn-mini, .btn-secondary, .spread-settings-btn, .fan-nav-btn):not(:disabled):not(.is-at-end):hover {
     background: var(--grove-key-bg-hover);
     border-color: var(--grove-gold-rim-bright);
   }
@@ -3063,7 +3063,8 @@ html.ui2 .fan-nav-btn:focus-visible {
   outline: 2px solid rgba(var(--accent-rgb), .55);
   outline-offset: 3px;
 }
-html.ui2 .fan-nav-btn:disabled {
+html.ui2 .fan-nav-btn:disabled,
+html.ui2 .fan-nav-btn.is-at-end {
   opacity: .3;
   cursor: default;
   border-color: var(--line-soft);
@@ -3082,13 +3083,16 @@ html.ui2 .table-area.is-freeform .fan-nav { margin-bottom: 10px; }
 }
 
 /* at the ends the paging arrow is grey and does nothing at all */
-html.ui2 .fan-nav-btn:disabled:active { transform: none; }
-html.ui2 .fan-nav-btn:disabled:hover {
+html.ui2 .fan-nav-btn:disabled:active,
+html.ui2 .fan-nav-btn.is-at-end:active { transform: none; }
+html.ui2 .fan-nav-btn:disabled:hover,
+html.ui2 .fan-nav-btn.is-at-end:hover {
   color: var(--text-muted);
   border-color: var(--line-soft);
   background: transparent;
 }
-html.ui2 .fan-nav-btn:disabled:hover svg { transform: none; }
+html.ui2 .fan-nav-btn:disabled:hover svg,
+html.ui2 .fan-nav-btn.is-at-end:hover svg { transform: none; }
 
 /* ---------- wide spreads scroll inside the table, not the page ---------- */
 html.ui2 .table-plane > .table-center {
