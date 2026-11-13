@@ -1630,7 +1630,9 @@ html.ui2 .table-center .phase-label:empty {
 }
 html.ui2 .table-center .spread-board-scroll {
   /* 7 列牌阵在 390px 上宽 550px：保留横向滚动，两端牌位才够得着 */
-  padding: 0;
+  /* 上下留 8px：删除牌的 × 徽标才不会被这个滚动容器裁掉 */
+  padding: 10px 8px 2px;
+  margin: -10px -8px -2px;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
@@ -1883,6 +1885,14 @@ html.ui2 .table-hint {
   letter-spacing: 0.08em;
   color: var(--text-muted);
   opacity: 0.75;
+}
+
+/* 拖到牌堆尽头时，这行提示临时换成“到头了”，见 flashEdge() */
+html.ui2 .table-hint.is-edge {
+  color: var(--accent-light);
+  opacity: 1;
+  font-weight: 500;
+  letter-spacing: 0.1em;
 }
 
 html.ui2 .table-plane::after {
@@ -2501,6 +2511,7 @@ html.ui2 .shuffle-orbit {
   height: 0;
 }
 html.ui2 .shuffle-layer .shuffle-clone {
+  will-change: transform;
   position: absolute !important;
   left: 0 !important;
   top: 0 !important;
