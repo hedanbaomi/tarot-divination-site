@@ -1,6 +1,6 @@
 /* Deck fan: a top-down arc of cards crowning the spread.
    Only a window of the deck is on the arc at once; dragging slides the deck
-   along it and stops hard at the first and the last card. Tap to draw. */
+   along it, with resistance and spring-back at either end. Tap to draw. */
 (function () {
   "use strict";
 
@@ -31,10 +31,7 @@
   var lut = null;
   var lutKey = "";
   var ringCardW = 0;
-  var edgeSide = 0;
-  var hintEl = null;
-  var hintKey = "";
-  var hintTimer = 0;
+  var EDGE_DRAG_SCALE = 0.22 * 0.28; // Combined drag and display damping of the original fan.
   /* how many cards the arc can hold without them squashing into each other;
      recomputed from the real arc length on every layout */
   var lastVis = 0;
@@ -176,11 +173,8 @@
     var vis = lastVis;
     var K = Math.max(1, Math.min(vis, n) - 1);
     var max = maxSlide();
-    if (slide < 0) {
-      slide = 0;
-    } else if (slide > max) {
-      slide = max;
-    }
+    // A drag and its release animation may temporarily extend past the endpoints.
+    if (!dragging && !raf) slide = Math.max(0, Math.min(max, slide));
     for (var i = 0; i < n; i++) {
       var card = cards[i];
       var u = i / K - slide;
@@ -273,7 +267,7 @@
     var max = maxSlide();
     var bound = slide < 0 ? 0 : slide > max ? max : null;
     if (bound !== null) {
-      /* hard stop: settle onto the end of the deck and stop dead */
+      /* Ease the resisted drag back to the first or last card. */
       slide += (bound - slide) * 0.34;
       velocity = 0;
       layout();
@@ -287,7 +281,7 @@
       }
       return;
     }
-    slide += velocity * dt;
+    slide = Math.max(0, Math.min(max, slide + velocity * dt));
     velocity *= Math.pow(0.93, dt);
     layout();
     if (Math.abs(velocity) > 0.0004) {
@@ -374,7 +368,6 @@
     startSlide = slide;
     moved = 0;
     velocity = 0;
-    edgeSide = 0;
     stage.classList.add("is-dragging");
     setActive(nearestCard(event.clientX, event.clientY, 36));
     window.addEventListener("pointermove", onMove);
@@ -389,12 +382,10 @@
     var perPixel = 1 / (lut ? lut.total : 400);
     var raw = startSlide - dx * perPixel;
     var max = maxSlide();
-    /* 越界不再做位移：索引永远停在 [0, max]，只提示一句“到头了” */
-    var clamped = raw < 0 ? 0 : raw > max ? max : raw;
-    if (clamped !== raw) flashEdge(raw < 0 ? -1 : 1);
-    else edgeSide = 0;
-    velocity = clamped - slide;
-    slide = clamped;
+    var bound = Math.max(0, Math.min(max, raw));
+    var next = bound + (raw - bound) * EDGE_DRAG_SCALE;
+    velocity = next - slide;
+    slide = next;
     /* 一帧最多重排一次：同一帧里的移动事件全部合并进这一次 rAF */
     if (moveRaf) return;
     moveRaf = window.requestAnimationFrame(function () {
@@ -416,10 +407,7 @@
       moveRaf = 0;
     }
     var max = maxSlide();
-    if (slide < 0 || slide > max) {
-      suppressClickUntil = Date.now() + 400;
-      startInertia();
-    } else if (moved > 8) {
+    if (slide < 0 || slide > max || moved > 8) {
       suppressClickUntil = Date.now() + 400;
       startInertia();
     } else {
@@ -434,9 +422,6 @@
     "click",
     function (event) {
       if (syntheticClick) return;
-      /* 键盘激活按钮产生的点击 detail 是 0：交给焦点元素自己处理，
-         不走下面「最近一张牌」的拾取（否则按 Enter 会误抽下一张） */
-      if (event.detail === 0) return;
       /* only clicks inside the table plane are card picks — the caption row
          (牌阵设置) and everything else must keep their own click */
       var inPlane = event.target.closest ? event.target.closest(".table-plane") : null;
@@ -449,7 +434,7 @@
         event.preventDefault();
         return;
       }
-      if (Date.now() < suppressClickUntil) {
+      if (event.detail !== 0 && Date.now() < suppressClickUntil) {
         event.stopPropagation();
         event.preventDefault();
         return;
@@ -459,6 +444,7 @@
         pick(direct);
         return;
       }
+      if (event.detail === 0) return;
       var card = nearestCard(event.clientX, event.clientY, 34);
       if (!card) return;
       event.stopPropagation();
@@ -481,43 +467,8 @@
     var max = maxSlide();
     var prev = document.getElementById("deckPrevBtn");
     var next = document.getElementById("deckNextBtn");
-    /* 尽头箭头只是「看起来禁用」：不设 disabled 属性，点它（或键盘激活它）
-       仍能触发那句「已经到牌堆开头 / 末尾了」，牌堆本身保持原位 */
-    var pEnd = slide <= 0.0005;
-    var nEnd = slide >= max - 0.0005;
-    if (prev) {
-      prev.setAttribute("aria-disabled", pEnd ? "true" : "false");
-      prev.classList.toggle("is-at-end", pEnd);
-    }
-    if (next) {
-      next.setAttribute("aria-disabled", nEnd ? "true" : "false");
-      next.classList.toggle("is-at-end", nEnd);
-    }
-  }
-
-  /* 已经到牌堆尽头：把牌堆下面那行提示临时换成一句“到头了”，
-     1.3 秒后换回原文案；同时那一侧的翻页箭头本来就是灰的。
-     不再做橡胶位移。 */
-  function flashEdge(dir) {
-    /* 每次都重新提示：定时器到期时把 edgeSide 清零，下一次到尽头还能再触发 */
-    edgeSide = dir;
-    var el = hintEl || (hintEl = document.querySelector(".table-hint"));
-    if (!el) return;
-    if (!hintKey) hintKey = el.getAttribute("data-i18n") || "table.dragHint";
-    var api = window.DivinationI18n;
-    var key = dir < 0 ? "table.edgeStart" : "table.edgeEnd";
-    var text = api && api.t ? api.t(key) : "";
-    if (!text || text === key) text = dir < 0 ? "已经到牌堆开头了" : "已经到牌堆末尾了";
-    el.textContent = text;
-    el.classList.add("is-edge");
-    clearTimeout(hintTimer);
-    hintTimer = setTimeout(function () {
-      var back = api && api.t ? api.t(hintKey) : "";
-      if (!back || back === hintKey) back = "左右拖动翻看牌堆 · 轻点任意一张牌";
-      el.textContent = back;
-      el.classList.remove("is-edge");
-      edgeSide = 0;
-    }, 1300);
+    if (prev) prev.disabled = slide <= 0.0005;
+    if (next) next.disabled = slide >= max - 0.0005;
   }
 
   /* 停掉正在跑的翻页动画：Home/End 这种「直接跳」不能被上一帧的缓动拉回去 */
@@ -538,7 +489,6 @@
     stopGlide();
     /* 已经在尽头：按钮是灰的，按下去什么都不发生（也不再回弹） */
     if (Math.abs(to - from) < 0.0009) {
-      flashEdge(direction < 0 ? -1 : 1);
       slide = from;
       layout();
       syncFanNav();
@@ -578,7 +528,7 @@
         Math.abs(cy - (stageRect.top + stageRect.height / 2)) * 0.4;
       if (dist < bestDist) { bestDist = dist; best = card; }
     }
-    if (best) { pick(best); best.click(); }
+    if (best) best.click();
   }
 
   var prevBtn = document.getElementById("deckPrevBtn");
@@ -587,7 +537,8 @@
   if (nextBtn) nextBtn.addEventListener("click", function () { pageFan(1); });
 
   stage.addEventListener("keydown", function (event) {
-    if (event.target !== stage && !stage.contains(event.target)) return;
+    var target = event.target;
+    if (target !== stage && !ring.contains(target) && target !== prevBtn && target !== nextBtn) return;
     if (event.key === "ArrowLeft") { pageFan(-1); event.preventDefault(); }
     else if (event.key === "ArrowRight") { pageFan(1); event.preventDefault(); }
     else if (event.key === "Home") { stopGlide(); slide = 0; velocity = 0; layout(); event.preventDefault(); }
