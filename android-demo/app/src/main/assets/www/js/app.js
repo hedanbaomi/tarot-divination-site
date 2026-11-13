@@ -551,6 +551,32 @@
     };
   }
 
+  /* 牌面状态（翻开 / 朝向 / 牌名 / 读屏文案）统一在这里更新。
+     翻牌时只改状态、不重建元素：重建会让牌按新的钳制范围重新定位，看起来就是「瞬移」。 */
+  function applyFreeCardFace(el, item, index) {
+    if (!el || !item) return;
+    var card = cardById(item.id);
+    if (!card) return;
+    var front = el.querySelector(".spread-card-front");
+    var img = el.querySelector(".spread-card-front .card-image");
+    var nameEl = el.querySelector(".spread-card-caption .name");
+    el.classList.toggle("revealed", !!item.revealed);
+    if (front) {
+      front.classList.toggle("reversed", item.orientation === "reversed");
+      if (item.revealed) front.removeAttribute("aria-hidden");
+      else front.setAttribute("aria-hidden", "true");
+    }
+    if (img) img.alt = item.revealed ? localizedCardName(card) : "";
+    if (nameEl) nameEl.textContent = item.revealed ? localizedCardName(card) : "";
+    el.setAttribute("aria-label", item.revealed
+      ? t("freeBoard.cardAria", {
+          index: index + 1,
+          name: localizedCardName(card),
+          orientation: t(item.orientation === "reversed" ? "orientation.reversed" : "orientation.upright")
+        })
+      : t("freeBoard.cardHiddenAria", { index: index + 1 }));
+  }
+
   function buildFreeTableCard(item, index) {
     var card = cardById(item.id);
     if (!card) return null;
@@ -563,13 +589,7 @@
     /* 未翻开的牌不给辅助技术读牌名，只报「第几张、未翻开」 */
     el.setAttribute("role", "button");
     el.setAttribute("tabindex", "0");
-    el.setAttribute("aria-label", item.revealed
-      ? t("freeBoard.cardAria", {
-          index: index + 1,
-          name: localizedCardName(card),
-          orientation: t(item.orientation === "reversed" ? "orientation.reversed" : "orientation.upright")
-        })
-      : t("freeBoard.cardHiddenAria", { index: index + 1 }));
+    /* 牌名与读屏文案统一由 applyFreeCardFace 维护（翻牌时也只改状态，不重建元素） */
 
     var inner = document.createElement("div");
     inner.className = "spread-card-inner";
@@ -605,6 +625,7 @@
     inner.appendChild(back);
     inner.appendChild(front);
     el.appendChild(inner);
+    applyFreeCardFace(el, item, index);
     return el;
   }
 
@@ -797,14 +818,13 @@
       box.innerHTML = "";
       var layerW = box.clientWidth;
       var layerH = box.clientHeight;
+      var placed = [];
       freeDrawn.forEach(function (item, index) {
         if (legacyViewport && layerW && layerH) {
           // The original board used world coordinates anchored at its center.
           item.x = layerW / 2 + legacyViewport.panX + item.x * legacyViewport.zoom;
           item.y = layerH / 2 + legacyViewport.panY + item.y * legacyViewport.zoom;
         }
-        if (layerW) item.x = Math.max(46, Math.min(layerW - 46, item.x));
-        if (layerH) item.y = Math.max(70, Math.min(layerH - 70, item.y));
         var el = buildFreeTableCard(item, index);
         if (!el) return;
         el.style.zIndex = String(10 + freeIndex(item.id));
@@ -812,7 +832,29 @@
         el.style.left = item.x + "px";
         el.style.top = item.y + "px";
         box.appendChild(el);
+        placed.push({ item: item, el: el });
       });
+      /* 只在画板尺寸变了（转屏、换设备）或刚恢复草稿时把牌收回可见范围。
+         平时的重绘（抽牌、撤销、翻牌）不再钳制，否则用户摆好的牌会被拽回原位。 */
+      var relayout = freeformRelayout || layerW !== freeformLayerW || layerH !== freeformLayerH;
+      if (relayout && layerW && layerH) {
+        var halfW = ((placed[0] && placed[0].el.offsetWidth) || 84) / 2 + 2;
+        var halfH = ((placed[0] && placed[0].el.offsetHeight) || 126) / 2 + 2;
+        placed.forEach(function (entry, index) {
+          /* 超出新范围的牌放回网格：直接钳制会让几张牌叠在同一位置 */
+          if (entry.item.x < halfW || entry.item.x > layerW - halfW ||
+              entry.item.y < halfH || entry.item.y > layerH - halfH) {
+            var point = freeDefaultPoint(index);
+            entry.item.x = Math.max(halfW, Math.min(layerW - halfW, point.x));
+            entry.item.y = Math.max(halfH, Math.min(layerH - halfH, point.y));
+          }
+          entry.el.style.left = entry.item.x + "px";
+          entry.el.style.top = entry.item.y + "px";
+        });
+        freeformLayerW = layerW;
+        freeformLayerH = layerH;
+        freeformRelayout = false;
+      }
       if (layerW && layerH) legacyViewport = null;
     }
     var undo = document.getElementById("freeUndoBtn");
@@ -828,6 +870,9 @@
   var FREEFORM_DRAFT_KEY = "quareia-divination-free-board-draft-v1";
   var freeformDraftTimer = 0;
   var legacyViewport = null;
+  var freeformLayerW = 0;
+  var freeformLayerH = 0;
+  var freeformRelayout = true;
   var parkedDraft = null;
 
   function isShuffleRunning() {
@@ -974,6 +1019,7 @@
       });
     });
     freeDrawn = restored;
+    freeformRelayout = true;
     var view = draft.viewport || {};
     legacyViewport = draft.layout === 3 ? null : {
       panX: Number.isFinite(view.panX) ? view.panX : 0,
@@ -1416,6 +1462,15 @@
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape") hideCardMeaning();
   });
+  var meaningCloseBtn = document.getElementById("cardMeaningClose");
+  if (meaningCloseBtn) {
+    meaningCloseBtn.addEventListener("click", function () { hideCardMeaning(); });
+  }
+  /* 面板在脚本之后才解析出来，直接绑会拿到 null；用事件委托兜住关闭按钮 */
+  document.addEventListener("click", function (event) {
+    if (!event.target || !event.target.closest) return;
+    if (event.target.closest("#cardMeaningClose")) hideCardMeaning();
+  });
 
   function renderSpreadCards() {
     if (isFreeform()) return;
@@ -1601,7 +1656,13 @@
   function revealFreeCards(items) {
     if (!items.some(function (item) { return !item.revealed; })) return;
     items.forEach(function (item) { item.revealed = true; });
-    renderFreeDraw();
+    /* 只更新被翻开的牌本身：整块重绘会重排位置，牌会「瞬移」 */
+    freeDrawn.forEach(function (item, index) {
+      if (items.indexOf(item) === -1) return;
+      var cardEl = document.querySelector('.free-table-card[data-card-id="' + item.id + '"]');
+      if (cardEl) applyFreeCardFace(cardEl, item, index);
+    });
+    syncFreeActions();
     renderResults();
     saveFreeformDraftNow();
     if (freeDrawn.every(function (item) { return item.revealed; })) {
