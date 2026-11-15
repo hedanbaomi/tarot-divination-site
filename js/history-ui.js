@@ -612,6 +612,13 @@
       cardsHeading.textContent = t("history.completePositions");
       positionsHeader.appendChild(cardsHeading);
 
+      var openInAiLink = document.createElement("a");
+      openInAiLink.className = "btn btn-secondary btn-mini history-open-ai-link";
+      openInAiLink.href = "ai.html?readingId=" + encodeURIComponent(record.id);
+      openInAiLink.style.textDecoration = "none";
+      openInAiLink.textContent = t("history.openInAi");
+      positionsHeader.appendChild(openInAiLink);
+
       var actualLayoutSection = null;
       if (canRenderActualSpread(record, spread)) {
         var actualLayoutBtn = button(

@@ -47,13 +47,21 @@ class MainActivity : ComponentActivity() {
     private val historyExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri -> completeHistoryExport(uri) }
+    private val markdownExportLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/markdown")
+    ) { uri -> completeHistoryExport(uri) }
 
     internal companion object {
         internal const val HOME_URL = "https://appassets.androidplatform.net/assets/www/index.html"
         internal const val CLASSIC_URL = "https://appassets.androidplatform.net/assets/www/classic.html"
+        internal const val AI_URL = "https://appassets.androidplatform.net/assets/www/ai.html"
 
         internal fun isReadingPage(url: String?): Boolean =
-            url == HOME_URL || url == CLASSIC_URL || url == "$HOME_URL?view=modern"
+            url == HOME_URL ||
+                url == CLASSIC_URL ||
+                url == "$HOME_URL?view=modern" ||
+                url == AI_URL ||
+                (url != null && url.startsWith("$AI_URL?"))
 
         internal const val APP_HOST = "appassets.androidplatform.net"
         internal const val PROTECTED_PREFIX = "/_m/"
@@ -122,6 +130,7 @@ class MainActivity : ComponentActivity() {
             // over the homepage anymore.
             addJavascriptInterface(AboutBridge(this@MainActivity), "androidAbout")
             addJavascriptInterface(ThemeChromeBridge(this@MainActivity), "androidThemeChrome")
+            addJavascriptInterface(AiConfigBridge(this@MainActivity), "androidAiConfig")
 
             webViewClient = QuareiaWebViewClient(
                 publicAssetRoute,
@@ -298,22 +307,28 @@ class MainActivity : ComponentActivity() {
             webView.removeJavascriptInterface("androidHistoryExport")
             webView.removeJavascriptInterface("androidAbout")
             webView.removeJavascriptInterface("androidThemeChrome")
+            webView.removeJavascriptInterface("androidAiConfig")
             webView.destroy()
         }
         if (!isChangingConfigurations) clearPendingHistoryExport()
         super.onDestroy()
     }
 
-    /** Stage the JSON privately, then let the user choose its final location. */
+    /** Stage the JSON/Markdown privately, then let the user choose its final location. */
     internal fun requestHistoryExport(json: String, requestedName: String) {
         if (pendingHistoryExportFile != null) return
         val fileName = normalizeHistoryExportName(requestedName)
+        val isMarkdown = fileName.endsWith(".md", ignoreCase = true)
         try {
-            val staged = File.createTempFile(HISTORY_EXPORT_PREFIX, ".json", cacheDir)
+            val staged = File.createTempFile(HISTORY_EXPORT_PREFIX, if (isMarkdown) ".md" else ".json", cacheDir)
             staged.writeText(json, Charsets.UTF_8)
             pendingHistoryExportFile = staged
             pendingHistoryExportName = fileName
-            historyExportLauncher.launch(fileName)
+            if (isMarkdown) {
+                markdownExportLauncher.launch(fileName)
+            } else {
+                historyExportLauncher.launch(fileName)
+            }
         } catch (_error: Throwable) {
             pendingHistoryExportFile?.delete()
             pendingHistoryExportFile = null
@@ -395,6 +410,7 @@ class MainActivity : ComponentActivity() {
         val basename = requestedName.substringAfterLast('/').substringAfterLast('\\')
         val cleaned = basename.replace(Regex("[^A-Za-z0-9._-]"), "-").trim('.')
         if (cleaned.isBlank()) return "tarot-history.json"
+        if (cleaned.endsWith(".md", ignoreCase = true)) return cleaned
         return if (cleaned.endsWith(".json", ignoreCase = true)) cleaned else "$cleaned.json"
     }
 
@@ -455,6 +471,39 @@ private class AboutBridge(private val activity: ComponentActivity) {
     @android.webkit.JavascriptInterface
     fun setLocale(locale: String) {
         AppLocale.set(activity, locale)
+    }
+}
+
+/** Persists user-configured AI provider profiles locally outside cloud backup. */
+internal class AiConfigBridge(context: Context) {
+    private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    @android.webkit.JavascriptInterface
+    fun read(): String = prefs.getString(KEY_CONFIG_JSON, "") ?: ""
+
+    @android.webkit.JavascriptInterface
+    fun write(json: String?): Boolean {
+        if (json.isNullOrBlank()) return false
+        val bytes = json.toByteArray(Charsets.UTF_8)
+        if (bytes.size > MAX_CONFIG_BYTES) return false
+        val parsed = try {
+            JSONObject(json)
+        } catch (_error: Throwable) {
+            return false
+        }
+        if (parsed.optInt("version", -1) <= 0) return false
+        return prefs.edit().putString(KEY_CONFIG_JSON, json).commit()
+    }
+
+    @android.webkit.JavascriptInterface
+    fun clear() {
+        prefs.edit().remove(KEY_CONFIG_JSON).commit()
+    }
+
+    internal companion object {
+        internal const val PREFS_NAME = "quareia_ai_config"
+        internal const val KEY_CONFIG_JSON = "config_json"
+        internal const val MAX_CONFIG_BYTES = 262_144
     }
 }
 
