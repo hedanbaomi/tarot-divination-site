@@ -689,6 +689,19 @@ html.ui2 body.ai-chat-page .menu-toggle {
   color: var(--text-secondary, #c8c3b8);
 }
 
+.ai-markdown a,
+.ai-markdown a:visited {
+  color: var(--accent-light, #e6d19a);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-word;
+}
+
+.ai-markdown a:hover,
+.ai-markdown a:focus-visible {
+  color: var(--accent, #c8b078);
+}
+
 .ai-markdown code {
   padding: 1px 5px;
   border-radius: 4px;
@@ -880,6 +893,16 @@ html.ui2 body.ai-chat-page .menu-toggle {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.ai-modal-foot .ai-clear-config-btn {
+  margin-right: auto;
+  color: var(--reversed-color, #c96464);
+  border-color: var(--line, rgba(236, 230, 216, 0.22));
+}
+
+.ai-modal-foot .ai-clear-config-btn:hover:not(:disabled) {
+  border-color: var(--reversed-color, #c96464);
 }
 
 .ai-field-grid {
@@ -1080,6 +1103,11 @@ html.ui2[data-theme="grove-light"] .ai-theme-popover {
 /* Ensure confirm dialog overlays AI modals safely */
 html.ui2 body.ai-chat-page .confirm-overlay {
   z-index: 300;
+}
+
+html.ui2 body.ai-chat-page .theme-toast.is-error {
+  color: var(--reversed-color, #c96464);
+  border-color: var(--reversed-color, #c96464);
 }
 
 @media (max-width: 900px) {

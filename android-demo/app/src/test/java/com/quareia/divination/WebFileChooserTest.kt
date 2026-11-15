@@ -214,36 +214,61 @@ class WebFileChooserTest {
     }
 
     @Test
-    fun acceptTypesAreForwardedAndInvalidOnesBecomeAWildcard() {
+    fun acceptTypesBroadenJsonForSafAndInvalidOnesBecomeAWildcard() {
         val chooser = WebFileChooser(FakeLauncher())
         assertEquals(
-            listOf("application/json"),
+            OpenDocumentForWebViewContract.JSON_PICKER_MIMES,
             chooser.acceptTypes(singleFileParams(".json", "application/json")).toList(),
         )
         assertEquals(
+            OpenDocumentForWebViewContract.JSON_PICKER_MIMES,
+            chooser.acceptTypes(singleFileParams(".JSON")).toList(),
+        )
+        assertEquals(
+            listOf("image/png"),
+            chooser.acceptTypes(singleFileParams("image/png")).toList(),
+        )
+        assertEquals(
             listOf("*/*"),
-            chooser.acceptTypes(singleFileParams("", "not-a-mime", ".json")).toList(),
+            chooser.acceptTypes(singleFileParams("", "not-a-mime")).toList(),
+        )
+        assertEquals(
+            listOf("*/*"),
+            chooser.acceptTypes(singleFileParams(".custom", "application/x-custom")).toList(),
         )
         assertEquals(listOf("*/*"), chooser.acceptTypes(null).toList())
     }
 
     @Test
-    fun contractBuildsAnOpenDocumentPickerLimitedToTheAcceptedTypes() {
-        val intent = OpenDocumentForWebViewContract.createIntent(
+    fun contractBuildsAnOpenDocumentPickerWithJsonFallbacksAndSingleMimeLimits() {
+        val jsonIntent = OpenDocumentForWebViewContract.createIntent(
             RuntimeEnvironment.getApplication(),
-            arrayOf("application/json"),
+            arrayOf(".json", "application/json"),
         )
 
-        assertEquals(Intent.ACTION_OPEN_DOCUMENT, intent.action)
-        assertTrue(intent.categories.contains(Intent.CATEGORY_OPENABLE))
-        assertEquals("application/json", intent.type)
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT, jsonIntent.action)
+        assertTrue(jsonIntent.categories.contains(Intent.CATEGORY_OPENABLE))
+        // Android SAF greys out .json backups indexed as octet-stream or
+        // text/plain when intent.type is locked to application/json alone.
+        assertEquals("*/*", jsonIntent.type)
+        assertEquals(
+            OpenDocumentForWebViewContract.JSON_PICKER_MIMES,
+            jsonIntent.getStringArrayExtra(Intent.EXTRA_MIME_TYPES)?.toList(),
+        )
         // The page's accept list must not be able to steer anything else.
-        assertNull(intent.getStringExtra(Intent.EXTRA_TITLE))
+        assertNull(jsonIntent.getStringExtra(Intent.EXTRA_TITLE))
+
+        val singleMimeIntent = OpenDocumentForWebViewContract.createIntent(
+            RuntimeEnvironment.getApplication(),
+            arrayOf("image/png"),
+        )
+        assertEquals("image/png", singleMimeIntent.type)
+        assertNull(singleMimeIntent.getStringArrayExtra(Intent.EXTRA_MIME_TYPES))
 
         val many = OpenDocumentForWebViewContract.mimeTypes(
-            listOf("application/json", "text/plain", "application/json"),
+            listOf("image/png", "text/plain", "image/png"),
         )
-        assertEquals(listOf("application/json", "text/plain"), many)
+        assertEquals(listOf("image/png", "text/plain"), many)
     }
 
     @Test
@@ -280,13 +305,76 @@ class WebFileChooserTest {
         // ai.html's "导入备份" button unable to open any picker.
         assertTrue("the host must claim the request", handled)
         assertEquals(1, launcher.launched.size)
-        assertEquals(listOf("application/json"), launcher.launched[0].toList())
+        assertEquals(
+            OpenDocumentForWebViewContract.JSON_PICKER_MIMES,
+            launcher.launched[0].toList(),
+        )
         assertTrue(chooser.hasPendingRequest())
 
         // A null params object still has to be answered exactly once.
         val bare = RecordingCallback()
         assertTrue(client.onShowFileChooser(null, bare, null))
         assertNull(bare.results[0])
+    }
+
+    @Test
+    fun webViewNavigationPolicyAllowsBundledPagesDelegatesExternalLinksAndBlocksCustomSchemes() {
+        assertEquals(
+            MainActivity.NavigationAction.ALLOW_IN_WEBVIEW,
+            MainActivity.classifyNavigation(Uri.parse(MainActivity.HOME_URL)),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.ALLOW_IN_WEBVIEW,
+            MainActivity.classifyNavigation(Uri.parse("${MainActivity.AI_URL}?readingId=rec-1")),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.ALLOW_IN_WEBVIEW,
+            MainActivity.classifyNavigation(Uri.parse("file:///android_asset/www/index.html")),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.OPEN_EXTERNAL,
+            MainActivity.classifyNavigation(Uri.parse("https://www.quareia.com")),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.OPEN_EXTERNAL,
+            MainActivity.classifyNavigation(Uri.parse("mailto:contact@example.com")),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.OPEN_EXTERNAL,
+            MainActivity.classifyNavigation(Uri.parse("tel:+15550199")),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.BLOCK,
+            MainActivity.classifyNavigation(Uri.parse("intent://evil#Intent;scheme=https;end")),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.BLOCK,
+            MainActivity.classifyNavigation(Uri.parse("data:text/html,<script>1</script>")),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.BLOCK,
+            MainActivity.classifyNavigation(Uri.parse("blob:https://appassets.androidplatform.net/1")),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.BLOCK,
+            MainActivity.classifyNavigation(Uri.parse("about:blank")),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.BLOCK,
+            MainActivity.classifyNavigation(Uri.parse("file:///data/data/com.quareia.divination/shared_prefs/quareia_ai_config.xml")),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.BLOCK,
+            MainActivity.classifyNavigation(Uri.parse("file:///android_asset/../shared_prefs/quareia_ai_config.xml")),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.BLOCK,
+            MainActivity.classifyNavigation(Uri.parse("http://appassets.androidplatform.net/assets/www/ai.html")),
+        )
+        assertEquals(
+            MainActivity.NavigationAction.BLOCK,
+            MainActivity.classifyNavigation(null),
+        )
     }
 
     @Test

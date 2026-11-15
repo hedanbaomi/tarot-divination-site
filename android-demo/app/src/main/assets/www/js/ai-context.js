@@ -247,20 +247,36 @@
     }
   }
 
+  function parseOptionalSlotIndex(value) {
+    if (value === null || value === undefined || value === "" || typeof value === "boolean") {
+      return null;
+    }
+    var num = Number(value);
+    return Number.isInteger(num) && num >= 0 ? num : null;
+  }
+
+  function parsePositivePositionNumber(value) {
+    if (value === null || value === undefined || value === "" || typeof value === "boolean") {
+      return 0;
+    }
+    var num = Number(value);
+    return Number.isFinite(num) && num > 0 ? num : 0;
+  }
+
   function findSpreadPosition(spread, cardEntry, index) {
     if (!spread || !Array.isArray(spread.positions) || spread.positions.length === 0) {
       return null;
     }
-    var targetNumber = Number(cardEntry.positionNumber);
-    if (Number.isFinite(targetNumber) && targetNumber > 0) {
+    var targetNumber = parsePositivePositionNumber(cardEntry.positionNumber);
+    if (targetNumber > 0) {
       for (var i = 0; i < spread.positions.length; i += 1) {
         if (Number(spread.positions[i].number) === targetNumber) {
           return spread.positions[i];
         }
       }
     }
-    var slotIndex = Number(cardEntry.slotIndex);
-    if (Number.isInteger(slotIndex) && slotIndex >= 0 && slotIndex < spread.positions.length) {
+    var slotIndex = parseOptionalSlotIndex(cardEntry.slotIndex);
+    if (slotIndex !== null && slotIndex < spread.positions.length) {
       return spread.positions[slotIndex];
     }
     return spread.positions[index] || null;
@@ -273,10 +289,22 @@
     if (Number.isInteger(pos.stackOn) && pos.stackOn > 0) {
       return pos.stackOn;
     }
-    if (spread && Array.isArray(spread.positions) && (pos.offsetX || pos.offsetY)) {
+    if (
+      spread
+      && Array.isArray(spread.positions)
+      && (pos.offsetX || pos.offsetY)
+      && pos.column !== null
+      && pos.column !== undefined
+      && pos.row !== null
+      && pos.row !== undefined
+    ) {
       for (var i = 0; i < spread.positions.length; i += 1) {
         var peer = spread.positions[i];
         if (peer
+          && peer.column !== null
+          && peer.column !== undefined
+          && peer.row !== null
+          && peer.row !== undefined
           && Number(peer.number) !== Number(pos.number)
           && Number(peer.column) === Number(pos.column)
           && Number(peer.row) === Number(pos.row)) {
@@ -326,8 +354,9 @@
 
     var resolvedCards = record.cards.map(function (entry, index) {
       var pos = findSpreadPosition(spread, entry, index);
-      var positionNumber = Number.isFinite(Number(entry.positionNumber)) && Number(entry.positionNumber) > 0
-        ? Number(entry.positionNumber)
+      var entryPosNum = parsePositivePositionNumber(entry.positionNumber);
+      var positionNumber = entryPosNum > 0
+        ? entryPosNum
         : (pos ? Number(pos.number) : index + 1);
       var positionName = pos
         ? pickText(pos, "name", "nameEn", isEnglish)
@@ -335,6 +364,7 @@
       var positionMeaning = pos ? pickText(pos, "meaning", "meaningEn", isEnglish) : (entry.positionMeaning || "");
       var stackOn = pos ? resolveCrossingTarget(spread, pos)
         : (Number.isInteger(entry.stackOn) && entry.stackOn > 0 ? entry.stackOn : null);
+      var parsedSlotIndex = parseOptionalSlotIndex(entry.slotIndex);
 
       var cardObj = findCardInDeck(entry.cardId, deckType, env);
       var cardName = cardObj
@@ -377,7 +407,7 @@
 
       return {
         index: index,
-        slotIndex: Number.isInteger(Number(entry.slotIndex)) ? Number(entry.slotIndex) : Math.max(0, positionNumber - 1),
+        slotIndex: parsedSlotIndex !== null ? parsedSlotIndex : Math.max(0, positionNumber - 1),
         cardId: entry.cardId,
         cardName: cardName,
         arcana: rawArcana,
@@ -428,9 +458,14 @@
     var resolved = resolveReadingDetails(record, options);
     var cards = (resolved ? resolved.cards : record.cards).map(function (c, index) {
       var raw = record.cards[index] || {};
-      var posNum = Number.isFinite(Number(c.positionNumber)) ? Number(c.positionNumber) : (index + 1);
+      var resolvedPosNum = parsePositivePositionNumber(c.positionNumber);
+      var posNum = resolvedPosNum > 0 ? resolvedPosNum : (index + 1);
+      var rawSlotIndex = parseOptionalSlotIndex(raw.slotIndex);
+      var resolvedSlotIndex = parseOptionalSlotIndex(c.slotIndex);
       return {
-        slotIndex: Number.isInteger(Number(raw.slotIndex)) ? Number(raw.slotIndex) : Math.max(0, posNum - 1),
+        slotIndex: rawSlotIndex !== null
+          ? rawSlotIndex
+          : (resolvedSlotIndex !== null ? resolvedSlotIndex : Math.max(0, posNum - 1)),
         positionNumber: posNum,
         positionName: c.positionName || raw.positionName || raw.positionNameSnapshot || "",
         positionMeaning: c.positionMeaning || raw.positionMeaning || "",
@@ -636,9 +671,15 @@
           return a.index - b.index;
         });
 
+        var stackedCrossNote = "";
+        if (Number.isInteger(grp.stackOn) && grp.stackOn > 0) {
+          stackedCrossNote = isEnglish
+            ? (" [Crossing over Pos " + grp.stackOn + "]")
+            : ("（交叉叠放于第 " + grp.stackOn + " 位之上）");
+        }
         var heading = isEnglish
-          ? ("**" + grp.positionNumber + ". " + grp.positionName + "** [Stacked Pair: Major Cause -> Minor Manifestation]")
-          : ("**第 " + grp.positionNumber + " 位 · " + grp.positionName + "**【叠牌组合：大牌为因 · 小牌为果】");
+          ? ("**" + grp.positionNumber + ". " + grp.positionName + "**" + stackedCrossNote + " [Stacked Pair: Major Cause -> Minor Manifestation]")
+          : ("**第 " + grp.positionNumber + " 位 · " + grp.positionName + "**" + stackedCrossNote + "【叠牌组合：大牌为因 · 小牌为果】");
         lines.push(heading);
         if (grp.positionMeaning) {
           lines.push("  - " + (isEnglish ? "Position Meaning" : "牌位含义") + ": " + grp.positionMeaning);

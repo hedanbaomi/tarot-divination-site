@@ -468,3 +468,405 @@ test("SSE CRLF, bare CR and UTF-8 boundaries preserve multiline data for all for
     }
   }
 });
+
+test("reasoning models use max_completion_tokens, omit non-1 temperature, and testConnection handles empty thinking completions & timeouts", async () => {
+  // OpenAI Chat reasoning models: o1/o3/o4/gpt-5 swap max_tokens -> max_completion_tokens and drop temperature != 1
+  for (const model of ["o1", "o3-mini", "o4-mini", "gpt-5", "openai/gpt-5-mini"]) {
+    const reqDropTemp = providers.buildRequest({
+      format: "openai-chat",
+      apiKey: "sk-reason-1234",
+      model,
+      temperature: 0.3,
+      maxTokens: 1200
+    }, { messages: [{ role: "user", content: "Interpret" }] });
+    assert.equal(reqDropTemp.body.max_completion_tokens, 1200, model);
+    assert.equal("max_tokens" in reqDropTemp.body, false, model);
+    assert.equal("temperature" in reqDropTemp.body, false, model);
+
+    const reqTempOne = providers.buildRequest({
+      format: "openai-chat",
+      apiKey: "sk-reason-1234",
+      model,
+      temperature: 1,
+      maxTokens: 800
+    }, { messages: [{ role: "user", content: "Interpret" }] });
+    assert.equal(reqTempOne.body.temperature, 1, model);
+
+    const respReq = providers.buildRequest({
+      format: "openai-responses",
+      apiKey: "sk-reason-1234",
+      model,
+      temperature: 0.2,
+      maxTokens: 900
+    }, { messages: [{ role: "user", content: "Interpret" }] });
+    assert.equal(respReq.body.max_output_tokens, 900, model);
+    assert.equal("temperature" in respReq.body, false, model);
+  }
+
+  // compressMessages omits non-1 temperature on OpenAI reasoning models and uses >= 2048 token budget
+  let capturedCompBody = null;
+  await providers.compressMessages({
+    format: "openai-chat",
+    apiKey: "sk-comp-reason",
+    model: "gpt-5"
+  }, {
+    messages: [
+      { role: "user", content: "Turn 1" },
+      { role: "assistant", content: "Reply 1" }
+    ],
+    locale: "en",
+    fetchImpl: async (_url, init) => {
+      capturedCompBody = JSON.parse(init.body);
+      return createSseResponse([
+        JSON.stringify({ choices: [{ message: { content: "Summary." } }] })
+      ], 200, "application/json");
+    }
+  });
+  assert.ok(capturedCompBody.max_completion_tokens >= 2048);
+  assert.equal("max_tokens" in capturedCompBody, false);
+  assert.equal("temperature" in capturedCompBody, false);
+
+  // testConnection omits temperature, sends >= 256 tokens, and accepts valid HTTP 200 hidden-thinking completions
+  let capturedProbeBody = null;
+  const geminiThinkOnly = await providers.testConnection({
+    format: "gemini-aistudio",
+    apiKey: "AIzaSy-think-probe",
+    model: "gemini-2.5-pro",
+    temperature: 0.7
+  }, {
+    fetchImpl: async (_url, init) => {
+      capturedProbeBody = JSON.parse(init.body);
+      return createSseResponse([
+        JSON.stringify({
+          candidates: [{ content: { role: "model" }, finishReason: "MAX_TOKENS" }],
+          usageMetadata: { promptTokenCount: 14, thoughtsTokenCount: 256, totalTokenCount: 270 }
+        })
+      ], 200, "application/json");
+    }
+  });
+  assert.equal(geminiThinkOnly.ok, true);
+  assert.equal(geminiThinkOnly.reply, "OK");
+  assert.ok(capturedProbeBody.generationConfig.maxOutputTokens >= 256);
+  assert.equal("temperature" in capturedProbeBody.generationConfig, false);
+
+  // testConnection still rejects non-LLM HTTP 200 healthcheck payloads without completion metadata
+  await assert.rejects(() => providers.testConnection({
+    format: "openai-chat",
+    apiKey: "sk-bogus-endpoint",
+    model: "gpt-4o"
+  }, {
+    fetchImpl: async () => createSseResponse([JSON.stringify({ ok: true })], 200, "application/json")
+  }), (err) => err.code === "empty_response");
+
+  // testConnection enforces AbortController timeout when upstream hangs
+  let signalAborted = false;
+  await assert.rejects(() => providers.testConnection({
+    format: "openai-chat",
+    apiKey: "sk-timeout-probe",
+    model: "gpt-4o"
+  }, {
+    timeoutMs: 30,
+    fetchImpl: async (_url, init) => {
+      init.signal.addEventListener("abort", () => {
+        signalAborted = true;
+      }, { once: true });
+      return new Promise(() => {});
+    }
+  }), (err) => err.code === "timeout");
+  assert.equal(signalAborted, true);
+});
+
+test("sanitizeMessages & buildRequest drop empty/leading-assistant turns, coalesce same-role turns, and reject empty messages before fetch", async () => {
+  const messy = [
+    { role: "assistant", content: "Leading orphan assistant after shift" },
+    { role: "user", content: "   " },
+    { role: "user", content: "First user prompt (previous attempt aborted)" },
+    { role: "assistant", content: "" },
+    { role: "system", content: "Extra inline system rule" },
+    { role: "user", content: "Second user prompt" },
+    { role: "assistant", content: "Part A" },
+    { role: "assistant", content: "Part B" }
+  ];
+
+  for (const format of providers.FORMAT_IDS) {
+    const req = providers.buildRequest({
+      format,
+      apiKey: "sk-norm-123456",
+      model: "gemini-2.5-flash"
+    }, { systemPrompt: "Base sys", messages: messy });
+
+    if (format === "openai-chat") {
+      assert.deepEqual(req.body.messages, [
+        { role: "system", content: "Base sys\n\nExtra inline system rule" },
+        { role: "user", content: "First user prompt (previous attempt aborted)\n\nSecond user prompt" },
+        { role: "assistant", content: "Part A\n\nPart B" }
+      ]);
+    } else if (format === "openai-responses") {
+      assert.equal(req.body.instructions, "Base sys\n\nExtra inline system rule");
+      assert.deepEqual(req.body.input, [
+        { role: "user", content: "First user prompt (previous attempt aborted)\n\nSecond user prompt" },
+        { role: "assistant", content: "Part A\n\nPart B" }
+      ]);
+    } else if (format === "anthropic-messages") {
+      assert.equal(req.body.system, "Base sys\n\nExtra inline system rule");
+      assert.deepEqual(req.body.messages, [
+        { role: "user", content: "First user prompt (previous attempt aborted)\n\nSecond user prompt" },
+        { role: "assistant", content: "Part A\n\nPart B" }
+      ]);
+    } else {
+      assert.equal(req.body.systemInstruction.parts[0].text, "Base sys\n\nExtra inline system rule");
+      assert.deepEqual(req.body.contents, [
+        { role: "user", parts: [{ text: "First user prompt (previous attempt aborted)\n\nSecond user prompt" }] },
+        { role: "model", parts: [{ text: "Part A\n\nPart B" }] }
+      ]);
+    }
+  }
+
+  let fetchCalled = false;
+  for (const badMessages of [
+    [],
+    [{ role: "user", content: "   " }],
+    [{ role: "assistant", content: "Orphan assistant only" }]
+  ]) {
+    await assert.rejects(() => providers.streamChat({
+      format: "anthropic-messages",
+      apiKey: "sk-ant-empty",
+      model: "claude-sonnet-4-20250514"
+    }, {
+      messages: badMessages,
+      fetchImpl: async () => {
+        fetchCalled = true;
+        return createSseResponse([]);
+      }
+    }), (err) => err.code === "empty_messages");
+  }
+  assert.equal(fetchCalled, false);
+});
+
+test("redacts secrets before 400-char slice (including URL-encoded and ?key=), and URL builders handle ?query, Vertex locations & pasted Gemini URLs", async () => {
+  const secretKey = "sk-key/with+plus=987654321";
+  const encodedSecret = encodeURIComponent(secretKey);
+  const boundaryBody = "X".repeat(392) + " token=" + secretKey + " url=https://proxy.example/v1?key=AIzaSyLeak999&foo=1";
+
+  await assert.rejects(() => providers.streamChat({
+    format: "openai-chat",
+    apiKey: secretKey,
+    model: "gpt-4o"
+  }, {
+    messages: [{ role: "user", content: "Hi" }],
+    fetchImpl: async () => createSseResponse([boundaryBody], 502, "text/html")
+  }), (err) => {
+    assert.equal(err.message.includes("sk-key/with"), false);
+    assert.equal(err.message.includes("AIzaSyLeak999"), false);
+    assert.ok(err.detail.length <= 400);
+    return true;
+  });
+
+  await assert.rejects(() => providers.streamChat({
+    format: "openai-chat",
+    apiKey: secretKey,
+    model: "gpt-4o"
+  }, {
+    messages: [{ role: "user", content: "Hi" }],
+    fetchImpl: async () => {
+      throw new Error("Proxy failed for " + encodedSecret + " at https://host/path?api_key=PlainQueryKey");
+    }
+  }), (err) => {
+    assert.equal(err.message.includes(encodedSecret), false);
+    assert.equal(err.message.includes("PlainQueryKey"), false);
+    assert.ok(err.message.includes("api_key=****"));
+    return true;
+  });
+
+  // URL builders keep paths inside pathname before ?query and strip leaked ?key=
+  const oaQueryReq = providers.buildRequest({
+    format: "openai-chat",
+    baseUrl: "https://gateway.example.com/openai/v1?api-version=2024-10-21&api_key=leak",
+    apiKey: "sk-gw-123456",
+    model: "gpt-4o"
+  }, { messages: [{ role: "user", content: "Hi" }] });
+  assert.equal(oaQueryReq.url, "https://gateway.example.com/openai/v1/chat/completions?api-version=2024-10-21");
+
+  // Vertex blank location defaults BOTH host and path to us-central1; global keeps aiplatform.googleapis.com
+  const vertexBlankLoc = providers.buildRequest({
+    format: "gemini-vertex",
+    baseUrl: "https://aiplatform.googleapis.com/v1",
+    vertexProject: "proj-1",
+    vertexLocation: "",
+    apiKey: "AQ.Key123456",
+    model: "gemini-2.5-flash"
+  }, { messages: [{ role: "user", content: "Hi" }] });
+  assert.equal(
+    vertexBlankLoc.url,
+    "https://us-central1-aiplatform.googleapis.com/v1/projects/proj-1/locations/us-central1/publishers/google/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+  );
+
+  const vertexGlobalLoc = providers.buildRequest({
+    format: "gemini-vertex",
+    baseUrl: "https://aiplatform.googleapis.com",
+    vertexProject: "proj-1",
+    vertexLocation: "global",
+    apiKey: "AQ.Key123456",
+    model: "gemini-2.5-flash"
+  }, { messages: [{ role: "user", content: "Hi" }] });
+  assert.equal(
+    vertexGlobalLoc.url,
+    "https://aiplatform.googleapis.com/v1/projects/proj-1/locations/global/publishers/google/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+  );
+
+  const vertexBareRegional = providers.buildRequest({
+    format: "gemini-vertex",
+    baseUrl: "https://europe-west4-aiplatform.googleapis.com",
+    vertexProject: "proj-eu",
+    vertexLocation: "",
+    apiKey: "AQ.Key123456",
+    model: "gemini-2.5-flash"
+  }, { messages: [{ role: "user", content: "Hi" }], stream: false });
+  assert.equal(
+    vertexBareRegional.url,
+    "https://europe-west4-aiplatform.googleapis.com/v1/projects/proj-eu/locations/europe-west4/publishers/google/models/gemini-2.5-flash:generateContent"
+  );
+
+  // Pasted :generateContent URL swaps cleanly to :streamGenerateContent?alt=sse and strips :generateContent in metadata probe
+  const studioPasted = providers.buildRequest({
+    format: "gemini-aistudio",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaPasted",
+    apiKey: "AIzaHeaderKey123",
+    model: "gemini-2.5-flash"
+  }, { messages: [{ role: "user", content: "Hi" }], stream: true });
+  assert.equal(
+    studioPasted.url,
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+  );
+
+  let probedMetadataUrl = "";
+  await providers.fetchModelContextWindow({
+    format: "gemini-aistudio",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=AIzaPasted",
+    apiKey: "AIzaHeaderKey123",
+    model: "gemini-2.5-flash"
+  }, {
+    fetchImpl: async (url) => {
+      probedMetadataUrl = url;
+      return { ok: true, status: 200, text: async () => JSON.stringify({ inputTokenLimit: 1048576 }) };
+    }
+  });
+  assert.equal(probedMetadataUrl, "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash");
+});
+
+test("catalog/default contextWindowSource stays auto, Anthropic usage merge preserves inputTokens, and /models prefers exact ID & clean stream cancel", async () => {
+  // Non-live fallback must stay auto (never mislabeled as "api")
+  const fallbackProf = providers.normalizeProfile({
+    format: "openai-chat",
+    apiKey: "sk-test",
+    model: "gpt-4o",
+    detectedContextWindow: 128000,
+    contextWindowSource: "catalog"
+  });
+  assert.equal(fallbackProf.contextWindowSource, "auto");
+  assert.equal(fallbackProf.detectedContextWindow, 0);
+  const resolvedAfterModelSwitch = providers.resolveContextWindow(Object.assign({}, fallbackProf, {
+    model: "gemini-2.5-flash",
+    format: "gemini-aistudio"
+  }));
+  assert.equal(resolvedAfterModelSwitch.contextWindow, 1048576);
+  assert.equal(resolvedAfterModelSwitch.source, "catalog");
+
+  // Anthropic message_start + message_delta usage merge never drops inputTokens from totalTokens
+  const anthStream = await providers.streamChat({
+    format: "anthropic-messages",
+    apiKey: "sk-ant-usage",
+    model: "claude-sonnet-4-20250514"
+  }, {
+    messages: [{ role: "user", content: "Read spread" }],
+    fetchImpl: async () => createSseResponse([
+      'event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":900,"cache_creation_input_tokens":200,"cache_read_input_tokens":151,"output_tokens":1}}}\n\n',
+      'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Interpretation"}}\n\n',
+      'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":340}}\n\n',
+      'event: message_stop\ndata: {"type":"message_stop"}\n\n'
+    ])
+  });
+  assert.deepEqual(anthStream.usage, {
+    inputTokens: 1251,
+    outputTokens: 340,
+    totalTokens: 1591
+  });
+
+  // /models list prefers exact ID over earlier short-name match
+  const exactCtx = await providers.fetchModelContextWindow({
+    format: "openai-chat",
+    apiKey: "sk-openrouter",
+    model: "deepseek/deepseek-r1"
+  }, {
+    fetchImpl: async (url) => {
+      if (url.endsWith("/models")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            data: [
+              { id: "other-vendor/deepseek-r1", context_length: 32768 },
+              { id: "deepseek/deepseek-r1", context_length: 163840 }
+            ]
+          })
+        };
+      }
+      return { ok: false, status: 404, text: async () => "" };
+    }
+  });
+  assert.equal(exactCtx.contextWindow, 163840);
+  assert.equal(exactCtx.live, true);
+
+  // Unary JSON containing "data:" inside reply text with text/plain Content-Type is parsed as JSON, not SSE
+  const unaryWithColon = await providers.streamChat({
+    format: "openai-chat",
+    apiKey: "sk-unary",
+    model: "gpt-4o"
+  }, {
+    messages: [{ role: "user", content: "Hi" }],
+    fetchImpl: async () => createSseResponse([
+      JSON.stringify({ choices: [{ message: { content: "Here is data: 42" } }] })
+    ], 200, "text/plain")
+  });
+  assert.equal(unaryWithColon.text, "Here is data: 42");
+
+  // Mid-stream abort cancels reader cleanly
+  const abortCtrl = new AbortController();
+  let readerCancelled = false;
+  await assert.rejects(() => providers.streamChat({
+    format: "openai-chat",
+    apiKey: "sk-abort-mid",
+    model: "gpt-4o"
+  }, {
+    messages: [{ role: "user", content: "Hi" }],
+    signal: abortCtrl.signal,
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => "text/event-stream" },
+      body: {
+        getReader() {
+          let readCount = 0;
+          return {
+            read() {
+              readCount += 1;
+              if (readCount === 1) {
+                abortCtrl.abort();
+                return Promise.resolve({
+                  done: false,
+                  value: new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Partial"}}]}\n\n')
+                });
+              }
+              return Promise.resolve({ done: true, value: undefined });
+            },
+            cancel() {
+              readerCancelled = true;
+              return Promise.reject(new Error("benign cancel rejection"));
+            }
+          };
+        }
+      }
+    })
+  }), (err) => err.code === "aborted");
+  assert.equal(readerCancelled, true);
+});

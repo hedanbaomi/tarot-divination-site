@@ -7,27 +7,6 @@ const chatStore = require("../js/ai-chat-store.js");
 function createFakeIndexedDb() {
   const databases = new Map();
 
-  function makeReq(executor) {
-    const req = {
-      result: undefined,
-      error: null,
-      onsuccess: null,
-      onerror: null,
-      onupgradeneeded: null
-    };
-    queueMicrotask(() => {
-      try {
-        executor(req);
-      } catch (err) {
-        req.error = err;
-        if (typeof req.onerror === "function") {
-          req.onerror({ target: req });
-        }
-      }
-    });
-    return req;
-  }
-
   return {
     open(name, version) {
       const req = {
@@ -50,9 +29,45 @@ function createFakeIndexedDb() {
           databases.set(name, entry);
         }
 
-        function createStoreWrapper(storeName) {
+        function createStoreWrapper(storeName, txRef, snapshotMap) {
           const map = entry.stores.get(storeName);
+
+          function makeStoreReq(executor) {
+            const r = {
+              result: undefined,
+              error: null,
+              onsuccess: null,
+              onerror: null,
+              transaction: txRef || null,
+              listeners: Object.create(null),
+              addEventListener(type, fn) {
+                if (!this.listeners[type]) this.listeners[type] = [];
+                this.listeners[type].push(fn);
+              }
+            };
+            queueMicrotask(() => {
+              if (txRef && txRef._aborted) return;
+              try {
+                executor(r);
+                if (txRef && txRef._aborted) return;
+                if (typeof r.onsuccess === "function") {
+                  r.onsuccess({ target: r });
+                }
+                for (const fn of r.listeners.success || []) {
+                  fn({ target: r });
+                }
+              } catch (err) {
+                r.error = err;
+                if (typeof r.onerror === "function") {
+                  r.onerror({ target: r });
+                }
+              }
+            });
+            return r;
+          }
+
           return {
+            transaction: txRef || null,
             indexNames: {
               contains: (idxName) => (entry.indexes.get(storeName) || new Set()).has(idxName)
             },
@@ -65,36 +80,40 @@ function createFakeIndexedDb() {
               set.add(idxName);
             },
             get(key) {
-              return makeReq((r) => {
+              return makeStoreReq((r) => {
                 r.result = map.has(key) ? structuredClone(map.get(key)) : undefined;
-                if (typeof r.onsuccess === "function") r.onsuccess({ target: r });
               });
             },
             getAll() {
-              return makeReq((r) => {
+              return makeStoreReq((r) => {
                 r.result = Array.from(map.values()).map((v) => structuredClone(v));
-                if (typeof r.onsuccess === "function") r.onsuccess({ target: r });
               });
             },
             put(value) {
-              return makeReq((r) => {
+              return makeStoreReq((r) => {
+                if (snapshotMap && !snapshotMap.has(storeName)) {
+                  snapshotMap.set(storeName, new Map(map));
+                }
                 map.set(value.id, structuredClone(value));
                 r.result = value.id;
-                if (typeof r.onsuccess === "function") r.onsuccess({ target: r });
               });
             },
             delete(key) {
-              return makeReq((r) => {
+              return makeStoreReq((r) => {
+                if (snapshotMap && !snapshotMap.has(storeName)) {
+                  snapshotMap.set(storeName, new Map(map));
+                }
                 map.delete(key);
                 r.result = undefined;
-                if (typeof r.onsuccess === "function") r.onsuccess({ target: r });
               });
             },
             clear() {
-              return makeReq((r) => {
+              return makeStoreReq((r) => {
+                if (snapshotMap && !snapshotMap.has(storeName)) {
+                  snapshotMap.set(storeName, new Map(map));
+                }
                 map.clear();
                 r.result = undefined;
-                if (typeof r.onsuccess === "function") r.onsuccess({ target: r });
               });
             }
           };
@@ -109,21 +128,41 @@ function createFakeIndexedDb() {
             if (!entry.stores.has(s)) {
               entry.stores.set(s, new Map());
             }
-            return createStoreWrapper(s);
+            return createStoreWrapper(s, null, null);
           },
           transaction(storeNames) {
+            const snapshotMap = new Map();
             const tx = {
+              _aborted: false,
               onabort: null,
               onerror: null,
+              oncomplete: null,
               error: null,
+              abort() {
+                if (this._aborted) return;
+                this._aborted = true;
+                for (const [sName, prev] of snapshotMap.entries()) {
+                  entry.stores.set(sName, prev);
+                }
+                this.error = new Error("AbortError");
+                setTimeout(() => {
+                  if (typeof this.onabort === "function") {
+                    this.onabort({ target: this });
+                  }
+                }, 0);
+              },
               objectStore(s) {
                 if (!storeNames.includes(s) || !entry.stores.has(s)) {
                   throw new Error("Missing object store: " + s);
                 }
-                return createStoreWrapper(s);
+                return createStoreWrapper(s, tx, snapshotMap);
               }
             };
-            setTimeout(() => { if (tx.oncomplete) tx.oncomplete(); }, 0);
+            setTimeout(() => {
+              if (!tx._aborted && typeof tx.oncomplete === "function") {
+                tx.oncomplete();
+              }
+            }, 0);
             return tx;
           },
           close() {}
@@ -228,7 +267,7 @@ test("ai-chat-store preserves self-contained snapshots, rejects freeform, and in
         createdAt: "2026-06-15T10:00:00.000Z",
         question: "年运",
         cards: [
-          { slotIndex: 0, positionNumber: 1, positionName: "第一宫", cardId: "major-0", cardName: "愚者", orientation: "upright", layer: "major" }
+          { slotIndex: 0, positionNumber: 1, positionName: "第一宫", cardId: "major-00", cardName: "愚者", orientation: "upright", layer: "major" }
         ]
       },
       {
@@ -251,7 +290,7 @@ test("ai-chat-store preserves self-contained snapshots, rejects freeform, and in
   assert.equal(conv.readingSnapshots.length, 1);
   assert.equal(conv.readingSnapshots[0].createdAt, Date.parse("2026-06-15T10:00:00.000Z"));
   assert.equal(conv.readingSnapshots[0].overviewMethod, "stacked");
-  assert.equal(conv.readingSnapshots[0].cards[0].cardId, "major-0");
+  assert.equal(conv.readingSnapshots[0].cards[0].cardId, "major-00");
 
   await store.setContextSummary("chat-snap", {
     text: "已摘要 m1-m2",
@@ -335,4 +374,209 @@ test("late compression does not restore a summary invalidated by another edit", 
   const current = await store.getConversation("summary");
   assert.equal(current.messages[0].content, "edited");
   assert.equal(current.contextSummary, null);
+});
+
+test("importBackup validates schema strictly, preserves newer local chats on merge, and refuses destructive invalid replace", async () => {
+  const store = chatStore.createStore({ indexedDB: createFakeIndexedDb() });
+
+  await store.createConversation({
+    id: "local-newer",
+    title: "本地最新修改",
+    createdAt: 1000,
+    updatedAt: 5000,
+    messages: [
+      { id: "m1", role: "user", content: "本地第一问", createdAt: 1001 },
+      { id: "m2", role: "assistant", content: "本地最新回答", createdAt: 4999 }
+    ]
+  });
+  await store.createConversation({
+    id: "local-older",
+    title: "本地旧标题",
+    createdAt: 1000,
+    updatedAt: 1500,
+    messages: [
+      { id: "m3", role: "user", content: "旧问题", createdAt: 1200 }
+    ]
+  });
+
+  // Malformed payloads must reject in replace mode BEFORE touching existing IndexedDB records.
+  const badPayloads = [
+    "[1, 2, 3]",
+    "[[], []]",
+    "[{}]",
+    '[{"foo":"bar"}]',
+    "[]",
+    JSON.stringify({ format: chatStore.BACKUP_FORMAT, version: 99, conversations: [] }),
+    JSON.stringify({ format: chatStore.BACKUP_FORMAT, version: 0, conversations: [] }),
+    JSON.stringify({ format: chatStore.BACKUP_FORMAT, version: 1, conversations: [null, 42, [], { foo: 1 }] })
+  ];
+  for (const raw of badPayloads) {
+    await assert.rejects(
+      () => store.importBackup(raw, { mode: "replace" }),
+      { code: "invalid_backup" },
+      `Expected malformed backup to reject: ${raw}`
+    );
+  }
+  assert.equal((await store.listConversations({ archived: "all" })).length, 2, "Existing chats must remain untouched after rejected replace");
+
+  // Merge mode keeps newer local chat, updates older local chat, imports brand-new chat, and deduplicates incoming IDs.
+  const mergePayload = {
+    format: chatStore.BACKUP_FORMAT,
+    version: chatStore.BACKUP_VERSION,
+    conversations: [
+      {
+        id: "local-newer",
+        title: "备份里的旧版本",
+        createdAt: 1000,
+        updatedAt: 2000,
+        messages: [{ id: "m1", role: "user", content: "旧内容", createdAt: 1001 }]
+      },
+      {
+        id: "local-older",
+        title: "备份里更新后的标题",
+        createdAt: 1000,
+        updatedAt: 3500,
+        messages: [
+          { id: "m3", role: "user", content: "旧问题", createdAt: 1200 },
+          { id: "m4", role: "assistant", content: "新补充解答", createdAt: 3400 }
+        ]
+      },
+      {
+        id: "dup-incoming",
+        title: "重复旧条目",
+        createdAt: 2000,
+        updatedAt: 2100,
+        messages: [{ id: "d1", role: "user", content: "v1", createdAt: 2100 }]
+      },
+      {
+        id: "dup-incoming",
+        title: "重复新条目",
+        createdAt: 2000,
+        updatedAt: 4200,
+        messages: [{ id: "d1", role: "user", content: "v2", createdAt: 4200 }]
+      }
+    ]
+  };
+
+  const mergeRes = await store.importBackup(JSON.stringify(mergePayload), { mode: "merge" });
+  assert.equal(mergeRes.importedCount, 2, "Only local-older and deduplicated dup-incoming should be written");
+  assert.equal(mergeRes.totalCount, 3);
+
+  const keptNewer = await store.getConversation("local-newer");
+  assert.equal(keptNewer.title, "本地最新修改");
+  assert.equal(keptNewer.updatedAt, 5000);
+  assert.equal(keptNewer.messages.length, 2);
+
+  const updatedOlder = await store.getConversation("local-older");
+  assert.equal(updatedOlder.title, "备份里更新后的标题");
+  assert.equal(updatedOlder.messages.length, 2);
+
+  const dedupedIncoming = await store.getConversation("dup-incoming");
+  assert.equal(dedupedIncoming.title, "重复新条目");
+  assert.equal(dedupedIncoming.messages[0].content, "v2");
+
+  // Verified envelope with empty conversations in replace mode intentionally clears store.
+  const emptyVerified = await store.importBackup(JSON.stringify({
+    format: chatStore.BACKUP_FORMAT,
+    version: chatStore.BACKUP_VERSION,
+    conversations: []
+  }), { mode: "replace" });
+  assert.equal(emptyVerified.importedCount, 0);
+  assert.equal(emptyVerified.totalCount, 0);
+});
+
+test("normalizeConversation guards null/empty slotIndex, deduplicates snapshot/message IDs, and resists prototype pollution", async () => {
+  const normalized = chatStore.normalizeConversation({
+    id: "norm-edge",
+    title: "边界归一化",
+    readingIds: ["snap-1", "snap-1"],
+    readingSnapshots: [
+      {
+        id: "snap-1",
+        layoutMode: "preset",
+        deckType: "tarot",
+        spreadName: "三张牌",
+        cards: [
+          { slotIndex: null, positionNumber: null, cardId: "major-00", cardName: "愚者" },
+          { slotIndex: "", positionNumber: "", cardId: "major-01", cardName: "魔法师" },
+          { slotIndex: false, positionNumber: "  ", cardId: "major-02", cardName: "女祭司" }
+        ]
+      },
+      {
+        id: "snap-1",
+        layoutMode: "preset",
+        deckType: "tarot",
+        spreadName: "重复快照应忽略",
+        cards: []
+      }
+    ],
+    messages: [
+      { id: "dup-msg", role: "user", content: "第一条" },
+      { id: "dup-msg", role: "assistant", content: "第二条同 ID" }
+    ]
+  });
+
+  assert.equal(normalized.readingSnapshots.length, 1);
+  assert.deepEqual(
+    normalized.readingSnapshots[0].cards.map((c) => [c.slotIndex, c.positionNumber]),
+    [[0, 1], [1, 2], [2, 3]],
+    "null/empty/boolean slotIndex & positionNumber must fall back to index instead of coercing to 0"
+  );
+  assert.equal(normalized.messages.length, 2);
+  assert.notEqual(normalized.messages[0].id, normalized.messages[1].id, "Colliding message IDs must be made unique");
+
+  const store = chatStore.createStore({ memoryFallback: true });
+  const protoJson = `{"format":"${chatStore.BACKUP_FORMAT}","version":1,"conversations":[{"id":"proto-chat","title":"Safe","__proto__":{"pollutedFlag":true},"messages":[{"id":"m1","role":"user","content":"hi"}]}]}`;
+  await store.importBackup(protoJson, { mode: "merge" });
+  assert.equal(({}).pollutedFlag, undefined, "Object.prototype must never be polluted by backup import");
+});
+
+test("IndexedDB transaction abort rolls back cleanly and rejects promise", async () => {
+  const fakeIdb = createFakeIndexedDb();
+  const store = chatStore.createStore({ indexedDB: fakeIdb });
+  await store.createConversation({ id: "abort-check", title: "Initial", pinned: false });
+
+  const realOpen = fakeIdb.open.bind(fakeIdb);
+  let abortNextPut = true;
+  fakeIdb.open = function (name, version) {
+    const req = realOpen(name, version);
+    const origSuccess = Object.getOwnPropertyDescriptor(req, "onsuccess");
+    let handler = null;
+    Object.defineProperty(req, "onsuccess", {
+      configurable: true,
+      get() { return handler; },
+      set(fn) {
+        handler = function (ev) {
+          const db = req.result;
+          const origTx = db.transaction.bind(db);
+          db.transaction = function (names, mode) {
+            const tx = origTx(names, mode);
+            const origStore = tx.objectStore.bind(tx);
+            tx.objectStore = function (s) {
+              const os = origStore(s);
+              const origPut = os.put.bind(os);
+              os.put = function (val) {
+                const putReq = origPut(val);
+                if (abortNextPut) {
+                  abortNextPut = false;
+                  putReq.addEventListener("success", () => tx.abort());
+                }
+                return putReq;
+              };
+              return os;
+            };
+            return tx;
+          };
+          if (origSuccess && origSuccess.set) origSuccess.set.call(req, fn);
+          return fn.call(this, ev);
+        };
+      }
+    });
+    return req;
+  };
+
+  const failingStore = chatStore.createStore({ indexedDB: fakeIdb });
+  await assert.rejects(() => failingStore.setPinned("abort-check", true));
+  const after = await store.getConversation("abort-check");
+  assert.equal(after.pinned, false, "Aborted transaction must not persist pinned=true");
 });

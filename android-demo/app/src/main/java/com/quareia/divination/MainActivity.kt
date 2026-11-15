@@ -28,6 +28,7 @@ import androidx.webkit.WebViewAssetLoader
 import java.io.ByteArrayInputStream
 import java.io.File
 import org.json.JSONObject
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -60,6 +61,12 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.CreateDocument("text/markdown")
     ) { uri -> completeHistoryExport(uri) }
 
+    internal enum class NavigationAction {
+        ALLOW_IN_WEBVIEW,
+        OPEN_EXTERNAL,
+        BLOCK,
+    }
+
     internal companion object {
         internal const val HOME_URL = "https://appassets.androidplatform.net/assets/www/index.html"
         internal const val CLASSIC_URL = "https://appassets.androidplatform.net/assets/www/classic.html"
@@ -74,6 +81,41 @@ class MainActivity : ComponentActivity() {
 
         internal const val APP_HOST = "appassets.androidplatform.net"
         internal const val PROTECTED_PREFIX = "/_m/"
+
+        internal fun classifyNavigation(url: Uri?): NavigationAction {
+            if (url == null) return NavigationAction.BLOCK
+            val scheme = url.scheme?.lowercase(Locale.ROOT) ?: return NavigationAction.BLOCK
+            val host = url.host?.lowercase(Locale.ROOT)
+            if ((scheme == "http" || scheme == "https") && host == APP_HOST) {
+                val path = url.path.orEmpty()
+                return if (
+                    scheme == "https" &&
+                    url.port == -1 &&
+                    path.startsWith("/assets/www/") &&
+                    url.pathSegments.none { it == "." || it == ".." }
+                ) {
+                    NavigationAction.ALLOW_IN_WEBVIEW
+                } else {
+                    NavigationAction.BLOCK
+                }
+            }
+            if (scheme == "file") {
+                val path = url.path.orEmpty()
+                return if (
+                    host.isNullOrEmpty() &&
+                    path.startsWith("/android_asset/") &&
+                    url.pathSegments.none { it == "." || it == ".." }
+                ) {
+                    NavigationAction.ALLOW_IN_WEBVIEW
+                } else {
+                    NavigationAction.BLOCK
+                }
+            }
+            if (scheme == "http" || scheme == "https" || scheme == "mailto" || scheme == "tel") {
+                return NavigationAction.OPEN_EXTERNAL
+            }
+            return NavigationAction.BLOCK
+        }
         private const val STATE_LXXXI_ROUTE_TOKEN = "lxxxiRouteToken"
         private const val STATE_HISTORY_EXPORT_PATH = "pendingHistoryExportPath"
         private const val STATE_HISTORY_EXPORT_NAME = "pendingHistoryExportName"
@@ -298,20 +340,22 @@ class MainActivity : ComponentActivity() {
             view: WebView?,
             request: WebResourceRequest?
         ): Boolean {
-            val url = request?.url ?: return false
-            val scheme = url.scheme?.lowercase()
-            if (scheme == "http" || scheme == "https" || scheme == "mailto" || scheme == "tel") {
-                // Only delegate genuinely external links; the virtual appassets
-                // host is internal and must stay inside the WebView.
-                if (url.host == "appassets.androidplatform.net") return false
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, url))
-                } catch (_: ActivityNotFoundException) {
-                    // No handler available — silently ignore in the demo.
+            val url = request?.url
+            return when (classifyNavigation(url)) {
+                NavigationAction.ALLOW_IN_WEBVIEW -> false
+                NavigationAction.OPEN_EXTERNAL -> {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, url))
+                    } catch (_: ActivityNotFoundException) {
+                        // No handler available — silently ignore in the demo.
+                    }
+                    true
                 }
-                return true
+                // Block non-http(s)/mailto/tel schemes (intent:, javascript:,
+                // data:, blob:, about:, content:, non-asset file://, etc.) so
+                // untrusted navigations never run inside the bridged WebView.
+                NavigationAction.BLOCK -> true
             }
-            return false
         }
     }
 

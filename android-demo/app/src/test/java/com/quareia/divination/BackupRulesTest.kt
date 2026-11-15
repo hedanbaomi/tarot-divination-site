@@ -2,6 +2,7 @@ package com.quareia.divination
 
 import android.content.Context
 import java.io.File
+import java.io.StringReader
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -12,6 +13,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserFactory
 
 /**
  * Guards the manifest wiring that keeps the BYOK API key out of Android
@@ -70,6 +72,58 @@ class BackupRulesTest {
             "device-transfer must exclude both key stores",
             EXPECTED_EXCLUSIONS,
             excludesUnder(R.xml.data_extraction_rules, "device-transfer"),
+        )
+        assertFalse(
+            "backup_rules.xml must not use <include> (which switches backup into allowlist-only mode)",
+            hasTag(R.xml.backup_rules, "include"),
+        )
+        assertFalse(
+            "data_extraction_rules.xml must not use <include>",
+            hasTag(R.xml.data_extraction_rules, "include"),
+        )
+    }
+
+    @Test
+    fun sectionParserResetsOnEndTagSoDeviceTransferCannotMaskMissingCloudBackup() {
+        val missingCloudXml = """
+            <data-extraction-rules>
+                <cloud-backup>
+                </cloud-backup>
+                <device-transfer>
+                    <exclude domain="sharedpref" path="quareia_ai_config.xml"/>
+                    <exclude domain="root" path="app_webview/"/>
+                </device-transfer>
+            </data-extraction-rules>
+        """.trimIndent()
+
+        assertEquals(
+            "device-transfer exclusions must not satisfy an empty cloud-backup section",
+            emptySet<Pair<String, String>>(),
+            excludesUnderXmlText(missingCloudXml, "cloud-backup"),
+        )
+        assertEquals(
+            EXPECTED_EXCLUSIONS,
+            excludesUnderXmlText(missingCloudXml, "device-transfer"),
+        )
+
+        val missingTransferXml = """
+            <data-extraction-rules>
+                <cloud-backup>
+                    <exclude domain="sharedpref" path="quareia_ai_config.xml"/>
+                    <exclude domain="root" path="app_webview/"/>
+                </cloud-backup>
+                <device-transfer/>
+            </data-extraction-rules>
+        """.trimIndent()
+
+        assertEquals(
+            EXPECTED_EXCLUSIONS,
+            excludesUnderXmlText(missingTransferXml, "cloud-backup"),
+        )
+        assertEquals(
+            "cloud-backup exclusions must not leak into an empty device-transfer section",
+            emptySet<Pair<String, String>>(),
+            excludesUnderXmlText(missingTransferXml, "device-transfer"),
         )
     }
 
@@ -133,6 +187,20 @@ class BackupRulesTest {
      */
     private fun excludesUnder(resourceId: Int, section: String): Set<Pair<String, String>> {
         val parser = context.resources.getXml(resourceId)
+        return try {
+            excludesUnder(parser, section)
+        } finally {
+            parser.close()
+        }
+    }
+
+    private fun excludesUnderXmlText(xml: String, section: String): Set<Pair<String, String>> {
+        val parser = XmlPullParserFactory.newInstance().newPullParser()
+        parser.setInput(StringReader(xml))
+        return excludesUnder(parser, section)
+    }
+
+    private fun excludesUnder(parser: XmlPullParser, section: String): Set<Pair<String, String>> {
         var event = parser.eventType
         var depth = 0
         var sectionDepth = -1
@@ -141,24 +209,47 @@ class BackupRulesTest {
             when (event) {
                 XmlPullParser.START_TAG -> {
                     depth += 1
-                    if (parser.name == section) sectionDepth = depth
-                    if (parser.name == "exclude" && inSection(section, sectionDepth)) {
+                    if (parser.name == section && sectionDepth < 0) {
+                        sectionDepth = depth
+                    }
+                    if (parser.name == "exclude" && inSection(sectionDepth, depth)) {
                         result.add(
                             parser.getAttributeValue(null, "domain") to
                                 parser.getAttributeValue(null, "path"),
                         )
                     }
                 }
-                XmlPullParser.END_TAG -> depth -= 1
+                XmlPullParser.END_TAG -> {
+                    if (depth == sectionDepth) {
+                        sectionDepth = -1
+                    }
+                    depth -= 1
+                }
             }
             event = parser.next()
         }
         return result
     }
 
-    /** A full-backup file has no wrapper section, so every exclude belongs to it. */
-    private fun inSection(section: String, sectionDepth: Int): Boolean =
-        if (section == "full-backup-content") true else sectionDepth > 0
+    private fun hasTag(resourceId: Int, tagName: String): Boolean {
+        val parser = context.resources.getXml(resourceId)
+        return try {
+            var event = parser.eventType
+            while (event != XmlPullParser.END_DOCUMENT) {
+                if (event == XmlPullParser.START_TAG && parser.name == tagName) {
+                    return true
+                }
+                event = parser.next()
+            }
+            false
+        } finally {
+            parser.close()
+        }
+    }
+
+    /** Matches tags nested strictly inside the active section (or root full-backup-content). */
+    private fun inSection(sectionDepth: Int, depth: Int): Boolean =
+        sectionDepth > 0 && depth > sectionDepth
 
     private companion object {
         val EXPECTED_EXCLUSIONS = setOf(

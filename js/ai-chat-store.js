@@ -62,8 +62,18 @@
     if (!cardId && !cardName) {
       return null;
     }
-    var slotIndex = Number.isFinite(Number(raw.slotIndex)) ? Number(raw.slotIndex) : fallbackIndex;
-    var posNum = Number.isFinite(Number(raw.positionNumber)) ? Number(raw.positionNumber) : (slotIndex + 1);
+    var hasSlotIndex = raw.slotIndex !== null
+      && raw.slotIndex !== undefined
+      && typeof raw.slotIndex !== "boolean"
+      && !(typeof raw.slotIndex === "string" && !raw.slotIndex.trim());
+    var parsedSlot = hasSlotIndex ? Number(raw.slotIndex) : NaN;
+    var slotIndex = Number.isFinite(parsedSlot) && parsedSlot >= 0 ? Math.floor(parsedSlot) : fallbackIndex;
+    var hasPosNum = raw.positionNumber !== null
+      && raw.positionNumber !== undefined
+      && typeof raw.positionNumber !== "boolean"
+      && !(typeof raw.positionNumber === "string" && !raw.positionNumber.trim());
+    var parsedPos = hasPosNum ? Number(raw.positionNumber) : NaN;
+    var posNum = Number.isFinite(parsedPos) && parsedPos > 0 ? Math.floor(parsedPos) : (slotIndex + 1);
     var entry = {
       slotIndex: slotIndex,
       positionNumber: posNum,
@@ -200,11 +210,12 @@
     }
 
     var snapshots = [];
+    var seenSnapIds = Object.create(null);
     var rejectedFreeformIds = Object.create(null);
     if (Array.isArray(input.readingSnapshots)) {
       for (var s = 0; s < input.readingSnapshots.length; s += 1) {
         var rawSnap = input.readingSnapshots[s];
-        if (rawSnap && typeof rawSnap === "object" && trimString(rawSnap.layoutMode).toLowerCase() === "freeform") {
+        if (rawSnap && typeof rawSnap === "object" && !Array.isArray(rawSnap) && trimString(rawSnap.layoutMode).toLowerCase() === "freeform") {
           var freeId = trimString(rawSnap.id);
           if (freeId) {
             rejectedFreeformIds[freeId] = true;
@@ -212,7 +223,8 @@
           continue;
         }
         var snap = normalizeReadingSnapshot(rawSnap);
-        if (snap && seenIds[snap.id]) {
+        if (snap && seenIds[snap.id] && !seenSnapIds[snap.id]) {
+          seenSnapIds[snap.id] = true;
           snapshots.push(snap);
         }
       }
@@ -224,10 +236,17 @@
     }
 
     var messages = [];
+    var seenMsgIds = Object.create(null);
     if (Array.isArray(input.messages)) {
       for (var m = 0; m < input.messages.length; m += 1) {
-        if (input.messages[m] && typeof input.messages[m] === "object") {
-          messages.push(normalizeMessage(input.messages[m]));
+        var rawMsg = input.messages[m];
+        if (rawMsg && typeof rawMsg === "object" && !Array.isArray(rawMsg)) {
+          var normMsg = normalizeMessage(rawMsg);
+          if (seenMsgIds[normMsg.id]) {
+            normMsg.id = generateMessageId();
+          }
+          seenMsgIds[normMsg.id] = true;
+          messages.push(normMsg);
         }
       }
     }
@@ -762,6 +781,33 @@
       });
     }
 
+    function isValidBackupConversationEntry(entry) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        return false;
+      }
+      if (entry.messages !== undefined && !Array.isArray(entry.messages)) {
+        return false;
+      }
+      if (entry.readingIds !== undefined && !Array.isArray(entry.readingIds)) {
+        return false;
+      }
+      if (entry.readingSnapshots !== undefined && !Array.isArray(entry.readingSnapshots)) {
+        return false;
+      }
+      var hasId = typeof entry.id === "string" && entry.id.trim().length > 0;
+      var hasTitle = typeof entry.title === "string" && entry.title.trim().length > 0;
+      var hasArrays = Array.isArray(entry.messages)
+        || Array.isArray(entry.readingIds)
+        || Array.isArray(entry.readingSnapshots);
+      return Boolean(hasId || hasTitle || hasArrays);
+    }
+
+    function invalidBackupError(msg) {
+      var err = new Error(msg);
+      err.code = "invalid_backup";
+      return err;
+    }
+
     function importBackup(rawInput, importOpts) {
       var optsImport = importOpts && typeof importOpts === "object" ? importOpts : {};
       var mode = optsImport.mode === "replace" ? "replace" : "merge";
@@ -770,49 +816,98 @@
         try {
           parsed = JSON.parse(rawInput);
         } catch (_err) {
-          return Promise.reject(new Error("Invalid backup JSON"));
+          return Promise.reject(invalidBackupError("Invalid backup JSON"));
         }
       }
       if (!parsed || typeof parsed !== "object") {
-        return Promise.reject(new Error("Invalid backup payload"));
+        return Promise.reject(invalidBackupError("Invalid backup payload"));
       }
-      var list = Array.isArray(parsed.conversations)
-        ? parsed.conversations
-        : (Array.isArray(parsed) ? parsed : null);
+      var isEnvelope = !Array.isArray(parsed);
+      if (isEnvelope) {
+        if (parsed.format !== undefined && parsed.format !== BACKUP_FORMAT) {
+          return Promise.reject(invalidBackupError("Unsupported backup format: " + parsed.format));
+        }
+        if (parsed.version !== undefined) {
+          var parsedVersion = Number(parsed.version);
+          if (!Number.isFinite(parsedVersion) || parsedVersion < 1 || parsedVersion > BACKUP_VERSION) {
+            return Promise.reject(invalidBackupError("Unsupported backup version: " + parsed.version));
+          }
+        }
+      }
+      var list = isEnvelope
+        ? (Array.isArray(parsed.conversations) ? parsed.conversations : null)
+        : parsed;
       if (!list) {
-        return Promise.reject(new Error("Missing conversations array in backup"));
-      }
-      if (parsed.format && parsed.format !== BACKUP_FORMAT) {
-        return Promise.reject(new Error("Unsupported backup format: " + parsed.format));
+        return Promise.reject(invalidBackupError("Missing conversations array in backup"));
       }
 
-      var validItems = [];
+      var dedupedItems = [];
+      var dedupIndexById = Object.create(null);
       var skippedCount = 0;
       for (var i = 0; i < list.length; i += 1) {
         var entry = list[i];
-        if (!entry || typeof entry !== "object") {
+        if (!isValidBackupConversationEntry(entry)) {
           skippedCount += 1;
           continue;
         }
-        validItems.push(normalizeConversation(entry));
+        var norm = normalizeConversation(entry);
+        var prevIdx = dedupIndexById[norm.id];
+        if (prevIdx !== undefined) {
+          skippedCount += 1;
+          var prevItem = dedupedItems[prevIdx];
+          if ((Number(norm.updatedAt) || 0) >= (Number(prevItem.updatedAt) || 0)) {
+            dedupedItems[prevIdx] = norm;
+          }
+        } else {
+          dedupIndexById[norm.id] = dedupedItems.length;
+          dedupedItems.push(norm);
+        }
       }
 
-      var prep = mode === "replace" ? clearConversations({ archivedOnly: false }) : Promise.resolve(0);
-      return prep.then(function () {
-        return withStore("readwrite", function (store, mem) {
-          if (mem) {
-            return Promise.all(validItems.map(function (item) {
-              return mem.put(item);
+      if (list.length > 0 && dedupedItems.length === 0) {
+        return Promise.reject(invalidBackupError("No valid conversations found in backup"));
+      }
+      if (mode === "replace" && list.length === 0 && (!isEnvelope || parsed.format !== BACKUP_FORMAT)) {
+        return Promise.reject(invalidBackupError("Cannot replace all conversations from an unverified empty array"));
+      }
+
+      var importedCount = 0;
+      return withStore("readwrite", function (store, mem) {
+        if (mode === "replace") {
+          var clearDone = mem ? mem.clear() : reqToPromise(store.clear());
+          return clearDone.then(function () {
+            return Promise.all(dedupedItems.map(function (item) {
+              return (mem ? mem.put(item) : reqToPromise(store.put(item))).then(function () {
+                importedCount += 1;
+              });
             }));
-          }
-          return Promise.all(validItems.map(function (item) {
-            return reqToPromise(store.put(item));
-          }));
-        });
+          });
+        }
+        return Promise.all(dedupedItems.map(function (item) {
+          var readExisting = mem ? mem.get(item.id) : reqToPromise(store.get(item.id));
+          return readExisting.then(function (rawExisting) {
+            if (rawExisting) {
+              var existing = normalizeConversation(rawExisting);
+              var existingUpdated = Number(existing.updatedAt) || 0;
+              var incomingUpdated = Number(item.updatedAt) || 0;
+              if (
+                existingUpdated > incomingUpdated
+                || (existingUpdated === incomingUpdated && existing.messages.length > item.messages.length)
+              ) {
+                skippedCount += 1;
+                return false;
+              }
+            }
+            return (mem ? mem.put(item) : reqToPromise(store.put(item))).then(function () {
+              importedCount += 1;
+              return true;
+            });
+          });
+        }));
       }).then(function () {
         return listConversations({ archived: "all" }).then(function (all) {
           return {
-            importedCount: validItems.length,
+            importedCount: importedCount,
             skippedCount: skippedCount,
             totalCount: all.length
           };

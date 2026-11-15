@@ -8,6 +8,7 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
+import java.util.Locale
 
 /**
  * Turns `<input type="file">` inside the bundled WebView into a system
@@ -114,10 +115,9 @@ internal class WebFileChooser(
     }
 
     /**
-     * MIME types handed to the picker. WebChromeClient.FileChooserParams
-     * already reports MIME types (the WebView maps accept extensions such as
-     * .json), but an empty or malformed list must not produce an intent the
-     * system cannot match.
+     * MIME types handed to the picker. Chromium's FileChooserParams passes raw
+     * `<input accept>` tokens such as `.json` verbatim, and an empty or
+     * malformed list must still produce an intent the system picker can match.
      */
     internal fun acceptTypes(params: WebChromeClient.FileChooserParams?): Array<String> =
         OpenDocumentForWebViewContract
@@ -185,17 +185,29 @@ internal object OpenDocumentForWebViewContract :
     }
 
     /**
-     * Valid, de-duplicated MIME types; a single wildcard when the page named
-     * none that can be forwarded.
+     * Valid, de-duplicated MIME types; falls back to a wildcard when nothing
+     * usable was supplied or an unmapped file extension is requested.
+     *
+     * Android document providers (Downloads, MTP, messaging/cloud apps, OEM
+     * ExternalStorageProvider) frequently index `.json` backups as
+     * `application/octet-stream` or `text/plain` rather than `application/json`.
+     * Broadening JSON requests to [JSON_PICKER_MIMES] causes [pickIntent] to
+     * use [ALL_MIMES] with `EXTRA_MIME_TYPES` so `.json` backups are never
+     * greyed out, while the web importer still validates the JSON payload.
      */
     internal fun mimeTypes(requested: List<String>): List<String> {
-        val valid = requested
-            .asSequence()
-            .map(String::trim)
-            .filter { MIME_TYPE.matches(it) }
-            .distinct()
-            .toList()
-        return valid.ifEmpty { listOf(ALL_MIMES) }
+        val expanded = LinkedHashSet<String>()
+        for (raw in requested) {
+            val token = raw.substringBefore(';').trim().lowercase(Locale.ROOT)
+            if (token.isEmpty()) continue
+            when {
+                token == ALL_MIMES -> return listOf(ALL_MIMES)
+                token in JSON_ACCEPT_TOKENS -> expanded.addAll(JSON_PICKER_MIMES)
+                EXTENSION_TOKEN.matches(token) -> return listOf(ALL_MIMES)
+                MIME_TYPE.matches(token) -> expanded.add(token)
+            }
+        }
+        return expanded.toList().ifEmpty { listOf(ALL_MIMES) }
     }
 
     /** The URIs a picker returned, de-duplicated and in order. */
@@ -211,6 +223,19 @@ internal object OpenDocumentForWebViewContract :
         return uris.toTypedArray().takeIf { it.isNotEmpty() }
     }
 
+    internal val JSON_PICKER_MIMES = listOf(
+        "application/json",
+        "text/json",
+        "text/plain",
+        "application/octet-stream",
+    )
+    private val JSON_ACCEPT_TOKENS = setOf(
+        ".json",
+        "application/json",
+        "text/json",
+        "application/x-json",
+    )
     private const val ALL_MIMES = "*/*"
-    private val MIME_TYPE = Regex("[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+|\\*/\\*")
+    private val EXTENSION_TOKEN = Regex("\\.[a-z0-9][a-z0-9.+-]*")
+    private val MIME_TYPE = Regex("[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+|\\*/\\*")
 }

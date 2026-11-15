@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#060919">
   <title>AI 辅助解牌 · Quareia 占卜</title>
-  <meta name="description" content="结合 Quareia 应用内牌意与非自由画板占卜历史的 AI 辅助解牌对话工作台">
+  <meta name="description" content="结合 Quareia 应用内牌意与非自由画板占卜历史的 AI 辅助解牌对话工作台" data-i18n-content="ai.pageDescription">
   <script>
     (function () {
       try {
         var allowed = { celestial: 1, parchment: 1, ember: 1, grove: 1, "grove-light": 1, jade: 1, dusk: 1, ash: 1 };
         var stored = localStorage.getItem("quareia-divination-theme");
-        document.documentElement.setAttribute("data-theme", allowed[stored] ? stored : "celestial");
+        document.documentElement.setAttribute("data-theme", stored && Object.prototype.hasOwnProperty.call(allowed, stored) ? stored : "celestial");
       } catch (e) {
         document.documentElement.setAttribute("data-theme", "celestial");
       }
@@ -145,7 +145,7 @@
     </aside>
 
     <main class="ai-main">
-      <section class="ai-context-bar" aria-label="当前对话与占卜上下文">
+      <section class="ai-context-bar" aria-label="当前对话与占卜上下文" data-i18n-aria-label="ai.contextBarAria">
         <div class="ai-context-header">
           <div class="ai-active-chat-meta">
             <h2 class="ai-active-chat-title" id="aiActiveChatTitle" data-i18n="ai.untitledChat">新解牌对话</h2>
@@ -186,7 +186,7 @@
           <span class="ai-context-meter" id="aiContextMeter" role="status" aria-live="polite"></span>
         </div>
         <p class="ai-privacy-footnote" data-i18n="privacy.ai">
-          AI 解牌使用的 API Key 与聊天记录均只保存在当前设备本地；发起对话时仅向你配置的大模型接口地址直连发送提问与所选占卜牌意，本站后台不接收、不中转也不存储任何密钥或对话内容。
+          AI 解牌使用的 API Key 与聊天记录均只保存在当前设备本地；发起对话时仅向你配置的大模型接口地址直连发送提问与所选占卜牌意，统计后台不接收、不中转也不存储任何密钥或对话内容。
         </p>
       </footer>
     </main>
@@ -206,7 +206,7 @@
             placeholder="按问题、牌阵名或牌名筛选" data-i18n-placeholder="ai.pickerSearchPlaceholder">
           <select class="ai-select" id="aiPickerDeckFilter" aria-label="按牌组筛选" data-i18n-aria-label="history.filterLabel">
             <option value="all" data-i18n="ai.deckAll">全部牌组</option>
-            <option value="tarot">Quareia 塔罗</option>
+            <option value="tarot" data-i18n="ai.deckTarot">Quareia 塔罗</option>
             <option value="mystagogus">Mystagogus</option>
             <option value="lxxxi">LXXXI</option>
           </select>
@@ -326,6 +326,7 @@
         <p class="ai-status-msg" id="aiSettingsStatus" role="status" aria-live="polite"></p>
       </div>
       <footer class="ai-modal-foot">
+        <button class="btn btn-secondary ai-clear-config-btn" id="aiClearConfigBtn" type="button" data-i18n="ai.clearConfig">清除已存密钥</button>
         <button class="btn btn-secondary" id="aiTestConnectionBtn" type="button" data-i18n="ai.testConnection">测试连接</button>
         <button class="btn btn-accent" id="aiSaveProfileBtn" type="button" data-i18n="ai.saveActivate">保存并启用</button>
       </footer>

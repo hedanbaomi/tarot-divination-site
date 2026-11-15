@@ -28,6 +28,12 @@
   };
 
   var ANTHROPIC_DEFAULT_MAX_TOKENS = 4096;
+  var DEFAULT_TEST_TIMEOUT_MS = 15000;
+  var OPENAI_REASONING_MODEL_RE = /^(?:.*\/)?(o[134](?:[-_]|$)|gpt-5)/i;
+
+  function isOpenAiReasoningModel(model) {
+    return OPENAI_REASONING_MODEL_RE.test(trimString(model));
+  }
 
   function AiProviderError(code, message, options) {
     var opts = options && typeof options === "object" ? options : {};
@@ -118,10 +124,16 @@
     var contextWindowSource = "";
     if (contextWindow >= 1024) {
       contextWindowSource = "manual";
-    } else if (detectedContextWindow >= 1024) {
+      if (rawSource !== "api" && rawSource !== "manual") {
+        detectedContextWindow = 0;
+      }
+    } else if (rawSource === "api" && detectedContextWindow >= 1024) {
       contextWindowSource = "api";
-    } else if (rawSource === "catalog" || rawSource === "default") {
-      contextWindowSource = rawSource;
+    } else {
+      detectedContextWindow = 0;
+      if (rawSource === "catalog" || rawSource === "default" || rawSource === "auto") {
+        contextWindowSource = "auto";
+      }
     }
     // Intentionally omit any user-supplied systemPrompt field: system prompt is code-locked.
     return {
@@ -229,9 +241,37 @@
 
   function sanitizeSecretText(text, apiKey) {
     var output = typeof text === "string" ? text : String(text || "");
+    if (!output) {
+      return "";
+    }
+    output = output.replace(/([?&](?:key|api_key|access_token|x-goog-api-key)=)[^&\s"'<>]+/gi, "$1****");
     var key = trimString(apiKey);
-    if (key && key.length >= 6 && output.indexOf(key) !== -1) {
-      output = output.split(key).join(redactApiKey(key));
+    if (!key) {
+      return output;
+    }
+    var mask = redactApiKey(key);
+    if (output.indexOf("Bearer " + key) !== -1) {
+      output = output.split("Bearer " + key).join("Bearer " + mask);
+    }
+    var shouldRedactBareKey = key.length >= 6 || (key.length >= 4 && !/^[a-z]+$/i.test(key));
+    if (shouldRedactBareKey) {
+      if (output.indexOf(key) !== -1) {
+        output = output.split(key).join(mask);
+      }
+      var encodedKey = "";
+      try {
+        encodedKey = encodeURIComponent(key);
+      } catch (_err) {
+        encodedKey = "";
+      }
+      if (encodedKey && encodedKey !== key && output.indexOf(encodedKey) !== -1) {
+        output = output.split(encodedKey).join(mask);
+      }
+      var lowerEncoded = encodedKey ? encodedKey.toLowerCase() : "";
+      if (lowerEncoded && lowerEncoded !== encodedKey && output.toLowerCase().indexOf(lowerEncoded) !== -1) {
+        var escaped = lowerEncoded.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        output = output.replace(new RegExp(escaped, "gi"), mask);
+      }
     }
     return output;
   }
@@ -430,34 +470,87 @@
     return url + (url.indexOf("?") === -1 ? "?alt=sse" : "&alt=sse");
   }
 
+  function normalizeUrlPathname(pathname) {
+    return String(pathname || "").replace(/\/+$/, "");
+  }
+
+  function stripQuerySecrets(parsed) {
+    if (!parsed || !parsed.searchParams) {
+      return;
+    }
+    var keys = [];
+    parsed.searchParams.forEach(function (_value, key) {
+      var lower = String(key || "").toLowerCase();
+      if (lower === "key" || lower === "api_key" || lower === "access_token" || lower === "x-goog-api-key") {
+        keys.push(key);
+      }
+    });
+    for (var i = 0; i < keys.length; i += 1) {
+      parsed.searchParams.delete(keys[i]);
+    }
+  }
+
+  function stripGeminiEndpointSuffix(pathname) {
+    var cleanPath = normalizeUrlPathname(pathname);
+    cleanPath = cleanPath.replace(/\/models\/(?!v\d+(?:alpha|beta)?$)[^/]+(?::(?:streamGenerateContent|generateContent))?$/i, "");
+    cleanPath = cleanPath.replace(/:(?:streamGenerateContent|generateContent)$/i, "");
+    return normalizeUrlPathname(cleanPath);
+  }
+
+  function applyGeminiStreamQuery(parsed, stream) {
+    if (stream) {
+      if (!parsed.searchParams.has("alt")) {
+        parsed.searchParams.set("alt", "sse");
+      }
+    } else if ((parsed.searchParams.get("alt") || "").toLowerCase() === "sse") {
+      parsed.searchParams.delete("alt");
+    }
+  }
+
   function buildOpenAiUrl(baseUrl, suffixPath, defaultHostPath) {
     var clean = stripTrailingSlashes(baseUrl);
-    if (clean.slice(-suffixPath.length) === suffixPath) {
-      return clean;
-    }
     try {
       var parsed = new URL(clean);
-      if (parsed.hostname.toLowerCase() === "api.openai.com" && (parsed.pathname === "" || parsed.pathname === "/")) {
-        return clean + defaultHostPath + suffixPath;
+      stripQuerySecrets(parsed);
+      var pathname = normalizeUrlPathname(parsed.pathname);
+      if (pathname.slice(-suffixPath.length) !== suffixPath) {
+        if (parsed.hostname.toLowerCase() === "api.openai.com" && pathname === "") {
+          pathname = defaultHostPath + suffixPath;
+        } else {
+          pathname = pathname + suffixPath;
+        }
       }
+      parsed.pathname = pathname;
+      return parsed.toString();
     } catch (_err) {
       // Ignore malformed URL here; validateProfile reports it separately.
+    }
+    if (clean.slice(-suffixPath.length) === suffixPath) {
+      return clean;
     }
     return clean + suffixPath;
   }
 
   function buildAnthropicUrl(baseUrl) {
     var clean = stripTrailingSlashes(baseUrl);
-    if (clean.slice(-9) === "/messages") {
-      return clean;
-    }
     try {
       var parsed = new URL(clean);
-      if (parsed.hostname.toLowerCase() === "api.anthropic.com" && (parsed.pathname === "" || parsed.pathname === "/")) {
-        return clean + "/v1/messages";
+      stripQuerySecrets(parsed);
+      var pathname = normalizeUrlPathname(parsed.pathname);
+      if (pathname.slice(-9) !== "/messages") {
+        if (parsed.hostname.toLowerCase() === "api.anthropic.com" && pathname === "") {
+          pathname = "/v1/messages";
+        } else {
+          pathname = pathname + "/messages";
+        }
       }
+      parsed.pathname = pathname;
+      return parsed.toString();
     } catch (_err) {
       // Ignore
+    }
+    if (clean.slice(-9) === "/messages") {
+      return clean;
     }
     return clean + "/messages";
   }
@@ -465,58 +558,80 @@
   function buildAiStudioUrl(baseUrl, model, stream) {
     var clean = stripTrailingSlashes(baseUrl);
     var method = stream ? "streamGenerateContent" : "generateContent";
-    if (clean.indexOf(":streamGenerateContent") !== -1 || clean.indexOf(":generateContent") !== -1) {
-      return stream ? appendAltSse(clean) : clean;
-    }
+    var safeModel = encodeURIComponent(cleanGeminiModelName(model));
     try {
       var parsed = new URL(clean);
-      if (parsed.hostname.toLowerCase() === "generativelanguage.googleapis.com" && (parsed.pathname === "" || parsed.pathname === "/")) {
-        clean += "/v1beta";
+      stripQuerySecrets(parsed);
+      var pathname = stripGeminiEndpointSuffix(parsed.pathname);
+      if (parsed.hostname.toLowerCase() === "generativelanguage.googleapis.com" && pathname === "") {
+        pathname = "/v1beta";
       }
+      parsed.pathname = pathname + "/models/" + safeModel + ":" + method;
+      applyGeminiStreamQuery(parsed, stream);
+      return parsed.toString();
     } catch (_err) {
       // Ignore
     }
-    var safeModel = encodeURIComponent(cleanGeminiModelName(model));
-    var url = clean + "/models/" + safeModel + ":" + method;
+    var base = clean.replace(/\/models\/[^/]+(?::(?:streamGenerateContent|generateContent))?$/i, "")
+      .replace(/:(?:streamGenerateContent|generateContent)$/i, "");
+    var url = base + "/models/" + safeModel + ":" + method;
     return stream ? appendAltSse(url) : url;
   }
 
   function buildVertexUrl(profile, stream) {
     var clean = stripTrailingSlashes(profile.baseUrl || DEFAULT_BASE_URLS["gemini-vertex"]);
     var method = stream ? "streamGenerateContent" : "generateContent";
-    if (clean.indexOf(":streamGenerateContent") !== -1 || clean.indexOf(":generateContent") !== -1) {
-      return stream ? appendAltSse(clean) : clean;
-    }
     var safeModel = encodeURIComponent(cleanGeminiModelName(profile.model));
     var project = trimString(profile.vertexProject);
-    var location = trimString(profile.vertexLocation);
+    var rawLocation = trimString(profile.vertexLocation);
 
     try {
       var parsed = new URL(clean);
+      stripQuerySecrets(parsed);
       var host = parsed.hostname.toLowerCase();
-      if (host === "aiplatform.googleapis.com" && (parsed.pathname === "" || parsed.pathname === "/")) {
-        clean += "/v1";
-        parsed = new URL(clean);
+      var regionalMatch = host.match(/^([a-z0-9-]+)-aiplatform\.googleapis\.com$/i);
+      var isVertexGoogleHost = host === "aiplatform.googleapis.com" || Boolean(regionalMatch);
+      var effLocation = rawLocation || (regionalMatch ? regionalMatch[1] : "us-central1");
+
+      if (project && host === "aiplatform.googleapis.com" && effLocation.toLowerCase() !== "global") {
+        parsed.hostname = effLocation + "-aiplatform.googleapis.com";
       }
-      if (project && host === "aiplatform.googleapis.com" && location && location.toLowerCase() !== "global") {
-        parsed.hostname = location + "-aiplatform.googleapis.com";
-        clean = stripTrailingSlashes(parsed.toString());
+
+      var pathname = stripGeminiEndpointSuffix(parsed.pathname);
+      if (isVertexGoogleHost && pathname === "") {
+        pathname = "/v1";
       }
+
+      if (pathname.indexOf("/publishers/") !== -1) {
+        pathname += "/models/" + safeModel + ":" + method;
+      } else if (project) {
+        pathname += "/projects/" + encodeURIComponent(project)
+          + "/locations/" + encodeURIComponent(effLocation)
+          + "/publishers/google/models/" + safeModel + ":" + method;
+      } else {
+        pathname += "/publishers/google/models/" + safeModel + ":" + method;
+      }
+
+      parsed.pathname = pathname;
+      applyGeminiStreamQuery(parsed, stream);
+      return parsed.toString();
     } catch (_err) {
       // Ignore
     }
 
+    var fallbackEffLocation = rawLocation || "us-central1";
+    var base = clean.replace(/\/models\/[^/]+(?::(?:streamGenerateContent|generateContent))?$/i, "")
+      .replace(/:(?:streamGenerateContent|generateContent)$/i, "");
     var url;
-    if (clean.indexOf("/publishers/") !== -1) {
-      url = clean + "/models/" + safeModel + ":" + method;
+    if (base.indexOf("/publishers/") !== -1) {
+      url = base + "/models/" + safeModel + ":" + method;
     } else if (project) {
-      var effLocation = location || "us-central1";
-      url = clean
+      url = base
         + "/projects/" + encodeURIComponent(project)
-        + "/locations/" + encodeURIComponent(effLocation)
+        + "/locations/" + encodeURIComponent(fallbackEffLocation)
         + "/publishers/google/models/" + safeModel + ":" + method;
     } else {
-      url = clean + "/publishers/google/models/" + safeModel + ":" + method;
+      url = base + "/publishers/google/models/" + safeModel + ":" + method;
     }
     return stream ? appendAltSse(url) : url;
   }
@@ -526,6 +641,7 @@
       return [];
     }
     var out = [];
+    var seenUser = false;
     for (var i = 0; i < messages.length; i += 1) {
       var msg = messages[i];
       if (!msg || typeof msg !== "object") {
@@ -536,25 +652,74 @@
       if (!content.trim()) {
         continue;
       }
-      out.push({
-        role: role,
-        content: content
-      });
+      if (role === "assistant" && !seenUser) {
+        continue;
+      }
+      if (role === "user") {
+        seenUser = true;
+      }
+      if (out.length > 0 && out[out.length - 1].role === role) {
+        out[out.length - 1].content += "\n\n" + content;
+      } else {
+        out.push({
+          role: role,
+          content: content
+        });
+      }
     }
     return out;
   }
 
-  function buildGeminiPayload(profile, systemPrompt, messages) {
-    var contents = [];
+  function extractConversationTurns(messages) {
+    var turns = [];
+    var extraSystem = [];
+    var seenUser = false;
     for (var i = 0; i < messages.length; i += 1) {
       var m = messages[i];
-      if (m.role === "system") {
+      if (!m) {
         continue;
       }
-      contents.push({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }]
-      });
+      if (m.role === "system") {
+        if (trimString(m.content)) {
+          extraSystem.push(m.content);
+        }
+        continue;
+      }
+      var role = m.role === "assistant" ? "assistant" : "user";
+      if (role === "assistant" && !seenUser) {
+        continue;
+      }
+      if (role === "user") {
+        seenUser = true;
+      }
+      if (turns.length > 0 && turns[turns.length - 1].role === role) {
+        turns[turns.length - 1].content += "\n\n" + m.content;
+      } else {
+        turns.push({
+          role: role,
+          content: m.content
+        });
+      }
+    }
+    return {
+      turns: turns,
+      extraSystem: extraSystem
+    };
+  }
+
+  function buildGeminiPayload(profile, systemPrompt, turns) {
+    var contents = [];
+    for (var i = 0; i < turns.length; i += 1) {
+      var m = turns[i];
+      var gemRole = m.role === "assistant" ? "model" : "user";
+      if (contents.length > 0 && contents[contents.length - 1].role === gemRole) {
+        contents[contents.length - 1].parts[0].text += "\n\n" + m.content;
+      } else {
+        contents.push({
+          role: gemRole,
+          parts: [{ text: m.content }]
+        });
+      }
     }
     var body = {
       contents: contents
@@ -588,10 +753,27 @@
     }
 
     var opts = payload && typeof payload === "object" ? payload : {};
-    var systemPrompt = typeof opts.systemPrompt === "string" ? opts.systemPrompt : "";
-    var messages = sanitizeMessages(opts.messages);
+    var rawSystemPrompt = typeof opts.systemPrompt === "string" ? opts.systemPrompt : "";
+    var sanitized = sanitizeMessages(opts.messages);
+    var normalizedConv = extractConversationTurns(sanitized);
+    var turns = normalizedConv.turns;
+    if (turns.length === 0) {
+      throw AiProviderError("empty_messages", "At least one non-empty user message is required", {
+        format: profile.format,
+        detail: "empty_messages"
+      });
+    }
+    var systemParts = [];
+    if (trimString(rawSystemPrompt)) {
+      systemParts.push(rawSystemPrompt);
+    }
+    for (var sIdx = 0; sIdx < normalizedConv.extraSystem.length; sIdx += 1) {
+      systemParts.push(normalizedConv.extraSystem[sIdx]);
+    }
+    var systemPrompt = systemParts.join("\n\n");
     var stream = opts.stream !== false;
     var format = profile.format;
+    var isReasoningModel = isOpenAiReasoningModel(profile.model);
     var url;
     var headers;
     var body;
@@ -607,8 +789,8 @@
       if (trimString(systemPrompt)) {
         chatMessages.push({ role: "system", content: systemPrompt });
       }
-      for (var i = 0; i < messages.length; i += 1) {
-        chatMessages.push(messages[i]);
+      for (var i = 0; i < turns.length; i += 1) {
+        chatMessages.push(turns[i]);
       }
       body = {
         model: profile.model,
@@ -616,10 +798,16 @@
         stream: stream
       };
       if (typeof profile.temperature === "number" && Number.isFinite(profile.temperature)) {
-        body.temperature = profile.temperature;
+        if (!isReasoningModel || profile.temperature === 1) {
+          body.temperature = profile.temperature;
+        }
       }
       if (typeof profile.maxTokens === "number" && Number.isFinite(profile.maxTokens) && profile.maxTokens > 0) {
-        body.max_tokens = profile.maxTokens;
+        if (isReasoningModel) {
+          body.max_completion_tokens = profile.maxTokens;
+        } else {
+          body.max_tokens = profile.maxTokens;
+        }
       }
     } else if (format === "openai-responses") {
       url = buildOpenAiUrl(profile.baseUrl, "/responses", "/v1");
@@ -628,13 +816,10 @@
         "Authorization": "Bearer " + profile.apiKey
       };
       var respInput = [];
-      for (var j = 0; j < messages.length; j += 1) {
-        if (messages[j].role === "system") {
-          continue;
-        }
+      for (var j = 0; j < turns.length; j += 1) {
         respInput.push({
-          role: messages[j].role,
-          content: messages[j].content
+          role: turns[j].role,
+          content: turns[j].content
         });
       }
       body = {
@@ -646,7 +831,9 @@
         body.instructions = systemPrompt;
       }
       if (typeof profile.temperature === "number" && Number.isFinite(profile.temperature)) {
-        body.temperature = profile.temperature;
+        if (!isReasoningModel || profile.temperature === 1) {
+          body.temperature = profile.temperature;
+        }
       }
       if (typeof profile.maxTokens === "number" && Number.isFinite(profile.maxTokens) && profile.maxTokens > 0) {
         body.max_output_tokens = profile.maxTokens;
@@ -660,13 +847,10 @@
         "anthropic-dangerous-direct-browser-access": "true"
       };
       var anthMessages = [];
-      for (var k = 0; k < messages.length; k += 1) {
-        if (messages[k].role === "system") {
-          continue;
-        }
+      for (var k = 0; k < turns.length; k += 1) {
         anthMessages.push({
-          role: messages[k].role,
-          content: messages[k].content
+          role: turns[k].role,
+          content: turns[k].content
         });
       }
       body = {
@@ -690,7 +874,7 @@
         "content-type": "application/json",
         "x-goog-api-key": profile.apiKey
       };
-      body = buildGeminiPayload(profile, systemPrompt, messages);
+      body = buildGeminiPayload(profile, systemPrompt, turns);
     } else if (format === "gemini-vertex") {
       url = buildVertexUrl(profile, stream);
       // Vertex AI static API key mode only; strictly no OAuth Bearer header.
@@ -698,7 +882,7 @@
         "content-type": "application/json",
         "x-goog-api-key": profile.apiKey
       };
-      body = buildGeminiPayload(profile, systemPrompt, messages);
+      body = buildGeminiPayload(profile, systemPrompt, turns);
     } else {
       throw AiProviderError("invalid_format", "Unsupported AI format: " + format, {
         format: format
@@ -744,19 +928,16 @@
 
   function buildHttpError(status, bodyText, format, apiKey) {
     var cleanText = trimString(bodyText);
-    var detail = cleanText;
+    var detail = "";
     if (cleanText) {
       try {
         var parsed = JSON.parse(cleanText);
         var extracted = extractErrorMessageFromJson(parsed);
-        if (extracted) {
-          detail = extracted;
-        }
+        detail = sanitizeSecretText(extracted || cleanText, apiKey).slice(0, 400);
       } catch (_err) {
-        detail = cleanText.slice(0, 400);
+        detail = sanitizeSecretText(cleanText, apiKey).slice(0, 400);
       }
     }
-    detail = sanitizeSecretText(detail, apiKey);
     var code = "http_error";
     if (status === 401 || status === 403) {
       code = "auth_error";
@@ -843,8 +1024,8 @@
       && dataObj.usageMetadata && typeof dataObj.usageMetadata === "object") {
       var uGem = dataObj.usageMetadata;
       inputTokens = Number(uGem.promptTokenCount) || 0;
-      outputTokens = Number(uGem.candidatesTokenCount) || 0;
-      totalTokens = Number(uGem.totalTokenCount) || (inputTokens + outputTokens);
+      outputTokens = (Number(uGem.candidatesTokenCount) || 0) + (Number(uGem.thoughtsTokenCount) || 0);
+      totalTokens = Math.max(Number(uGem.totalTokenCount) || 0, inputTokens + outputTokens);
       if (!outputTokens && totalTokens > inputTokens) {
         outputTokens = totalTokens - inputTokens;
       }
@@ -867,22 +1048,29 @@
     var done = false;
     var errMessage = "";
     var usage = extractUsageObject(format, dataObj);
+    var hasMeta = Boolean(usage);
 
     if (!dataObj || typeof dataObj !== "object") {
-      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: null };
+      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: null, hasMeta: false };
     }
 
     if (dataObj.error) {
       errMessage = extractErrorMessageFromJson(dataObj) || "Stream error";
-      return { text: "", reasoning: "", done: false, error: errMessage, usage: usage };
+      return { text: "", reasoning: "", done: false, error: errMessage, usage: usage, hasMeta: false };
     }
 
     if (format === "openai-chat") {
       var choices = Array.isArray(dataObj.choices) ? dataObj.choices : [];
       var choice = choices[0];
       if (choice && typeof choice === "object") {
+        if (typeof choice.finish_reason === "string" && choice.finish_reason) {
+          hasMeta = true;
+        }
         var delta = choice.delta;
         if (delta && typeof delta === "object") {
+          if (delta.role === "assistant") {
+            hasMeta = true;
+          }
           if (typeof delta.reasoning_content === "string") {
             reasoning += delta.reasoning_content;
           } else if (typeof delta.reasoning === "string") {
@@ -896,6 +1084,9 @@
         }
         var msg = choice.message;
         if (msg && typeof msg === "object") {
+          if (msg.role === "assistant") {
+            hasMeta = true;
+          }
           if (typeof msg.reasoning_content === "string") {
             reasoning += msg.reasoning_content;
           } else if (typeof msg.reasoning === "string") {
@@ -906,11 +1097,17 @@
           }
         }
       }
-      return { text: text, reasoning: reasoning, done: done, error: "", usage: usage };
+      return { text: text, reasoning: reasoning, done: done, error: "", usage: usage, hasMeta: hasMeta };
     }
 
     if (format === "openai-responses") {
       var evType = trimString(dataObj.type) || trimString(eventName);
+      if (evType === "response.completed" || evType === "response.incomplete") {
+        hasMeta = true;
+      }
+      if (dataObj.object === "response" && (dataObj.status === "completed" || dataObj.status === "incomplete")) {
+        hasMeta = true;
+      }
       if (evType === "response.output_text.delta" && typeof dataObj.delta === "string") {
         text += dataObj.delta;
       } else if (
@@ -933,6 +1130,9 @@
           if (!item || typeof item !== "object") {
             continue;
           }
+          if (item.type === "reasoning" || item.type === "message") {
+            hasMeta = true;
+          }
           if (item.type === "reasoning" && Array.isArray(item.summary)) {
             for (var s = 0; s < item.summary.length; s += 1) {
               if (item.summary[s] && typeof item.summary[s].text === "string") {
@@ -950,11 +1150,19 @@
           }
         }
       }
-      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: usage };
+      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: usage, hasMeta: hasMeta };
     }
 
     if (format === "anthropic-messages") {
       var aType = trimString(dataObj.type) || trimString(eventName);
+      if (
+        aType === "message_stop"
+        || aType === "message_start"
+        || (aType === "message_delta" && dataObj.delta && typeof dataObj.delta.stop_reason === "string")
+        || (dataObj.type === "message" && dataObj.role === "assistant")
+      ) {
+        hasMeta = true;
+      }
       if (aType === "content_block_delta" && dataObj.delta && typeof dataObj.delta === "object") {
         if (dataObj.delta.type === "text_delta" && typeof dataObj.delta.text === "string") {
           text += dataObj.delta.text;
@@ -971,6 +1179,9 @@
           if (!block || typeof block !== "object") {
             continue;
           }
+          if (block.type === "thinking" || block.type === "redacted_thinking" || block.type === "text") {
+            hasMeta = true;
+          }
           if (block.type === "text" && typeof block.text === "string") {
             text += block.text;
           } else if (block.type === "thinking" && typeof block.thinking === "string") {
@@ -978,12 +1189,18 @@
           }
         }
       }
-      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: usage };
+      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: usage, hasMeta: hasMeta };
     }
 
     if (format === "gemini-aistudio" || format === "gemini-vertex") {
       var candidates = Array.isArray(dataObj.candidates) ? dataObj.candidates : [];
       var candidate = candidates[0];
+      if (candidate && typeof candidate === "object") {
+        if ((typeof candidate.finishReason === "string" && candidate.finishReason)
+          || (candidate.content && candidate.content.role === "model")) {
+          hasMeta = true;
+        }
+      }
       if (candidate && candidate.content && Array.isArray(candidate.content.parts)) {
         var parts = candidate.content.parts;
         for (var g = 0; g < parts.length; g += 1) {
@@ -998,10 +1215,10 @@
           }
         }
       }
-      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: usage };
+      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: usage, hasMeta: hasMeta };
     }
 
-    return { text: text, reasoning: reasoning, done: done, error: "", usage: usage };
+    return { text: text, reasoning: reasoning, done: done, error: "", usage: usage, hasMeta: hasMeta };
   }
 
   function parseSseEventBlock(block) {
@@ -1038,9 +1255,10 @@
     try {
       parsed = JSON.parse(trimmed);
     } catch (err) {
+      var safeDetail = sanitizeSecretText(err && err.message ? err.message : "", apiKey);
       throw AiProviderError("parse_error", "Failed to parse provider JSON response", {
         format: format,
-        detail: err && err.message ? err.message : "",
+        detail: safeDetail,
         cause: err
       });
     }
@@ -1052,6 +1270,9 @@
           format: format,
           detail: sanitizeSecretText(extracted.error, apiKey)
         });
+      }
+      if (extracted.hasMeta && typeof callbacks.onMeta === "function") {
+        callbacks.onMeta();
       }
       if (extracted.usage && typeof callbacks.onUsage === "function") {
         callbacks.onUsage(extracted.usage);
@@ -1103,6 +1324,9 @@
           detail: sanitizeSecretText(extracted.error, apiKey)
         });
       }
+      if (extracted.hasMeta && typeof callbacks.onMeta === "function") {
+        callbacks.onMeta();
+      }
       if (extracted.usage && typeof callbacks.onUsage === "function") {
         callbacks.onUsage(extracted.usage);
       }
@@ -1117,6 +1341,41 @@
       }
     }
     return false;
+  }
+
+  function mergeUsage(prev, u) {
+    if (!u || typeof u !== "object") {
+      return prev;
+    }
+    var next = prev
+      ? {
+          inputTokens: prev.inputTokens || 0,
+          outputTokens: prev.outputTokens || 0,
+          totalTokens: prev.totalTokens || 0
+        }
+      : { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    if (u.inputTokens > 0) {
+      next.inputTokens = u.inputTokens;
+    }
+    if (u.outputTokens > 0) {
+      next.outputTokens = u.outputTokens;
+    }
+    var minTotal = next.inputTokens + next.outputTokens;
+    var reportedTotal = Number(u.totalTokens) || 0;
+    var prevTotal = prev ? (Number(prev.totalTokens) || 0) : 0;
+    next.totalTokens = Math.max(minTotal, reportedTotal, prevTotal);
+    return next;
+  }
+
+  function cancelReaderSafely(reader) {
+    if (!reader || typeof reader.cancel !== "function") {
+      return;
+    }
+    try {
+      Promise.resolve(reader.cancel()).catch(function () {});
+    } catch (_err) {
+      // Ignore synchronous cancel error
+    }
   }
 
   function isAbortError(err, signal) {
@@ -1154,7 +1413,11 @@
     var fullText = "";
     var fullReasoning = "";
     var latestUsage = null;
+    var sawCompletionMeta = false;
     var callbacks = {
+      onMeta: function () {
+        sawCompletionMeta = true;
+      },
       onText: function (delta) {
         if (!delta) {
           return;
@@ -1174,23 +1437,7 @@
         }
       },
       onUsage: function (u) {
-        if (!u || typeof u !== "object") {
-          return;
-        }
-        if (!latestUsage) {
-          latestUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-        }
-        if (u.inputTokens > 0) {
-          latestUsage.inputTokens = u.inputTokens;
-        }
-        if (u.outputTokens > 0) {
-          latestUsage.outputTokens = u.outputTokens;
-        }
-        if (u.totalTokens > 0) {
-          latestUsage.totalTokens = u.totalTokens;
-        } else {
-          latestUsage.totalTokens = latestUsage.inputTokens + latestUsage.outputTokens;
-        }
+        latestUsage = mergeUsage(latestUsage, u);
       }
     };
 
@@ -1224,7 +1471,8 @@
 
       if (forceJsonFallback) {
         return response.text().then(function (rawText) {
-          if (rawText.indexOf("data:") !== -1 && rawText.trim().charAt(0) !== "{" && rawText.trim().charAt(0) !== "[") {
+          var trimmedRaw = rawText.trim();
+          if (/^(?:event:|data:)/m.test(rawText) && trimmedRaw.charAt(0) !== "{" && trimmedRaw.charAt(0) !== "[") {
             consumeSseEvents({ raw: rawText }, true, profile.format, profile.apiKey, callbacks);
           } else {
             applyNonSsePayload(rawText, profile.format, profile.apiKey, callbacks);
@@ -1236,16 +1484,29 @@
       var reader = response.body.getReader();
       var decoder = new TextDecoder("utf-8");
       var bufferObj = { raw: "" };
+      var onAbortCancel = function () {
+        cancelReaderSafely(reader);
+      };
+      if (signal && typeof signal.addEventListener === "function") {
+        signal.addEventListener("abort", onAbortCancel, { once: true });
+      }
+
+      function cleanupAbortListener() {
+        if (signal && typeof signal.removeEventListener === "function") {
+          signal.removeEventListener("abort", onAbortCancel);
+        }
+      }
 
       function pump() {
         return reader.read().then(function (step) {
           if (signal && signal.aborted) {
+            cancelReaderSafely(reader);
             throw AiProviderError("aborted", "Generation aborted", { format: profile.format });
           }
           if (step.done) {
             bufferObj.raw += decoder.decode();
             var trimmedBuf = bufferObj.raw.trim();
-            if (trimmedBuf && (trimmedBuf.charAt(0) === "{" || trimmedBuf.charAt(0) === "[") && trimmedBuf.indexOf("data:") === -1) {
+            if (trimmedBuf && (trimmedBuf.charAt(0) === "{" || trimmedBuf.charAt(0) === "[") && !/^(?:event:|data:)/m.test(trimmedBuf)) {
               applyNonSsePayload(trimmedBuf, profile.format, profile.apiKey, callbacks);
             } else {
               consumeSseEvents(bufferObj, true, profile.format, profile.apiKey, callbacks);
@@ -1256,13 +1517,7 @@
           bufferObj.raw += decoder.decode(step.value, { stream: true });
           var stopped = consumeSseEvents(bufferObj, false, profile.format, profile.apiKey, callbacks);
           if (stopped) {
-            if (typeof reader.cancel === "function") {
-              try {
-                reader.cancel();
-              } catch (_err) {
-                // Ignore cancel errors after SSE stop signal
-              }
-            }
+            cancelReaderSafely(reader);
             return finalizeStreamResult();
           }
           return pump();
@@ -1270,7 +1525,8 @@
       }
 
       function finalizeStreamResult() {
-        if (!fullText && !fullReasoning) {
+        var allowEmpty = Boolean(opts.allowEmptyOutput) && (sawCompletionMeta || Boolean(latestUsage));
+        if (!fullText && !fullReasoning && !allowEmpty) {
           throw AiProviderError("empty_response", "Model returned an empty response", {
             format: profile.format
           });
@@ -1284,7 +1540,13 @@
         };
       }
 
-      return pump();
+      return pump().then(function (res) {
+        cleanupAbortListener();
+        return res;
+      }, function (pumpErr) {
+        cleanupAbortListener();
+        throw pumpErr;
+      });
     }).catch(function (err) {
       if (isAbortError(err, signal)) {
         throw AiProviderError("aborted", "Generation stopped", {
@@ -1405,7 +1667,7 @@
     if (profile.contextWindowSource === "manual" && profile.contextWindow >= 1024) {
       return { contextWindow: profile.contextWindow, source: "manual" };
     }
-    if (profile.detectedContextWindow >= 1024) {
+    if (profile.contextWindowSource === "api" && profile.detectedContextWindow >= 1024) {
       return { contextWindow: profile.detectedContextWindow, source: "api" };
     }
     if (profile.contextWindow >= 1024) {
@@ -1442,11 +1704,25 @@
           continue;
         }
         var candId = trimString(item.id || item.name).toLowerCase();
-        var candShort = normalizeModelCatalogKey(item.id || item.name);
-        if (candId === normTarget || (shortTarget && candShort === shortTarget)) {
-          var matched = extractContextWindowFromModelObject(item, targetModel);
-          if (matched) {
-            return matched;
+        if (normTarget && candId === normTarget) {
+          var exactMatched = extractContextWindowFromModelObject(item, targetModel);
+          if (exactMatched) {
+            return exactMatched;
+          }
+        }
+      }
+      if (shortTarget) {
+        for (var j = 0; j < list.length; j += 1) {
+          var fallbackItem = list[j];
+          if (!fallbackItem || typeof fallbackItem !== "object") {
+            continue;
+          }
+          var candShort = normalizeModelCatalogKey(fallbackItem.id || fallbackItem.name);
+          if (candShort === shortTarget) {
+            var shortMatched = extractContextWindowFromModelObject(fallbackItem, targetModel);
+            if (shortMatched) {
+              return shortMatched;
+            }
           }
         }
       }
@@ -1485,28 +1761,51 @@
     };
   }
 
+  function replaceUrlPathname(rawUrl, replacer) {
+    try {
+      var parsed = new URL(rawUrl);
+      stripQuerySecrets(parsed);
+      parsed.pathname = replacer(normalizeUrlPathname(parsed.pathname));
+      return parsed.toString();
+    } catch (_err) {
+      return replacer(rawUrl);
+    }
+  }
+
   function buildModelMetadataRequests(profile) {
     var format = profile.format;
     var model = trimString(profile.model);
     if (!model) {
       return [];
     }
+    var encodedModel = encodeURIComponent(model);
     if (format === "openai-chat" || format === "openai-responses") {
-      var chatEndpoint = buildOpenAiUrl(profile.baseUrl, "/chat/completions", "/v1");
-      var respEndpoint = buildOpenAiUrl(profile.baseUrl, "/responses", "/v1");
-      var apiRoot = format === "openai-responses"
-        ? respEndpoint.replace(/\/responses$/, "")
-        : chatEndpoint.replace(/\/chat\/completions$/, "");
+      var oaEndpoint = format === "openai-responses"
+        ? buildOpenAiUrl(profile.baseUrl, "/responses", "/v1")
+        : buildOpenAiUrl(profile.baseUrl, "/chat/completions", "/v1");
+      var oaSuffixRe = format === "openai-responses" ? /\/responses$/ : /\/chat\/completions$/;
       var oaHeaders = { "Authorization": "Bearer " + profile.apiKey };
       return [
-        { url: apiRoot + "/models/" + encodeURIComponent(model), headers: oaHeaders },
-        { url: apiRoot + "/models", headers: oaHeaders }
+        {
+          url: replaceUrlPathname(oaEndpoint, function (p) {
+            return p.replace(oaSuffixRe, "") + "/models/" + encodedModel;
+          }),
+          headers: oaHeaders
+        },
+        {
+          url: replaceUrlPathname(oaEndpoint, function (p) {
+            return p.replace(oaSuffixRe, "") + "/models";
+          }),
+          headers: oaHeaders
+        }
       ];
     }
     if (format === "anthropic-messages") {
-      var anthRoot = buildAnthropicUrl(profile.baseUrl).replace(/\/messages$/, "");
+      var anthEndpoint = buildAnthropicUrl(profile.baseUrl);
       return [{
-        url: anthRoot + "/models/" + encodeURIComponent(model),
+        url: replaceUrlPathname(anthEndpoint, function (p) {
+          return p.replace(/\/messages$/, "") + "/models/" + encodedModel;
+        }),
         headers: {
           "x-api-key": profile.apiKey,
           "anthropic-version": "2023-06-01",
@@ -1515,16 +1814,20 @@
       }];
     }
     if (format === "gemini-aistudio") {
-      var studioModelUrl = buildAiStudioUrl(profile.baseUrl, model, false).replace(/:generateContent$/, "");
+      var studioEndpoint = buildAiStudioUrl(profile.baseUrl, model, false);
       return [{
-        url: studioModelUrl,
+        url: replaceUrlPathname(studioEndpoint, function (p) {
+          return p.replace(/:(?:streamGenerateContent|generateContent)$/i, "");
+        }),
         headers: { "x-goog-api-key": profile.apiKey }
       }];
     }
     if (format === "gemini-vertex") {
-      var vertexModelUrl = buildVertexUrl(profile, false).replace(/:generateContent$/, "");
+      var vertexEndpoint = buildVertexUrl(profile, false);
       return [{
-        url: vertexModelUrl,
+        url: replaceUrlPathname(vertexEndpoint, function (p) {
+          return p.replace(/:(?:streamGenerateContent|generateContent)$/i, "");
+        }),
         headers: { "x-goog-api-key": profile.apiKey }
       }];
     }
@@ -1612,11 +1915,34 @@
     });
   }
 
+  function cleanTranscriptMessages(messages) {
+    if (!Array.isArray(messages)) {
+      return [];
+    }
+    var out = [];
+    for (var i = 0; i < messages.length; i += 1) {
+      var msg = messages[i];
+      if (!msg || typeof msg !== "object") {
+        continue;
+      }
+      var role = msg.role === "assistant" ? "assistant" : (msg.role === "system" ? "system" : "user");
+      var content = typeof msg.content === "string" ? msg.content : String(msg.content || "");
+      if (!content.trim()) {
+        continue;
+      }
+      out.push({
+        role: role,
+        content: content
+      });
+    }
+    return out;
+  }
+
   function compressMessages(profileInput, options) {
     var profile = normalizeProfile(profileInput);
     var opts = options && typeof options === "object" ? options : {};
     var isEnglish = opts.locale === "en";
-    var msgs = sanitizeMessages(opts.messages);
+    var msgs = cleanTranscriptMessages(opts.messages);
     var previousSummary = trimString(opts.previousSummary);
 
     var transcriptLines = [];
@@ -1640,9 +1966,11 @@
       ? "You are a precise conversation memory compressor for a divination & general assistant chat. Condense the earlier transcript into a concise structured summary (under 450 words) that preserves: (1) the user's core questions and practical background, (2) specific cards, spread positions, stacked Cause->Manifestation pairs, and conclusions established so far, and (3) unresolved follow-ups or user preferences. Output only the factual summary in the primary language of the conversation."
       : "你是一个精确的对话记忆浓缩器。请将以下较早的对话记录压缩成简洁、保留重点的结构化摘要（控制在 500 字以内），务必保留：(1) 用户的核心问题与现实背景；(2) 已讨论过的具体牌名、牌位、叠牌法“底牌(因)/叠牌(果)”组合与核心解牌结论；(3) 尚未完结的追问脉络或用户偏好。只输出客观摘要正文，使用对话主要语言，不要寒暄或添加元说明。";
 
+    var skipLowTemperature = isOpenAiReasoningModel(profile.model)
+      && (profile.format === "openai-chat" || profile.format === "openai-responses");
     var compressionProfile = Object.assign({}, profile, {
-      temperature: 0.2,
-      maxTokens: 1024
+      temperature: skipLowTemperature ? null : 0.2,
+      maxTokens: 2048
     });
 
     return streamChat(compressionProfile, {
@@ -1665,23 +1993,90 @@
   function testConnection(profileInput, options) {
     var opts = options && typeof options === "object" ? options : {};
     var profile = normalizeProfile(profileInput);
+    var callerSignal = opts.signal;
+    if (callerSignal && callerSignal.aborted) {
+      return Promise.reject(AiProviderError("aborted", "Request aborted", { format: profile.format }));
+    }
+
     var probeProfile = Object.assign({}, profile, {
-      maxTokens: 24,
-      temperature: 0
+      maxTokens: 256,
+      temperature: null
     });
-    return streamChat(probeProfile, {
+
+    var timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : DEFAULT_TEST_TIMEOUT_MS;
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var effectiveSignal = controller ? controller.signal : callerSignal;
+    var timedOut = false;
+    var onCallerAbort = null;
+
+    if (callerSignal && controller && typeof callerSignal.addEventListener === "function") {
+      onCallerAbort = function () {
+        try {
+          controller.abort();
+        } catch (_err) {}
+      };
+      callerSignal.addEventListener("abort", onCallerAbort, { once: true });
+    }
+
+    var timeoutReject = null;
+    var timeoutPromise = new Promise(function (_resolve, reject) {
+      timeoutReject = reject;
+    });
+
+    var timerId = setTimeout(function () {
+      timedOut = true;
+      if (controller) {
+        try {
+          controller.abort();
+        } catch (_err) {}
+      }
+      if (timeoutReject) {
+        timeoutReject(AiProviderError("timeout", "Connection test timed out after " + timeoutMs + "ms", {
+          format: profile.format,
+          detail: "timeout"
+        }));
+      }
+    }, timeoutMs);
+
+    function cleanup() {
+      if (timerId !== null) {
+        clearTimeout(timerId);
+        timerId = null;
+      }
+      if (callerSignal && onCallerAbort && typeof callerSignal.removeEventListener === "function") {
+        callerSignal.removeEventListener("abort", onCallerAbort);
+      }
+    }
+
+    var streamPromise = streamChat(probeProfile, {
       systemPrompt: "You are a connectivity probe.",
       messages: [{ role: "user", content: "Reply with OK." }],
       stream: opts.stream !== undefined ? opts.stream : true,
-      signal: opts.signal,
+      allowEmptyOutput: true,
+      signal: effectiveSignal,
       fetchImpl: opts.fetchImpl
-    }).then(function (result) {
+    });
+    streamPromise.catch(function () {});
+
+    return Promise.race([streamPromise, timeoutPromise]).then(function (result) {
+      cleanup();
       return {
         ok: true,
         format: result.format,
         model: result.model,
-        reply: result.text || result.reasoning || "OK"
+        reply: result.text || result.reasoning || "OK",
+        usage: result.usage || null
       };
+    }, function (err) {
+      cleanup();
+      if (timedOut && !(callerSignal && callerSignal.aborted)) {
+        throw AiProviderError("timeout", "Connection test timed out after " + timeoutMs + "ms", {
+          format: profile.format,
+          detail: "timeout",
+          cause: err
+        });
+      }
+      throw err;
     });
   }
 

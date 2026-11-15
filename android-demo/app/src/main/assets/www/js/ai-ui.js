@@ -103,8 +103,9 @@
     });
   }
 
-  function renderMarkdownInto(container, markdownText) {
+  function renderMarkdownInto(container, markdownText, depth) {
     if (!container) return;
+    var curDepth = typeof depth === "number" ? depth : 0;
     var doc = container.ownerDocument || document;
     var frag = doc.createDocumentFragment();
     var lines = String(markdownText || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
@@ -162,7 +163,16 @@
           i += 1;
         }
         var quote = doc.createElement("blockquote");
-        renderMarkdownInto(quote, quoteLines.join("\n"));
+        if (curDepth + 1 < 6) {
+          renderMarkdownInto(quote, quoteLines.join("\n"), curDepth + 1);
+        } else {
+          var fallbackQuotePara = doc.createElement("p");
+          for (var qIdx = 0; qIdx < quoteLines.length; qIdx += 1) {
+            if (qIdx > 0) fallbackQuotePara.appendChild(doc.createElement("br"));
+            appendInlineMarkdown(fallbackQuotePara, quoteLines[qIdx].replace(/^(?:>\s?)+/, ""));
+          }
+          quote.appendChild(fallbackQuotePara);
+        }
         frag.appendChild(quote);
         continue;
       }
@@ -367,6 +377,66 @@
     return Promise.resolve(true);
   }
 
+  function normalizeConversationMessagesForApi(messages, startIndex, limitIdx) {
+    var list = Array.isArray(messages) ? messages : [];
+    var start = typeof startIndex === "number" ? Math.max(0, startIndex) : 0;
+    var end = typeof limitIdx === "number" ? Math.min(list.length, Math.max(0, limitIdx)) : list.length;
+    var validMessages = [];
+
+    for (var i = start; i < end; i += 1) {
+      var m = list[i];
+      if (!m || (m.role !== "user" && m.role !== "assistant")) continue;
+      var rawContent = typeof m.content === "string" ? m.content : "";
+      if (!rawContent.trim()) continue;
+      if (validMessages.length === 0 && m.role !== "user") {
+        continue;
+      }
+      if (validMessages.length > 0 && validMessages[validMessages.length - 1].role === m.role) {
+        var prev = validMessages[validMessages.length - 1];
+        prev.content = prev.content + "\n\n" + rawContent;
+        prev.id = m.id || prev.id;
+        prev.rawCount = (prev.rawCount || 1) + 1;
+      } else {
+        validMessages.push({
+          id: m.id,
+          role: m.role,
+          content: rawContent,
+          rawCount: 1
+        });
+      }
+    }
+    return validMessages;
+  }
+
+  function truncateMessagesToBudget(apiMessages, systemPrompt, hardCap, estimateTokensFn) {
+    var finalMessages = Array.isArray(apiMessages) ? apiMessages.slice() : [];
+    while (finalMessages.length > 1 && finalMessages[0].role !== "user") {
+      finalMessages.shift();
+    }
+    while (
+      finalMessages.length > 1
+      && estimateTokensFn({ systemPrompt: systemPrompt, messages: finalMessages }) >= hardCap
+    ) {
+      finalMessages.shift();
+      while (finalMessages.length > 1 && finalMessages[0].role !== "user") {
+        finalMessages.shift();
+      }
+    }
+    return finalMessages;
+  }
+
+  function hasPrecedingUserTurn(messages, assistantIndex) {
+    var list = Array.isArray(messages) ? messages : [];
+    for (var i = assistantIndex - 1; i >= 0; i -= 1) {
+      var m = list[i];
+      if (!m || (m.role !== "user" && m.role !== "assistant")) continue;
+      if (typeof m.content === "string" && m.content.trim()) {
+        return m.role === "user";
+      }
+    }
+    return false;
+  }
+
   function byId(id) {
     return document.getElementById(id);
   }
@@ -414,10 +484,13 @@
       streaming: false,
       compressing: false,
       abortController: null,
+      activeStreamContext: null,
       editingMessageId: "",
       settingsDraft: null,
       keyVisible: false,
-      lastFocusedBeforeModal: null
+      lastFocusedBeforeModal: null,
+      lastRenderedConvId: "",
+      toastTimer: null
     };
 
     var els = {
@@ -498,9 +571,52 @@
       contextWindowHint: byId("aiContextWindowHint"),
       fieldAutoCompress: byId("aiFieldAutoCompress"),
       formatHint: byId("aiFormatHint"),
+      clearConfigBtn: byId("aiClearConfigBtn"),
       testConnectionBtn: byId("aiTestConnectionBtn"),
       saveProfileBtn: byId("aiSaveProfileBtn"),
-      settingsStatus: byId("aiSettingsStatus")
+      settingsStatus: byId("aiSettingsStatus"),
+      themeToast: byId("themeToast")
+    };
+
+    function showToast(message, isError) {
+      if (!els.themeToast || !message) return;
+      if (state.toastTimer) {
+        clearTimeout(state.toastTimer);
+        state.toastTimer = null;
+      }
+      els.themeToast.textContent = message;
+      els.themeToast.classList.toggle("is-error", Boolean(isError));
+      els.themeToast.classList.add("is-on");
+      state.toastTimer = setTimeout(function () {
+        state.toastTimer = null;
+        if (els.themeToast) {
+          els.themeToast.classList.remove("is-on");
+          els.themeToast.classList.remove("is-error");
+        }
+      }, 3400);
+    }
+
+    global.__quareiaHistoryExportResult = function (result) {
+      if (result && result.cancelled) {
+        showToast(tr("ai.exportCancelled", null, "已取消导出。", "Export cancelled."), false);
+      } else if (result && result.ok) {
+        var outName = result.fileName || "quareia-ai-export";
+        showToast(tr("ai.exportedTo", { fileName: outName },
+          "已导出：" + outName,
+          "Exported: " + outName), false);
+      } else {
+        var failMsg = tr("ai.exportFailed", null, "导出失败，请稍后重试。", "Export failed. Please try again.");
+        showToast(failMsg, true);
+        if (global.DivinationDialog && typeof global.DivinationDialog.request === "function") {
+          global.DivinationDialog.request({
+            kicker: tr("ai.backupKicker", null, "AI 备份", "AI BACKUP"),
+            title: tr("ai.exportFailed", null, "导出失败，请稍后重试。", "Export failed. Please try again."),
+            message: failMsg,
+            cancelLabel: tr("ai.close", null, "关闭", "Close"),
+            proceedLabel: tr("ai.ok", null, "确定", "OK")
+          });
+        }
+      }
     };
 
     function formatDisplayLabel(formatId) {
@@ -727,6 +843,18 @@
         if (!key) return;
         el.placeholder = tr(key, null, el.placeholder || "", el.placeholder || "");
       });
+      Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-content]"), function (el) {
+        var key = el.getAttribute("data-i18n-content");
+        if (!key) return;
+        var prev = el.getAttribute("content") || "";
+        el.setAttribute("content", tr(key, null, prev, prev));
+      });
+      Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-aria-label]"), function (el) {
+        var key = el.getAttribute("data-i18n-aria-label");
+        if (!key) return;
+        var prev = el.getAttribute("aria-label") || "";
+        el.setAttribute("aria-label", tr(key, null, prev, prev));
+      });
     }
 
     function updateProfileIndicator() {
@@ -866,6 +994,8 @@
         var archiveBtn = document.createElement("button");
         archiveBtn.type = "button";
         archiveBtn.className = "ai-mini-action";
+        archiveBtn.dataset.streamLock = "true";
+        archiveBtn.disabled = state.streaming;
         archiveBtn.textContent = conv.archived
           ? tr("ai.unarchive", null, "取消归档", "Unarchive")
           : tr("ai.archive", null, "归档", "Archive");
@@ -874,6 +1004,8 @@
         var deleteBtn = document.createElement("button");
         deleteBtn.type = "button";
         deleteBtn.className = "ai-mini-action is-danger";
+        deleteBtn.dataset.streamLock = "true";
+        deleteBtn.disabled = state.streaming;
         deleteBtn.textContent = tr("ai.delete", null, "删除", "Delete");
         deleteBtn.addEventListener("click", function () { deleteChatWithConfirm(conv); });
 
@@ -922,23 +1054,16 @@
           }
         }
         if (coveredIdx !== -1) {
-          summaryText = summaryObj.text;
-          startIndex = coveredIdx + 1;
-          compressedCount = summaryObj.compressedCount || (coveredIdx + 1);
+          var postSummaryValid = normalizeConversationMessagesForApi(messages, coveredIdx + 1, limitIdx);
+          if (postSummaryValid.length > 0) {
+            summaryText = summaryObj.text;
+            startIndex = coveredIdx + 1;
+            compressedCount = summaryObj.compressedCount || (coveredIdx + 1);
+          }
         }
       }
 
-      var validMessages = [];
-      for (var i = startIndex; i < limitIdx; i += 1) {
-        var m = messages[i];
-        if (m && (m.role === "user" || m.role === "assistant") && m.content && m.content.trim()) {
-          validMessages.push({
-            id: m.id,
-            role: m.role,
-            content: m.content
-          });
-        }
-      }
+      var validMessages = normalizeConversationMessagesForApi(messages, startIndex, limitIdx);
 
       var systemPrompt = contextApi.buildSystemPrompt(currentLocale(), readingsMd, summaryText);
       var apiMessages = validMessages.map(function (item) {
@@ -996,7 +1121,29 @@
 
     function renderContextHeader() {
       var conv = state.activeConversation;
-      if (!conv) return;
+      if (!conv) {
+        if (els.activeChatTitle) {
+          els.activeChatTitle.textContent = tr("ai.untitledChat", null, "新解牌对话", "Untitled Chat");
+        }
+        if (els.archivedBadge) {
+          els.archivedBadge.hidden = true;
+        }
+        if (els.archiveChatBtn) {
+          els.archiveChatBtn.textContent = tr("ai.archive", null, "归档", "Archive");
+        }
+        if (els.attachedChips) {
+          var emptyHint = document.createElement("span");
+          emptyHint.className = "ai-no-reading-hint";
+          emptyHint.textContent = tr("ai.noAttachedReadings", null,
+            "未附加占卜记录（已自动过滤自由画板记录）",
+            "No readings attached (freeform records excluded)");
+          els.attachedChips.replaceChildren(emptyHint);
+        }
+        updateStreamingUi();
+        updateProfileIndicator();
+        renderContextMeter();
+        return;
+      }
 
       if (els.activeChatTitle) {
         els.activeChatTitle.textContent = conv.title || tr("ai.untitledChat", null, "新解牌对话", "Untitled Chat");
@@ -1062,6 +1209,8 @@
             var rmBtn = document.createElement("button");
             rmBtn.type = "button";
             rmBtn.className = "ai-chip-remove";
+            rmBtn.dataset.streamLock = "true";
+            rmBtn.disabled = state.streaming;
             rmBtn.textContent = "×";
             rmBtn.setAttribute("aria-label", tr("ai.removeReading", null, "移除此占卜记录", "Remove reading"));
             rmBtn.addEventListener("click", function () { removeAttachedReading(rid); });
@@ -1145,14 +1294,36 @@
       return box;
     }
 
+    function isMessagesNearBottom() {
+      if (!els.messages) return true;
+      var distance = (els.messages.scrollHeight || 0) - (els.messages.scrollTop || 0) - (els.messages.clientHeight || 0);
+      return !(distance > 72);
+    }
+
     function scrollMessagesToBottom() {
       if (!els.messages) return;
       els.messages.scrollTop = els.messages.scrollHeight;
     }
 
-    function renderMessages() {
+    function renderMessages(renderOpts) {
       if (!els.messages) return;
+      var optsRender = renderOpts && typeof renderOpts === "object" ? renderOpts : {};
       var conv = state.activeConversation;
+      var currentConvId = conv ? conv.id : "";
+      var switchedConv = currentConvId !== state.lastRenderedConvId;
+      var shouldScroll = Boolean(optsRender.forceScroll || switchedConv || isMessagesNearBottom());
+      var openReasoningIds = Object.create(null);
+      if (!switchedConv && typeof els.messages.querySelectorAll === "function") {
+        Array.prototype.forEach.call(els.messages.querySelectorAll(".ai-msg"), function (art) {
+          var det = art.querySelector ? art.querySelector("details.ai-reasoning") : null;
+          var isOpen = Boolean(det && (det.open || (typeof det.hasAttribute === "function" && det.hasAttribute("open"))));
+          if (isOpen && art.dataset && art.dataset.msgId) {
+            openReasoningIds[art.dataset.msgId] = true;
+          }
+        });
+      }
+      state.lastRenderedConvId = currentConvId;
+
       if (!conv || !conv.messages || conv.messages.length === 0) {
         els.messages.replaceChildren(createStarterEmptyState());
         return;
@@ -1178,6 +1349,9 @@
         if (msg.role === "assistant" && msg.reasoning) {
           var details = document.createElement("details");
           details.className = "ai-reasoning";
+          if (openReasoningIds[msg.id]) {
+            details.open = true;
+          }
           var summary = document.createElement("summary");
           summary.textContent = tr("ai.reasoningSummary", null, "思考过程 / 推理摘要", "Reasoning Summary");
           var bodyDiv = document.createElement("div");
@@ -1227,17 +1401,18 @@
           return;
         }
 
+        var isLiveStreamingTurn = Boolean(state.streaming && index === messages.length - 1);
         if (msg.role === "assistant") {
           var mdContainer = document.createElement("div");
           mdContainer.className = "ai-markdown";
           if (msg.content) {
             renderMarkdownInto(mdContainer, msg.content);
-          } else if (state.streaming && index === messages.length - 1) {
+          } else if (isLiveStreamingTurn) {
             var waiting = document.createElement("span");
             waiting.className = "ai-streaming-cursor";
             mdContainer.appendChild(waiting);
           }
-          if (state.streaming && index === messages.length - 1 && msg.content) {
+          if (isLiveStreamingTurn && msg.content) {
             var cursor = document.createElement("span");
             cursor.className = "ai-streaming-cursor";
             mdContainer.appendChild(cursor);
@@ -1247,13 +1422,19 @@
           bubble.textContent = msg.content;
         }
 
-        if (msg.error) {
+        var canRegenerate = msg.role === "assistant" && hasPrecedingUserTurn(messages, index);
+        var effectiveError = msg.error || (
+          msg.role === "assistant" && !isLiveStreamingTurn && !msg.content
+            ? tr("ai.stoppedEmpty", null, "已停止生成。", "Generation stopped.")
+            : ""
+        );
+        if (effectiveError) {
           var errBox = document.createElement("div");
           errBox.className = "ai-msg-error";
           var errText = document.createElement("span");
-          errText.textContent = msg.error;
+          errText.textContent = effectiveError;
           errBox.appendChild(errText);
-          if (msg.role === "assistant" && !state.streaming) {
+          if (msg.role === "assistant" && !state.streaming && canRegenerate) {
             var retryBtn = document.createElement("button");
             retryBtn.type = "button";
             retryBtn.className = "ai-mini-action";
@@ -1266,7 +1447,7 @@
 
         article.appendChild(bubble);
 
-        if (!state.streaming || index < messages.length - 1) {
+        if (!isLiveStreamingTurn) {
           var msgActions = document.createElement("div");
           msgActions.className = "ai-msg-actions";
 
@@ -1302,7 +1483,7 @@
             regenBtn.type = "button";
             regenBtn.className = "ai-mini-action";
             regenBtn.textContent = tr("ai.regenerate", null, "重新生成", "Regenerate");
-            regenBtn.disabled = state.streaming;
+            regenBtn.disabled = state.streaming || !canRegenerate;
             regenBtn.addEventListener("click", function () {
               regenerateFromIndex(index);
             });
@@ -1326,13 +1507,105 @@
       });
 
       els.messages.replaceChildren(frag);
-      scrollMessagesToBottom();
+      if (shouldScroll) {
+        scrollMessagesToBottom();
+      }
+    }
+
+    function patchStreamingMessageDom(conv, assistantMsgIndex) {
+      if (!els.messages || !conv || !state.activeConversation || state.activeConversation.id !== conv.id) {
+        return;
+      }
+      var msg = conv.messages && conv.messages[assistantMsgIndex];
+      if (!msg) return;
+      var targetArticle = null;
+      if (typeof els.messages.querySelectorAll === "function") {
+        var articles = els.messages.querySelectorAll(".ai-msg");
+        for (var i = articles.length - 1; i >= 0; i -= 1) {
+          if (articles[i].dataset && articles[i].dataset.msgId === msg.id) {
+            targetArticle = articles[i];
+            break;
+          }
+        }
+      }
+      if (!targetArticle) {
+        renderMessages({ forceScroll: false });
+        return;
+      }
+      var shouldScroll = isMessagesNearBottom();
+      var bubble = targetArticle.querySelector ? targetArticle.querySelector(".ai-msg-bubble") : null;
+      if (!bubble) {
+        renderMessages({ forceScroll: false });
+        return;
+      }
+
+      if (msg.reasoning) {
+        var details = targetArticle.querySelector ? targetArticle.querySelector("details.ai-reasoning") : null;
+        if (!details) {
+          details = document.createElement("details");
+          details.className = "ai-reasoning";
+          var summary = document.createElement("summary");
+          summary.textContent = tr("ai.reasoningSummary", null, "思考过程 / 推理摘要", "Reasoning Summary");
+          var bodyDiv = document.createElement("div");
+          bodyDiv.className = "ai-reasoning-body";
+          details.appendChild(summary);
+          details.appendChild(bodyDiv);
+          if (typeof targetArticle.insertBefore === "function") {
+            targetArticle.insertBefore(details, bubble);
+          } else {
+            targetArticle.appendChild(details);
+          }
+        }
+        var reasonBody = details.querySelector ? details.querySelector(".ai-reasoning-body") : details.lastChild;
+        if (reasonBody) {
+          reasonBody.textContent = msg.reasoning;
+        }
+      }
+
+      var mdContainer = bubble.querySelector ? bubble.querySelector(".ai-markdown") : null;
+      if (!mdContainer) {
+        mdContainer = document.createElement("div");
+        mdContainer.className = "ai-markdown";
+        bubble.replaceChildren(mdContainer);
+      }
+      if (msg.content) {
+        renderMarkdownInto(mdContainer, msg.content);
+        if (state.streaming) {
+          var cursor = document.createElement("span");
+          cursor.className = "ai-streaming-cursor";
+          mdContainer.appendChild(cursor);
+        }
+      } else if (state.streaming) {
+        var waiting = document.createElement("span");
+        waiting.className = "ai-streaming-cursor";
+        mdContainer.replaceChildren(waiting);
+      }
+
+      if (shouldScroll) {
+        scrollMessagesToBottom();
+      }
     }
 
     function updateStreamingUi() {
+      var hasConv = Boolean(state.activeConversation);
       if (els.sendBtn) els.sendBtn.hidden = state.streaming;
       if (els.stopBtn) els.stopBtn.hidden = !state.streaming;
       if (els.promptInput) els.promptInput.disabled = state.streaming;
+      if (els.newChatBtn) els.newChatBtn.disabled = state.streaming;
+      if (els.exportBackupBtn) els.exportBackupBtn.disabled = state.streaming;
+      if (els.importBackupBtn) els.importBackupBtn.disabled = state.streaming;
+      if (els.clearChatsBtn) els.clearChatsBtn.disabled = state.streaming;
+      if (els.pickReadingsBtn) els.pickReadingsBtn.disabled = state.streaming || !hasConv;
+      if (els.bannerPickBtn) els.bannerPickBtn.disabled = state.streaming;
+      if (els.archiveChatBtn) els.archiveChatBtn.disabled = state.streaming || !hasConv;
+      if (els.deleteChatBtn) els.deleteChatBtn.disabled = state.streaming || !hasConv;
+      if (els.renameChatBtn) els.renameChatBtn.disabled = !hasConv;
+      if (els.exportMdBtn) els.exportMdBtn.disabled = !hasConv;
+      if (typeof document !== "undefined" && typeof document.querySelectorAll === "function") {
+        Array.prototype.forEach.call(document.querySelectorAll("[data-stream-lock]"), function (btn) {
+          btn.disabled = state.streaming;
+        });
+      }
     }
 
     function adoptConversation(refetched) {
@@ -1359,6 +1632,7 @@
       state.streaming = false;
       state.compressing = false;
       state.abortController = null;
+      state.activeStreamContext = null;
       updateStreamingUi();
     }
 
@@ -1381,6 +1655,16 @@
       }
     }
 
+    function resolveFallbackConversation(allActive, allArchived) {
+      if (state.conversations.length > 0) {
+        return state.conversations[0];
+      }
+      if (state.activeTab === "archived") {
+        return allArchived[0] || allActive[0] || null;
+      }
+      return allActive[0] || null;
+    }
+
     function refreshConversationsList(preferredId) {
       return Promise.all([
         chatStore.listConversations({ archived: false, query: state.searchQuery }),
@@ -1390,48 +1674,38 @@
       ]).then(function (results) {
         var activeFiltered = results[0];
         var archivedFiltered = results[1];
-        state.allCounts.active = results[2].length;
-        state.allCounts.archived = results[3].length;
+        var allActive = results[2];
+        var allArchived = results[3];
+        state.allCounts.active = allActive.length;
+        state.allCounts.archived = allArchived.length;
         state.conversations = state.activeTab === "archived" ? archivedFiltered : activeFiltered;
+        var shouldAutoCreate = state.activeTab === "active" && !state.searchQuery && allActive.length === 0;
 
-        if (preferredId) {
-          return chatStore.getConversation(preferredId).then(function (found) {
-            state.activeConversation = adoptConversation(found);
-            renderSidebar();
-            renderContextHeader();
-            renderMessages();
-          });
-        }
-
-        if (state.activeConversation) {
-          return chatStore.getConversation(state.activeConversation.id).then(function (refetched) {
-            if (refetched) {
-              state.activeConversation = adoptConversation(refetched);
-              renderSidebar();
-              renderContextHeader();
-              renderMessages();
-              return null;
-            }
-            state.activeConversation = state.conversations[0] || null;
-            if (!state.activeConversation) {
-              return createFreshConversation();
-            }
-            renderSidebar();
-            renderContextHeader();
-            renderMessages();
-            return null;
-          });
-        }
-
-        if (state.conversations.length > 0) {
-          state.activeConversation = state.conversations[0];
+        function finalizeSelection(candidate) {
+          state.activeConversation = candidate || resolveFallbackConversation(allActive, allArchived);
+          if (!state.activeConversation && shouldAutoCreate) {
+            return createFreshConversation();
+          }
+          updateStreamingUi();
           renderSidebar();
           renderContextHeader();
           renderMessages();
           return null;
         }
 
-        return createFreshConversation();
+        if (preferredId) {
+          return chatStore.getConversation(preferredId).then(function (found) {
+            return finalizeSelection(found ? adoptConversation(found) : null);
+          });
+        }
+
+        if (state.activeConversation) {
+          return chatStore.getConversation(state.activeConversation.id).then(function (refetched) {
+            return finalizeSelection(refetched ? adoptConversation(refetched) : null);
+          });
+        }
+
+        return finalizeSelection(null);
       });
     }
 
@@ -1458,9 +1732,10 @@
       return chatStore.getConversation(chatId).then(function (conv) {
         if (!conv) return;
         state.activeConversation = conv;
+        updateStreamingUi();
         renderSidebar();
         renderContextHeader();
-        renderMessages();
+        renderMessages({ forceScroll: true });
       });
     }
 
@@ -1490,6 +1765,7 @@
     }
 
     function toggleArchive(chatId, nextArchived) {
+      if (state.streaming) return;
       chatStore.setArchived(chatId, nextArchived).then(function () {
         var remainingId = state.activeConversation && state.activeConversation.id === chatId
           ? ""
@@ -1930,18 +2206,53 @@
       if (els.detectContextBtn) els.detectContextBtn.disabled = true;
 
       providers.fetchModelContextWindow(normalized).then(function (res) {
-        active.detectedContextWindow = res.contextWindow;
-        active.contextWindowSource = res.source;
+        if (res && res.live === true && res.contextWindow > 0) {
+          active.detectedContextWindow = res.contextWindow;
+          active.contextWindowSource = "api";
+        } else {
+          active.detectedContextWindow = null;
+          active.contextWindowSource = (res && res.source) || "";
+        }
+        var resolved = providers.resolveContextWindow(active);
+        var displayWindow = res && res.contextWindow > 0 ? res.contextWindow : resolved.contextWindow;
+        var displaySource = (res && res.source) || resolved.source;
         updateContextWindowHintUI(active);
         setStatusText(els.settingsStatus, tr("ai.detectContextDone", {
-          count: formatTokenCount(res.contextWindow),
-          source: contextSourceLabel(res.source)
+          count: formatTokenCount(displayWindow),
+          source: contextSourceLabel(displaySource)
         },
-        "已识别模型上下文窗口：" + formatTokenCount(res.contextWindow) + " tokens（" + contextSourceLabel(res.source) + "）",
-        "Detected model context window: " + formatTokenCount(res.contextWindow) + " tokens (" + contextSourceLabel(res.source) + ")"), false);
+        "已识别模型上下文窗口：" + formatTokenCount(displayWindow) + " tokens（" + contextSourceLabel(displaySource) + "）",
+        "Detected model context window: " + formatTokenCount(displayWindow) + " tokens (" + contextSourceLabel(displaySource) + ")"), false);
         renderContextMeter();
+      }).catch(function (err) {
+        setStatusText(els.settingsStatus, formatProviderError(err), true);
       }).finally(function () {
         if (els.detectContextBtn) els.detectContextBtn.disabled = false;
+      });
+    }
+
+    function clearSavedConfigWithConfirm() {
+      confirmAction({
+        kicker: tr("ai.confirmKicker", null, "AI 对话", "AI CHAT"),
+        title: tr("ai.clearConfigTitle", null, "清除已保存的 API 密钥？", "Clear saved API keys?"),
+        message: tr("ai.clearConfigMsg", null, "将从当前设备本地存储中移除所有已保存的模型配置与 API Key，聊天记录不受影响。", "This removes all saved model profiles and API keys from local storage on this device. Chat history is preserved."),
+        cancelLabel: tr("ai.cancel", null, "取消", "Cancel"),
+        proceedLabel: tr("ai.clearConfigConfirm", null, "确认清除", "Clear Keys")
+      }).then(function (confirmed) {
+        if (!confirmed) return;
+        configStore.clear();
+        var starter = providers.createDefaultProfile("openai-chat", {
+          name: "OpenAI"
+        });
+        state.settingsDraft = {
+          activeProfileId: starter.id,
+          profiles: [starter]
+        };
+        state.keyVisible = false;
+        renderSettingsModal();
+        updateProfileIndicator();
+        renderContextMeter();
+        setStatusText(els.settingsStatus, tr("ai.configCleared", null, "已从本地存储清除所有模型配置与 API Key。", "Cleared all saved model profiles and API keys from local storage."), false);
       });
     }
 
@@ -1990,9 +2301,16 @@
         var res = results[0];
         var ctxRes = results[1];
         if (ctxRes && ctxRes.contextWindow > 0) {
-          active.detectedContextWindow = ctxRes.contextWindow;
-          if (!active.contextWindow) {
-            active.contextWindowSource = ctxRes.source;
+          if (ctxRes.live === true) {
+            active.detectedContextWindow = ctxRes.contextWindow;
+            if (!active.contextWindow) {
+              active.contextWindowSource = "api";
+            }
+          } else {
+            active.detectedContextWindow = null;
+            if (!active.contextWindow) {
+              active.contextWindowSource = ctxRes.source || "";
+            }
           }
           updateContextWindowHintUI(active);
         }
@@ -2049,6 +2367,11 @@
       state.editingMessageId = "";
       state.abortController = state.abortController
         || (typeof AbortController === "function" ? new AbortController() : null);
+      state.activeStreamContext = {
+        conv: conv,
+        assistantMsgIndex: assistantMsgIndex,
+        profileId: profile.id
+      };
       updateStreamingUi();
 
       var prepPromise = Promise.resolve(payload);
@@ -2094,10 +2417,14 @@
             }
             var coveredUntilId = toCompress[toCompress.length - 1].id || prevCoveredId;
             if (nextSummaryText) {
+              var addedRawCount = 0;
+              for (var tc = 0; tc < toCompress.length; tc += 1) {
+                addedRawCount += Number(toCompress[tc].rawCount) > 0 ? Number(toCompress[tc].rawCount) : 1;
+              }
               conv.contextSummary = {
                 text: nextSummaryText,
                 coveredUntilId: coveredUntilId,
-                compressedCount: coveredCountBefore + toCompress.length,
+                compressedCount: coveredCountBefore + addedRawCount,
                 updatedAt: Date.now()
               };
               return buildPromptPayloadForConversation(conv, assistantMsgIndex);
@@ -2115,19 +2442,18 @@
         if (pendingFrame) return;
         pendingFrame = setTimeout(function () {
           pendingFrame = null;
-          renderMessages();
+          patchStreamingMessageDom(conv, assistantMsgIndex);
         }, 60);
       }
 
       return prepPromise.then(function (readyPayload) {
-        var finalMessages = readyPayload.apiMessages.slice();
         var hardCap = Math.floor(inputBudget * 0.94);
-        while (
-          finalMessages.length > 1
-          && contextApi.estimateConversationTokens({ systemPrompt: readyPayload.systemPrompt, messages: finalMessages }) >= hardCap
-        ) {
-          finalMessages.shift();
-        }
+        var finalMessages = truncateMessagesToBudget(
+          readyPayload.apiMessages,
+          readyPayload.systemPrompt,
+          hardCap,
+          contextApi.estimateConversationTokens
+        );
         return providers.streamChat(profile, {
           systemPrompt: readyPayload.systemPrompt,
           messages: finalMessages,
@@ -2184,6 +2510,7 @@
           }
         }
       }).finally(function () {
+        state.activeStreamContext = null;
         var coveredIndex = conv.contextSummary
           ? conv.messages.findIndex(function (m) { return m.id === conv.contextSummary.coveredUntilId; }) : -1;
         return chatStore.completeMessage(conv.id, conv.messages[assistantMsgIndex], {
@@ -2203,8 +2530,6 @@
 
     function sendUserPrompt() {
       if (state.streaming) return;
-      var conv = state.activeConversation;
-      if (!conv) return;
       var text = els.promptInput ? els.promptInput.value.trim() : "";
       if (!text) return;
 
@@ -2225,11 +2550,31 @@
         format: profile.format,
         createdAt: now + 1
       });
-      var nextTitle = conv.title || deriveAutoTitle(conv.readingIds, text);
+      var conv = state.activeConversation;
       startStreamingUi();
-      chatStore.appendMessages(conv.id, [userMsg, assistantMsg], {
-        title: nextTitle,
-        profileId: profile.id
+
+      var ensureConvPromise = conv
+        ? Promise.resolve(conv)
+        : chatStore.createConversation({
+          title: deriveAutoTitle([], text),
+          archived: false,
+          readingIds: [],
+          readingSnapshots: [],
+          messages: []
+        }).then(function (created) {
+          state.activeTab = "active";
+          state.searchQuery = "";
+          if (els.chatSearchInput) els.chatSearchInput.value = "";
+          state.activeConversation = created;
+          return created;
+        });
+
+      ensureConvPromise.then(function (targetConv) {
+        var nextTitle = targetConv.title || deriveAutoTitle(targetConv.readingIds, text);
+        return chatStore.appendMessages(targetConv.id, [userMsg, assistantMsg], {
+          title: nextTitle,
+          profileId: profile.id
+        });
       }).then(function (saved) {
         if (!saved) {
           var missing = new Error("Conversation was deleted");
@@ -2239,7 +2584,7 @@
         state.activeConversation = saved;
         renderSidebar();
         renderContextHeader();
-        renderMessages();
+        renderMessages({ forceScroll: true });
         return runGeneration(saved, saved.messages.length - 1);
       }).catch(function (err) { handleConversationWriteError(err, text); });
     }
@@ -2248,10 +2593,35 @@
       if (state.streaming) return;
       var conv = state.activeConversation;
       if (!conv || !conv.messages || assistantIndex < 0 || assistantIndex >= conv.messages.length) return;
+      if (!conv.messages[assistantIndex] || conv.messages[assistantIndex].role !== "assistant") return;
+      if (!hasPrecedingUserTurn(conv.messages, assistantIndex)) return;
       var profile = configStore.getActiveProfile();
       if (!profile || !providers.validateProfile(profile).ok) {
         openSettingsModal();
         return;
+      }
+
+      var lastUserIdx = -1;
+      for (var u = assistantIndex - 1; u >= 0; u -= 1) {
+        if (conv.messages[u] && conv.messages[u].role === "user" && conv.messages[u].content) {
+          lastUserIdx = u;
+          break;
+        }
+      }
+      if (lastUserIdx === -1) return;
+
+      var nextSummary = conv.contextSummary || null;
+      if (nextSummary) {
+        var coveredIdx = -1;
+        for (var c = 0; c < assistantIndex; c += 1) {
+          if (conv.messages[c].id === nextSummary.coveredUntilId) {
+            coveredIdx = c;
+            break;
+          }
+        }
+        if (!nextSummary.coveredUntilId || coveredIdx === -1 || coveredIdx >= lastUserIdx) {
+          nextSummary = null;
+        }
       }
 
       var kept = conv.messages.slice(0, assistantIndex);
@@ -2268,6 +2638,7 @@
       startStreamingUi();
       chatStore.updateConversation(conv.id, {
         messages: kept,
+        contextSummary: nextSummary,
         profileId: profile.id
       }, { expectedMessages: conv.messages }).then(function (saved) {
         if (!saved) {
@@ -2276,7 +2647,7 @@
           throw missing;
         }
         state.activeConversation = saved;
-        renderMessages();
+        renderMessages({ forceScroll: true });
         return runGeneration(saved, saved.messages.length - 1);
       }).catch(function (err) { handleConversationWriteError(err); });
     }
@@ -2345,7 +2716,7 @@
           throw missing;
         }
         state.activeConversation = saved;
-        renderMessages();
+        renderMessages({ forceScroll: true });
         return runGeneration(saved, saved.messages.length - 1);
       }).catch(function (err) { handleConversationWriteError(err); });
     }
@@ -2371,23 +2742,34 @@
     function exportActiveConversationMarkdown() {
       var conv = state.activeConversation;
       if (!conv) return;
-      var md = chatStoreApi.formatConversationMarkdown(conv, { locale: currentLocale() });
-      var stamp = new Date().toISOString().slice(0, 10);
-      triggerFileDownload(md, "quareia-ai-reading-" + stamp + ".md", "text/markdown;charset=utf-8");
+      try {
+        var md = chatStoreApi.formatConversationMarkdown(conv, { locale: currentLocale() });
+        var stamp = new Date().toISOString().slice(0, 10);
+        triggerFileDownload(md, "quareia-ai-reading-" + stamp + ".md", "text/markdown;charset=utf-8");
+      } catch (_err) {
+        if (typeof global.__quareiaHistoryExportResult === "function") {
+          global.__quareiaHistoryExportResult({ ok: false });
+        }
+      }
     }
 
     function exportAllChatsBackup() {
+      if (state.streaming) return;
       chatStore.exportBackup().then(function (backup) {
         var json = JSON.stringify(backup, null, 2);
         var stamp = new Date().toISOString().slice(0, 10);
         triggerFileDownload(json, "quareia-ai-chats-" + stamp + ".json", "application/json;charset=utf-8");
+      }).catch(function () {
+        if (typeof global.__quareiaHistoryExportResult === "function") {
+          global.__quareiaHistoryExportResult({ ok: false });
+        }
       });
     }
 
     function importChatsBackup(event) {
-      var file = event.target.files && event.target.files[0];
-      event.target.value = "";
-      if (!file) return;
+      var file = event.target && event.target.files && event.target.files[0];
+      if (event.target) event.target.value = "";
+      if (state.streaming || !file) return;
       file.text().then(function (raw) {
         return chatStore.importBackup(raw, { mode: "merge" });
       }).then(function (res) {
@@ -2455,7 +2837,10 @@
 
     if (els.exportBackupBtn) els.exportBackupBtn.addEventListener("click", exportAllChatsBackup);
     if (els.importBackupBtn && els.importFileInput) {
-      els.importBackupBtn.addEventListener("click", function () { els.importFileInput.click(); });
+      els.importBackupBtn.addEventListener("click", function () {
+        if (state.streaming) return;
+        els.importFileInput.click();
+      });
       els.importFileInput.addEventListener("change", importChatsBackup);
     }
     if (els.clearChatsBtn) els.clearChatsBtn.addEventListener("click", clearTabChatsWithConfirm);
@@ -2614,8 +2999,19 @@
           : tr("ai.showKey", null, "显示", "Show");
       });
     }
+    if (els.clearConfigBtn) els.clearConfigBtn.addEventListener("click", clearSavedConfigWithConfirm);
     if (els.testConnectionBtn) els.testConnectionBtn.addEventListener("click", runConnectionTest);
     if (els.saveProfileBtn) els.saveProfileBtn.addEventListener("click", saveSettingsFromModal);
+
+    function isConfirmDialogOpen() {
+      var dlg = byId("confirmDialog");
+      if (!dlg) return false;
+      return Boolean(
+        dlg.open
+        || (typeof dlg.hasAttribute === "function" && dlg.hasAttribute("open"))
+        || (dlg.classList && dlg.classList.contains("is-open"))
+      );
+    }
 
     // Backdrop click / Escape handling
     [els.pickerModal, els.renameModal, els.settingsModal].forEach(function (modal) {
@@ -2626,15 +3022,18 @@
     });
 
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") {
-        var openM = getOpenModal();
-        if (openM) {
-          closeModal(openM);
-        } else if (state.themePopoverOpen) {
-          setThemePopoverOpen(false);
-        } else if (state.sidebarOpen) {
-          setSidebarOpen(false);
-        }
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (isConfirmDialogOpen()) return;
+      var openM = getOpenModal();
+      if (openM) {
+        closeModal(openM);
+      } else if (state.sidebarOpen) {
+        setSidebarOpen(false);
+      } else if (state.themePopoverOpen) {
+        setThemePopoverOpen(false);
+      } else if (state.editingMessageId) {
+        state.editingMessageId = "";
+        renderMessages();
       }
     });
 
@@ -2645,6 +3044,48 @@
       renderMessages();
       if (els.settingsModal && !els.settingsModal.hidden) {
         renderSettingsModal();
+      }
+    });
+
+    global.addEventListener("pageshow", function () {
+      updateBackLink();
+      updateProfileIndicator();
+    });
+
+    global.addEventListener("storage", function (e) {
+      var key = e ? e.key : "";
+      if (!key || key === "quareia-page-version" || key === "quareia-page-version-v1") {
+        updateBackLink();
+      }
+      if (!key || key === providers.STORAGE_KEY) {
+        updateProfileIndicator();
+        renderContextMeter();
+      }
+    });
+
+    global.addEventListener("pagehide", function () {
+      if (!state.streaming) return;
+      var ctx = state.activeStreamContext;
+      state.activeStreamContext = null;
+      if (ctx && ctx.conv && ctx.conv.messages && ctx.conv.messages[ctx.assistantMsgIndex]) {
+        var partialMsg = ctx.conv.messages[ctx.assistantMsgIndex];
+        if (!partialMsg.content && !partialMsg.error) {
+          partialMsg.error = tr("ai.stoppedEmpty", null, "已停止生成。", "Generation stopped.");
+        }
+        var covIdx = ctx.conv.contextSummary
+          ? ctx.conv.messages.findIndex(function (m) { return m.id === ctx.conv.contextSummary.coveredUntilId; })
+          : -1;
+        chatStore.completeMessage(ctx.conv.id, partialMsg, {
+          profileId: ctx.profileId || "",
+          contextSummary: ctx.conv.contextSummary || null,
+          summaryMessages: covIdx >= 0 ? ctx.conv.messages.slice(0, covIdx + 1) : null,
+          lastUsage: ctx.conv.lastUsage || null
+        }).catch(function () {});
+      }
+      if (state.abortController) {
+        try {
+          state.abortController.abort();
+        } catch (_err) {}
       }
     });
 
@@ -2674,14 +3115,16 @@
 
     return {
       handleBack: function () {
-        if (state.editingMessageId) {
-          state.editingMessageId = "";
-          renderMessages();
-          return true;
-        }
-        if (state.themePopoverOpen) {
-          setThemePopoverOpen(false);
-          return true;
+        if (global.DivinationDialog && typeof global.DivinationDialog.handleBack === "function") {
+          if (global.DivinationDialog.handleBack()) {
+            return true;
+          }
+        } else if (isConfirmDialogOpen()) {
+          var cancelBtn = byId("confirmCancelBtn");
+          if (cancelBtn && typeof cancelBtn.click === "function") {
+            cancelBtn.click();
+            return true;
+          }
         }
         var openM = getOpenModal();
         if (openM) {
@@ -2692,14 +3135,31 @@
           setSidebarOpen(false);
           return true;
         }
+        if (state.themePopoverOpen) {
+          setThemePopoverOpen(false);
+          return true;
+        }
+        if (state.streaming) {
+          if (state.abortController) {
+            state.abortController.abort();
+          } else {
+            finishStreamingUi();
+          }
+          return true;
+        }
+        if (state.editingMessageId) {
+          state.editingMessageId = "";
+          renderMessages();
+          return true;
+        }
         return false;
       }
     };
   }
 
   var controller = null;
-  function bootstrap() {
-    if (controller) return controller;
+  function bootstrap(opts) {
+    if (controller && !(opts && opts.reset === true)) return controller;
     controller = initAiPage();
     return controller;
   }
@@ -2714,6 +3174,9 @@
 
   var api = {
     renderMarkdownInto: renderMarkdownInto,
+    normalizeConversationMessagesForApi: normalizeConversationMessagesForApi,
+    truncateMessagesToBudget: truncateMessagesToBudget,
+    hasPrecedingUserTurn: hasPrecedingUserTurn,
     handleBack: function () {
       return controller ? controller.handleBack() : false;
     },

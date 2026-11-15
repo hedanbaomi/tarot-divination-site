@@ -581,6 +581,21 @@
       ,"ai.importDoneMsg": "已成功合并导入 {imported} 段对话（当前共 {total} 段）。"
       ,"ai.importErrTitle": "导入失败"
       ,"ai.importErrMsg": "文件格式不匹配，请选择本站导出的 AI 对话 JSON 备份文件。"
+      ,"ai.pageDescription": "结合 Quareia 应用内牌意与非自由画板占卜历史的 AI 辅助解牌对话工作台"
+      ,"ai.contextBarAria": "当前对话与占卜上下文"
+      ,"ai.deckTarot": "Quareia 塔罗"
+      ,"ai.clearConfig": "清除已存密钥"
+      ,"ai.clearConfigTitle": "清除所有已保存的 API Key？"
+      ,"ai.clearConfigMsg": "此操作将从当前设备移除所有已保存的模型配置与 API Key，但不会删除你的 AI 对话记录。"
+      ,"ai.clearConfigConfirm": "确认清除"
+      ,"ai.configCleared": "已清除本地保存的所有 API Key 与模型配置。"
+      ,"ai.exportedTo": "已导出：{fileName}"
+      ,"ai.exportCancelled": "已取消导出。"
+      ,"ai.exportFailed": "导出失败，请稍后重试。"
+      ,"ai.chatChangedTitle": "对话已更新"
+      ,"ai.chatChangedMsg": "其他标签页已修改此对话，已载入最新内容。请确认后重试。"
+      ,"ai.saveFailedTitle": "保存失败"
+      ,"ai.saveFailedMsg": "无法保存对话，请检查存储空间后重试。"
     },
     "en": {
       "page.title": "Quareia Divination",
@@ -1153,7 +1168,22 @@
       "ai.importDoneTitle": "Import Complete",
       "ai.importDoneMsg": "Merged {imported} conversations ({total} total).",
       "ai.importErrTitle": "Import Failed",
-      "ai.importErrMsg": "Invalid backup file format. Choose an AI chat JSON backup exported from this app."
+      "ai.importErrMsg": "Invalid backup file format. Choose an AI chat JSON backup exported from this app.",
+      "ai.pageDescription": "AI-assisted divination workspace grounded in Quareia in-app card meanings and preset spread history.",
+      "ai.contextBarAria": "Active conversation and reading context",
+      "ai.deckTarot": "Quareia Tarot",
+      "ai.clearConfig": "Clear Saved Keys",
+      "ai.clearConfigTitle": "Clear all saved API keys?",
+      "ai.clearConfigMsg": "This removes all saved model profiles and API keys from this device without deleting your AI chat history.",
+      "ai.clearConfigConfirm": "Clear Keys",
+      "ai.configCleared": "All locally saved API keys and model settings have been cleared.",
+      "ai.exportedTo": "Exported: {fileName}",
+      "ai.exportCancelled": "Export cancelled.",
+      "ai.exportFailed": "Export failed. Please try again.",
+      "ai.chatChangedTitle": "Conversation Updated",
+      "ai.chatChangedMsg": "Another tab changed this conversation. The latest messages have been loaded; review them and retry.",
+      "ai.saveFailedTitle": "Save Failed",
+      "ai.saveFailedMsg": "Could not save the conversation. Check available storage and retry."
     }
   };
 
@@ -1194,9 +1224,13 @@
     if (!global.document) return;
     var document = global.document;
     document.documentElement.lang = locale;
-    document.title = t("page.title");
+    var isAiPage = Boolean(document.body && document.body.classList && document.body.classList.contains("ai-chat-page"));
+    document.title = t(isAiPage ? "ai.pageTitle" : "page.title");
     var description = document.querySelector('meta[name="description"]');
-    if (description) description.setAttribute("content", t("page.description"));
+    if (description) {
+      var descKey = description.getAttribute("data-i18n-content") || (isAiPage ? "ai.pageDescription" : "page.description");
+      description.setAttribute("content", t(descKey));
+    }
     Array.prototype.forEach.call(document.querySelectorAll("[data-i18n]"), function (element) {
       element.textContent = t(element.getAttribute("data-i18n"));
     });
