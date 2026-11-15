@@ -372,12 +372,14 @@ function createMemoryStorage() {
 
 const REQUIRED_HTML_IDS = [
   "aiChatList", "aiMessages", "aiPromptInput", "aiSendBtn", "aiStopBtn",
-  "aiPickReadingsBtn", "aiPickerModal", "aiRenameModal",
+  "aiPickReadingsBtn", "aiPickerModal", "aiPickerDeckFilter", "aiRenameModal",
   "aiSettingsModal", "aiProfileFormat", "aiProfileApiKey", "aiVertexGroup",
   "aiLockedPromptNote", "aiFieldContextWindow", "aiDetectContextBtn",
   "aiContextWindowHint", "aiFieldAutoCompress", "aiContextMeter",
   "aiClearConfigBtn",
-  "themeSwatches", "themeToast", "confirmDialog", "languageToggle"
+  "themeSwatches", "themeToast", "confirmDialog",
+  "choiceDialog", "choiceDialogKicker", "choiceDialogTitle", "choiceOptions", "choiceCancelBtn",
+  "languageToggle"
 ];
 
 const FORBIDDEN_HTML_IDS = [
@@ -411,6 +413,10 @@ function assertAiHtmlContract(label, html) {
   assert.ok(html.includes('data-i18n-content="ai.pageDescription"'), `${label} ai.html meta description missing data-i18n-content`);
   assert.ok(html.includes('data-i18n-aria-label="ai.contextBarAria"'), `${label} ai.html context bar missing data-i18n-aria-label`);
   assert.ok(html.includes('data-i18n="ai.deckTarot"'), `${label} ai.html tarot option missing data-i18n`);
+  assert.ok(html.includes('src="js/custom-selects.js"'), `${label} ai.html must load js/custom-selects.js to replace native <select> UI`);
+  assert.ok(/<label[^>]+for="aiPickerDeckFilter"/i.test(html), `${label} ai.html must bind an explicit <label for="aiPickerDeckFilter">`);
+  assert.ok(/<label[^>]+for="aiProfileFormat"/i.test(html), `${label} ai.html must bind an explicit <label for="aiProfileFormat">`);
+  assert.equal(/<label\b[^>]*>(?:(?!<\/label>)[\s\S])*?<select\b/i.test(html), false, `${label} ai.html must not wrap <select> inside <label> (prevents option-text concatenation in choiceDialogTitle)`);
   assert.ok(html.includes("quareia-divination-theme"), `${label} ai.html missing synchronous head theme boot script`);
   assert.ok(
     html.includes("Object.prototype.hasOwnProperty.call(allowed, stored)"),
@@ -434,6 +440,13 @@ test("web ai.html, css, theme.js, entry pages, and i18n satisfy structure, contr
 
   assert.ok(/\.ai-markdown\s+a\b/.test(webCss), "css/ai-chat.css must style .ai-markdown links for accessible contrast");
   assert.ok(webCss.includes(".ai-clear-config-btn"), "css/ai-chat.css must style .ai-clear-config-btn");
+  assert.ok(webCss.includes(".themed-select-trigger"), "css/ai-chat.css must theme custom select triggers");
+  assert.ok(webCss.includes(".choice-overlay"), "css/ai-chat.css must layer #choiceDialog above AI modals");
+  assert.ok(/input\[type="checkbox"\]\s*\{[\s\S]*?appearance:\s*none/.test(webCss), "css/ai-chat.css must replace native checkboxes with custom themed controls");
+  assert.ok(webCss.includes("::-webkit-inner-spin-button"), "css/ai-chat.css must hide native number input spin buttons");
+  assert.ok(webCss.includes("::-webkit-search-cancel-button"), "css/ai-chat.css must replace native search cancel icon");
+  assert.ok(webCss.includes(".ai-reasoning summary::after"), "css/ai-chat.css must replace native <details> disclosure triangle");
+  assert.ok(webCss.includes("::-webkit-scrollbar"), "css/ai-chat.css must theme scrollbars across AI containers");
 
   assert.ok(webThemeSrc.includes("syncFromStorage"), "web theme.js must support cross-tab/pageshow theme sync");
   assert.ok(webThemeSrc.includes('"storage"') || webThemeSrc.includes("'storage'"), "web theme.js must listen to storage events");
@@ -625,6 +638,7 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
     DivinationAiContext: global.DivinationAiContext,
     DivinationAiChatStore: global.DivinationAiChatStore,
     DivinationDialog: global.DivinationDialog,
+    DivinationCustomSelects: global.DivinationCustomSelects,
     DivinationI18n: global.DivinationI18n,
     exportCb: global.__quareiaHistoryExportResult
   };
@@ -639,6 +653,7 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
     global.DivinationAiContext = savedGlobals.DivinationAiContext;
     global.DivinationAiChatStore = savedGlobals.DivinationAiChatStore;
     global.DivinationDialog = savedGlobals.DivinationDialog;
+    global.DivinationCustomSelects = savedGlobals.DivinationCustomSelects;
     global.DivinationI18n = savedGlobals.DivinationI18n;
     global.__quareiaHistoryExportResult = savedGlobals.exportCb;
   });
@@ -742,6 +757,9 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   const confirmDialog = el("dialog", "confirmDialog");
   const confirmCancelBtn = el("button", "confirmCancelBtn");
   confirmDialog.appendChild(confirmCancelBtn);
+  const choiceDialog = el("dialog", "choiceDialog");
+  const choiceCancelBtn = el("button", "choiceCancelBtn");
+  choiceDialog.appendChild(choiceCancelBtn);
 
   const storage = createMemoryStorage();
   const realProviders = require("../js/ai-providers.js");
@@ -785,6 +803,21 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
       return Promise.resolve(confirmNext);
     }
   };
+  const customSelectRefreshes = [];
+  let customSelectSyncCount = 0;
+  global.DivinationCustomSelects = {
+    sync() {
+      customSelectSyncCount += 1;
+    },
+    refresh(scope) {
+      customSelectRefreshes.push(scope ? scope.id || "scope" : "document");
+    },
+    handleBack() {
+      if (!choiceDialog.open) return false;
+      choiceDialog.open = false;
+      return true;
+    }
+  };
   const webI18n = require("../js/i18n.js");
   global.DivinationAiProviders = fakeProviders;
   global.DivinationAiContext = contextModule;
@@ -802,7 +835,22 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   await flush();
 
   // 1. Initial auto-created active chat exists (1 active, 0 archived). Switching to empty Archived tab must NOT spawn blank active chats.
+  assert.ok(customSelectSyncCount >= 1, "Bootstrap must synchronize custom selects");
   assert.equal((await memChatStore.listConversations({ archived: "all" })).length, 1);
+
+  // Verify custom select synchronization & choiceDialog Escape / handleBack layering over #aiPickerModal:
+  doc.getElementById("aiPickReadingsBtn").click();
+  await flush();
+  assert.equal(pickerModal.hidden, false, "Readings picker modal should open");
+  assert.ok(customSelectRefreshes.includes("aiPickerDeckFilter"), "Opening readings picker must refresh #aiPickerDeckFilter custom select");
+  choiceDialog.open = true;
+  doc.dispatchEvent({ type: "keydown", key: "Escape", defaultPrevented: false });
+  assert.equal(pickerModal.hidden, false, "Escape while #choiceDialog is open must not close underlying #aiPickerModal");
+  assert.equal(ctrl.handleBack(), true, "1st handleBack() must dismiss open #choiceDialog");
+  assert.equal(choiceDialog.open, false);
+  assert.equal(pickerModal.hidden, false, "#aiPickerModal must stay open after dismissing #choiceDialog");
+  assert.equal(ctrl.handleBack(), true, "2nd handleBack() closes #aiPickerModal");
+  assert.equal(pickerModal.hidden, true);
   doc.getElementById("aiTabArchived").click();
   await flush();
   assert.equal((await memChatStore.listConversations({ archived: "all" })).length, 1, "Viewing empty Archived tab must not create extra blank active chats");

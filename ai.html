@@ -177,12 +177,15 @@
         <div class="ai-picker-filters">
           <input class="ai-input" id="aiPickerSearchInput" type="search"
             placeholder="按问题、牌阵名或牌名筛选" data-i18n-placeholder="ai.pickerSearchPlaceholder">
-          <select class="ai-select" id="aiPickerDeckFilter" aria-label="按牌组筛选" data-i18n-aria-label="history.filterLabel">
-            <option value="all" data-i18n="ai.deckAll">全部牌组</option>
-            <option value="tarot" data-i18n="ai.deckTarot">Quareia 塔罗</option>
-            <option value="mystagogus">Mystagogus</option>
-            <option value="lxxxi">LXXXI</option>
-          </select>
+          <div class="ai-picker-deck-wrap">
+            <label class="visually-hidden" for="aiPickerDeckFilter" data-i18n="history.filterLabel">按牌组筛选</label>
+            <select class="ai-select" id="aiPickerDeckFilter" aria-label="按牌组筛选" data-i18n-aria-label="history.filterLabel">
+              <option value="all" data-i18n="ai.deckAll">全部牌组</option>
+              <option value="tarot" data-i18n="ai.deckTarot">Quareia 塔罗</option>
+              <option value="mystagogus">Mystagogus</option>
+              <option value="lxxxi">LXXXI</option>
+            </select>
+          </div>
         </div>
         <div class="ai-picker-list" id="aiPickerList"></div>
       </div>
@@ -236,10 +239,10 @@
             <span data-i18n="ai.fieldName">配置名称</span>
             <input class="ai-input" id="aiProfileName" type="text" maxlength="60" autocomplete="off">
           </label>
-          <label class="ai-field">
-            <span data-i18n="ai.fieldFormat">接口格式</span>
+          <div class="ai-field">
+            <label for="aiProfileFormat" data-i18n="ai.fieldFormat">接口格式</label>
             <select class="ai-select" id="aiProfileFormat"></select>
-          </label>
+          </div>
           <label class="ai-field is-full">
             <span data-i18n="ai.fieldBaseUrl">Base URL（接口地址 / 代理地址）</span>
             <input class="ai-input" id="aiProfileBaseUrl" type="url" autocomplete="off" spellcheck="false">
@@ -320,6 +323,17 @@
     </section>
   </dialog>
 
+  <dialog class="choice-overlay" id="choiceDialog" aria-modal="true"
+    aria-labelledby="choiceDialogTitle" aria-hidden="true">
+    <section class="choice-card">
+      <div class="choice-symbol" aria-hidden="true">✦</div>
+      <p class="choice-kicker" id="choiceDialogKicker">纸牌选择</p>
+      <h2 id="choiceDialogTitle">请选择</h2>
+      <div class="choice-options" id="choiceOptions" role="listbox"></div>
+      <button class="btn btn-secondary choice-cancel" id="choiceCancelBtn" type="button">取消</button>
+    </section>
+  </dialog>
+
   <span class="theme-toast" id="themeToast" aria-live="polite"></span>
 
   <script src="js/tarot-data.js"></script>
@@ -331,6 +345,7 @@
   <script src="js/i18n.js"></script>
   <script src="js/theme.js"></script>
   <script src="js/dialogs.js"></script>
+  <script src="js/custom-selects.js"></script>
   <script src="js/history-records.js"></script>
   <script src="js/history-store.js"></script>
   <script src="js/ai-providers.js"></script>

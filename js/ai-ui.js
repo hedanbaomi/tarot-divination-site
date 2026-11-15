@@ -1867,13 +1867,42 @@
       });
     }
 
+    function syncCustomSelects(scope) {
+      var cs = global.DivinationCustomSelects;
+      if (!cs) return;
+      if (scope && typeof cs.refresh === "function") {
+        cs.refresh(scope);
+      } else if (typeof cs.sync === "function") {
+        cs.sync();
+      }
+    }
+
+    function ensureProfileFormatOptions() {
+      if (!els.profileFormat) return;
+      if (!els.profileFormat.options.length) {
+        providers.FORMAT_IDS.forEach(function (fmt) {
+          var opt = document.createElement("option");
+          opt.value = fmt;
+          opt.textContent = formatDisplayLabel(fmt);
+          els.profileFormat.appendChild(opt);
+        });
+      } else {
+        Array.prototype.forEach.call(els.profileFormat.options, function (opt) {
+          opt.textContent = formatDisplayLabel(opt.value);
+        });
+      }
+    }
+
     function openReadingsPicker() {
       if (state.streaming || !els.pickerModal) return;
       loadSelectableReadings().then(function () {
         var conv = state.activeConversation;
         state.pickerDraftIds = conv && Array.isArray(conv.readingIds) ? conv.readingIds.slice() : [];
         if (els.pickerSearchInput) els.pickerSearchInput.value = "";
-        if (els.pickerDeckFilter) els.pickerDeckFilter.value = "all";
+        if (els.pickerDeckFilter) {
+          els.pickerDeckFilter.value = "all";
+          syncCustomSelects(els.pickerDeckFilter);
+        }
         renderPickerList();
         openModal(els.pickerModal, els.pickerSearchInput);
       });
@@ -2116,19 +2145,9 @@
 
       if (els.profileName) els.profileName.value = active.name || "";
       if (els.profileFormat) {
-        if (!els.profileFormat.options.length) {
-          providers.FORMAT_IDS.forEach(function (fmt) {
-            var opt = document.createElement("option");
-            opt.value = fmt;
-            opt.textContent = formatDisplayLabel(fmt);
-            els.profileFormat.appendChild(opt);
-          });
-        } else {
-          Array.prototype.forEach.call(els.profileFormat.options, function (opt) {
-            opt.textContent = formatDisplayLabel(opt.value);
-          });
-        }
+        ensureProfileFormatOptions();
         els.profileFormat.value = active.format;
+        syncCustomSelects(els.profileFormat);
       }
       if (els.profileBaseUrl) {
         els.profileBaseUrl.value = active.baseUrl || providers.DEFAULT_BASE_URLS[active.format] || "";
@@ -3013,6 +3032,16 @@
       );
     }
 
+    function isChoiceDialogOpen() {
+      var dlg = byId("choiceDialog");
+      if (!dlg) return false;
+      return Boolean(
+        dlg.open
+        || (typeof dlg.hasAttribute === "function" && dlg.hasAttribute("open"))
+        || (document.body && document.body.classList && document.body.classList.contains("choice-open"))
+      );
+    }
+
     // Backdrop click / Escape handling
     [els.pickerModal, els.renameModal, els.settingsModal].forEach(function (modal) {
       if (!modal) return;
@@ -3023,7 +3052,7 @@
 
     document.addEventListener("keydown", function (e) {
       if (e.key !== "Escape" || e.defaultPrevented) return;
-      if (isConfirmDialogOpen()) return;
+      if (isConfirmDialogOpen() || isChoiceDialogOpen()) return;
       var openM = getOpenModal();
       if (openM) {
         closeModal(openM);
@@ -3039,11 +3068,16 @@
 
     global.addEventListener("quareia:languagechange", function () {
       applyAiLocalizedAttributes();
+      ensureProfileFormatOptions();
+      syncCustomSelects();
       renderSidebar();
       renderContextHeader();
       renderMessages();
       if (els.settingsModal && !els.settingsModal.hidden) {
         renderSettingsModal();
+      }
+      if (els.pickerModal && !els.pickerModal.hidden) {
+        renderPickerList();
       }
     });
 
@@ -3091,6 +3125,8 @@
 
     updateBackLink();
     applyAiLocalizedAttributes();
+    ensureProfileFormatOptions();
+    syncCustomSelects();
     maybeProbeActiveProfileContextWindow();
 
     // Handle optional ?readingId=... deep link from reading/history pages.
@@ -3123,6 +3159,17 @@
           var cancelBtn = byId("confirmCancelBtn");
           if (cancelBtn && typeof cancelBtn.click === "function") {
             cancelBtn.click();
+            return true;
+          }
+        }
+        if (global.DivinationCustomSelects && typeof global.DivinationCustomSelects.handleBack === "function") {
+          if (global.DivinationCustomSelects.handleBack()) {
+            return true;
+          }
+        } else if (isChoiceDialogOpen()) {
+          var choiceCancel = byId("choiceCancelBtn");
+          if (choiceCancel && typeof choiceCancel.click === "function") {
+            choiceCancel.click();
             return true;
           }
         }
