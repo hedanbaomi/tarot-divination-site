@@ -164,8 +164,9 @@
           <span class="ai-context-meter" id="aiContextMeter" role="status" aria-live="polite"></span>
         </div>
         <p class="ai-privacy-footnote" data-i18n="privacy.ai">
-          AI 解牌使用的 API Key 与聊天记录均只保存在当前设备本地；发起对话时仅向你配置的大模型接口地址直连发送提问与所选占卜牌意，本站后台不接收、不中转也不存储任何密钥或对话内容。
+          AI 密钥与聊天记录只保存在本机，请求直连你配置的模型接口。开启匿名使用统计时，会发送模型 ID、接口回传的 Token 用量和对话轮数；后台不接收密钥、接口地址、问题或回答内容。
         </p>
+        <button class="btn btn-ghost btn-sm" id="aiTelemetryToggle" type="button" hidden>关闭匿名使用统计</button>
       </footer>
     </main>
   </div>
@@ -356,6 +357,8 @@
   <script src="js/ai-providers.js"></script>
   <script src="js/ai-context.js"></script>
   <script src="js/ai-chat-store.js"></script>
+  <script src="js/web-telemetry.js"></script>
+  <script src="js/ai-telemetry.js"></script>
   <script src="js/ai-ui.js"></script>
   <script src="js/web-analytics.js"></script>
 </body>

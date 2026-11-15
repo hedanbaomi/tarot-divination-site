@@ -797,6 +797,9 @@
         messages: chatMessages,
         stream: stream
       };
+      // Official Chat Completions needs this flag for its final usage chunk.
+      // Unknown compatible gateways keep their existing request shape.
+      if (stream && new URL(profile.baseUrl).hostname === "api.openai.com") body.stream_options = { include_usage: true };
       if (typeof profile.temperature === "number" && Number.isFinite(profile.temperature)) {
         if (!isReasoningModel || profile.temperature === 1) {
           body.temperature = profile.temperature;
@@ -973,73 +976,50 @@
     return out;
   }
 
+  function usageCount(value) {
+    return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 1000000000 ? value : null;
+  }
+
+  function firstUsageCount(obj, names) {
+    for (var i = 0; obj && i < names.length; i += 1) {
+      var count = usageCount(obj[names[i]]);
+      if (count !== null) return count;
+    }
+    return null;
+  }
+
   function extractUsageObject(format, dataObj) {
-    if (!dataObj || typeof dataObj !== "object") {
-      return null;
-    }
-    var inputTokens = 0;
-    var outputTokens = 0;
-    var totalTokens = 0;
-    var found = false;
-
-    if (format === "openai-chat" && dataObj.usage && typeof dataObj.usage === "object") {
-      var uChat = dataObj.usage;
-      inputTokens = Number(uChat.prompt_tokens) || Number(uChat.input_tokens) || 0;
-      outputTokens = Number(uChat.completion_tokens) || Number(uChat.output_tokens) || 0;
-      totalTokens = Number(uChat.total_tokens) || (inputTokens + outputTokens);
-      found = inputTokens > 0 || outputTokens > 0 || totalTokens > 0;
-    } else if (format === "openai-responses") {
-      var uResp = (dataObj.response && dataObj.response.usage) || dataObj.usage;
-      if (uResp && typeof uResp === "object") {
-        inputTokens = Number(uResp.input_tokens) || Number(uResp.prompt_tokens) || 0;
-        outputTokens = Number(uResp.output_tokens) || Number(uResp.completion_tokens) || 0;
-        totalTokens = Number(uResp.total_tokens) || (inputTokens + outputTokens);
-        found = inputTokens > 0 || outputTokens > 0 || totalTokens > 0;
-      }
+    if (!dataObj || typeof dataObj !== "object") return null;
+    var inputTokens = null, outputTokens = null, totalTokens = null;
+    var usage;
+    if (format === "openai-chat" || format === "openai-responses") {
+      usage = (dataObj.response && dataObj.response.usage) || dataObj.usage;
+      if (!usage || typeof usage !== "object") return null;
+      inputTokens = firstUsageCount(usage, ["input_tokens", "prompt_tokens"]);
+      outputTokens = firstUsageCount(usage, ["output_tokens", "completion_tokens"]);
+      totalTokens = firstUsageCount(usage, ["total_tokens"]);
     } else if (format === "anthropic-messages") {
-      var uMsg = dataObj.message && dataObj.message.usage;
-      var uDelta = dataObj.usage;
-      if (uMsg && typeof uMsg === "object") {
-        inputTokens += (Number(uMsg.input_tokens) || 0)
-          + (Number(uMsg.cache_creation_input_tokens) || 0)
-          + (Number(uMsg.cache_read_input_tokens) || 0);
-        outputTokens += Number(uMsg.output_tokens) || 0;
-        found = true;
+      usage = (dataObj.message && dataObj.message.usage) || dataObj.usage;
+      if (!usage || typeof usage !== "object") return null;
+      inputTokens = usageCount(usage.input_tokens);
+      if (inputTokens !== null) {
+        var cacheCreate = usage.cache_creation_input_tokens === undefined ? 0 : usageCount(usage.cache_creation_input_tokens);
+        var cacheRead = usage.cache_read_input_tokens === undefined ? 0 : usageCount(usage.cache_read_input_tokens);
+        inputTokens = cacheCreate === null || cacheRead === null ? null : usageCount(inputTokens + cacheCreate + cacheRead);
       }
-      if (uDelta && typeof uDelta === "object") {
-        var deltaIn = (Number(uDelta.input_tokens) || 0)
-          + (Number(uDelta.cache_creation_input_tokens) || 0)
-          + (Number(uDelta.cache_read_input_tokens) || 0);
-        if (deltaIn > inputTokens) {
-          inputTokens = deltaIn;
-        }
-        if ((Number(uDelta.output_tokens) || 0) > outputTokens) {
-          outputTokens = Number(uDelta.output_tokens) || 0;
-        }
-        found = true;
-      }
-      totalTokens = inputTokens + outputTokens;
-      found = found && (totalTokens > 0);
-    } else if ((format === "gemini-aistudio" || format === "gemini-vertex")
-      && dataObj.usageMetadata && typeof dataObj.usageMetadata === "object") {
-      var uGem = dataObj.usageMetadata;
-      inputTokens = Number(uGem.promptTokenCount) || 0;
-      outputTokens = (Number(uGem.candidatesTokenCount) || 0) + (Number(uGem.thoughtsTokenCount) || 0);
-      totalTokens = Math.max(Number(uGem.totalTokenCount) || 0, inputTokens + outputTokens);
-      if (!outputTokens && totalTokens > inputTokens) {
-        outputTokens = totalTokens - inputTokens;
-      }
-      found = inputTokens > 0 || outputTokens > 0 || totalTokens > 0;
+      outputTokens = usageCount(usage.output_tokens);
+    } else if (format === "gemini-aistudio" || format === "gemini-vertex") {
+      usage = dataObj.usageMetadata;
+      if (!usage || typeof usage !== "object") return null;
+      inputTokens = usageCount(usage.promptTokenCount);
+      var candidates = usageCount(usage.candidatesTokenCount);
+      var thoughts = usage.thoughtsTokenCount === undefined ? 0 : usageCount(usage.thoughtsTokenCount);
+      outputTokens = candidates === null || thoughts === null ? null : usageCount(candidates + thoughts);
+      totalTokens = usageCount(usage.totalTokenCount);
     }
-
-    if (!found) {
-      return null;
-    }
-    return {
-      inputTokens: inputTokens,
-      outputTokens: outputTokens,
-      totalTokens: totalTokens || (inputTokens + outputTokens)
-    };
+    if (inputTokens === null && outputTokens === null && totalTokens === null) return null;
+    if (totalTokens === null && inputTokens !== null && outputTokens !== null) totalTokens = usageCount(inputTokens + outputTokens);
+    return { inputTokens: inputTokens, outputTokens: outputTokens, totalTokens: totalTokens };
   }
 
   function normalizeFinishReason(reason, apiKey) {
@@ -1478,27 +1458,18 @@
     return false;
   }
 
-  function mergeUsage(prev, u) {
-    if (!u || typeof u !== "object") {
-      return prev;
+  function mergeUsage(prev, usage) {
+    if (!usage || typeof usage !== "object") return prev;
+    var next = { inputTokens: null, outputTokens: null, totalTokens: null };
+    Object.keys(next).forEach(function (key) {
+      var oldValue = prev ? usageCount(prev[key]) : null;
+      var value = usageCount(usage[key]);
+      next[key] = value === null ? oldValue : (oldValue === null ? value : Math.max(value, oldValue));
+    });
+    if (next.inputTokens !== null && next.outputTokens !== null) {
+      var sum = usageCount(next.inputTokens + next.outputTokens);
+      if (sum !== null) next.totalTokens = next.totalTokens === null ? sum : Math.max(next.totalTokens, sum);
     }
-    var next = prev
-      ? {
-          inputTokens: prev.inputTokens || 0,
-          outputTokens: prev.outputTokens || 0,
-          totalTokens: prev.totalTokens || 0
-        }
-      : { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-    if (u.inputTokens > 0) {
-      next.inputTokens = u.inputTokens;
-    }
-    if (u.outputTokens > 0) {
-      next.outputTokens = u.outputTokens;
-    }
-    var minTotal = next.inputTokens + next.outputTokens;
-    var reportedTotal = Number(u.totalTokens) || 0;
-    var prevTotal = prev ? (Number(prev.totalTokens) || 0) : 0;
-    next.totalTokens = Math.max(minTotal, reportedTotal, prevTotal);
     return next;
   }
 
@@ -1608,11 +1579,18 @@
       }
     };
 
-    return fetchImpl(reqSpec.url, {
+    function notifyObserver(name, value) {
+      try { if (typeof opts[name] === "function") opts[name](value); } catch (_ignored) { /* Optional statistics never affect requests. */ }
+    }
+    return Promise.resolve().then(function () {
+      if (signal && signal.aborted) throw AiProviderError("aborted", "Request aborted", { format: profile.format });
+      notifyObserver("onRequestStart");
+      return fetchImpl(reqSpec.url, {
       method: reqSpec.method,
       headers: reqSpec.headers,
       body: reqSpec.bodyJson,
       signal: signal
+      });
     }).then(function (response) {
       if (!response) {
         throw AiProviderError("network_error", "Empty response from network request", {
@@ -1766,6 +1744,12 @@
         detail: safeMsg,
         cause: err
       });
+    }).then(function (result) {
+      notifyObserver("onRequestEnd", { usage: latestUsage, complete: sawTerminalCompletion || sawNonSsePayload });
+      return result;
+    }, function (error) {
+      notifyObserver("onRequestEnd", { usage: null, complete: false });
+      throw error;
     });
   }
 
@@ -2228,7 +2212,9 @@
       }],
       stream: opts.stream !== undefined ? opts.stream : true,
       signal: opts.signal,
-      fetchImpl: opts.fetchImpl
+      fetchImpl: opts.fetchImpl,
+      onRequestStart: opts.onRequestStart,
+      onRequestEnd: opts.onRequestEnd
     }).then(function (res) {
       return {
         summaryText: trimString(res.text),

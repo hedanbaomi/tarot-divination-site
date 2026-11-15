@@ -237,7 +237,7 @@
       "attribution.quareiaLink": "Quareia 官网",
       "attribution.quoteCite": "— Josephine McCarthy",
       "attribution.quoteZh": "（中文参考译文：「虽然数字占卜工具在紧急情况下可能会有用，但占卜师用双手亲自接触和洗牌的互动更安全，准确度也更高，且力量强大得多。」原文以英文为准。）",
-      "privacy.analytics": "本站使用匿名浏览器标识，将访问量、活跃浏览器和完成解牌次数及国家/省州级地区分布汇总至与手机端共用的统计后台，可随时关闭；另使用 Cloudflare Web Analytics 统计访问量与页面性能。不收集邮箱、占卜内容、抽牌结果或本地历史记录。",
+      "privacy.analytics": "本站使用匿名浏览器标识，将访问量、活跃浏览器、完成解牌次数、AI 模型 ID / Token 用量 / 对话轮数及国家/省州级地区分布汇总至与手机端共用的统计后台，可随时关闭；另使用 Cloudflare Web Analytics 统计访问量与页面性能。不收集邮箱、占卜内容、抽牌结果或本地历史记录。",
       "privacy.telemetryDisable": "关闭统一使用统计",
       "privacy.telemetryEnable": "开启统一使用统计",
       "source.tarot": "参考《21世纪的塔罗技能》与 Quareia 训练语境整理",
@@ -442,7 +442,9 @@
       ,"history.savedFreeBoard": "自由画板已保存到当前浏览器的占卜历史。"
       ,"history.duplicateFreeBoard": "这份自由画板刚刚已经保存，无需重复保存。"
       ,"history.openInAi": "去 AI 解牌"
-      ,"privacy.ai": "AI 解牌使用的 API Key 与聊天记录均只保存在当前设备本地；发起对话时仅向你配置的大模型接口地址直连发送提问与所选占卜牌意，本站后台不接收、不中转也不存储任何密钥或对话内容。"
+      ,"privacy.ai": "AI 密钥与聊天记录只保存在本机，请求直连你配置的模型接口。开启匿名使用统计时，会发送模型 ID、接口回传的 Token 用量和对话轮数；后台不接收密钥、接口地址、问题或回答内容。"
+      ,"ai.telemetryDisable": "关闭匿名使用统计"
+      ,"ai.telemetryEnable": "开启匿名使用统计"
       ,"ai.open": "AI 解牌"
       ,"ai.pageTitle": "AI 辅助解牌 · Quareia 占卜"
       ,"ai.title": "AI 辅助解牌"
@@ -837,7 +839,7 @@
       "attribution.quareiaLink": "Official Quareia website",
       "attribution.quoteCite": "— Josephine McCarthy",
       "attribution.quoteZh": "(Chinese reference translation is shown on the Chinese interface; the English original is authoritative.)",
-      "privacy.analytics": "This site uses an anonymous browser identifier to combine visits, active browsers, completed readings and coarse country/region statistics with mobile statistics; you can turn this off at any time. Cloudflare Web Analytics separately measures traffic and performance. It does not collect email addresses, reading questions, card results, or locally stored history.",
+      "privacy.analytics": "This site uses an anonymous browser identifier to combine visits, active browsers, completed readings, AI model IDs / token usage / conversation rounds, and coarse country/region statistics with mobile statistics; you can turn this off at any time. Cloudflare Web Analytics separately measures traffic and performance. It does not collect email addresses, reading questions, card results, or locally stored history.",
       "privacy.telemetryDisable": "Turn off unified usage statistics",
       "privacy.telemetryEnable": "Turn on unified usage statistics",
       "source.tarot": "Based on Tarot Skills for the 21st Century and the Quareia training context",
@@ -1041,7 +1043,9 @@
       "history.savedFreeBoard": "Free Board saved to this browser's divination history.",
       "history.duplicateFreeBoard": "This Free Board was just saved; no duplicate was created.",
       "history.openInAi": "Open in AI",
-      "privacy.ai": "AI reading API keys and chat history remain stored locally on this device only. Requests go directly from your browser to your configured model endpoint; this site never receives, relays, or stores any API keys or chat contents.",
+      "privacy.ai": "API keys and chats stay on this device; requests go directly to your configured model endpoint. When anonymous usage statistics are enabled, we report model IDs, provider-reported token usage, and conversation rounds. The backend never receives keys, endpoint URLs, questions, or answers.",
+      "ai.telemetryDisable": "Turn off anonymous statistics",
+      "ai.telemetryEnable": "Turn on anonymous statistics",
       "ai.open": "AI Reading",
       "ai.pageTitle": "AI Assisted Reading · Quareia Divination",
       "ai.title": "AI Assisted Reading",

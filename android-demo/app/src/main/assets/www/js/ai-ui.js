@@ -2403,6 +2403,11 @@
       return err.message || String(err);
     }
 
+    function aiUsageObserver(model, kind) {
+      return global.DivinationAiTelemetry && typeof global.DivinationAiTelemetry.createObserver === "function"
+        ? global.DivinationAiTelemetry.createObserver(model, kind) : {};
+    }
+
     // Streaming chat pipeline
     function runGeneration(conversationSnapshot, assistantMsgIndex) {
       var profile = configStore.getActiveProfile();
@@ -2456,12 +2461,12 @@
         if (toCompress.length > 0) {
           state.compressing = true;
           renderContextMeter();
-          prepPromise = providers.compressMessages(profile, {
+          prepPromise = providers.compressMessages(profile, Object.assign(aiUsageObserver(profile.model, "compression"), {
             previousSummary: payload.summaryText,
             messages: toCompress,
             locale: currentLocale(),
             signal: state.abortController ? state.abortController.signal : undefined
-          }).catch(function (compErr) {
+          })).catch(function (compErr) {
             if (compErr && compErr.code === "aborted") {
               throw compErr;
             }
@@ -2513,7 +2518,7 @@
           hardCap,
           contextApi.estimateConversationTokens
         );
-        return providers.streamChat(profile, {
+        return providers.streamChat(profile, Object.assign(aiUsageObserver(profile.model, "conversation"), {
           systemPrompt: readyPayload.systemPrompt,
           messages: finalMessages,
           signal: state.abortController ? state.abortController.signal : undefined,
@@ -2531,7 +2536,7 @@
               scheduleRender();
             }
           }
-        });
+        }));
       }).then(function (result) {
         if (pendingFrame) {
           clearTimeout(pendingFrame);
