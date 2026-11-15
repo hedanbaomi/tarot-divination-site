@@ -182,6 +182,7 @@ Releases.
 - A revealed card flips to its meaning and back when tapped
 - The reshuffle confirmation supports cancel, continue, and backdrop dismissal
 - Reading history remains in the app's local WebView data
+- The native AI API key settings and the WebView data directory are excluded from Android automatic backup and device transfer. WebView history, AI conversations and settings therefore do not migrate automatically; use the pages' JSON export/import to save and restore history and conversations.
 - The "About / Copyright & Attribution" screen opens from the home button, switches with the system language, the Quareia link is tappable, and the author's English note is preserved verbatim
 
 ## Content and Rights

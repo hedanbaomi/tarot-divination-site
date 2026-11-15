@@ -441,6 +441,169 @@
       ,"history.savingFreeBoard": "正在保存自由画板历史…"
       ,"history.savedFreeBoard": "自由画板已保存到当前浏览器的占卜历史。"
       ,"history.duplicateFreeBoard": "这份自由画板刚刚已经保存，无需重复保存。"
+      ,"history.openInAi": "去 AI 解牌"
+      ,"privacy.ai": "AI 解牌使用的 API Key 与聊天记录均只保存在当前设备本地；发起对话时仅向你配置的大模型接口地址直连发送提问与所选占卜牌意，本站后台不接收、不中转也不存储任何密钥或对话内容。"
+      ,"ai.open": "AI 解牌"
+      ,"ai.pageTitle": "AI 辅助解牌 · Quareia 占卜"
+      ,"ai.title": "AI 辅助解牌"
+      ,"ai.subtitle": "基于应用内牌意 · 仅限非自由画板历史"
+      ,"ai.chatsMenu": "对话"
+      ,"ai.sidebarToggleAria": "打开对话列表"
+      ,"ai.sidebarAria": "AI 对话历史"
+      ,"ai.backToReading": "返回占卜"
+      ,"ai.settingsOpen": "API 设置"
+      ,"ai.newChat": "+ 新建对话"
+      ,"ai.searchPlaceholder": "搜索对话标题、问题或聊天内容"
+      ,"ai.untitledChat": "新解牌对话"
+      ,"ai.archivedBadge": "已归档"
+      ,"ai.pickReadings": "+ 选择占卜历史"
+      ,"ai.rename": "重命名"
+      ,"ai.exportMd": "导出 Markdown"
+      ,"ai.archive": "归档"
+      ,"ai.unarchive": "取消归档"
+      ,"ai.delete": "删除"
+      ,"ai.pin": "置顶"
+      ,"ai.unpin": "取消置顶"
+      ,"ai.pinned": "已置顶"
+      ,"ai.exportBackup": "导出备份"
+      ,"ai.err.incomplete": "连接在回答完成前结束，已保留收到的内容。请重试或继续追问。"
+      ,"ai.archiveTooLargeTitle": "备份超过导入上限"
+      ,"ai.archiveTooLargeMsg": "全部对话的 JSON 备份超过 8 MiB，无法通过本页面恢复。可改为导出全部对话的 Markdown 存档，保留聊天正文、回答提示与占卜摘要供阅读。Markdown 存档不能导入聊天列表。"
+      ,"ai.exportArchive": "导出 Markdown 存档"
+      ,"ai.storageMemoryWarning": "无法访问聊天存储，本次聊天仅保存在内存中。刷新或离开页面会丢失本次聊天，请先导出备份。"
+      ,"ai.importTooLarge": "AI 对话备份不能超过 8 MiB。请选择较小的备份文件。"
+      ,"ai.err.truncated": "已达到模型输出上限，回答可能不完整。可以继续追问，或在 API 设置中提高最大输出 Token。"
+      ,"ai.err.blocked": "模型的内容策略拦截了本次回答，已保留收到的内容。请调整问题后重试。"
+      ,"ai.err.invalidResponse": "接口返回了无法识别的响应，请检查接口地址或中转服务：{detail}"
+      ,"ai.importBackup": "导入备份"
+      ,"ai.clearArchived": "清空已归档"
+      ,"ai.clearActive": "清空进行中"
+      ,"ai.tabActiveCount": "进行中 ({count})"
+      ,"ai.tabArchivedCount": "已归档 ({count})"
+      ,"ai.noMatchingChats": "没有匹配的对话记录。"
+      ,"ai.noArchivedChats": "暂无已归档对话。"
+      ,"ai.noActiveChats": "暂无对话，点击上方「新建对话」开始。"
+      ,"ai.chatMetaSummary": "{readings} 条占卜 · {messages} 条消息"
+      ,"ai.promptPlaceholder": "输入你的困惑或追问（Enter 发送，Shift+Enter 换行）"
+      ,"ai.send": "发送"
+      ,"ai.stop": "停止"
+      ,"ai.pickerTitle": "选择占卜历史（仅非自由画板）"
+      ,"ai.pickerHint": "支持多选。已自动过滤自由画板记录；卡片仅展示摘要信息，后台将准确注入牌阵牌位、叠牌因果关系与对应应用内牌意。"
+      ,"ai.pickerSearchPlaceholder": "按问题、牌阵名或牌名筛选"
+      ,"ai.deckAll": "全部牌组"
+      ,"ai.pickerClear": "清空已选"
+      ,"ai.pickerApplyCount": "确定附加 ({count})"
+      ,"ai.pickerEmpty": "没有找到可选的非自由画板占卜记录。请先在首页使用固定牌阵或自定义牌阵完成一次占卜并保存历史。"
+      ,"ai.renameTitle": "重命名对话"
+      ,"ai.renameLabel": "对话标题"
+      ,"ai.save": "保存"
+      ,"ai.cancel": "取消"
+      ,"ai.close": "关闭"
+      ,"ai.ok": "确定"
+      ,"ai.settingsTitle": "模型接口与 API Key 设置"
+      ,"ai.newProfile": "+ 新增配置"
+      ,"ai.deleteProfile": "删除配置"
+      ,"ai.newProfileDefaultName": "新模型配置"
+      ,"ai.lockedPromptNote": "系统提示词已锁定为 Quareia 占卜辅助助手（依据应用内牌意与叠牌法法则），不可修改，且不限制日常非占卜主题正常对话。"
+      ,"ai.fieldName": "配置名称"
+      ,"ai.fieldFormat": "接口格式"
+      ,"ai.fieldBaseUrl": "Base URL（接口地址 / 代理地址）"
+      ,"ai.fieldApiKey": "静态 API Key（仅存本机，持续有效）"
+      ,"ai.fieldModel": "模型名称（Model ID）"
+      ,"ai.fieldVertexProject": "Vertex Project ID（Express Mode 可留空）"
+      ,"ai.fieldVertexLocation": "Vertex Location（如 global 或 us-central1）"
+      ,"ai.fieldTemperature": "Temperature（可选，0–2）"
+      ,"ai.fieldMaxTokens": "Max Tokens（可选）"
+      ,"ai.fieldContextWindow": "模型上下文窗口（Tokens，留空自动识别）"
+      ,"ai.contextWindowPlaceholder": "自动识别模型上下文大小"
+      ,"ai.contextWindowAutoPlaceholder": "自动识别（当前约 {count} tokens）"
+      ,"ai.detectContextWindow": "自动获取"
+      ,"ai.detectingContext": "正在获取模型上下文窗口大小…"
+      ,"ai.detectContextDone": "已识别模型上下文窗口：{count} tokens（{source}）"
+      ,"ai.contextWindowStatus": "当前生效上限：{count} tokens（来源：{source}）"
+      ,"ai.contextSource.manual": "手动指定"
+      ,"ai.contextSource.api": "接口实时获取"
+      ,"ai.contextSource.catalog": "模型目录识别"
+      ,"ai.contextSource.default": "默认保守估计"
+      ,"ai.fieldAutoCompress": "自动压缩早期上下文"
+      ,"ai.autoCompressHint": "接近模型上下文上限时自动摘要早期对话，并保留当前关联的占卜牌意与近期对话。"
+      ,"ai.contextMeter": "上下文约 {used} / {limit} tokens（{source}）"
+      ,"ai.contextMeterCompressed": " · 已压缩早期 {count} 条"
+      ,"ai.compressingStatus": "正在压缩早期对话上下文以保持完整牌意…"
+      ,"ai.testConnection": "测试连接"
+      ,"ai.saveActivate": "保存并启用"
+      ,"ai.profileUnconfigured": "未配置 API Key"
+      ,"ai.banner.needBoth": "请先配置大模型 API Key；如需辅助解牌，可从非自由画板占卜历史中选择一条或多条记录作为上下文，也可直接自由对话。"
+      ,"ai.banner.needKey": "尚未配置可用的模型 API Key。点击「API 设置」填写密钥并测试连接后即可开始对话。"
+      ,"ai.banner.needReading": "当前对话尚未附加占卜记录：可直接进行常规 AI 对话，或点击「选择占卜历史」传入固定/自定义牌阵与应用内牌意。"
+      ,"ai.noAttachedReadings": "未附加占卜记录（已自动过滤自由画板记录）"
+      ,"ai.readingSnapshotSaved": "已使用对话内保存的牌阵快照"
+      ,"ai.readingDeleted": "原记录已不在本地历史中"
+      ,"ai.removeReading": "移除此占卜记录"
+      ,"ai.emptyHeading": "AI 辅助解牌助手"
+      ,"ai.emptyDesc": "选择一条或多条非自由画板占卜记录后，系统会将对应牌阵的牌位定义、应用内关键词与完整牌意整理发送给大模型。你可以输入自己的背景疑问，点击下方示例快速开始："
+      ,"ai.roleUser": "你"
+      ,"ai.reasoningSummary": "思考过程 / 推理摘要"
+      ,"ai.saveAndResend": "保存并重新发送"
+      ,"ai.retry": "重试"
+      ,"ai.copy": "复制"
+      ,"ai.copied": "已复制"
+      ,"ai.editResend": "编辑并重发"
+      ,"ai.regenerate": "重新生成"
+      ,"ai.showKey": "显示"
+      ,"ai.hideKey": "隐藏"
+      ,"ai.format.openaiChat": "OpenAI Chat Completions (/v1/chat/completions)"
+      ,"ai.format.openaiResponses": "OpenAI Responses API (/v1/responses)"
+      ,"ai.format.anthropic": "Anthropic Messages (/v1/messages)"
+      ,"ai.format.geminiStudio": "Google Gemini AI Studio"
+      ,"ai.format.geminiVertex": "Google Gemini Vertex AI（仅静态 API Key）"
+      ,"ai.hint.openaiChat": "兼容 OpenAI、DeepSeek、OpenRouter、SiliconFlow 及符合 /v1/chat/completions 规范的代理地址；默认发送 Authorization: Bearer 请求头。"
+      ,"ai.hint.openaiResponses": "适用于 OpenAI 新版 Responses 接口 (/v1/responses)，请求体使用 instructions 与 input 字段。"
+      ,"ai.hint.anthropic": "适用于 Claude (/v1/messages)，自动附带 x-api-key、anthropic-version 与浏览器直连所需请求头。"
+      ,"ai.hint.geminiStudio": "使用 Google AI Studio API Key，自动请求 generativelanguage.googleapis.com 的 streamGenerateContent?alt=sse 接口。"
+      ,"ai.hint.geminiVertex": "仅使用静态 API Key (x-goog-api-key)，不提供 OAuth 登录。留空 Project ID 可直接用于 Vertex Express Mode；填写 Project ID 与 Location 则构造区域项目静态密钥接口。"
+      ,"ai.err.missingKey": "请填写 API Key"
+      ,"ai.err.missingModel": "请填写模型名称"
+      ,"ai.err.insecureUrl": "除本机 localhost 外 Base URL 必须使用 https://"
+      ,"ai.err.invalidUrl": "Base URL 格式无效"
+      ,"ai.settingsSaved": "配置已持久保存并设为当前启用方案。"
+      ,"ai.testingConnection": "正在测试接口连接…"
+      ,"ai.testSuccess": "连接成功（{model}），可保存使用。"
+      ,"ai.err.unknown": "请求失败"
+      ,"ai.err.auth": "鉴权失败，请检查 API Key、模型权限或 Vertex 接口设置：{detail}"
+      ,"ai.err.rateLimit": "触发频率或配额限制，请稍后重试：{detail}"
+      ,"ai.err.network": "网络或跨域请求失败，请检查网络、Base URL（HTTPS）或中转站 CORS 配置：{detail}"
+      ,"ai.stoppedEmpty": "已停止生成。"
+      ,"ai.confirmKicker": "AI 对话"
+      ,"ai.deleteChatTitle": "确认删除该对话？"
+      ,"ai.deleteChatMsg": "将永久移除「{title}」中的所有提问与解牌记录，无法恢复。"
+      ,"ai.clearArchivedTitle": "清空所有已归档对话？"
+      ,"ai.clearAllTitle": "清空当前进行中的对话？"
+      ,"ai.clearArchivedMsg": "此操作将删除所有已归档的 AI 对话，进行中的对话会保留。"
+      ,"ai.clearAllMsg": "此操作将清空所有进行中（非归档）对话，或建议先导出备份。"
+      ,"ai.clearConfirm": "确认清空"
+      ,"ai.deleteMsgTitle": "删除这条消息？"
+      ,"ai.deleteMsgDesc": "确认将该条发言从本地聊天记录中移除吗？"
+      ,"ai.backupKicker": "AI 备份"
+      ,"ai.importDoneTitle": "导入完成"
+      ,"ai.importDoneMsg": "已成功合并导入 {imported} 段对话（当前共 {total} 段）。"
+      ,"ai.importErrTitle": "导入失败"
+      ,"ai.importErrMsg": "文件格式不匹配，请选择本站导出的 AI 对话 JSON 备份文件。"
+      ,"ai.pageDescription": "结合 Quareia 应用内牌意与非自由画板占卜历史的 AI 辅助解牌对话工作台"
+      ,"ai.contextBarAria": "当前对话与占卜上下文"
+      ,"ai.deckTarot": "Quareia 塔罗"
+      ,"ai.clearConfig": "清除已存密钥"
+      ,"ai.clearConfigTitle": "清除所有已保存的 API Key？"
+      ,"ai.clearConfigMsg": "此操作将从当前设备移除所有已保存的模型配置与 API Key，但不会删除你的 AI 对话记录。"
+      ,"ai.clearConfigConfirm": "确认清除"
+      ,"ai.configCleared": "已清除本地保存的所有 API Key 与模型配置。"
+      ,"ai.exportedTo": "已导出：{fileName}"
+      ,"ai.exportCancelled": "已取消导出。"
+      ,"ai.exportFailed": "导出失败，请稍后重试。"
+      ,"ai.chatChangedTitle": "对话已更新"
+      ,"ai.chatChangedMsg": "其他标签页已修改此对话，已载入最新内容。请确认后重试。"
+      ,"ai.saveFailedTitle": "保存失败"
+      ,"ai.saveFailedMsg": "无法保存对话，请检查存储空间后重试。"
     },
     "en": {
       "page.title": "Quareia Divination",
@@ -873,7 +1036,170 @@
       "history.freeBoardCardState": "{card} · {state}",
       "history.savingFreeBoard": "Saving Free Board history…",
       "history.savedFreeBoard": "Free Board saved to this browser's divination history.",
-      "history.duplicateFreeBoard": "This Free Board was just saved; no duplicate was created."
+      "history.duplicateFreeBoard": "This Free Board was just saved; no duplicate was created.",
+      "history.openInAi": "Open in AI",
+      "privacy.ai": "AI reading API keys and chat history remain stored locally on this device only. Requests go directly from your browser to your configured model endpoint; this site never receives, relays, or stores any API keys or chat contents.",
+      "ai.open": "AI Reading",
+      "ai.pageTitle": "AI Assisted Reading · Quareia Divination",
+      "ai.title": "AI Assisted Reading",
+      "ai.subtitle": "Grounded in In-App Card Meanings · Preset Readings Only",
+      "ai.chatsMenu": "Chats",
+      "ai.sidebarToggleAria": "Open conversation list",
+      "ai.sidebarAria": "AI chat history",
+      "ai.backToReading": "Back to Reading",
+      "ai.settingsOpen": "API Settings",
+      "ai.newChat": "+ New Chat",
+      "ai.searchPlaceholder": "Search titles, questions, or messages",
+      "ai.untitledChat": "Untitled Chat",
+      "ai.archivedBadge": "Archived",
+      "ai.pickReadings": "+ Attach Readings",
+      "ai.rename": "Rename",
+      "ai.exportMd": "Export Markdown",
+      "ai.archive": "Archive",
+      "ai.unarchive": "Unarchive",
+      "ai.delete": "Delete",
+      "ai.pin": "Pin",
+      "ai.unpin": "Unpin",
+      "ai.pinned": "Pinned",
+      "ai.exportBackup": "Export Backup",
+      "ai.err.incomplete": "The connection ended before the response finished. Any received text has been kept. Retry or ask it to continue.",
+      "ai.archiveTooLargeTitle": "Backup exceeds the import limit",
+      "ai.archiveTooLargeMsg": "The JSON backup exceeds the 8 MiB import limit and cannot be restored here. You can instead export all transcripts, response notices and reading summaries as a readable Markdown archive. This archive cannot be imported into the chat list.",
+      "ai.exportArchive": "Export Markdown Archive",
+      "ai.storageMemoryWarning": "Chat storage is unavailable. This session is kept only in memory and will be lost when you reload or leave. Export a backup first.",
+      "ai.importTooLarge": "AI chat backups must be 8 MiB or smaller. Choose a smaller backup file.",
+      "ai.err.truncated": "The model reached its output limit, so the answer may be incomplete. Ask it to continue or increase the output token limit in API settings.",
+      "ai.err.blocked": "The provider blocked this response under its content policy. Any received text has been kept. Revise your question and retry.",
+      "ai.err.invalidResponse": "The endpoint returned an invalid response. Check its URL or proxy service: {detail}",
+      "ai.importBackup": "Import Backup",
+      "ai.clearArchived": "Clear Archived",
+      "ai.clearActive": "Clear Active",
+      "ai.tabActiveCount": "Active ({count})",
+      "ai.tabArchivedCount": "Archived ({count})",
+      "ai.noMatchingChats": "No matching conversations.",
+      "ai.noArchivedChats": "No archived conversations.",
+      "ai.noActiveChats": "No conversations yet. Start a new chat above.",
+      "ai.chatMetaSummary": "{readings} readings · {messages} msgs",
+      "ai.promptPlaceholder": "Ask about your reading (Enter to send, Shift+Enter for newline)",
+      "ai.send": "Send",
+      "ai.stop": "Stop",
+      "ai.pickerTitle": "Attach Readings (Non-Freeboard Only)",
+      "ai.pickerHint": "Multi-select supported (freeform excluded). Cards show a concise summary here while spread positions, stacking links, and in-app card meanings are injected accurately.",
+      "ai.pickerSearchPlaceholder": "Filter by question, spread, or card",
+      "ai.deckAll": "All Decks",
+      "ai.pickerClear": "Clear",
+      "ai.pickerApplyCount": "Attach Selected ({count})",
+      "ai.pickerEmpty": "No matching non-freeboard readings found. Complete and save a preset or custom spread reading first.",
+      "ai.renameTitle": "Rename Chat",
+      "ai.renameLabel": "Conversation Title",
+      "ai.save": "Save",
+      "ai.cancel": "Cancel",
+      "ai.close": "Close",
+      "ai.ok": "OK",
+      "ai.settingsTitle": "Model Endpoint & API Key Settings",
+      "ai.newProfile": "+ New Profile",
+      "ai.deleteProfile": "Delete Profile",
+      "ai.newProfileDefaultName": "New Profile",
+      "ai.lockedPromptNote": "The system prompt is locked to the Quareia divination assistant (grounded in in-app card meanings and stacking rules), cannot be edited, and never blocks normal non-divination chat.",
+      "ai.fieldName": "Profile Name",
+      "ai.fieldFormat": "API Format",
+      "ai.fieldBaseUrl": "Base URL (Endpoint or Proxy)",
+      "ai.fieldApiKey": "Static API Key (Stored Locally Only)",
+      "ai.fieldModel": "Model ID",
+      "ai.fieldVertexProject": "Vertex Project ID (Optional for Express Mode)",
+      "ai.fieldVertexLocation": "Vertex Location (e.g. global or us-central1)",
+      "ai.fieldTemperature": "Temperature (Optional, 0–2)",
+      "ai.fieldMaxTokens": "Max Tokens (Optional)",
+      "ai.fieldContextWindow": "Model Context Window (Tokens, blank for auto)",
+      "ai.contextWindowPlaceholder": "Auto-detect model context window",
+      "ai.contextWindowAutoPlaceholder": "Auto ({count} tokens)",
+      "ai.detectContextWindow": "Auto Detect",
+      "ai.detectingContext": "Detecting model context window…",
+      "ai.detectContextDone": "Detected model context window: {count} tokens ({source})",
+      "ai.contextWindowStatus": "Active window: {count} tokens ({source})",
+      "ai.contextSource.manual": "Manual",
+      "ai.contextSource.api": "Fetched from API",
+      "ai.contextSource.catalog": "Matched from catalog",
+      "ai.contextSource.default": "Default estimate",
+      "ai.fieldAutoCompress": "Auto-compress earlier context",
+      "ai.autoCompressHint": "Automatically summarizes earlier turns before reaching the model context limit while keeping attached card meanings and recent turns intact.",
+      "ai.contextMeter": "Context ~{used} / {limit} tokens ({source})",
+      "ai.contextMeterCompressed": " · {count} earlier compressed",
+      "ai.compressingStatus": "Compressing earlier messages to preserve context…",
+      "ai.testConnection": "Test Connection",
+      "ai.saveActivate": "Save & Activate",
+      "ai.profileUnconfigured": "API Key not set",
+      "ai.banner.needBoth": "Configure an API key first. Optionally attach non-freeboard readings for interpretation, or chat freely on any topic.",
+      "ai.banner.needKey": "No active API key configured yet. Open API Settings to add your key and test the connection.",
+      "ai.banner.needReading": "No readings attached: you can chat normally on any topic, or attach non-freeboard readings for in-app card interpretation.",
+      "ai.noAttachedReadings": "No readings attached (freeform records excluded)",
+      "ai.readingSnapshotSaved": "Saved snapshot",
+      "ai.readingDeleted": "Removed from local history",
+      "ai.removeReading": "Remove reading",
+      "ai.emptyHeading": "AI Assisted Reading",
+      "ai.emptyDesc": "Attach one or more non-freeboard readings to provide spread positions, keywords, and in-app card meanings to your chosen LLM, then ask a question or pick a starter prompt:",
+      "ai.roleUser": "You",
+      "ai.reasoningSummary": "Reasoning Summary",
+      "ai.saveAndResend": "Save & Resend",
+      "ai.retry": "Retry",
+      "ai.copy": "Copy",
+      "ai.copied": "Copied",
+      "ai.editResend": "Edit & Resend",
+      "ai.regenerate": "Regenerate",
+      "ai.showKey": "Show",
+      "ai.hideKey": "Hide",
+      "ai.format.openaiChat": "OpenAI Chat Completions (/v1/chat/completions)",
+      "ai.format.openaiResponses": "OpenAI Responses API (/v1/responses)",
+      "ai.format.anthropic": "Anthropic Messages (/v1/messages)",
+      "ai.format.geminiStudio": "Google Gemini AI Studio",
+      "ai.format.geminiVertex": "Google Gemini Vertex AI (Static API Key)",
+      "ai.hint.openaiChat": "Compatible with OpenAI, DeepSeek, OpenRouter, and /v1/chat/completions proxies using Authorization: Bearer.",
+      "ai.hint.openaiResponses": "Uses OpenAI Responses API (/v1/responses) with instructions and input payload fields.",
+      "ai.hint.anthropic": "Uses Anthropic Messages (/v1/messages) with x-api-key, anthropic-version, and browser direct-access header.",
+      "ai.hint.geminiStudio": "Uses Google AI Studio API Key via x-goog-api-key against generativelanguage.googleapis.com.",
+      "ai.hint.geminiVertex": "Static API key only (x-goog-api-key); no OAuth login. Leave Project ID blank for Express Mode, or set Project ID & Location for regional endpoints.",
+      "ai.err.missingKey": "API Key is required",
+      "ai.err.missingModel": "Model name is required",
+      "ai.err.insecureUrl": "Base URL must use https:// (except localhost)",
+      "ai.err.invalidUrl": "Invalid Base URL",
+      "ai.settingsSaved": "Configuration saved and activated.",
+      "ai.testingConnection": "Testing connection…",
+      "ai.testSuccess": "Connection succeeded ({model}). Ready to save.",
+      "ai.err.unknown": "Request failed",
+      "ai.err.auth": "Authentication failed. Verify your API key and endpoint permissions: {detail}",
+      "ai.err.rateLimit": "Rate limit or quota reached: {detail}",
+      "ai.err.network": "Network or CORS error. Check connectivity, HTTPS Base URL, or proxy CORS headers: {detail}",
+      "ai.stoppedEmpty": "Generation stopped.",
+      "ai.confirmKicker": "AI CHAT",
+      "ai.deleteChatTitle": "Delete this conversation?",
+      "ai.deleteChatMsg": "All messages in \"{title}\" will be permanently removed.",
+      "ai.clearArchivedTitle": "Clear all archived chats?",
+      "ai.clearAllTitle": "Clear all active chats?",
+      "ai.clearArchivedMsg": "This permanently deletes all archived chats while keeping active ones.",
+      "ai.clearAllMsg": "This deletes all active conversations. Consider exporting a JSON backup first.",
+      "ai.clearConfirm": "Clear",
+      "ai.deleteMsgTitle": "Delete this message?",
+      "ai.deleteMsgDesc": "Remove this message from local chat history?",
+      "ai.backupKicker": "AI BACKUP",
+      "ai.importDoneTitle": "Import Complete",
+      "ai.importDoneMsg": "Merged {imported} conversations ({total} total).",
+      "ai.importErrTitle": "Import Failed",
+      "ai.importErrMsg": "Invalid backup file format. Choose an AI chat JSON backup exported from this app.",
+      "ai.pageDescription": "AI-assisted divination workspace grounded in Quareia in-app card meanings and preset spread history.",
+      "ai.contextBarAria": "Active conversation and reading context",
+      "ai.deckTarot": "Quareia Tarot",
+      "ai.clearConfig": "Clear Saved Keys",
+      "ai.clearConfigTitle": "Clear all saved API keys?",
+      "ai.clearConfigMsg": "This removes all saved model profiles and API keys from this device without deleting your AI chat history.",
+      "ai.clearConfigConfirm": "Clear Keys",
+      "ai.configCleared": "All locally saved API keys and model settings have been cleared.",
+      "ai.exportedTo": "Exported: {fileName}",
+      "ai.exportCancelled": "Export cancelled.",
+      "ai.exportFailed": "Export failed. Please try again.",
+      "ai.chatChangedTitle": "Conversation Updated",
+      "ai.chatChangedMsg": "Another tab changed this conversation. The latest messages have been loaded; review them and retry.",
+      "ai.saveFailedTitle": "Save Failed",
+      "ai.saveFailedMsg": "Could not save the conversation. Check available storage and retry."
     }
   };
 
@@ -914,9 +1240,13 @@
     if (!global.document) return;
     var document = global.document;
     document.documentElement.lang = locale;
-    document.title = t("page.title");
+    var isAiPage = Boolean(document.body && document.body.classList && document.body.classList.contains("ai-chat-page"));
+    document.title = t(isAiPage ? "ai.pageTitle" : "page.title");
     var description = document.querySelector('meta[name="description"]');
-    if (description) description.setAttribute("content", t("page.description"));
+    if (description) {
+      var descKey = description.getAttribute("data-i18n-content") || (isAiPage ? "ai.pageDescription" : "page.description");
+      description.setAttribute("content", t(descKey));
+    }
     Array.prototype.forEach.call(document.querySelectorAll("[data-i18n]"), function (element) {
       element.textContent = t(element.getAttribute("data-i18n"));
     });

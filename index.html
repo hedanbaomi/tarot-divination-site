@@ -48,6 +48,8 @@
           aria-label="Switch to English">EN</button>
         <button class="btn-mini history-open-btn" id="historyOpenBtn" type="button"
           aria-haspopup="dialog" aria-controls="historyDialog" data-i18n="history.open">占卜历史</button>
+        <a class="btn-mini ai-open-link" id="aiOpenLink" href="ai.html"
+          style="display:inline-flex;align-items:center;text-decoration:none" data-i18n="ai.open">AI 解牌</a>
         <button class="btn-mini announcement-open-btn" id="announcementOpenBtn" type="button"
           aria-haspopup="dialog" aria-controls="announcementDialog" data-i18n="announcement.open">公告</button>
         <span class="masthead-sep" aria-hidden="true"></span>
@@ -572,6 +574,9 @@
         <h2 class="footer-heading" data-i18n="footer.privacyTitle">隐私与统计</h2>
         <p class="attribution-privacy" data-i18n="privacy.analytics">
           本站使用匿名浏览器标识，将访问量、活跃浏览器和完成解牌次数及国家/省州级地区分布汇总至与手机端共用的统计后台，可随时关闭；另使用 Cloudflare Web Analytics 统计访问量与页面性能。不收集邮箱、占卜内容、抽牌结果或本地历史记录。
+        </p>
+        <p class="attribution-privacy ai-privacy-note" data-i18n="privacy.ai">
+          AI 解牌使用的 API Key 与聊天记录均只保存在当前设备本地；发起对话时仅向你配置的大模型接口地址直连发送提问与所选占卜牌意，本站后台不接收、不中转也不存储任何密钥或对话内容。
         </p>
         <button id="webTelemetryToggle" type="button" hidden>关闭统一使用统计</button>
       </div>

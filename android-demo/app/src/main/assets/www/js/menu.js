@@ -63,6 +63,10 @@
 
     var historyButton = document.getElementById("historyOpenBtn");
     if (historyButton) historyButton.addEventListener("click", function () { setOpen(false); });
+    var aiOpenLink = document.getElementById("aiOpenLink");
+    if (aiOpenLink) aiOpenLink.addEventListener("click", function () { setOpen(false); });
+    var aiMenuBack = document.getElementById("aiMenuBackToReading");
+    if (aiMenuBack) aiMenuBack.addEventListener("click", function () { setOpen(false); });
     var aboutButton = document.getElementById("aboutOpenBtn");
     if (aboutButton) aboutButton.addEventListener("click", openAbout);
 

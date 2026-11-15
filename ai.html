@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="ui2">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#060919">
+  <title>AI 辅助解牌 · Quareia 占卜</title>
+  <meta name="description" content="结合 Quareia 应用内牌意与非自由画板占卜历史的 AI 辅助解牌对话工作台" data-i18n-content="ai.pageDescription">
+  <script>
+    (function () {
+      try {
+        var allowed = { celestial: 1, parchment: 1, ember: 1, grove: 1, "grove-light": 1, jade: 1, dusk: 1, ash: 1 };
+        var stored = localStorage.getItem("quareia-divination-theme");
+        document.documentElement.setAttribute("data-theme", stored && Object.prototype.hasOwnProperty.call(allowed, stored) ? stored : "celestial");
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "celestial");
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/redesign.css">
+  <link rel="stylesheet" href="css/ai-chat.css">
+</head>
+<body class="ai-chat-page">
+  <header class="ai-topbar">
+    <div class="ai-topbar-left">
+      <button class="btn-mini ai-sidebar-toggle" id="aiSidebarToggle" type="button"
+        aria-expanded="false" aria-controls="aiSidebar"
+        aria-label="打开对话列表" data-i18n-aria-label="ai.sidebarToggleAria" data-i18n="ai.chatsMenu">对话</button>
+      <a class="btn-mini ai-back-link" id="aiBackToReading" href="index.html" data-i18n="ai.backToReading">返回占卜</a>
+      <div class="ai-brand">
+        <h1 class="ai-page-title" data-i18n="ai.title">AI 辅助解牌</h1>
+        <p class="ai-page-sub" data-i18n="ai.subtitle">基于应用内牌意 · 仅限非自由画板历史</p>
+      </div>
+    </div>
+    <div class="ai-topbar-right">
+      <button class="ai-profile-pill" id="aiActiveProfileBtn" type="button"
+        aria-haspopup="dialog" aria-controls="aiSettingsModal">
+        <span class="ai-profile-dot" id="aiProfileDot" aria-hidden="true"></span>
+        <span class="ai-profile-pill-label" id="aiActiveProfileName">未配置 API Key</span>
+      </button>
+      <div class="ai-theme-wrap">
+        <button class="btn-mini" id="aiThemeBtn" type="button"
+          aria-haspopup="true" aria-expanded="false" aria-controls="aiThemePopover"
+          data-i18n="settings.theme">界面主题</button>
+        <div class="ai-theme-popover" id="aiThemePopover" role="dialog" aria-modal="false"
+          aria-label="界面主题" data-i18n-aria-label="settings.themeAria" hidden>
+          <div class="theme-swatches" id="themeSwatches" role="radiogroup"
+            aria-label="选择界面主题" data-i18n-aria-label="settings.themeAria">
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="celestial" aria-checked="true">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.celestial">星夜秘境</span>
+            </button>
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="parchment" aria-checked="false">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.parchment">羊皮纸晨光</span>
+            </button>
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="ember" aria-checked="false">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.ember">余烬圣堂</span>
+            </button>
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="grove" aria-checked="false">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.grove">密林祭坛</span>
+            </button>
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="grove-light" aria-checked="false">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.groveLight">密林祭坛（明亮版）</span>
+            </button>
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="jade" aria-checked="false">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.jade">青玉纸</span>
+            </button>
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="dusk" aria-checked="false">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.dusk">暮紫</span>
+            </button>
+            <button type="button" class="theme-swatch" role="radio" data-theme-id="ash" aria-checked="false">
+              <span class="theme-swatch-preview" aria-hidden="true"></span>
+              <span data-i18n="theme.ash">素灰</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <button class="btn-mini" id="aiSettingsBtn" type="button"
+        aria-haspopup="dialog" aria-controls="aiSettingsModal" data-i18n="ai.settingsOpen">API 设置</button>
+      <button class="btn-mini language-toggle" id="languageToggle" type="button"
+        aria-label="Switch to English">EN</button>
+    </div>
+  </header>
+
+  <div class="ai-shell">
+    <div class="ai-sidebar-backdrop" id="aiSidebarBackdrop" hidden></div>
+
+    <aside class="ai-sidebar" id="aiSidebar" aria-label="AI 对话历史" data-i18n-aria-label="ai.sidebarAria">
+      <div class="ai-sidebar-head">
+        <div class="ai-sidebar-head-row">
+          <button class="btn btn-accent ai-new-chat-btn" id="aiNewChatBtn" type="button" data-i18n="ai.newChat">+ 新建对话</button>
+          <button class="btn-mini ai-sidebar-close-btn" id="aiSidebarClose" type="button"
+            aria-label="关闭对话列表" data-i18n-aria-label="ai.close">×</button>
+        </div>
+        <input class="ai-search-input" id="aiChatSearchInput" type="search"
+          placeholder="搜索对话标题、问题或聊天内容" data-i18n-placeholder="ai.searchPlaceholder">
+        <div class="ai-tabs" role="tablist">
+          <button class="ai-tab-btn" id="aiTabActive" type="button" role="tab" aria-selected="true">进行中 (0)</button>
+          <button class="ai-tab-btn" id="aiTabArchived" type="button" role="tab" aria-selected="false">已归档 (0)</button>
+        </div>
+      </div>
+
+      <div class="ai-chat-list" id="aiChatList"></div>
+
+      <div class="ai-sidebar-foot">
+        <button class="btn-mini" id="aiExportBackupBtn" type="button" data-i18n="ai.exportBackup">导出备份</button>
+        <button class="btn-mini" id="aiImportBackupBtn" type="button" data-i18n="ai.importBackup">导入备份</button>
+        <input id="aiImportFileInput" type="file" accept=".json,application/json" hidden>
+        <button class="btn-mini" id="aiClearChatsBtn" type="button">清空当前</button>
+      </div>
+    </aside>
+
+    <main class="ai-main">
+      <section class="ai-context-bar" aria-label="当前对话与占卜上下文" data-i18n-aria-label="ai.contextBarAria">
+        <div class="ai-context-header">
+          <div class="ai-active-chat-meta">
+            <h2 class="ai-active-chat-title" id="aiActiveChatTitle" data-i18n="ai.untitledChat">新解牌对话</h2>
+            <span class="ai-archived-badge" id="aiArchivedBadge" data-i18n="ai.archivedBadge" hidden>已归档</span>
+          </div>
+          <div class="ai-context-controls">
+            <button class="btn-mini" id="aiPickReadingsBtn" type="button" data-i18n="ai.pickReadings">+ 选择占卜历史</button>
+            <button class="btn-mini" id="aiRenameChatBtn" type="button" data-i18n="ai.rename">重命名</button>
+            <button class="btn-mini" id="aiExportMdBtn" type="button" data-i18n="ai.exportMd">导出 Markdown</button>
+            <button class="btn-mini" id="aiArchiveChatBtn" type="button" data-i18n="ai.archive">归档</button>
+            <button class="btn-mini" id="aiDeleteChatBtn" type="button" data-i18n="ai.delete">删除</button>
+          </div>
+        </div>
+        <div class="ai-attached-chips" id="aiAttachedChips"></div>
+      </section>
+
+      <div class="ai-banner" id="aiStorageWarning" role="alert" hidden>
+        <span data-i18n="ai.storageMemoryWarning">无法访问聊天存储，本次聊天仅保存在内存中。刷新或离开页面会丢失本次聊天，请先导出备份。</span>
+        <button class="btn-mini" id="aiStorageExportBtn" type="button" data-i18n="ai.exportBackup">导出备份</button>
+      </div>
+
+      <div class="ai-banner" id="aiSetupBanner" hidden>
+        <span id="aiSetupBannerText"></span>
+        <div class="ai-composer-actions">
+          <button class="btn-mini" id="aiBannerSettingsBtn" type="button" data-i18n="ai.settingsOpen">API 设置</button>
+          <button class="btn-mini" id="aiBannerPickBtn" type="button" data-i18n="ai.pickReadings">+ 选择占卜历史</button>
+        </div>
+      </div>
+
+      <section class="ai-messages" id="aiMessages" aria-live="polite"></section>
+
+      <footer class="ai-composer">
+        <div class="ai-composer-box">
+          <textarea class="ai-prompt-input" id="aiPromptInput" rows="2"
+            placeholder="输入你的困惑或追问（Enter 发送，Shift+Enter 换行）"
+            data-i18n-placeholder="ai.promptPlaceholder"></textarea>
+          <div class="ai-composer-actions">
+            <button class="btn btn-accent" id="aiSendBtn" type="button" data-i18n="ai.send">发送</button>
+            <button class="btn btn-secondary" id="aiStopBtn" type="button" data-i18n="ai.stop" hidden>停止</button>
+          </div>
+        </div>
+        <div class="ai-context-status-row">
+          <span class="ai-context-meter" id="aiContextMeter" role="status" aria-live="polite"></span>
+        </div>
+        <p class="ai-privacy-footnote" data-i18n="privacy.ai">
+          AI 解牌使用的 API Key 与聊天记录均只保存在当前设备本地；发起对话时仅向你配置的大模型接口地址直连发送提问与所选占卜牌意，本站后台不接收、不中转也不存储任何密钥或对话内容。
+        </p>
+      </footer>
+    </main>
+  </div>
+
+  <!-- 选择非自由画板占卜历史弹窗 -->
+  <div class="ai-modal-backdrop" id="aiPickerModal" role="dialog" aria-modal="true" aria-labelledby="aiPickerModalTitle" hidden>
+    <section class="ai-modal">
+      <header class="ai-modal-head">
+        <h2 id="aiPickerModalTitle" data-i18n="ai.pickerTitle">选择占卜历史（仅非自由画板）</h2>
+        <button class="history-icon-btn" id="aiPickerCloseBtn" type="button" aria-label="关闭" data-i18n-aria-label="ai.close">×</button>
+      </header>
+      <div class="ai-modal-body">
+        <p class="ai-hint" data-i18n="ai.pickerHint">支持多选。已自动过滤自由画板记录；确认后将自动注入牌阵牌位含义与对应牌组应用内牌意。</p>
+        <div class="ai-picker-filters">
+          <input class="ai-input" id="aiPickerSearchInput" type="search"
+            placeholder="按问题、牌阵名或牌名筛选" data-i18n-placeholder="ai.pickerSearchPlaceholder">
+          <div class="ai-picker-deck-wrap">
+            <label class="visually-hidden" for="aiPickerDeckFilter" data-i18n="history.filterLabel">按牌组筛选</label>
+            <select class="ai-select" id="aiPickerDeckFilter" aria-label="按牌组筛选" data-i18n-aria-label="history.filterLabel">
+              <option value="all" data-i18n="ai.deckAll">全部牌组</option>
+              <option value="tarot" data-i18n="ai.deckTarot">Quareia 塔罗</option>
+              <option value="mystagogus">Mystagogus</option>
+              <option value="lxxxi">LXXXI</option>
+            </select>
+          </div>
+        </div>
+        <div class="ai-picker-list" id="aiPickerList"></div>
+      </div>
+      <footer class="ai-modal-foot">
+        <button class="btn btn-secondary" id="aiPickerClearBtn" type="button" data-i18n="ai.pickerClear">清空已选</button>
+        <button class="btn btn-accent" id="aiPickerApplyBtn" type="button">确定附加 (0)</button>
+      </footer>
+    </section>
+  </div>
+
+  <!-- 重命名对话弹窗 -->
+  <div class="ai-modal-backdrop" id="aiRenameModal" role="dialog" aria-modal="true" aria-labelledby="aiRenameModalTitle" hidden>
+    <section class="ai-modal">
+      <header class="ai-modal-head">
+        <h2 id="aiRenameModalTitle" data-i18n="ai.renameTitle">重命名对话</h2>
+        <button class="history-icon-btn" id="aiRenameCloseBtn" type="button" aria-label="关闭" data-i18n-aria-label="ai.close">×</button>
+      </header>
+      <div class="ai-modal-body">
+        <label class="ai-field">
+          <span data-i18n="ai.renameLabel">对话标题</span>
+          <input class="ai-input" id="aiRenameInput" type="text" maxlength="100" autocomplete="off">
+        </label>
+      </div>
+      <footer class="ai-modal-foot">
+        <button class="btn btn-secondary" id="aiRenameCancelBtn" type="button" data-i18n="ai.cancel">取消</button>
+        <button class="btn btn-accent" id="aiRenameSaveBtn" type="button" data-i18n="ai.save">保存</button>
+      </footer>
+    </section>
+  </div>
+
+  <!-- 模型 API Key 设置弹窗 -->
+  <div class="ai-modal-backdrop" id="aiSettingsModal" role="dialog" aria-modal="true" aria-labelledby="aiSettingsModalTitle" hidden>
+    <section class="ai-modal">
+      <header class="ai-modal-head">
+        <h2 id="aiSettingsModalTitle" data-i18n="ai.settingsTitle">模型接口与 API Key 设置</h2>
+        <button class="history-icon-btn" id="aiSettingsCloseBtn" type="button" aria-label="关闭" data-i18n-aria-label="ai.close">×</button>
+      </header>
+      <div class="ai-modal-body">
+        <div class="ai-sidebar-head-row">
+          <div class="ai-profile-list" id="aiProfileList"></div>
+          <button class="btn-mini" id="aiNewProfileBtn" type="button" data-i18n="ai.newProfile">+ 新增配置</button>
+          <button class="btn-mini" id="aiProfileDeleteBtn" type="button" data-i18n="ai.deleteProfile">删除配置</button>
+        </div>
+
+        <p class="ai-locked-prompt-note" id="aiLockedPromptNote" data-i18n="ai.lockedPromptNote">
+          系统提示词已锁定为 Quareia 占卜辅助助手（依据应用内牌意与叠牌法法则），不可修改，且不限制日常非占卜主题正常对话。
+        </p>
+
+        <div class="ai-field-grid">
+          <label class="ai-field">
+            <span data-i18n="ai.fieldName">配置名称</span>
+            <input class="ai-input" id="aiProfileName" type="text" maxlength="60" autocomplete="off">
+          </label>
+          <div class="ai-field">
+            <label for="aiProfileFormat" data-i18n="ai.fieldFormat">接口格式</label>
+            <select class="ai-select" id="aiProfileFormat"></select>
+          </div>
+          <label class="ai-field is-full">
+            <span data-i18n="ai.fieldBaseUrl">Base URL（接口地址 / 代理地址）</span>
+            <input class="ai-input" id="aiProfileBaseUrl" type="url" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="ai-field is-full">
+            <span data-i18n="ai.fieldApiKey">静态 API Key（仅存本机，持续有效）</span>
+            <div class="ai-key-row">
+              <input class="ai-input" id="aiProfileApiKey" type="password" autocomplete="off" spellcheck="false">
+              <button class="btn-mini" id="aiToggleKeyVisibilityBtn" type="button">显示</button>
+            </div>
+          </label>
+          <label class="ai-field is-full">
+            <span data-i18n="ai.fieldModel">模型名称（Model ID）</span>
+            <input class="ai-input" id="aiProfileModel" type="text" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+
+        <div class="ai-field-grid" id="aiVertexGroup" hidden>
+          <label class="ai-field">
+            <span data-i18n="ai.fieldVertexProject">Vertex Project ID（Express Mode 可留空）</span>
+            <input class="ai-input" id="aiProfileVertexProject" type="text" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="ai-field">
+            <span data-i18n="ai.fieldVertexLocation">Vertex Location（如 global 或 us-central1）</span>
+            <input class="ai-input" id="aiProfileVertexLocation" type="text" placeholder="us-central1" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+
+        <div class="ai-field-grid">
+          <label class="ai-field">
+            <span data-i18n="ai.fieldTemperature">Temperature（可选，0–2）</span>
+            <input class="ai-input" id="aiProfileTemperature" type="number" step="0.1" min="0" max="2">
+          </label>
+          <label class="ai-field">
+            <span data-i18n="ai.fieldMaxTokens">Max Tokens（可选）</span>
+            <input class="ai-input" id="aiProfileMaxTokens" type="number" step="1" min="1">
+          </label>
+          <div class="ai-field is-full">
+            <label for="aiFieldContextWindow" data-i18n="ai.fieldContextWindow">模型上下文窗口（Tokens，留空自动识别）</label>
+            <div class="ai-context-row">
+              <input class="ai-input" id="aiFieldContextWindow" type="number" step="1024" min="1024"
+                placeholder="自动识别模型上下文大小" data-i18n-placeholder="ai.contextWindowPlaceholder">
+              <button class="btn-mini" id="aiDetectContextBtn" type="button" data-i18n="ai.detectContextWindow">自动获取</button>
+            </div>
+            <p class="ai-hint" id="aiContextWindowHint"></p>
+          </div>
+          <label class="ai-checkbox-row is-full" for="aiFieldAutoCompress">
+            <input id="aiFieldAutoCompress" type="checkbox" checked>
+            <span>
+              <strong data-i18n="ai.fieldAutoCompress">自动压缩早期上下文</strong>
+              <small class="ai-hint" data-i18n="ai.autoCompressHint">接近模型上下文上限时自动摘要早期对话，并保留当前关联的占卜牌意与近期对话。</small>
+            </span>
+          </label>
+        </div>
+
+        <p class="ai-hint" id="aiFormatHint"></p>
+        <p class="ai-status-msg" id="aiSettingsStatus" role="status" aria-live="polite"></p>
+      </div>
+      <footer class="ai-modal-foot">
+        <button class="btn btn-secondary ai-clear-config-btn" id="aiClearConfigBtn" type="button" data-i18n="ai.clearConfig">清除已存密钥</button>
+        <button class="btn btn-secondary" id="aiTestConnectionBtn" type="button" data-i18n="ai.testConnection">测试连接</button>
+        <button class="btn btn-accent" id="aiSaveProfileBtn" type="button" data-i18n="ai.saveActivate">保存并启用</button>
+      </footer>
+    </section>
+  </div>
+
+  <dialog class="confirm-overlay" id="confirmDialog" role="alertdialog" aria-modal="true"
+    aria-labelledby="confirmDialogTitle" aria-describedby="confirmMessage" aria-hidden="true">
+    <section class="confirm-card">
+      <div class="confirm-symbol" aria-hidden="true">✦</div>
+      <p class="confirm-kicker" data-i18n="confirm.kicker">CONFIRM</p>
+      <h2 id="confirmDialogTitle">确认操作</h2>
+      <p id="confirmMessage"></p>
+      <div class="confirm-actions">
+        <button class="btn btn-secondary" id="confirmCancelBtn" type="button" data-i18n="confirm.cancel">取消</button>
+        <button class="btn confirm-danger-btn" id="confirmProceedBtn" type="button" data-i18n="confirm.proceed">确定</button>
+      </div>
+    </section>
+  </dialog>
+
+  <dialog class="choice-overlay" id="choiceDialog" aria-modal="true"
+    aria-labelledby="choiceDialogTitle" aria-hidden="true">
+    <section class="choice-card">
+      <div class="choice-symbol" aria-hidden="true">✦</div>
+      <p class="choice-kicker" id="choiceDialogKicker">纸牌选择</p>
+      <h2 id="choiceDialogTitle">请选择</h2>
+      <div class="choice-options" id="choiceOptions" role="listbox"></div>
+      <button class="btn btn-secondary choice-cancel" id="choiceCancelBtn" type="button">取消</button>
+    </section>
+  </dialog>
+
+  <span class="theme-toast" id="themeToast" aria-live="polite"></span>
+
+  <script src="js/tarot-data.js"></script>
+  <script src="js/mystagogus-data.js"></script>
+  <script src="js/lxxxi-data.js"></script>
+  <script src="js/spreads.js"></script>
+  <script src="js/custom-spreads.js"></script>
+  <script src="js/i18n-data-en.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/dialogs.js"></script>
+  <script src="js/custom-selects.js"></script>
+  <script src="js/history-records.js"></script>
+  <script src="js/history-store.js"></script>
+  <script src="js/ai-providers.js"></script>
+  <script src="js/ai-context.js"></script>
+  <script src="js/ai-chat-store.js"></script>
+  <script src="js/ai-ui.js"></script>
+  <script src="js/web-analytics.js"></script>
+</body>
+</html>
