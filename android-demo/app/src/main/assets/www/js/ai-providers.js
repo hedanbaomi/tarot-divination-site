@@ -1066,12 +1066,15 @@
   }
 
   function consumeSseEvents(bufferObj, isFinal, format, apiKey, callbacks) {
-    var normalized = bufferObj.raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    // A trailing CR may be the first half of a CRLF split across reads.
+    var pendingCr = !isFinal && bufferObj.raw.slice(-1) === "\r";
+    var raw = pendingCr ? bufferObj.raw.slice(0, -1) : bufferObj.raw;
+    var normalized = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
     var blocks = normalized.split("\n\n");
     if (isFinal) {
       bufferObj.raw = "";
     } else {
-      bufferObj.raw = blocks.pop() || "";
+      bufferObj.raw = (blocks.pop() || "") + (pendingCr ? "\r" : "");
     }
 
     for (var i = 0; i < blocks.length; i += 1) {

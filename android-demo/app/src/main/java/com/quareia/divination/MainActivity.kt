@@ -10,11 +10,13 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebChromeClient.FileChooserParams
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -44,6 +46,13 @@ class MainActivity : ComponentActivity() {
     private var lxxxiRouteToken = ""
     private var pendingHistoryExportFile: File? = null
     private var pendingHistoryExportName: String? = null
+    private val webFileChooser: WebFileChooser = WebFileChooser(
+        registerForActivityResult(OpenDocumentForWebViewContract) { uris ->
+            // A result that arrives after onDestroy has nowhere to go;
+            // deliver() ignores it.
+            webFileChooser.deliver(uris)
+        }
+    )
     private val historyExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri -> completeHistoryExport(uri) }
@@ -136,7 +145,12 @@ class MainActivity : ComponentActivity() {
                 publicAssetRoute,
                 LxxxiAssetRoute(lxxxiRouteToken, LxxxiAssetProviderFactory.create()),
             )
-            webChromeClient = WebChromeClient()
+            // ai.html imports a JSON conversation backup through a hidden
+            // <input type="file">; the stock WebChromeClient ignores it, so
+            // the page could never open a picker. This client forwards the
+            // request to the system document picker (user-picked URI only,
+            // allowContentAccess stays off).
+            webChromeClient = QuareiaWebChromeClient(webFileChooser)
             scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
         }
 
@@ -302,6 +316,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        // A WebView whose leading page asked for a file must not leave the
+        // generic callback outstanding once the host is gone.
+        webFileChooser.discard()
         if (this::webView.isInitialized) {
             webView.removeJavascriptInterface("androidTelemetry")
             webView.removeJavascriptInterface("androidHistoryExport")
@@ -435,6 +452,30 @@ class MainActivity : ComponentActivity() {
         val controller = WindowCompat.getInsetsController(window, window.decorView)
         controller.isAppearanceLightStatusBars = light
         controller.isAppearanceLightNavigationBars = light
+    }
+}
+
+/**
+ * WebView chrome hooks. The only override that matters here is the file
+ * picker: the bundled ai.html imports a JSON conversation backup through a
+ * hidden `<input type="file">`, and a plain `WebChromeClient` returns "not
+ * handled", which leaves the page unable to open any picker. Everything else
+ * keeps the stock behaviour.
+ */
+internal class QuareiaWebChromeClient(
+    private val fileChooser: WebFileChooser,
+) : WebChromeClient() {
+
+    override fun onShowFileChooser(
+        webView: WebView?,
+        filePathCallback: ValueCallback<Array<Uri>>?,
+        fileChooserParams: FileChooserParams?,
+    ): Boolean {
+        fileChooser.open(fileChooserParams, filePathCallback)
+        // Claim the request even when it resolves to a cancel: the class
+        // contract requires the callback to be answered exactly once, and the
+        // caller cannot answer it a second time.
+        return true
     }
 }
 

@@ -339,3 +339,51 @@ test("ISO timestamps, real history-records schema, snapshots, summary cards, cro
   });
   assert.ok(convTokens > 10);
 });
+
+test("custom spread context survives snapshot storage and backup after its definition is removed", async () => {
+  const storeApi = require("../js/ai-chat-store.js");
+  const record = {
+    id: "custom-crossing-reading", layoutMode: "preset", deckType: "tarot",
+    spreadId: "custom-crossing", orientationMode: "mixed", createdAt: 1700000000000,
+    question: "What crosses the cause?",
+    cards: [
+      { cardId: "major-0", positionNumber: 1, orientation: "upright" },
+      { cardId: "major-1", positionNumber: 2, orientation: "reversed" }
+    ]
+  };
+  const definition = {
+    id: record.spreadId, name: "自定义交叉阵", description: "因与影响", source: "个人牌阵",
+    positions: [
+      { number: 1, name: "原因", meaning: "当前的内因" },
+      { number: 2, name: "影响", meaning: "外来的影响", stackOn: 1 }
+    ]
+  };
+  const present = { locale: "zh-CN", customLibrary: { getById: () => definition } };
+  const missing = { locale: "zh-CN", customLibrary: { getById: () => null } };
+  const before = aiContext.resolveReadingDetails(record, present);
+  const snapshot = aiContext.buildReadingSnapshot(record, present);
+  const store = storeApi.createStore({ indexedDB: null, memoryFallback: true });
+  await store.createConversation({ id: "saved", readingIds: [record.id], readingSnapshots: [snapshot] });
+  const backup = await store.exportBackup();
+  const restored = storeApi.createStore({ indexedDB: null, memoryFallback: true });
+  await restored.importBackup(JSON.stringify(backup));
+  const saved = (await restored.getConversation("saved")).readingSnapshots[0];
+  const after = aiContext.resolveReadingDetails(saved, missing);
+  assert.equal(after.spreadFound, false);
+  for (const key of ["spreadName", "spreadDescription", "spreadSource"]) assert.equal(after[key], before[key]);
+  for (let i = 0; i < 2; i++) {
+    for (const key of ["positionName", "positionMeaning", "stackOn", "orientation", "meaning"]) {
+      assert.equal(after.cards[i][key], before.cards[i][key], key);
+    }
+  }
+  const prompt = aiContext.formatReadingsForPrompt([saved], missing);
+  assert.ok(prompt.includes("当前的内因") && prompt.includes("外来的影响"));
+  assert.ok(prompt.includes("交叉叠放于第 1 位之上"));
+  // Old backup files remain readable without invented missing semantics.
+  const legacy = JSON.parse(JSON.stringify(snapshot));
+  delete legacy.spreadDescription; delete legacy.spreadSource;
+  legacy.cards.forEach(c => { delete c.positionMeaning; delete c.stackOn; });
+  const legacyDetails = aiContext.resolveReadingDetails(legacy, missing);
+  assert.equal(legacyDetails.cards[1].stackOn, null);
+  assert.equal(legacyDetails.cards[0].positionMeaning, "");
+});

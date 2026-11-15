@@ -123,6 +123,7 @@ function createFakeIndexedDb() {
                 return createStoreWrapper(s);
               }
             };
+            setTimeout(() => { if (tx.oncomplete) tx.oncomplete(); }, 0);
             return tx;
           },
           close() {}
@@ -286,4 +287,52 @@ test("ai-chat-store preserves self-contained snapshots, rejects freeform, and in
 
   const summaryMd = chatStore.formatConversationMarkdown(afterEditCovered, { locale: "zh-CN" });
   assert.ok(summaryMd.includes("总览牌阵 (塔罗 · 叠牌法) — 年运"));
+});
+
+test("message appends and late completions preserve concurrent changes and deletions", async () => {
+  const store = chatStore.createStore({ indexedDB: null, memoryFallback: true });
+  await store.createConversation({ id: "shared" });
+  const a = [
+    chatStore.normalizeMessage({ id: "ua", role: "user", content: "A" }),
+    chatStore.normalizeMessage({ id: "aa", role: "assistant", content: "" })
+  ];
+  const b = [
+    chatStore.normalizeMessage({ id: "ub", role: "user", content: "B" }),
+    chatStore.normalizeMessage({ id: "ab", role: "assistant", content: "" })
+  ];
+  await Promise.all([store.appendMessages("shared", a), store.appendMessages("shared", b), store.setPinned("shared", true)]);
+  await store.completeMessage("shared", { ...b[1], content: "answer B" });
+  await store.completeMessage("shared", { ...a[1], content: "answer A" });
+  let current = await store.getConversation("shared");
+  assert.deepEqual(current.messages.map(m => m.content), ["A", "answer A", "B", "answer B"]);
+  assert.equal(current.pinned, true);
+  await assert.rejects(store.updateConversation("shared", { messages: a }, { expectedMessages: a }), { code: "conversation_conflict" });
+  assert.equal((await store.getConversation("shared")).messages.length, 4);
+  await store.deleteMessage("shared", "aa");
+  await store.completeMessage("shared", { ...a[1], content: "late" });
+  assert.equal((await store.getConversation("shared")).messages.some(m => m.id === "aa"), false);
+  await store.deleteConversation("shared");
+  assert.equal(await store.completeMessage("shared", { ...a[1], content: "later" }), null);
+  assert.equal(await store.getConversation("shared"), null);
+});
+
+test("late compression does not restore a summary invalidated by another edit", async () => {
+  const store = chatStore.createStore({ indexedDB: createFakeIndexedDb() });
+  const messages = [
+    chatStore.normalizeMessage({ id: "u", role: "user", content: "original" }),
+    chatStore.normalizeMessage({ id: "a", role: "assistant", content: "" })
+  ];
+  await store.createConversation({ id: "summary", messages });
+  await store.updateConversation("summary", conv => {
+    conv.messages[0].content = "edited";
+    conv.contextSummary = null;
+    return conv;
+  });
+  await store.completeMessage("summary", { ...messages[1], content: "answer" }, {
+    contextSummary: { text: "stale", coveredUntilId: "u", compressedCount: 1 },
+    summaryMessages: messages.slice(0, 1)
+  });
+  const current = await store.getConversation("summary");
+  assert.equal(current.messages[0].content, "edited");
+  assert.equal(current.contextSummary, null);
 });

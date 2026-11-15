@@ -320,8 +320,8 @@
     var spreadName = spread
       ? pickText(spread, "name", "nameEn", isEnglish)
       : (record.spreadName || record.spreadNameSnapshot || record.spreadId);
-    var spreadDescription = spread ? pickText(spread, "description", "descriptionEn", isEnglish) : "";
-    var spreadSource = spread ? pickText(spread, "source", "sourceEn", isEnglish) : "";
+    var spreadDescription = spread ? pickText(spread, "description", "descriptionEn", isEnglish) : (record.spreadDescription || "");
+    var spreadSource = spread ? pickText(spread, "source", "sourceEn", isEnglish) : (record.spreadSource || "");
     var isSplitDeckStacked = isRecordSplitDeckStacked(record, spread);
 
     var resolvedCards = record.cards.map(function (entry, index) {
@@ -332,8 +332,9 @@
       var positionName = pos
         ? pickText(pos, "name", "nameEn", isEnglish)
         : (entry.positionName || entry.positionNameSnapshot || ((isEnglish ? "Position " : "牌位 ") + positionNumber));
-      var positionMeaning = pos ? pickText(pos, "meaning", "meaningEn", isEnglish) : "";
-      var stackOn = resolveCrossingTarget(spread, pos);
+      var positionMeaning = pos ? pickText(pos, "meaning", "meaningEn", isEnglish) : (entry.positionMeaning || "");
+      var stackOn = pos ? resolveCrossingTarget(spread, pos)
+        : (Number.isInteger(entry.stackOn) && entry.stackOn > 0 ? entry.stackOn : null);
 
       var cardObj = findCardInDeck(entry.cardId, deckType, env);
       var cardName = cardObj
@@ -432,6 +433,8 @@
         slotIndex: Number.isInteger(Number(raw.slotIndex)) ? Number(raw.slotIndex) : Math.max(0, posNum - 1),
         positionNumber: posNum,
         positionName: c.positionName || raw.positionName || raw.positionNameSnapshot || "",
+        positionMeaning: c.positionMeaning || raw.positionMeaning || "",
+        stackOn: Number.isInteger(c.stackOn) && c.stackOn > 0 ? c.stackOn : null,
         cardId: String(c.cardId || raw.cardId || ""),
         cardName: c.cardName || raw.cardName || raw.cardNameSnapshot || "",
         orientation: c.orientation || raw.orientation || "upright",
@@ -448,6 +451,8 @@
       deckType: resolved ? resolved.deckType : (record.deckType || "tarot"),
       spreadId: String(record.spreadId || ""),
       spreadName: (resolved && resolved.spreadName) || record.spreadName || record.spreadNameSnapshot || String(record.spreadId || ""),
+      spreadDescription: (resolved && resolved.spreadDescription) || record.spreadDescription || "",
+      spreadSource: (resolved && resolved.spreadSource) || record.spreadSource || "",
       positionCount: Number(record.positionCount) || cards.length,
       orientationMode: record.orientationMode || "upright-only",
       filterMode: record.filterMode || "not-applicable",

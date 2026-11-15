@@ -624,11 +624,11 @@
       for (var i = 0; i < conv.readingIds.length; i += 1) {
         var rid = conv.readingIds[i];
         var rec = state.readingsById[rid];
-        if (rec) {
+        var snap = snapById[rid];
+        if (rec && (!snap || contextApi.resolveReadingDetails(rec, { customLibrary: customLibrary }).spreadFound)) {
           records.push(rec);
           continue;
         }
-        var snap = snapById[rid];
         if (snap && Array.isArray(snap.cards) && snap.cards.length > 0) {
           records.push(snap);
         }
@@ -650,7 +650,7 @@
       for (var i = 0; i < ids.length; i += 1) {
         var rid = ids[i];
         var rec = state.readingsById[rid];
-        if (rec) {
+        if (rec && (!prevById[rid] || contextApi.resolveReadingDetails(rec, { customLibrary: customLibrary }).spreadFound)) {
           var built = contextApi.buildReadingSnapshot(rec, {
             locale: currentLocale(),
             customLibrary: customLibrary
@@ -1335,6 +1335,52 @@
       if (els.promptInput) els.promptInput.disabled = state.streaming;
     }
 
+    function adoptConversation(refetched) {
+      var live = state.activeConversation;
+      if (state.streaming && live && refetched && live.id === refetched.id) {
+        // The request callbacks own this object until the response is saved.
+        Object.assign(live, refetched, {
+          messages: live.messages,
+          contextSummary: live.contextSummary,
+          lastUsage: live.lastUsage
+        });
+        return live;
+      }
+      return refetched;
+    }
+
+    function startStreamingUi() {
+      state.streaming = true;
+      state.abortController = typeof AbortController === "function" ? new AbortController() : null;
+      updateStreamingUi();
+    }
+
+    function finishStreamingUi() {
+      state.streaming = false;
+      state.compressing = false;
+      state.abortController = null;
+      updateStreamingUi();
+    }
+
+    function handleConversationWriteError(err, draft) {
+      finishStreamingUi();
+      if (draft && els.promptInput && !els.promptInput.value) els.promptInput.value = draft;
+      var conflict = err && err.code === "conversation_conflict";
+      if (conflict) refreshConversationsList();
+      if (global.DivinationDialog && typeof global.DivinationDialog.request === "function") {
+        global.DivinationDialog.request({
+          title: conflict
+            ? tr("ai.chatChangedTitle", null, "对话已更新", "Conversation Updated")
+            : tr("ai.saveFailedTitle", null, "保存失败", "Save Failed"),
+          message: conflict
+            ? tr("ai.chatChangedMsg", null, "其他标签页已修改此对话，已载入最新内容。请确认后重试。", "Another tab changed this conversation. The latest messages have been loaded; review them and retry.")
+            : tr("ai.saveFailedMsg", null, "无法保存对话，请检查存储空间后重试。", "Could not save the conversation. Check available storage and retry."),
+          cancelLabel: tr("ai.close", null, "关闭", "Close"),
+          proceedLabel: tr("ai.ok", null, "确定", "OK")
+        });
+      }
+    }
+
     function refreshConversationsList(preferredId) {
       return Promise.all([
         chatStore.listConversations({ archived: false, query: state.searchQuery }),
@@ -1350,7 +1396,7 @@
 
         if (preferredId) {
           return chatStore.getConversation(preferredId).then(function (found) {
-            state.activeConversation = found;
+            state.activeConversation = adoptConversation(found);
             renderSidebar();
             renderContextHeader();
             renderMessages();
@@ -1360,7 +1406,7 @@
         if (state.activeConversation) {
           return chatStore.getConversation(state.activeConversation.id).then(function (refetched) {
             if (refetched) {
-              state.activeConversation = refetched;
+              state.activeConversation = adoptConversation(refetched);
               renderSidebar();
               renderContextHeader();
               renderMessages();
@@ -1985,6 +2031,7 @@
       var profile = configStore.getActiveProfile();
       var check = profile ? providers.validateProfile(profile) : { ok: false, errors: ["missing_api_key"] };
       if (!check.ok) {
+        finishStreamingUi();
         openSettingsModal();
         return Promise.resolve();
       }
@@ -2000,7 +2047,8 @@
       state.streaming = true;
       state.compressing = false;
       state.editingMessageId = "";
-      state.abortController = typeof AbortController === "function" ? new AbortController() : null;
+      state.abortController = state.abortController
+        || (typeof AbortController === "function" ? new AbortController() : null);
       updateStreamingUi();
 
       var prepPromise = Promise.resolve(payload);
@@ -2052,9 +2100,7 @@
                 compressedCount: coveredCountBefore + toCompress.length,
                 updatedAt: Date.now()
               };
-              return chatStore.setContextSummary(conv.id, conv.contextSummary).then(function () {
-                return buildPromptPayloadForConversation(conv, assistantMsgIndex);
-              });
+              return buildPromptPayloadForConversation(conv, assistantMsgIndex);
             }
             return payload;
           }).finally(function () {
@@ -2138,18 +2184,19 @@
           }
         }
       }).finally(function () {
-        state.streaming = false;
-        state.compressing = false;
-        state.abortController = null;
-        updateStreamingUi();
-        return chatStore.updateConversation(conv.id, {
+        var coveredIndex = conv.contextSummary
+          ? conv.messages.findIndex(function (m) { return m.id === conv.contextSummary.coveredUntilId; }) : -1;
+        return chatStore.completeMessage(conv.id, conv.messages[assistantMsgIndex], {
           profileId: profile.id,
-          messages: conv.messages,
           contextSummary: conv.contextSummary || null,
+          summaryMessages: coveredIndex >= 0 ? conv.messages.slice(0, coveredIndex + 1) : null,
           lastUsage: conv.lastUsage || null
         }).then(function (saved) {
+          finishStreamingUi();
           state.activeConversation = saved;
-          return refreshConversationsList(saved.id);
+          return refreshConversationsList(saved ? saved.id : "");
+        }, function (err) {
+          handleConversationWriteError(err);
         });
       });
     }
@@ -2178,20 +2225,23 @@
         format: profile.format,
         createdAt: now + 1
       });
-      var nextMessages = (conv.messages || []).concat([userMsg, assistantMsg]);
       var nextTitle = conv.title || deriveAutoTitle(conv.readingIds, text);
-
-      chatStore.updateConversation(conv.id, {
+      startStreamingUi();
+      chatStore.appendMessages(conv.id, [userMsg, assistantMsg], {
         title: nextTitle,
-        messages: nextMessages,
         profileId: profile.id
       }).then(function (saved) {
+        if (!saved) {
+          var missing = new Error("Conversation was deleted");
+          missing.code = "conversation_conflict";
+          throw missing;
+        }
         state.activeConversation = saved;
         renderSidebar();
         renderContextHeader();
         renderMessages();
-        runGeneration(saved, saved.messages.length - 1);
-      });
+        return runGeneration(saved, saved.messages.length - 1);
+      }).catch(function (err) { handleConversationWriteError(err, text); });
     }
 
     function regenerateFromIndex(assistantIndex) {
@@ -2215,14 +2265,20 @@
       });
       kept.push(newAssistant);
 
+      startStreamingUi();
       chatStore.updateConversation(conv.id, {
         messages: kept,
         profileId: profile.id
-      }).then(function (saved) {
+      }, { expectedMessages: conv.messages }).then(function (saved) {
+        if (!saved) {
+          var missing = new Error("Conversation was deleted");
+          missing.code = "conversation_conflict";
+          throw missing;
+        }
         state.activeConversation = saved;
         renderMessages();
-        runGeneration(saved, saved.messages.length - 1);
-      });
+        return runGeneration(saved, saved.messages.length - 1);
+      }).catch(function (err) { handleConversationWriteError(err); });
     }
 
     function commitEditAndResend(msgId, newContent) {
@@ -2277,15 +2333,21 @@
       }));
       state.editingMessageId = "";
 
+      startStreamingUi();
       chatStore.updateConversation(conv.id, {
         messages: kept,
         contextSummary: nextSummary,
         profileId: profile.id
-      }).then(function (saved) {
+      }, { expectedMessages: conv.messages }).then(function (saved) {
+        if (!saved) {
+          var missing = new Error("Conversation was deleted");
+          missing.code = "conversation_conflict";
+          throw missing;
+        }
         state.activeConversation = saved;
         renderMessages();
-        runGeneration(saved, saved.messages.length - 1);
-      });
+        return runGeneration(saved, saved.messages.length - 1);
+      }).catch(function (err) { handleConversationWriteError(err); });
     }
 
     function deleteMessageWithConfirm(msgId) {

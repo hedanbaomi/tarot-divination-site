@@ -68,6 +68,7 @@
       slotIndex: slotIndex,
       positionNumber: posNum,
       positionName: trimString(raw.positionName),
+      positionMeaning: trimString(raw.positionMeaning),
       cardId: cardId,
       cardName: cardName,
       orientation: trimString(raw.orientation) || "upright",
@@ -122,6 +123,8 @@
       deckType: trimString(raw.deckType),
       spreadId: trimString(raw.spreadId),
       spreadName: trimString(raw.spreadName || raw.spreadNameSnapshot || raw.spreadId),
+      spreadDescription: trimString(raw.spreadDescription),
+      spreadSource: trimString(raw.spreadSource),
       positionCount: positionCount,
       orientationMode: trimString(raw.orientationMode),
       filterMode: trimString(raw.filterMode),
@@ -326,6 +329,7 @@
 
     var openPromise = null;
     var memoryFallback = opts.memoryFallback ? createMemoryAdapter() : null;
+    var memoryQueue = Promise.resolve();
 
     function open() {
       if (openPromise) {
@@ -396,12 +400,21 @@
     function withStore(mode, fn) {
       return open().then(function (db) {
         if (db && db.__memory && memoryFallback) {
-          return fn(null, memoryFallback);
+          var operation = memoryQueue.then(function () { return fn(null, memoryFallback); });
+          memoryQueue = operation.catch(function () {});
+          return operation;
         }
         return new Promise(function (resolve, reject) {
           var tx = db.transaction([CONVERSATIONS_STORE], mode);
           var store = tx.objectStore(CONVERSATIONS_STORE);
           var finished = false;
+          var result;
+          tx.oncomplete = function () {
+            if (!finished) {
+              finished = true;
+              resolve(result);
+            }
+          };
           function fail(err) {
             if (!finished) {
               finished = true;
@@ -411,13 +424,14 @@
           tx.onabort = function () { fail(tx.error); };
           tx.onerror = function () { fail(tx.error); };
           try {
-            Promise.resolve(fn(store, null)).then(function (result) {
-              if (!finished) {
-                finished = true;
-                resolve(result);
-              }
-            }, fail);
+            Promise.resolve(fn(store, null)).then(function (value) {
+              result = value;
+            }, function (err) {
+              try { tx.abort(); } catch (_err) {}
+              fail(err);
+            });
           } catch (err) {
+            try { tx.abort(); } catch (_err) {}
             fail(err);
           }
         });
@@ -520,28 +534,65 @@
       return saveConversation(base);
     }
 
+    // Read/modify/write in one transaction so tabs cannot overwrite each other.
     function updateConversation(id, patchOrUpdater, updateOpts) {
       var optsUpdate = updateOpts && typeof updateOpts === "object" ? updateOpts : {};
-      return getConversation(id).then(function (existing) {
-        if (!existing) {
-          return null;
+      var cleanId = trimString(id);
+      if (!cleanId) return Promise.resolve(null);
+      return withStore("readwrite", function (store, mem) {
+        return (mem ? mem.get(cleanId) : reqToPromise(store.get(cleanId))).then(function (raw) {
+          if (!raw) return null;
+          var existing = normalizeConversation(raw);
+          if (optsUpdate.expectedMessages &&
+              JSON.stringify(existing.messages) !== JSON.stringify(optsUpdate.expectedMessages)) {
+            var conflict = new Error("Conversation changed in another tab");
+            conflict.code = "conversation_conflict";
+            throw conflict;
+          }
+          var nextObj = typeof patchOrUpdater === "function"
+            ? patchOrUpdater(normalizeConversation(existing))
+            : Object.assign({}, existing, patchOrUpdater && typeof patchOrUpdater === "object" ? patchOrUpdater : {});
+          if (!nextObj || typeof nextObj !== "object") return existing;
+          nextObj.id = existing.id;
+          nextObj.updatedAt = optsUpdate.touchUpdatedAt !== false
+            ? Date.now() : (nextObj.updatedAt || existing.updatedAt);
+          var normalized = normalizeConversation(nextObj);
+          return (mem ? mem.put(normalized) : reqToPromise(store.put(normalized))).then(function () {
+            return normalized;
+          });
+        });
+      });
+    }
+
+    function appendMessages(id, messages, metadata) {
+      var additions = messages.map(normalizeMessage);
+      var meta = metadata || {};
+      return updateConversation(id, function (conv) {
+        conv.messages = conv.messages.concat(additions);
+        if (!conv.title && meta.title) conv.title = meta.title;
+        if (meta.profileId) conv.profileId = meta.profileId;
+        return conv;
+      });
+    }
+
+    function completeMessage(id, message, metadata) {
+      var completed = normalizeMessage(message);
+      var meta = metadata || {};
+      return updateConversation(id, function (conv) {
+        var index = conv.messages.findIndex(function (m) { return m.id === completed.id; });
+        // Deletion/edit-and-resend in another tab wins over a late completion.
+        if (index === -1) return null;
+        conv.messages[index] = completed;
+        if (meta.profileId) conv.profileId = meta.profileId;
+        if (meta.lastUsage) conv.lastUsage = meta.lastUsage;
+        if (meta.contextSummary && Array.isArray(meta.summaryMessages)) {
+          var covered = meta.summaryMessages;
+          var current = conv.messages.slice(0, covered.length);
+          if (JSON.stringify(current) === JSON.stringify(covered)) {
+            conv.contextSummary = meta.contextSummary;
+          }
         }
-        var nextObj;
-        if (typeof patchOrUpdater === "function") {
-          nextObj = patchOrUpdater(normalizeConversation(existing));
-        } else {
-          nextObj = Object.assign({}, existing, patchOrUpdater && typeof patchOrUpdater === "object" ? patchOrUpdater : {});
-        }
-        if (!nextObj || typeof nextObj !== "object") {
-          return existing;
-        }
-        nextObj.id = existing.id;
-        if (optsUpdate.touchUpdatedAt !== false) {
-          nextObj.updatedAt = Date.now();
-        } else if (!nextObj.updatedAt) {
-          nextObj.updatedAt = existing.updatedAt;
-        }
-        return saveConversation(nextObj);
+        return conv;
       });
     }
 
@@ -775,6 +826,8 @@
       getConversation: getConversation,
       createConversation: createConversation,
       updateConversation: updateConversation,
+      appendMessages: appendMessages,
+      completeMessage: completeMessage,
       setArchived: setArchived,
       setPinned: setPinned,
       setContextSummary: setContextSummary,

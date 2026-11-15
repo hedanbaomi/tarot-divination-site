@@ -439,3 +439,32 @@ test("normalizeProfile strips systemPrompt and context window inference/detectio
   assert.equal(compRes.summaryText, "- User asked about The Fool threshold.");
   assert.equal(compRes.usage.totalTokens, 105);
 });
+
+test("SSE CRLF, bare CR and UTF-8 boundaries preserve multiline data for all formats", async () => {
+  const fixtures = {
+    "openai-chat": { choices: [{ delta: { content: "Hello 牌" } }] },
+    "openai-responses": { type: "response.output_text.delta", delta: "Hello 牌" },
+    "anthropic-messages": { type: "content_block_delta", delta: { type: "text_delta", text: "Hello 牌" } },
+    "gemini-aistudio": { candidates: [{ content: { parts: [{ text: "Hello 牌" }] } }] },
+    "gemini-vertex": { candidates: [{ content: { parts: [{ text: "Hello 牌" }] } }] }
+  };
+  for (const [format, payload] of Object.entries(fixtures)) {
+    for (const newline of ["\r\n", "\r", "\n"]) {
+      const json = JSON.stringify(payload);
+      const event = ": comment" + newline + "data: {" + newline + "data: " + json.slice(1) + newline + newline;
+      const bytes = new TextEncoder().encode(event);
+      const partitions = [Array.from(bytes, b => Uint8Array.of(b))];
+      for (let i = 1; i < bytes.length; i++) partitions.push([bytes.slice(0, i), bytes.slice(i)]);
+      for (const chunks of partitions) {
+        const deltas = [];
+        const result = await providers.streamChat({ format, apiKey: "fixture-key", model: "test" }, {
+          messages: [{ role: "user", content: "hello" }],
+          fetchImpl: async () => createSseResponse(chunks),
+          onDelta: delta => deltas.push(delta)
+        });
+        assert.equal(result.text, "Hello 牌", format + " " + JSON.stringify(newline));
+        assert.equal(deltas.join(""), "Hello 牌");
+      }
+    }
+  }
+});
