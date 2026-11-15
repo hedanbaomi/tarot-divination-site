@@ -775,6 +775,7 @@
         if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
         item.x = originX + dx;
         item.y = originY + dy;
+        if (item._fit) delete item._fit;
         el.style.left = item.x + "px";
         el.style.top = item.y + "px";
       }
@@ -812,55 +813,112 @@
      越界的牌收回边界，画板内的牌一张都不动，也不会丢回默认网格。 */
   function fitFreeCardsToWidth(items, layerW, prevW, halfW) {
     if (!items || !items.length || !layerW) return false;
+    function setFitState(item, raw, at) {
+      Object.defineProperty(item, "_fit", {
+        value: { raw: raw, at: at },
+        writable: true,
+        configurable: true
+      });
+    }
     /* 变宽、等宽都不碰坐标，只有确实变窄才收 */
-    if (prevW > 0 && layerW >= prevW) return false;
+    if (prevW > 0 && layerW >= prevW) {
+      if (layerW > prevW) {
+        items.forEach(function (item) {
+          if (item._fit && typeof item.x === "number" && isFinite(item.x)) {
+            setFitState(item, item.x, item.x);
+          }
+        });
+      }
+      return false;
+    }
     var ratio = prevW > 0 ? layerW / prevW : 1;
-    var minX = halfW;
-    var maxX = Math.max(halfW, layerW - halfW);
+    var padX = Math.ceil(halfW);
+    var minX = padX;
+    var maxX = Math.max(minX, Math.floor(layerW - padX));
     /* 错开用牌宽做步长：10px 比牌窄太多，同等高度收进来十来张还是一坨 */
     var step = Math.max(12, Math.round(halfW));
+    var rowBandY = Math.max(24, Math.round(step * 1.4));
     var changed = false;
-    var rows = Object.create(null);
-    items.forEach(function (item) {
-      var source = typeof item.x === "number" && isFinite(item.x) ? item.x : minX;
-      var x = Math.round(source * ratio);
-      if (x < minX) x = minX;
-      else if (x > maxX) x = maxX;
-      if (x !== item.x) {
-        item.x = x;
+
+    var entries = items.map(function (item, index) {
+      var validX = typeof item.x === "number" && isFinite(item.x);
+      var rawItemX = validX ? item.x : minX;
+      var hasState = prevW > 0 && validX && item._fit &&
+        typeof item._fit.raw === "number" && isFinite(item._fit.raw) &&
+        item._fit.at === rawItemX;
+      var source = hasState ? item._fit.raw : rawItemX;
+      var scaled = source * ratio;
+      var y = typeof item.y === "number" && isFinite(item.y) ? item.y : 0;
+      var clampedLeft = scaled < minX;
+      var clampedRight = scaled > maxX;
+      var clampedVal = clampedLeft ? minX : (clampedRight ? maxX : scaled);
+      return {
+        item: item,
+        index: index,
+        raw: scaled,
+        x: Math.round(clampedVal),
+        y: y,
+        clampedLeft: clampedLeft,
+        clampedRight: clampedRight,
+        pushedLeft: clampedRight,
+        pushedRight: clampedLeft
+      };
+    });
+
+    function gapBetween(mover, anchor, bothClamped) {
+      if (bothClamped) return step;
+      var diff = Math.abs(anchor.raw - mover.raw);
+      return Math.min(step, Math.max(12, Math.round(diff)));
+    }
+
+    /* 左边界内推：按原始横向位置从左往右，被左边界收进来的牌依次向右推开同排邻牌 */
+    var byLeft = entries.slice().sort(function (a, b) {
+      return a.raw - b.raw || a.index - b.index;
+    });
+    for (var i = 0; i < byLeft.length; i += 1) {
+      var cur = byLeft[i];
+      for (var j = 0; j < i; j += 1) {
+        var prev = byLeft[j];
+        if (!prev.pushedRight) continue;
+        if (Math.abs(cur.y - prev.y) >= rowBandY) continue;
+        var need = gapBetween(cur, prev, prev.clampedLeft && cur.clampedLeft);
+        if (cur.x - prev.x < need) {
+          var nextRight = Math.min(maxX, prev.x + need);
+          if (nextRight > cur.x) {
+            cur.x = nextRight;
+            cur.pushedRight = true;
+          }
+        }
+      }
+    }
+
+    /* 右边界内推：按原始横向位置从右往左，被右边界收进来的牌依次向左推开同排邻牌 */
+    var byRight = entries.slice().sort(function (a, b) {
+      return b.raw - a.raw || a.index - b.index;
+    });
+    for (var r = 0; r < byRight.length; r += 1) {
+      var curR = byRight[r];
+      for (var k = 0; k < r; k += 1) {
+        var prevR = byRight[k];
+        if (!prevR.pushedLeft) continue;
+        if (Math.abs(curR.y - prevR.y) >= rowBandY) continue;
+        var needL = gapBetween(curR, prevR, prevR.clampedRight && curR.clampedRight);
+        if (prevR.x - curR.x < needL) {
+          var nextLeft = Math.max(minX, prevR.x - needL);
+          if (nextLeft < curR.x) {
+            curR.x = nextLeft;
+            curR.pushedLeft = true;
+          }
+        }
+      }
+    }
+
+    entries.forEach(function (e) {
+      if (prevW > 0) setFitState(e.item, e.raw, e.x);
+      if (e.x !== e.item.x) {
+        e.item.x = e.x;
         changed = true;
       }
-      var rowKey = String(Math.round(typeof item.y === "number" && isFinite(item.y) ? item.y : 0));
-      (rows[rowKey] || (rows[rowKey] = [])).push(item);
-    });
-    /* 同一行（y 相同）里落到同一列时，沿这一行左右交替错开，别叠成一张。
-       画板比牌阵窄得多时仍然会叠，这里只能尽量把牌摊开 */
-    Object.keys(rows).forEach(function (rowKey) {
-      var row = rows[rowKey];
-      if (row.length < 2) return;
-      var used = Object.create(null);
-      row.forEach(function (item) {
-        if (!used[item.x]) {
-          used[item.x] = true;
-          return;
-        }
-        var x = item.x;
-        var offset = step;
-        var guard = 0;
-        while (used[x] && guard < 24) {
-          var right = item.x + offset;
-          var left = item.x - offset;
-          if (right <= maxX && !used[right]) { x = right; break; }
-          if (left >= minX && !used[left]) { x = left; break; }
-          offset += step;
-          guard += 1;
-        }
-        used[x] = true;
-        if (x !== item.x) {
-          item.x = x;
-          changed = true;
-        }
-      });
     });
     return changed;
   }
@@ -897,8 +955,11 @@
         });
         scheduleFreeformDraft();
       }
-      freeformLayerW = layerW;
-      if (layerW && layerH) legacyViewport = null;
+      if (isFreeform() && layerW > 0) freeformLayerW = layerW;
+      if (layerW && layerH && legacyViewport) {
+        legacyViewport = null;
+        scheduleFreeformDraft();
+      }
     }
     var undo = document.getElementById("freeUndoBtn");
     var redo = document.getElementById("freeRedoBtn");
@@ -1010,6 +1071,7 @@
   }
 
   function clearFreeformDraft() {
+    freeformLayerW = 0;
     parkedDraft = null;
     if (freeformDraftTimer) {
       window.clearTimeout(freeformDraftTimer);
