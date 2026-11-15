@@ -318,6 +318,12 @@ Response shape:
 
 Definitions, as shown in the admin panel:
 
+Current web/Android clients emit only successfully completed calls; failures,
+cancellation, blocked/truncated output and premature EOF emit no AI event.
+Success without usage metadata still emits `total_tokens: null`. Older records
+and already-open old pages did not distinguish success from failure, so historical
+unknown-usage records are retained without guessing their outcome.
+
 - `requests` is the number of AI calls. It is **not** a count of distinct
   people: the table stores no install hash, so users cannot be derived and are
   never claimed. A person using two devices counts as two call sources.

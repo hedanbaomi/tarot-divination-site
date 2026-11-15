@@ -243,7 +243,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
       <div id="aiUsageUnavailable" class="notice err" role="alert" style="display:none"></div>
       <div id="aiUsageContent" style="display:none">
         <div id="aiUsageCards" class="grid history-summary" aria-label="AI 解读统计摘要"></div>
-        <p class="notice warning">口径：按模型 + 平台分组的调用请求数，重新生成算作新的对话轮次，压缩上下文消耗 Token 但不计轮次，测试连接不计入。未知用量请求数不为 0 时，Token 合计并不完整。</p>
+        <p class="notice warning">口径：新版仅上报成功完成的调用；失败、取消、拦截和截断不计入。成功重新生成算作新的对话轮次，成功压缩上下文消耗 Token 但不计轮次，测试连接不计入。成功但未回传用量仍记为未知；旧版历史记录未区分成败，无法回溯剔除。Token 合计仅包含已知用量。</p>
         <div class="card">
           <h3>按模型与平台分组</h3>
           <div id="aiUsageTable" class="table-scroll" tabindex="0" role="region" aria-label="按模型与平台分组的 AI 解读调用统计（可横向滚动）"></div>

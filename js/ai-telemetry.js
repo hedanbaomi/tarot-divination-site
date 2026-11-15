@@ -20,8 +20,8 @@
       onRequestEnd: function (result) {
         if (finished) return;
         finished = true;
-        if (!requestId) return;
-        var raw = result && result.complete && result.usage ? result.usage.totalTokens : null;
+        if (!requestId || !result || result.complete !== true) return;
+        var raw = result.usage ? result.usage.totalTokens : null;
         var total = typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 0 && raw <= 1000000000 ? raw : -1;
         try {
           // Only scalar usage metadata crosses the bridge. No profile or response object.

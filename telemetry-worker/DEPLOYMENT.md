@@ -1,5 +1,12 @@
 # Quareia Telemetry Worker deployment record
 
+## 2026-11-16: successful AI calls only
+
+- Source: `e844205`. Updated the client completion gate to omit unsuccessful calls, including cancellations and blocked/truncated output. Successful calls without provider usage remain unknown.
+- Worker version `2de4de91-4bff-42a8-9801-edd9d27b28b8` updates the admin counting explanation only. Deployment used `--keep-vars`; health and exact admin HTML checks passed. No database migration or historical row mutation was performed.
+- Validation: 284 web, 25 Android JavaScript and 216 Worker tests passed; offline browser checks passed for both web and Android resources, including failed calls. Worker dry-run passed.
+- The source merge publishes the web collector. Existing open pages must reload; older unknown-usage records cannot be reclassified because they have no outcome field. Android resources are synchronized, with packaging still paused.
+
 ## 2026-11-16: AI usage statistics
 
 - Worker source: `e2b743c` (`feat(telemetry): track AI usage across web and Android`).
