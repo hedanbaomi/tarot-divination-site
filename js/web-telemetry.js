@@ -58,9 +58,14 @@
         app_version: VERSION, platform: "web",
         locale: String(document.documentElement.lang || "zh-CN").slice(0, 64)
       };
-      if (extra) {
+      if (event === "reading_completed" && extra) {
         payload.deck_type = extra.deck_type;
         payload.card_count = extra.card_count;
+      } else if (event === "ai_usage" && extra) {
+        payload.request_id = extra.request_id;
+        payload.model_id = extra.model_id;
+        payload.usage_kind = extra.usage_kind;
+        payload.total_tokens = extra.total_tokens;
       }
       var controller = new AbortController();
       controllers.push(controller);
@@ -128,6 +133,14 @@
   window.DivinationWebTelemetry = {
     isEnabled: isEnabled,
     setEnabled: setEnabled,
+    beginAiUsage: function () { return isEnabled() ? String(generation) : ""; },
+    logAiUsage: function (requestId, modelId, usageKind, totalTokens, consentToken) {
+      if (!isEnabled() || consentToken !== String(generation) ||
+          !/^[0-9a-f]{32}$/.test(requestId) || !/^[A-Za-z0-9][A-Za-z0-9._:/@+\-]{0,127}$/.test(modelId) ||
+          ["conversation", "compression"].indexOf(usageKind) < 0 ||
+          !Number.isSafeInteger(totalTokens) || totalTokens < -1 || totalTokens > 1000000000) return Promise.resolve(false);
+      return send("ai_usage", { request_id: requestId, model_id: modelId, usage_kind: usageKind, total_tokens: totalTokens === -1 ? null : totalTokens });
+    },
     logReadingCompleted: function (deck, count) {
       if (["tarot", "mystagogus", "lxxxi"].indexOf(deck) === -1 ||
           !Number.isInteger(count) || count < 1 || count > 81) return Promise.resolve(false);

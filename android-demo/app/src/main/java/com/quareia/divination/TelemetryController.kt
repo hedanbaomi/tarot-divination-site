@@ -137,6 +137,33 @@ internal object TelemetryController {
         connectionToDisconnect?.disconnect()
     }
 
+    // A request must retain this generation across its entire model call.
+    fun beginAiUsage(): String = synchronized(stateLock) {
+        if (isEnabledLocked()) generation.get().toString() else ""
+    }
+
+    fun logAiUsage(requestId: String, modelId: String, usageKind: String, totalTokens: Long, consentToken: String) {
+        if (!Regex("^[0-9a-f]{32}$").matches(requestId) ||
+            !Regex("^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$").matches(modelId) ||
+            usageKind !in setOf("conversation", "compression") ||
+            totalTokens < -1L || totalTokens > 1000000000L) return
+        val token = consentToken.toLongOrNull() ?: return
+        val queued: QueuedEvent? = synchronized(stateLock) {
+            if (!isCurrentLocked(token)) return@synchronized null
+            QueuedEvent(
+                payload = basePayload("ai_usage").apply {
+                    put("platform", "android")
+                    put("request_id", requestId)
+                    put("model_id", modelId)
+                    put("usage_kind", usageKind)
+                    put("total_tokens", if (totalTokens == -1L) JSONObject.NULL else totalTokens)
+                },
+                token = token, slot = null, onResult = {}
+            )
+        }
+        queued?.let(::enqueue)
+    }
+
     // ---------- Public event entry points ----------
 
     /** Sent once per install (retried until it succeeds). Safe to call every launch. */

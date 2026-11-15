@@ -4,7 +4,10 @@
  * Endpoints:
  *  - POST /v1/events        — one validated event (install_seen, daily_active,
  *                             reading_completed, app_active); app_active also
- *                             updates the D1 install_state table.
+ *                             updates the D1 install_state table. The AI
+ *                             interpretation event ai_usage is stored only in
+ *                             the D1 ai_usage table and never in Analytics
+ *                             Engine.
  *  - GET  /v1/announcements — public announcements for a platform/version.
  *  - GET  /admin            — same-origin admin page (announcements + stats).
  *  - POST /admin/verify     — admin token check.
@@ -25,7 +28,9 @@
  *    coordinates, metro code, and all client-supplied geo fields are ignored.
  *  - Timestamps come from the server clock, never the client.
  *  - D1 stores only the anonymous install state (hash, app version, locale,
- *    platform/environment, Android major where applicable, first/last seen) and announcements; never an IP,
+ *    platform/environment, Android major where applicable, first/last seen),
+ *    the anonymous AI usage counters (request id, model id, platform, usage
+ *    kind, token total, timestamp) and announcements; never an IP,
  *    User-Agent, device model, city, card, spread, question, note or history.
  *  - On success the worker returns 204 with an empty body.
  *  - Admin endpoints are deny-by-default: the ADMIN_TOKEN secret is required
@@ -35,8 +40,9 @@
  */
 import { json, securityHeaders } from "./http.js";
 import { nowMs, setClockForTesting, resetClock } from "./clock.js";
-import { handleAnnouncements, publicAnnouncementHeaders } from "./announcements.js";
+import { handleAnnouncements, publicAnnouncementHeaders, hasD1Binding } from "./announcements.js";
 import { recordInstallActivity, cleanupInactiveInstalls } from "./stats.js";
+import { recordAiUsage, cleanupAiUsage } from "./ai-usage.js";
 import { handleAdminPage, handleAdminVerify, handleAdminApi } from "./admin.js";
 import { handleIOSUpdate } from "./ios-update.js";
 
@@ -54,10 +60,28 @@ const EVENT_DEFS = {
   daily_active: {},
   web_visit: {},
   reading_completed: { deck_type: "string", card_count: "int" },
-  app_active: { version_code: "optional_int" }
+  app_active: { version_code: "optional_int" },
+  ai_usage: {
+    request_id: "string",
+    model_id: "string",
+    usage_kind: "string",
+    total_tokens: "nullable_int"
+  }
 };
 
 const DECK_TYPES = new Set(["tarot", "mystagogus", "lxxxi"]);
+
+// AI interpretation usage events. Only the web and Android clients emit them.
+const AI_USAGE_PLATFORMS = new Set(["android", "web"]);
+const AI_USAGE_KINDS = new Set(["conversation", "compression"]);
+const AI_REQUEST_ID_PATTERN = /^[0-9a-f]{32}$/;
+// 1..128 ASCII characters, starting alphanumeric: 1 + up to 127 more.
+const AI_MODEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/@+\-]{0,127}$/;
+const AI_TOTAL_TOKENS_MAX = 1000000000;
+// The shared string field cap is 64; a model id may legitimately be longer.
+const AI_MODEL_ID_MAX_LENGTH = 128;
+// Per-field string caps; every field not listed uses the shared 64-byte bound.
+const STRING_LIMITS = { model_id: AI_MODEL_ID_MAX_LENGTH };
 
 // Base fields every event must carry (and is allowed to carry).
 const BASE_FIELDS = {
@@ -191,8 +215,10 @@ export default {
   },
 
   /**
-   * Daily cron: deletes install_state rows inactive for more than 90 days.
-   * Never throws; missing D1 binding is a no-op.
+   * Daily cron: deletes install_state rows inactive for more than 90 days and
+   * ai_usage rows older than 90 days. The two cleanups are independent, so a
+   * failure in one never suppresses the other, and neither can take the worker
+   * down; the next cron retries.
    */
   async scheduled(event, env, ctx) {
     try {
@@ -200,16 +226,15 @@ export default {
     } catch (_e) {
       // Cleanup must never take the worker down; the next cron retries.
     }
+    try {
+      await cleanupAiUsage(env);
+    } catch (_e) {
+      // Independent of the install cleanup above; retried by the next cron.
+    }
   }
 };
 
 async function handleEvents(request, env) {
-  // Fail closed when the production binding is absent. A 204 here would make
-  // the Android client permanently mark retryable events as delivered.
-  if (!hasAnalyticsBinding(env)) {
-    return json({ error: "telemetry_unavailable" }, 503);
-  }
-
   // 1. Size guard before reading the body.
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
@@ -232,6 +257,14 @@ async function handleEvents(request, env) {
   // later item in a batch is invalid or the binding fails halfway through.
   if (!event || typeof event !== "object" || Array.isArray(event)) {
     return json({ error: "event_must_be_object" }, 400);
+  }
+
+  // Fail closed when the Analytics Engine binding is absent: a 204 here would
+  // make the Android client permanently mark retryable events as delivered.
+  // ai_usage is the one exception — it is D1-only and must never be blocked by
+  // a missing Analytics Engine binding.
+  if (event.event !== "ai_usage" && !hasAnalyticsBinding(env)) {
+    return json({ error: "telemetry_unavailable" }, 503);
   }
 
   const cf = request.cf || {};
@@ -268,6 +301,22 @@ async function handleEvents(request, env) {
     MAX_INSTALL_BUCKETS
   )) {
     return json({ error: "rate_limited" }, 429);
+  }
+
+  // AI usage is the only event stored exclusively in D1. It is reported once
+  // after a request completes; a repeated request_id is idempotent and still
+  // returns 204 so a client retry after a lost response cannot double count.
+  if (validated.value.event === "ai_usage") {
+    if (!hasD1Binding(env)) {
+      // Never answer 204 without storing: the client would drop the report.
+      return json({ error: "d1_write_failed" }, 503);
+    }
+    try {
+      await recordAiUsage(env, validated.value);
+    } catch (_e) {
+      return json({ error: "d1_write_failed" }, 503);
+    }
+    return new Response(null, { status: 204 });
   }
 
   try {
@@ -355,6 +404,11 @@ function validateEvent(event) {
     return { ok: false, error: "invalid_event_platform" };
   }
 
+  if (type === "ai_usage" && !AI_USAGE_PLATFORMS.has(value.platform)) {
+    // Only the website and Android clients report AI interpretation usage.
+    return { ok: false, error: "invalid_event_platform" };
+  }
+
   if (value.platform === "android") {
     if (value.env_version !== "") {
       return { ok: false, error: "invalid_env_version" };
@@ -434,6 +488,31 @@ function validateEvent(event) {
     }
   }
 
+  if (type === "ai_usage") {
+    // request_id: 32 lowercase hex characters, generated by the client from
+    // 16 random bytes. It is the D1 primary key and the idempotency key.
+    if (!AI_REQUEST_ID_PATTERN.test(value.request_id)) {
+      return { ok: false, error: "invalid_request_id" };
+    }
+    // model_id: 1..128 ASCII characters, starting alphanumeric.
+    if (typeof value.model_id !== "string" ||
+        value.model_id.length === 0 ||
+        value.model_id.length > AI_MODEL_ID_MAX_LENGTH ||
+        !AI_MODEL_ID_PATTERN.test(value.model_id)) {
+      return { ok: false, error: "invalid_model_id" };
+    }
+    if (!AI_USAGE_KINDS.has(value.usage_kind)) {
+      return { ok: false, error: "invalid_usage_kind" };
+    }
+    // null = unknown (the provider returned no total); 0 = a real reported 0.
+    if (value.total_tokens !== null &&
+        (!Number.isInteger(value.total_tokens) ||
+         value.total_tokens < 0 ||
+         value.total_tokens > AI_TOTAL_TOKENS_MAX)) {
+      return { ok: false, error: "invalid_total_tokens" };
+    }
+  }
+
   return { ok: true, value };
 }
 
@@ -445,6 +524,17 @@ function validateField(src, dst, field, ftype) {
   // value and must fail type validation so platform-specific fields cannot be
   // smuggled through as null and normalized into server-owned sentinels.
   if (v === undefined) return optional;
+  if (actualType === "nullable_int") {
+    // An explicit null is meaningful here: the provider returned no usage
+    // total. It is stored as SQL NULL ("unknown"), never coerced to 0.
+    if (v === null) {
+      dst[field] = null;
+      return true;
+    }
+    if (!Number.isInteger(v)) return false;
+    dst[field] = v;
+    return true;
+  }
   if (v === null) return false;
   if (actualType === "int") {
     if (!Number.isInteger(v)) return false;
@@ -452,7 +542,7 @@ function validateField(src, dst, field, ftype) {
   } else {
     if (typeof v !== "string") return false;
     // Bound string length to keep payloads tiny and content-free.
-    if (v.length > 64) return false;
+    if (v.length > (STRING_LIMITS[field] || 64)) return false;
     dst[field] = v;
   }
   return true;

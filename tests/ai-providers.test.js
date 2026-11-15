@@ -1216,3 +1216,34 @@ test("recent Claude and Gemini catalogs keep unknown and specialised IDs out", (
   }
   assert.deepEqual(providers.inferModelContextWindow("claude-haiku-4-5-20251001", "anthropic-messages"), { contextWindow: 200000, source: "catalog" });
 });
+
+
+test("usage observers cover actual requests, explicit zero, incomplete data and errors", async () => {
+  const profile={format:"openai-chat",apiKey:"fixture-only",model:"gpt-6.1-terra"};
+  const messages=[{role:"user",content:"fixture"}];
+  for (const usage of [{prompt_tokens:0,completion_tokens:0,total_tokens:0},{prompt_tokens:12},{}]) {
+    const events=[];
+    const result=await providers.streamChat(profile,{messages,onRequestStart:()=>events.push("start"),onRequestEnd:r=>events.push(r),fetchImpl:async()=>createSseResponse(['data: '+JSON.stringify({choices:[{delta:{content:"ok"},finish_reason:"stop"}],usage})+'\n\n'])});
+    assert.equal(events.length,2);assert.equal(events[0],"start");assert.equal(events[1].complete,true);
+    assert.equal(result.usage?.totalTokens??null,Object.hasOwn(usage,"total_tokens")?0:null);
+  }
+  let starts=0,ends=0;
+  await assert.rejects(providers.streamChat(profile,{messages,onRequestStart:()=>starts++,onRequestEnd:r=>{ends++;assert.equal(r.complete,false);},fetchImpl:()=>{throw Error("network failure");}}));
+  assert.equal(starts,1);assert.equal(ends,1);
+  await assert.rejects(providers.streamChat(profile,{messages:[],onRequestStart:()=>starts++,onRequestEnd:()=>ends++}));
+  assert.equal(starts,1);assert.equal(ends,1);
+  const controller=new AbortController();
+  const cancelled=providers.streamChat(profile,{messages,signal:controller.signal,onRequestStart:()=>starts++,fetchImpl:()=>{throw Error("should not fetch");}});
+  controller.abort();await assert.rejects(cancelled);assert.equal(starts,1);
+});
+
+test("compression usage callbacks are forwarded and official chat requests ask for usage", async () => {
+  const profile={format:"openai-chat",apiKey:"fixture-only",model:"gpt-6.1-terra"};
+  const spec=providers.buildRequest(profile,{messages:[{role:"user",content:"test"}]});
+  assert.deepEqual(spec.body.stream_options,{include_usage:true});
+  const proxy=providers.buildRequest({...profile,baseUrl:"https://proxy.example/v1"},{messages:[{role:"user",content:"test"}]});
+  assert.equal(proxy.body.stream_options,undefined);
+  let starts=0,ended;
+  await providers.compressMessages(profile,{messages:[{role:"user",content:"old"}],onRequestStart:()=>starts++,onRequestEnd:r=>{ended=r;},fetchImpl:async()=>createSseResponse(['data: {"choices":[{"delta":{"content":"summary"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}\n\n'])});
+  assert.equal(starts,1);assert.equal(ended.usage.totalTokens,15);assert.equal(ended.complete,true);
+});

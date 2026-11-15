@@ -1,4 +1,4 @@
-﻿// Same-origin admin page for the Quareia telemetry worker. Static HTML+CSS+JS
+// Same-origin admin page for the Quareia telemetry worker. Static HTML+CSS+JS
 // served by the worker; the admin token lives only in sessionStorage and is
 // sent exclusively through the Authorization: Bearer header. Announcement
 // content is rendered with textContent/DOM APIs only, and the
@@ -59,6 +59,11 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
   td.number, th.number { text-align: right; white-space: nowrap; }
   .trend-wrap { overflow-x: auto; }
   .trend-wrap svg { display: block; min-width: 560px; width: 100%; height: auto; }
+  /* Wide data tables scroll inside their own box instead of widening the page.
+     All columns stay rendered: the table keeps its intrinsic min-content width
+     and this wrapper scrolls horizontally (overflow-x: auto, never hidden). */
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-scroll > table { width: 100%; }
   .trend-axis { stroke: #3a3e66; stroke-width: 1; }
   .trend-line { fill: none; stroke: #c9a86a; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
   .trend-point { fill: #c9a86a; stroke: #141633; stroke-width: 2; }
@@ -82,6 +87,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
       <button id="navCurrentStats" type="button">当前活跃版本</button>
       <button id="navHistory" type="button">历史遥测</button>
       <button id="navWebHistory" type="button">网页历史访问</button>
+      <button id="navAiUsage" type="button">AI 解读统计</button>
     </div>
     <button id="logout" class="danger">退出</button>
   </nav>
@@ -217,6 +223,34 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
         <details class="card"><summary>查看每日历史访问</summary><div id="webHistoryTable" class="trend-wrap"></div></details>
       </div>
     </section>
+    <section id="aiUsageView" aria-labelledby="aiUsageHeading">
+      <h2 id="aiUsageHeading" class="section-title">5. AI 解读统计（D1）</h2>
+      <p class="muted section-intro">统计的是 AI 调用的请求次数，不是精确人数：该表不保存安装标识，无法还原独立用户。Token 只累加模型实际回传的用量；未回传用量的请求单列为“未知用量”，它们不是 0。</p>
+      <div class="row" role="group" aria-label="AI 解读统计窗口">
+        <span class="muted">窗口：</span>
+        <button id="aiUsageWindow24h" class="window-choice active" type="button" data-window="24h" aria-pressed="true">24 小时</button>
+        <button id="aiUsageWindow7d" class="window-choice" type="button" data-window="7d" aria-pressed="false">7 天</button>
+        <button id="aiUsageWindow30d" class="window-choice" type="button" data-window="30d" aria-pressed="false">30 天</button>
+        <label class="muted" for="aiUsagePlatform">平台：</label>
+        <select id="aiUsagePlatform">
+          <option value="all">全部</option>
+          <option value="web">网页版</option>
+          <option value="android">Android</option>
+        </select>
+        <button id="refreshAiUsage" type="button">刷新 AI 解读统计</button>
+      </div>
+      <p id="aiUsageHint" class="muted" role="status" aria-live="polite">正在加载 AI 解读统计……</p>
+      <div id="aiUsageUnavailable" class="notice err" role="alert" style="display:none"></div>
+      <div id="aiUsageContent" style="display:none">
+        <div id="aiUsageCards" class="grid history-summary" aria-label="AI 解读统计摘要"></div>
+        <p class="notice warning">口径：按模型 + 平台分组的调用请求数，重新生成算作新的对话轮次，压缩上下文消耗 Token 但不计轮次，测试连接不计入。未知用量请求数不为 0 时，Token 合计并不完整。</p>
+        <div class="card">
+          <h3>按模型与平台分组</h3>
+          <div id="aiUsageTable" class="table-scroll" tabindex="0" role="region" aria-label="按模型与平台分组的 AI 解读调用统计（可横向滚动）"></div>
+          <p id="aiUsageTruncated" class="muted" style="display:none"></p>
+        </div>
+      </div>
+    </section>
   </div>
 </main>
 <script>
@@ -229,9 +263,14 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     historyWindow: "24h",
     historyPlatform: "all",
     analyticsRequestId: 0,
-    webHistoryRequestId: 0
+    webHistoryRequestId: 0,
+    aiUsageWindow: "24h",
+    aiUsagePlatform: "all",
+    aiUsageRequestId: 0
   };
   var analyticsWindows = ["24h", "7d", "30d"];
+  var aiUsageWindows = ["24h", "7d", "30d"];
+  var aiUsagePlatforms = ["all", "web", "android"];
 
   function $(id) { return document.getElementById(id); }
 
@@ -281,6 +320,7 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     loadStats();
     loadAnalytics();
     loadWebHistory();
+    loadAiUsage();
   }
 
   function makeBadge(text, cls) {
@@ -664,6 +704,157 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
         $("webHistoryContent").style.display = "none";
         $("webHistoryHint").textContent = "网页历史访问暂不可用，请稍后重试；其他统计独立加载。";
       }).then(function () { if (timeoutId !== null) clearTimeout(timeoutId); });
+  }
+
+  function loadAiUsage() {
+    var requestId = ++state.aiUsageRequestId;
+    var selectedWindow = state.aiUsageWindow;
+    var selectedPlatform = state.aiUsagePlatform;
+    updateAiUsageWindowControls();
+    $("aiUsageContent").style.display = "none";
+    $("aiUsageUnavailable").style.display = "none";
+    $("aiUsageHint").textContent = "正在加载 AI 解读统计（" + historyWindowLabel(selectedWindow) +
+      " · " + aiUsagePlatformLabel(selectedPlatform) + "）……";
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 10000) : null;
+
+    api("/admin/api/ai-usage?window=" + selectedWindow + "&platform=" + encodeURIComponent(selectedPlatform), {
+      isolated: true,
+      signal: controller ? controller.signal : undefined
+    }).then(function (response) {
+      if (requestId !== state.aiUsageRequestId) return null;
+      if (!response.ok) {
+        showAiUsageUnavailable(response.status === 401
+          ? "AI 解读统计不可用：授权缺失或已失效。"
+          : "AI 解读统计不可用（HTTP " + response.status + "）。");
+        return null;
+      }
+      return response.json().then(function (data) {
+        if (requestId !== state.aiUsageRequestId) return;
+        if (!data || data.module !== "ai_usage" || data.available !== true || !data.summary) {
+          showAiUsageUnavailable("AI 解读统计不可用：接口未返回可用数据。");
+          return;
+        }
+        renderAiUsage(data, selectedWindow, selectedPlatform);
+      });
+    }).catch(function (error) {
+      if (requestId !== state.aiUsageRequestId) return;
+      showAiUsageUnavailable(error && error.name === "AbortError"
+        ? "AI 解读统计不可用：请求超时。"
+        : "AI 解读统计不可用：网络错误。");
+    }).then(function () {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+    });
+  }
+
+  function showAiUsageUnavailable(message) {
+    $("aiUsageContent").style.display = "none";
+    $("aiUsageUnavailable").textContent = message + " 该面板独立加载，其他统计不受影响。";
+    $("aiUsageUnavailable").style.display = "block";
+    $("aiUsageHint").textContent = "AI 解读统计 " + historyWindowLabel(state.aiUsageWindow) + " · 暂不可用";
+  }
+
+  function aiUsagePlatformLabel(value) {
+    if (value === "web") return "网页版";
+    if (value === "android") return "Android";
+    return "全部平台";
+  }
+
+  function updateAiUsageWindowControls() {
+    [["24h", "aiUsageWindow24h"], ["7d", "aiUsageWindow7d"], ["30d", "aiUsageWindow30d"]]
+      .forEach(function (pair) {
+        var active = pair[0] === state.aiUsageWindow;
+        var button = $(pair[1]);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+        button.className = active ? "window-choice active" : "window-choice";
+      });
+  }
+
+  function selectAiUsageWindow(value) {
+    if (aiUsageWindows.indexOf(value) === -1 || value === state.aiUsageWindow) return;
+    state.aiUsageWindow = value;
+    loadAiUsage();
+  }
+
+  function renderAiUsage(data, selectedWindow, selectedPlatform) {
+    $("aiUsageUnavailable").style.display = "none";
+    $("aiUsageContent").style.display = "block";
+    var summary = data.summary;
+    $("aiUsageHint").textContent = "AI 解读统计 " + historyWindowLabel(selectedWindow) +
+      " · " + aiUsagePlatformLabel(selectedPlatform) + " · D1 · 已加载于 " +
+      new Date(data.generated_at * 1000).toLocaleString();
+
+    var cards = $("aiUsageCards");
+    cards.textContent = "";
+    cards.appendChild(makeSummaryCard("Token 合计（已知用量）", summary.total_tokens));
+    cards.appendChild(makeSummaryCard("对话轮数", summary.conversation_rounds));
+    cards.appendChild(makeSummaryCard("未知用量请求", summary.unknown_usage_requests));
+    cards.appendChild(makeSummaryCard("调用请求数（非人数）", summary.requests));
+
+    var container = $("aiUsageTable");
+    container.textContent = "";
+    var rows = Array.isArray(data.models) ? data.models : [];
+    if (rows.length === 0) {
+      var empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = "该窗口暂无 AI 调用记录。零值来自真实统计，不代表请求失败。";
+      container.appendChild(empty);
+    } else {
+      container.appendChild(makeAiUsageTable(rows));
+    }
+
+    var truncatedNote = $("aiUsageTruncated");
+    if (data.truncated === true) {
+      truncatedNote.textContent = "维度结果已截断：仅显示按请求数排序的前 " + data.models_limit +
+        " 行；上方汇总卡片仍是完整窗口总量，不受截断影响。";
+      truncatedNote.style.display = "block";
+    } else {
+      truncatedNote.textContent = "";
+      truncatedNote.style.display = "none";
+    }
+  }
+
+  function makeAiUsageTable(rows) {
+    var table = document.createElement("table");
+    var caption = document.createElement("caption");
+    caption.className = "sr-only";
+    caption.textContent = "按模型与平台分组的 AI 解读调用统计";
+    table.appendChild(caption);
+    var head = document.createElement("thead");
+    var headRow = document.createElement("tr");
+    ["模型", "平台", "请求数", "对话轮数", "压缩请求", "Token（已知）", "未知用量", "已知用量"]
+      .forEach(function (label, index) {
+        var cell = document.createElement("th");
+        cell.setAttribute("scope", "col");
+        cell.textContent = label;
+        if (index > 1) cell.className = "number";
+        headRow.appendChild(cell);
+      });
+    head.appendChild(headRow);
+    table.appendChild(head);
+
+    var body = document.createElement("tbody");
+    rows.forEach(function (row) {
+      var line = document.createElement("tr");
+      [
+        [row.model_id, false],
+        [aiUsagePlatformLabel(row.platform), false],
+        [formatMetric(row.requests), true],
+        [formatMetric(row.conversation_rounds), true],
+        [formatMetric(row.compression_requests), true],
+        [formatMetric(row.total_tokens), true],
+        [formatMetric(row.unknown_usage_requests), true],
+        [formatMetric(row.known_usage_requests), true]
+      ].forEach(function (pair) {
+        var cell = document.createElement("td");
+        if (pair[1]) cell.className = "number";
+        cell.textContent = pair[0] === "全部平台" ? "—" : pair[0];
+        line.appendChild(cell);
+      });
+      body.appendChild(line);
+    });
+    table.appendChild(body);
+    return table;
   }
 
   function loadAnalytics() {
@@ -1097,6 +1288,19 @@ export const ADMIN_PAGE_HTML = `<!DOCTYPE html>
     $("webHistoryView").scrollIntoView({ block: "start" });
   });
   $("refreshWebHistory").addEventListener("click", loadWebHistory);
+  $("navAiUsage").addEventListener("click", function () {
+    $("aiUsageView").scrollIntoView({ block: "start" });
+  });
+  $("refreshAiUsage").addEventListener("click", loadAiUsage);
+  $("aiUsageWindow24h").addEventListener("click", function () { selectAiUsageWindow("24h"); });
+  $("aiUsageWindow7d").addEventListener("click", function () { selectAiUsageWindow("7d"); });
+  $("aiUsageWindow30d").addEventListener("click", function () { selectAiUsageWindow("30d"); });
+  $("aiUsagePlatform").addEventListener("change", function () {
+    var value = $("aiUsagePlatform").value;
+    if (aiUsagePlatforms.indexOf(value) === -1) return;
+    state.aiUsagePlatform = value;
+    loadAiUsage();
+  });
   $("historyWindow24h").addEventListener("click", function () { selectHistoryWindow("24h"); });
   $("historyWindow7d").addEventListener("click", function () { selectHistoryWindow("7d"); });
   $("historyWindow30d").addEventListener("click", function () { selectHistoryWindow("30d"); });

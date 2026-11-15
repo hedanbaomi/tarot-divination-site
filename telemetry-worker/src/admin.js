@@ -1,4 +1,4 @@
-﻿// Admin API: token-authenticated announcements CRUD + publish/withdraw and
+// Admin API: token-authenticated announcements CRUD + publish/withdraw and
 // active-install statistics. Every admin response is Cache-Control: no-store
 // with a strict Content-Security-Policy (no third-party scripts, no framing),
 // no-referrer, and nosniff. The token is read from the Authorization: Bearer
@@ -15,6 +15,7 @@ import { activeWindowCounts, versionDistribution } from "./stats.js";
 import { ADMIN_PAGE_HTML } from "./admin-page.js";
 import { handleAnalytics } from "./analytics.js";
 import { handleWebHistory } from "./web-history.js";
+import { handleAiUsage } from "./ai-stats.js";
 
 const ADMIN_SECURITY_HEADERS = securityHeaders();
 
@@ -85,6 +86,13 @@ export async function handleAdminApi(request, env, pathname) {
   }
   if (parts[0] === "web-history" && parts.length === 1) {
     return handleWebHistory(request, env);
+  }
+
+  // AI interpretation counters are their own D1 read path. They stay ahead of
+  // the announcements gate so a D1 problem is reported as the AI module being
+  // unavailable rather than as a missing announcements database.
+  if (parts[0] === "ai-usage" && parts.length === 1) {
+    return handleAiUsage(request, env);
   }
 
   if (!hasD1Binding(env)) {
