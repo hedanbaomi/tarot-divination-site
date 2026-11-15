@@ -6,6 +6,7 @@
   var CONVERSATIONS_STORE = "conversations";
   var BACKUP_FORMAT = "quareia-ai-chats-backup";
   var BACKUP_VERSION = 1;
+  var MAX_BACKUP_BYTES = 8 * 1024 * 1024;
 
   function trimString(value) {
     return typeof value === "string" ? value.trim() : "";
@@ -349,28 +350,31 @@
     var openPromise = null;
     var memoryFallback = opts.memoryFallback ? createMemoryAdapter() : null;
     var memoryQueue = Promise.resolve();
+    var storageMode = "";
 
     function open() {
       if (openPromise) {
         return openPromise;
       }
-      if (!idb || typeof idb.open !== "function") {
-        if (memoryFallback) {
-          return Promise.resolve({ __memory: true });
-        }
-        return Promise.reject(new Error("IndexedDB is unavailable"));
-      }
       openPromise = new Promise(function (resolve, reject) {
-        var req;
-        try {
-          req = idb.open(dbName, dbVersion);
-        } catch (err) {
-          openPromise = null;
+        function unavailable(err) {
           if (memoryFallback) {
+            // Stay in memory for this store's lifetime. Reopening IDB here
+            // would hide conversations already written to this adapter.
             resolve({ __memory: true });
           } else {
             reject(err);
           }
+        }
+        if (!idb || typeof idb.open !== "function") {
+          unavailable(new Error("IndexedDB is unavailable"));
+          return;
+        }
+        var req;
+        try {
+          req = idb.open(dbName, dbVersion);
+        } catch (err) {
+          unavailable(err);
           return;
         }
         req.onupgradeneeded = function (event) {
@@ -405,13 +409,23 @@
           resolve(db);
         };
         req.onerror = function (event) {
-          openPromise = null;
-          if (memoryFallback) {
-            resolve({ __memory: true });
-          } else {
-            reject((event && event.target && event.target.error) || req.error || new Error("Failed to open AI chat store"));
-          }
+          unavailable((event && event.target && event.target.error) || req.error || new Error("Failed to open AI chat store"));
         };
+      }).then(function (db) {
+        var nextMode = db && db.__memory ? "memory" : "persistent";
+        if (nextMode !== storageMode) {
+          storageMode = nextMode;
+          if (typeof opts.onStorageModeChange === "function") {
+            // A view callback must not break an otherwise valid store read.
+            try { opts.onStorageModeChange(nextMode); } catch (_err) {}
+          }
+        }
+        return db;
+      }, function (err) {
+        // Clear after the executor, including synchronous open() failures,
+        // so callers without a fallback can retry a failed open.
+        openPromise = null;
+        throw err;
       });
       return openPromise;
     }
@@ -808,10 +822,38 @@
       return err;
     }
 
+    function exceedsBackupByteLimit(text) {
+      if (text.length > MAX_BACKUP_BYTES) return true;
+      var bytes = 0;
+      for (var i = 0; i < text.length; i += 1) {
+        var code = text.charCodeAt(i);
+        if (code < 0x80) bytes += 1;
+        else if (code < 0x800) bytes += 2;
+        else if (code >= 0xd800 && code <= 0xdbff
+          && text.charCodeAt(i + 1) >= 0xdc00 && text.charCodeAt(i + 1) <= 0xdfff) {
+          bytes += 4;
+          i += 1;
+        } else bytes += 3;
+        if (bytes > MAX_BACKUP_BYTES) return true;
+      }
+      return false;
+    }
+
     function importBackup(rawInput, importOpts) {
       var optsImport = importOpts && typeof importOpts === "object" ? importOpts : {};
       var mode = optsImport.mode === "replace" ? "replace" : "merge";
       var parsed = rawInput;
+      var serialized;
+      try {
+        serialized = typeof rawInput === "string" ? rawInput : JSON.stringify(rawInput);
+      } catch (_err) {
+        return Promise.reject(invalidBackupError("Invalid backup payload"));
+      }
+      if (typeof serialized === "string" && exceedsBackupByteLimit(serialized)) {
+        var sizeError = new Error("AI chat backup exceeds the 8 MiB import limit");
+        sizeError.code = "backup_too_large";
+        return Promise.reject(sizeError);
+      }
       if (typeof rawInput === "string") {
         try {
           parsed = JSON.parse(rawInput);
@@ -995,6 +1037,10 @@
         lines.push("");
       }
       lines.push(msg.content || "");
+      if (msg.error) {
+        lines.push("");
+        lines.push("> " + (isEnglish ? "**Response notice:** " : "**回答提示：** ") + msg.error.replace(/\r?\n/g, "\n> "));
+      }
     }
 
     return lines.join("\n").trim() + "\n";
@@ -1006,6 +1052,7 @@
     CONVERSATIONS_STORE: CONVERSATIONS_STORE,
     BACKUP_FORMAT: BACKUP_FORMAT,
     BACKUP_VERSION: BACKUP_VERSION,
+    MAX_BACKUP_BYTES: MAX_BACKUP_BYTES,
     parseTimestampMs: parseTimestampMs,
     normalizeMessage: normalizeMessage,
     normalizeReadingSnapshot: normalizeReadingSnapshot,

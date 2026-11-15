@@ -56,6 +56,33 @@ function createSseResponse(chunks, status = 200, contentType = "text/event-strea
   };
 }
 
+test("SSE extension-only fields are ignored without hiding a plain-text proxy failure", async () => {
+  const profile = providers.createDefaultProfile("openai-chat", {
+    baseUrl: "http://localhost:1234/v1", apiKey: "fixture-extension-key", model: "fixture"
+  });
+  for (const contentType of ["text/event-stream", "text/plain"]) {
+    const result = await providers.streamChat(profile, {
+      messages: [{ role: "user", content: "fixture" }],
+      fetchImpl: async () => createSseResponse([
+        "trace-id: fixture\ncustom field: ignored\nbare-field\n\n",
+        'data: {"choices":[{"delta":{"content":"Valid answer"},"finish_reason":"stop"}]}\n\n',
+        "extension-only: tail"
+      ], 200, contentType)
+    });
+    assert.equal(result.text, "Valid answer");
+    assert.equal(result.completionStatus, "complete");
+    assert.equal(result.finishReason, "stop");
+  }
+  await assert.rejects(providers.streamChat(profile, {
+    messages: [{ role: "user", content: "fixture" }],
+    fetchImpl: async () => createSseResponse(["proxy failed: fixture-extension-key\n\n"], 200, "text/plain")
+  }), err => {
+    assert.equal(err.code, "invalid_response");
+    assert.equal(err.message.includes("fixture-extension-key"), false);
+    return true;
+  });
+});
+
 test("buildRequest builds strictly isolated headers and URLs for all 5 API formats", () => {
   const messages = [
     { role: "user", content: "What does this spread indicate?" },
@@ -206,6 +233,7 @@ test("streamChat handles chunked UTF-8 multi-byte SSE across all stream formats"
   });
   assert.equal(resChat.text, "牌面显示：需稳步前行。");
   assert.equal(resChat.reasoning, "思考中...");
+  assert.equal(resChat.completionStatus, "complete");
   assert.equal(deltas.join(""), "牌面显示：需稳步前行。");
   assert.equal(reasonings.join(""), "思考中...");
 
@@ -251,11 +279,290 @@ test("streamChat handles chunked UTF-8 multi-byte SSE across all stream formats"
     messages: [{ role: "user", content: "Hi" }],
     fetchImpl: async () => createSseResponse([
       'data: {"candidates":[{"content":{"parts":[{"text":"Internal note","thought":true}]}}]}\n\n',
-      'data: {"candidates":[{"content":{"parts":[{"text":"Visible interpretation"}]}}]}\n\n'
+      'data: {"candidates":[{"content":{"parts":[{"text":"Visible interpretation"}]},"finishReason":"STOP"}]}\n\n'
     ])
   });
   assert.equal(resGemini.reasoning, "Internal note");
   assert.equal(resGemini.text, "Visible interpretation");
+});
+
+test("streamChat retains partial output and reports provider completion reasons", async () => {
+  const chatPartial = await providers.streamChat({
+    format: "openai-chat",
+    apiKey: "sk-partial-chat",
+    model: "gpt-4o"
+  }, {
+    messages: [{ role: "user", content: "Explain" }],
+    fetchImpl: async () => createSseResponse([
+      ": keep-alive\n\n",
+      'event: ping\ndata: {"type":"ping"}\n\n',
+      'data: {"choices":[{"delta":{"content":"Partial "}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"answer"}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n',
+      "data: [DONE]\n\n"
+    ])
+  });
+  assert.equal(chatPartial.text, "Partial answer");
+  assert.equal(chatPartial.completionStatus, "truncated");
+  assert.equal(chatPartial.finishReason, "length");
+
+  const responsesPartial = await providers.streamChat({
+    format: "openai-responses",
+    apiKey: "sk-partial-response",
+    model: "gpt-4.1"
+  }, {
+    messages: [{ role: "user", content: "Explain" }],
+    fetchImpl: async () => createSseResponse([
+      'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"Response prefix"}\n\n',
+      'event: response.incomplete\ndata: {"type":"response.incomplete","response":{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"}}}\n\n'
+    ])
+  });
+  assert.equal(responsesPartial.text, "Response prefix");
+  assert.equal(responsesPartial.completionStatus, "truncated");
+  assert.equal(responsesPartial.finishReason, "max_output_tokens");
+
+  const anthropicPartial = await providers.streamChat({
+    format: "anthropic-messages",
+    apiKey: "sk-partial-anthropic",
+    model: "claude-sonnet-4-20250514"
+  }, {
+    messages: [{ role: "user", content: "Explain" }],
+    fetchImpl: async () => createSseResponse([
+      'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Anthropic prefix"}}\n\n',
+      'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"max_tokens"}}\n\n',
+      'event: message_stop\ndata: {"type":"message_stop"}\n\n'
+    ])
+  });
+  assert.equal(anthropicPartial.text, "Anthropic prefix");
+  assert.equal(anthropicPartial.completionStatus, "truncated");
+  assert.equal(anthropicPartial.finishReason, "max_tokens");
+
+  const safetyResponse = await providers.streamChat({
+    format: "openai-responses",
+    apiKey: "sk-response-filter",
+    model: "gpt-4.1"
+  }, {
+    stream: false,
+    messages: [{ role: "user", content: "Explain" }],
+    fetchImpl: async () => createSseResponse([JSON.stringify({
+      object: "response",
+      status: "incomplete",
+      incomplete_details: { reason: "content_filter" },
+      output: [{ type: "message", content: [{ type: "output_text", text: "Filtered prefix" }] }]
+    })], 200, "application/json")
+  });
+  assert.equal(safetyResponse.text, "Filtered prefix");
+  assert.equal(safetyResponse.completionStatus, "blocked");
+  assert.equal(safetyResponse.finishReason, "content_filter");
+
+  for (const reason of ["SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII"]) {
+    const geminiPartial = await providers.streamChat({
+      format: "gemini-vertex",
+      apiKey: "AQ.test-gemini",
+      model: "gemini-2.5-flash"
+    }, {
+      stream: false,
+      messages: [{ role: "user", content: "Explain" }],
+      fetchImpl: async () => createSseResponse([JSON.stringify({
+        candidates: [{ content: { role: "model", parts: [{ text: "Gemini prefix" }] }, finishReason: reason }]
+      })], 200, "application/json")
+    });
+    assert.equal(geminiPartial.text, "Gemini prefix", reason);
+    assert.equal(geminiPartial.completionStatus, "blocked", reason);
+    assert.equal(geminiPartial.finishReason, reason, reason);
+  }
+
+  const geminiTruncated = await providers.streamChat({
+    format: "gemini-aistudio",
+    apiKey: "AIza-test-gemini",
+    model: "gemini-2.5-flash"
+  }, {
+    stream: false,
+    messages: [{ role: "user", content: "Explain" }],
+    fetchImpl: async () => createSseResponse([JSON.stringify({
+      candidates: [{ content: { role: "model", parts: [{ text: "Gemini prefix" }] }, finishReason: "MAX_TOKENS" }]
+    })], 200, "application/json")
+  });
+  assert.equal(geminiTruncated.text, "Gemini prefix");
+  assert.equal(geminiTruncated.completionStatus, "truncated");
+  assert.equal(geminiTruncated.finishReason, "MAX_TOKENS");
+
+  const unspecifiedPromptBlock = await providers.streamChat({
+    format: "gemini-aistudio",
+    apiKey: "AIza-unspecified-block",
+    model: "gemini-2.5-flash"
+  }, {
+    stream: false,
+    messages: [{ role: "user", content: "Explain" }],
+    fetchImpl: async () => createSseResponse([JSON.stringify({
+      promptFeedback: { blockReason: "BLOCK_REASON_UNSPECIFIED" },
+      candidates: [{ content: { role: "model", parts: [{ text: "Gemini prefix" }] }, finishReason: "MAX_TOKENS" }]
+    })], 200, "application/json")
+  });
+  assert.equal(unspecifiedPromptBlock.text, "Gemini prefix");
+  assert.equal(unspecifiedPromptBlock.completionStatus, "truncated");
+  assert.equal(unspecifiedPromptBlock.finishReason, "MAX_TOKENS");
+});
+
+test("streamChat distinguishes terminal SSE responses, premature EOF, and non-SSE JSON", async () => {
+  const partialStreams = [
+    { format: "openai-chat", payload: { choices: [{ delta: { content: "Chat partial" } }] }, text: "Chat partial" },
+    { format: "openai-responses", payload: { type: "response.output_text.delta", delta: "Responses partial" }, text: "Responses partial" },
+    { format: "anthropic-messages", payload: { type: "content_block_delta", delta: { type: "text_delta", text: "Anthropic partial" } }, text: "Anthropic partial" },
+    { format: "gemini-aistudio", payload: { candidates: [{ content: { parts: [{ text: "AI Studio partial" }] } }] }, text: "AI Studio partial" },
+    { format: "gemini-vertex", payload: { candidates: [{ content: { parts: [{ text: "Vertex partial" }] } }] }, text: "Vertex partial" }
+  ];
+  for (const fixture of partialStreams) {
+    const result = await providers.streamChat({ format: fixture.format, apiKey: "fixture-key", model: "test" }, {
+      messages: [{ role: "user", content: "hello" }],
+      fetchImpl: async () => createSseResponse(['data: ' + JSON.stringify(fixture.payload) + "\n\n"])
+    });
+    assert.equal(result.text, fixture.text, fixture.format);
+    assert.equal(result.completionStatus, "truncated", fixture.format);
+    assert.equal(result.finishReason, "stream_closed", fixture.format);
+  }
+
+  const emptyStreams = [
+    { format: "openai-chat", payload: { choices: [{ delta: { role: "assistant" } }], usage: { prompt_tokens: 1 } } },
+    { format: "openai-responses", payload: { type: "response.created", response: { usage: { input_tokens: 1 } } } },
+    { format: "anthropic-messages", payload: { type: "message_start", message: { usage: { input_tokens: 1, output_tokens: 0 } } } },
+    { format: "gemini-aistudio", payload: { usageMetadata: { promptTokenCount: 1 } } },
+    { format: "gemini-vertex", payload: { usageMetadata: { promptTokenCount: 1 } } }
+  ];
+  for (const fixture of emptyStreams) {
+    await assert.rejects(() => providers.streamChat({ format: fixture.format, apiKey: "fixture-key", model: "test" }, {
+      allowEmptyOutput: true,
+      messages: [{ role: "user", content: "hello" }],
+      fetchImpl: async () => createSseResponse(['data: ' + JSON.stringify(fixture.payload) + "\n\n"])
+    }), (err) => {
+      assert.equal(err.code, "response_incomplete", fixture.format);
+      assert.equal(err.detail, "stream_closed", fixture.format);
+      return true;
+    });
+  }
+
+  const terminalProbes = [
+    { format: "openai-chat", payload: { choices: [{ delta: {}, finish_reason: "stop" }] } },
+    { format: "openai-responses", event: "response.completed", payload: { type: "response.completed" } },
+    { format: "anthropic-messages", event: "message_stop", payload: { type: "message_stop" } },
+    { format: "gemini-aistudio", payload: { candidates: [{ content: { role: "model" }, finishReason: "STOP" }] } },
+    { format: "gemini-vertex", payload: { candidates: [{ content: { role: "model" }, finishReason: "STOP" }] } }
+  ];
+  for (const fixture of terminalProbes) {
+    const eventName = fixture.event ? "event: " + fixture.event + "\n" : "";
+    const result = await providers.streamChat({ format: fixture.format, apiKey: "fixture-key", model: "test" }, {
+      allowEmptyOutput: true,
+      messages: [{ role: "user", content: "hello" }],
+      fetchImpl: async () => createSseResponse([eventName + "data: " + JSON.stringify(fixture.payload) + "\n\n"])
+    });
+    assert.equal(result.text, "", fixture.format);
+    assert.equal(result.completionStatus, "complete", fixture.format);
+  }
+
+  const jsonResult = await providers.streamChat({ format: "openai-chat", apiKey: "fixture-key", model: "test" }, {
+    messages: [{ role: "user", content: "hello" }],
+    fetchImpl: async () => createSseResponse([JSON.stringify({ choices: [{ message: { content: "Valid JSON fallback" } }] })], 200, "application/json")
+  });
+  assert.equal(jsonResult.text, "Valid JSON fallback");
+  assert.equal(jsonResult.completionStatus, "complete");
+  assert.equal(jsonResult.finishReason, "");
+
+  const prettyJsonFallback = await providers.streamChat({ format: "openai-chat", apiKey: "fixture-key", model: "test" }, {
+    messages: [{ role: "user", content: "hello" }],
+    fetchImpl: async () => createSseResponse([
+      '{\n  "choices": [{ "message": { "content": "Pretty JSON fallback" } }],\n\n  "usage": { "prompt_tokens": 1 }\n}'
+    ], 200, "text/plain")
+  });
+  assert.equal(prettyJsonFallback.text, "Pretty JSON fallback");
+  assert.equal(prettyJsonFallback.completionStatus, "complete");
+
+  const emptyJsonProbe = await providers.streamChat({ format: "openai-chat", apiKey: "fixture-key", model: "test" }, {
+    stream: false,
+    allowEmptyOutput: true,
+    messages: [{ role: "user", content: "hello" }],
+    fetchImpl: async () => createSseResponse([JSON.stringify({
+      choices: [{ message: { role: "assistant", content: "" } }],
+      usage: { prompt_tokens: 1, completion_tokens: 0 }
+    })], 200, "application/json")
+  });
+  assert.equal(emptyJsonProbe.text, "");
+  assert.equal(emptyJsonProbe.completionStatus, "complete");
+});
+
+test("streamChat rejects empty blocked or truncated probes and diagnoses invalid 200 proxy bodies safely", async () => {
+  await assert.rejects(() => providers.streamChat({
+    format: "gemini-aistudio",
+    apiKey: "AIza-safety-probe",
+    model: "gemini-2.5-flash"
+  }, {
+    stream: false,
+    allowEmptyOutput: true,
+    messages: [{ role: "user", content: "Reply" }],
+    fetchImpl: async () => createSseResponse([JSON.stringify({
+      promptFeedback: { blockReason: "SAFETY" },
+      usageMetadata: { promptTokenCount: 14, thoughtsTokenCount: 256, totalTokenCount: 270 }
+    })], 200, "application/json")
+  }), (err) => {
+    assert.equal(err.code, "content_blocked");
+    assert.equal(err.detail, "SAFETY");
+    return true;
+  });
+
+  await assert.rejects(() => providers.streamChat({
+    format: "gemini-aistudio",
+    apiKey: "AIza-empty-truncated",
+    model: "gemini-2.5-flash"
+  }, {
+    stream: false,
+    allowEmptyOutput: true,
+    messages: [{ role: "user", content: "Reply" }],
+    fetchImpl: async () => createSseResponse([JSON.stringify({
+      candidates: [{ content: { role: "model" }, finishReason: "MAX_TOKENS" }],
+      usageMetadata: { promptTokenCount: 14, thoughtsTokenCount: 256, totalTokenCount: 270 }
+    })], 200, "application/json")
+  }), (err) => err.code === "output_truncated");
+
+  for (const testCase of [
+    { stream: false, contentType: "text/html", body: "<html><body>Proxy echoed sk-proxy-secret-4321</body></html>" },
+    { stream: true, contentType: "text/plain", body: "Upstream proxy echoed sk-proxy-secret-4321 and returned plain text." }
+  ]) {
+    await assert.rejects(() => providers.streamChat({
+      format: "openai-chat",
+      apiKey: "sk-proxy-secret-4321",
+      model: "gpt-4o"
+    }, {
+      stream: testCase.stream,
+      messages: [{ role: "user", content: "Reply" }],
+      fetchImpl: async () => createSseResponse([testCase.body], 200, testCase.contentType)
+    }), (err) => {
+      assert.equal(err.code, "invalid_response");
+      assert.ok(err.detail.length <= 240);
+      assert.equal(err.message.includes("sk-proxy-secret-4321"), false);
+      assert.equal(err.detail.includes("sk-proxy-secret-4321"), false);
+      assert.ok(err.detail.length > 0);
+      return true;
+    });
+  }
+
+  const partialDeltas = [];
+  await assert.rejects(() => providers.streamChat({
+    format: "openai-chat",
+    apiKey: "sk-partial-proxy-4321",
+    model: "gpt-4o"
+  }, {
+    messages: [{ role: "user", content: "Reply" }],
+    onDelta: (delta) => partialDeltas.push(delta),
+    fetchImpl: async () => createSseResponse([
+      'data: {"choices":[{"delta":{"content":"Kept partial answer"}}]}\n\n',
+      "data: proxy returned malformed text and sk-partial-proxy-4321\n\n"
+    ])
+  }), (err) => {
+    assert.equal(err.code, "invalid_response");
+    assert.equal(err.message.includes("sk-partial-proxy-4321"), false);
+    assert.ok(err.detail.length <= 240);
+    return true;
+  });
+  assert.equal(partialDeltas.join(""), "Kept partial answer");
 });
 
 test("streamChat handles non-SSE JSON fallback, HTTP error redaction, and AbortController", async () => {
@@ -442,16 +749,21 @@ test("normalizeProfile strips systemPrompt and context window inference/detectio
 
 test("SSE CRLF, bare CR and UTF-8 boundaries preserve multiline data for all formats", async () => {
   const fixtures = {
-    "openai-chat": { choices: [{ delta: { content: "Hello 牌" } }] },
+    "openai-chat": { choices: [{ delta: { content: "Hello 牌" }, finish_reason: "stop" }] },
     "openai-responses": { type: "response.output_text.delta", delta: "Hello 牌" },
     "anthropic-messages": { type: "content_block_delta", delta: { type: "text_delta", text: "Hello 牌" } },
-    "gemini-aistudio": { candidates: [{ content: { parts: [{ text: "Hello 牌" }] } }] },
-    "gemini-vertex": { candidates: [{ content: { parts: [{ text: "Hello 牌" }] } }] }
+    "gemini-aistudio": { candidates: [{ content: { parts: [{ text: "Hello 牌" }] }, finishReason: "STOP" }] },
+    "gemini-vertex": { candidates: [{ content: { parts: [{ text: "Hello 牌" }] }, finishReason: "STOP" }] }
   };
   for (const [format, payload] of Object.entries(fixtures)) {
     for (const newline of ["\r\n", "\r", "\n"]) {
       const json = JSON.stringify(payload);
-      const event = ": comment" + newline + "data: {" + newline + "data: " + json.slice(1) + newline + newline;
+      let event = ": comment" + newline + "data: {" + newline + "data: " + json.slice(1) + newline + newline;
+      if (format === "openai-responses") {
+        event += 'event: response.completed' + newline + 'data: {"type":"response.completed"}' + newline + newline;
+      } else if (format === "anthropic-messages") {
+        event += 'event: message_stop' + newline + 'data: {"type":"message_stop"}' + newline + newline;
+      }
       const bytes = new TextEncoder().encode(event);
       const partitions = [Array.from(bytes, b => Uint8Array.of(b))];
       for (let i = 1; i < bytes.length; i++) partitions.push([bytes.slice(0, i), bytes.slice(i)]);
@@ -463,13 +775,14 @@ test("SSE CRLF, bare CR and UTF-8 boundaries preserve multiline data for all for
           onDelta: delta => deltas.push(delta)
         });
         assert.equal(result.text, "Hello 牌", format + " " + JSON.stringify(newline));
+        assert.equal(result.completionStatus, "complete", format + " " + JSON.stringify(newline));
         assert.equal(deltas.join(""), "Hello 牌");
       }
     }
   }
 });
 
-test("reasoning models use max_completion_tokens, omit non-1 temperature, and testConnection handles empty thinking completions & timeouts", async () => {
+test("reasoning models use max_completion_tokens, omit non-1 temperature, and testConnection handles reasoning-only probes & timeouts", async () => {
   // OpenAI Chat reasoning models: o1/o3/o4/gpt-5 swap max_tokens -> max_completion_tokens and drop temperature != 1
   for (const model of ["o1", "o3-mini", "o4-mini", "gpt-5", "openai/gpt-5-mini"]) {
     const reqDropTemp = providers.buildRequest({
@@ -538,14 +851,14 @@ test("reasoning models use max_completion_tokens, omit non-1 temperature, and te
       capturedProbeBody = JSON.parse(init.body);
       return createSseResponse([
         JSON.stringify({
-          candidates: [{ content: { role: "model" }, finishReason: "MAX_TOKENS" }],
+          candidates: [{ content: { role: "model", parts: [{ text: "Reasoning-only probe", thought: true }] }, finishReason: "MAX_TOKENS" }],
           usageMetadata: { promptTokenCount: 14, thoughtsTokenCount: 256, totalTokenCount: 270 }
         })
       ], 200, "application/json");
     }
   });
   assert.equal(geminiThinkOnly.ok, true);
-  assert.equal(geminiThinkOnly.reply, "OK");
+  assert.equal(geminiThinkOnly.reply, "Reasoning-only probe");
   assert.ok(capturedProbeBody.generationConfig.maxOutputTokens >= 256);
   assert.equal("temperature" in capturedProbeBody.generationConfig, false);
 

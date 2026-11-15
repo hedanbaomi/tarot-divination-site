@@ -135,6 +135,11 @@
         <div class="ai-attached-chips" id="aiAttachedChips"></div>
       </section>
 
+      <div class="ai-banner" id="aiStorageWarning" role="alert" hidden>
+        <span data-i18n="ai.storageMemoryWarning">无法访问聊天存储，本次聊天仅保存在内存中。刷新或离开页面会丢失本次聊天，请先导出备份。</span>
+        <button class="btn-mini" id="aiStorageExportBtn" type="button" data-i18n="ai.exportBackup">导出备份</button>
+      </div>
+
       <div class="ai-banner" id="aiSetupBanner" hidden>
         <span id="aiSetupBannerText"></span>
         <div class="ai-composer-actions">

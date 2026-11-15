@@ -452,7 +452,12 @@
     var historyStoreApi = global.DivinationHistoryStore;
 
     var configStore = providers.createConfigStore();
-    var chatStore = chatStoreApi.createStore({ memoryFallback: true });
+    var chatStore = chatStoreApi.createStore({
+      memoryFallback: true,
+      onStorageModeChange: function (mode) {
+        if (els.storageWarning) els.storageWarning.hidden = mode !== "memory";
+      }
+    });
     var historyStore = historyStoreApi && typeof historyStoreApi.createStore === "function"
       ? historyStoreApi.createStore()
       : null;
@@ -523,6 +528,8 @@
       archiveChatBtn: byId("aiArchiveChatBtn"),
       deleteChatBtn: byId("aiDeleteChatBtn"),
       attachedChips: byId("aiAttachedChips"),
+      storageWarning: byId("aiStorageWarning"),
+      storageExportBtn: byId("aiStorageExportBtn"),
       setupBanner: byId("aiSetupBanner"),
       setupBannerText: byId("aiSetupBannerText"),
       bannerSettingsBtn: byId("aiBannerSettingsBtn"),
@@ -1593,6 +1600,7 @@
       if (els.promptInput) els.promptInput.disabled = state.streaming;
       if (els.newChatBtn) els.newChatBtn.disabled = state.streaming;
       if (els.exportBackupBtn) els.exportBackupBtn.disabled = state.streaming;
+      if (els.storageExportBtn) els.storageExportBtn.disabled = state.streaming;
       if (els.importBackupBtn) els.importBackupBtn.disabled = state.streaming;
       if (els.clearChatsBtn) els.clearChatsBtn.disabled = state.streaming;
       if (els.pickReadingsBtn) els.pickReadingsBtn.disabled = state.streaming || !hasConv;
@@ -2345,6 +2353,20 @@
 
     function formatProviderError(err) {
       if (!err) return tr("ai.err.unknown", null, "请求失败", "Request failed");
+      if (err.code === "output_truncated") {
+        return tr("ai.err.truncated", null, "已达到模型输出上限，回答可能不完整。可以继续追问，或在 API 设置中提高最大输出 Token。", "The model reached its output limit, so the answer may be incomplete. Ask it to continue or increase the output token limit in API settings.");
+      }
+      if (err.code === "response_incomplete") {
+        return tr("ai.err.incomplete", null, "连接在回答完成前结束，已保留收到的内容。请重试或继续追问。", "The connection ended before the response finished. Any received text has been kept. Retry or ask it to continue.");
+      }
+      if (err.code === "content_blocked") {
+        return tr("ai.err.blocked", null, "模型的内容策略拦截了本次回答，已保留收到的内容。请调整问题后重试。", "The provider blocked this response under its content policy. Any received text has been kept. Revise your question and retry.");
+      }
+      if (err.code === "invalid_response") {
+        return tr("ai.err.invalidResponse", { detail: err.message },
+          "接口返回了无法识别的响应，请检查接口地址或中转服务：" + err.message,
+          "The endpoint returned an invalid response. Check its URL or proxy service: " + err.message);
+      }
       if (err.code === "auth_error") {
         return tr("ai.err.auth", { detail: err.message },
           "鉴权失败，请检查 API Key、模型权限或 Vertex 接口设置：" + err.message,
@@ -2501,7 +2523,9 @@
         if (targetMsg) {
           targetMsg.content = result.text || "";
           targetMsg.reasoning = result.reasoning || "";
-          targetMsg.error = "";
+          targetMsg.error = result.completionStatus === "truncated"
+            ? formatProviderError({ code: result.finishReason === "stream_closed" ? "response_incomplete" : "output_truncated" })
+            : (result.completionStatus === "blocked" ? formatProviderError({ code: "content_blocked" }) : "");
           targetMsg.model = profile.model;
           targetMsg.format = profile.format;
         }
@@ -2777,6 +2801,23 @@
       chatStore.exportBackup().then(function (backup) {
         var json = JSON.stringify(backup, null, 2);
         var stamp = new Date().toISOString().slice(0, 10);
+        if (new Blob([json]).size > chatStoreApi.MAX_BACKUP_BYTES) {
+          return confirmAction({
+            kicker: tr("ai.backupKicker", null, "AI BACKUP", "AI BACKUP"),
+            title: tr("ai.archiveTooLargeTitle", null, "备份超过导入上限", "Backup exceeds the import limit"),
+            message: tr("ai.archiveTooLargeMsg", null,
+              "全部对话的 JSON 备份超过 8 MiB，无法通过本页面恢复。可改为导出全部对话的 Markdown 存档，保留聊天正文、回答提示与占卜摘要供阅读。Markdown 存档不能导入聊天列表。",
+              "The JSON backup exceeds the 8 MiB import limit and cannot be restored here. You can instead export all transcripts, response notices and reading summaries as a readable Markdown archive. This archive cannot be imported into the chat list."),
+            cancelLabel: tr("ai.cancel", null, "取消", "Cancel"),
+            proceedLabel: tr("ai.exportArchive", null, "导出 Markdown 存档", "Export Markdown Archive")
+          }).then(function (confirmed) {
+            if (!confirmed) return;
+            var archive = backup.conversations.map(function (conv) {
+              return chatStoreApi.formatConversationMarkdown(conv, { locale: currentLocale() });
+            }).join("\n---\n\n");
+            triggerFileDownload(archive, "quareia-ai-archive-" + stamp + ".md", "text/markdown;charset=utf-8");
+          });
+        }
         triggerFileDownload(json, "quareia-ai-chats-" + stamp + ".json", "application/json;charset=utf-8");
       }).catch(function () {
         if (typeof global.__quareiaHistoryExportResult === "function") {
@@ -2785,10 +2826,29 @@
       });
     }
 
+    function showBackupImportError(err) {
+      if (global.DivinationDialog && typeof global.DivinationDialog.request === "function") {
+        return global.DivinationDialog.request({
+          kicker: tr("ai.backupKicker", null, "AI BACKUP", "AI BACKUP"),
+          title: tr("ai.importErrTitle", null, "导入失败", "Import Failed"),
+          message: err && err.code === "backup_too_large"
+            ? tr("ai.importTooLarge", null, "AI 对话备份不能超过 8 MiB。请选择较小的备份文件。", "AI chat backups must be 8 MiB or smaller. Choose a smaller backup file.")
+            : tr("ai.importErrMsg", null, "文件格式不匹配，请选择本站导出的 AI 对话 JSON 备份文件。", "Invalid backup file format. Choose an AI chat JSON backup exported from this app."),
+          cancelLabel: tr("ai.close", null, "关闭", "Close"),
+          proceedLabel: tr("ai.ok", null, "确定", "OK")
+        });
+      }
+      return Promise.resolve();
+    }
+
     function importChatsBackup(event) {
       var file = event.target && event.target.files && event.target.files[0];
       if (event.target) event.target.value = "";
       if (state.streaming || !file) return;
+      if (file.size > chatStoreApi.MAX_BACKUP_BYTES) {
+        showBackupImportError({ code: "backup_too_large" });
+        return;
+      }
       file.text().then(function (raw) {
         return chatStore.importBackup(raw, { mode: "merge" });
       }).then(function (res) {
@@ -2806,17 +2866,7 @@
           }
           return null;
         });
-      }).catch(function () {
-        if (global.DivinationDialog && typeof global.DivinationDialog.request === "function") {
-          global.DivinationDialog.request({
-            kicker: tr("ai.backupKicker", null, "AI BACKUP", "AI BACKUP"),
-            title: tr("ai.importErrTitle", null, "导入失败", "Import Failed"),
-            message: tr("ai.importErrMsg", null, "文件格式不匹配，请选择本站导出的 AI 对话 JSON 备份文件。", "Invalid backup file format. Choose an AI chat JSON backup exported from this app."),
-            cancelLabel: tr("ai.close", null, "关闭", "Close"),
-            proceedLabel: tr("ai.ok", null, "确定", "OK")
-          });
-        }
-      });
+      }).catch(showBackupImportError);
     }
 
     // Event Bindings
@@ -2855,6 +2905,7 @@
     }
 
     if (els.exportBackupBtn) els.exportBackupBtn.addEventListener("click", exportAllChatsBackup);
+    if (els.storageExportBtn) els.storageExportBtn.addEventListener("click", exportAllChatsBackup);
     if (els.importBackupBtn && els.importFileInput) {
       els.importBackupBtn.addEventListener("click", function () {
         if (state.streaming) return;
@@ -2911,7 +2962,7 @@
     }
     if (els.promptInput) {
       els.promptInput.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+        if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
           e.preventDefault();
           sendUserPrompt();
         }
@@ -2936,7 +2987,7 @@
     if (els.renameSaveBtn) els.renameSaveBtn.addEventListener("click", commitRenameDialog);
     if (els.renameInput) {
       els.renameInput.addEventListener("keydown", function (e) {
-        if (e.key === "Enter") {
+        if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) {
           e.preventDefault();
           commitRenameDialog();
         }

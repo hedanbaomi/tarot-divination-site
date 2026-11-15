@@ -1042,21 +1042,93 @@
     };
   }
 
-  function extractFromChunk(format, eventName, dataObj) {
+  function normalizeFinishReason(reason, apiKey) {
+    var safeReason = sanitizeSecretText(trimString(reason), apiKey);
+    return safeReason
+      .replace(/[^A-Za-z0-9_.:-]/g, "_")
+      .replace(/_+/g, "_")
+      .slice(0, 64);
+  }
+
+  function completionStatusForReason(format, reason, forcedStatus) {
+    if (forcedStatus === "blocked" || forcedStatus === "truncated") {
+      return forcedStatus;
+    }
+    var key = trimString(reason).toLowerCase().replace(/[\s.-]+/g, "_");
+    if (format === "openai-chat") {
+      if (key === "length") {
+        return "truncated";
+      }
+      if (key === "content_filter") {
+        return "blocked";
+      }
+    } else if (format === "openai-responses") {
+      if (key === "max_output_tokens") {
+        return "truncated";
+      }
+      if (key === "content_filter") {
+        return "blocked";
+      }
+    } else if (format === "anthropic-messages") {
+      if (key === "max_tokens") {
+        return "truncated";
+      }
+      if (key === "refusal") {
+        return "blocked";
+      }
+    } else if (format === "gemini-aistudio" || format === "gemini-vertex") {
+      if (key === "max_tokens") {
+        return "truncated";
+      }
+      if (["safety", "recitation", "blocklist", "prohibited_content", "spii"].indexOf(key) !== -1) {
+        return "blocked";
+      }
+    }
+    return "complete";
+  }
+
+  function sanitizeResponseDetail(rawText, apiKey) {
+    var safeDetail = sanitizeSecretText(typeof rawText === "string" ? rawText : String(rawText || ""), apiKey);
+    return safeDetail.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 240);
+  }
+
+  function invalidResponseError(rawText, format, apiKey) {
+    var detail = sanitizeResponseDetail(rawText, apiKey);
+    return AiProviderError("invalid_response", "Invalid provider response" + (detail ? ": " + detail : ""), {
+      format: format,
+      detail: detail
+    });
+  }
+
+  function extractFromChunk(format, eventName, dataObj, apiKey) {
     var text = "";
     var reasoning = "";
     var done = false;
     var errMessage = "";
+    var terminal = false;
+    var finishReason = "";
+    var completionStatus = "complete";
     var usage = extractUsageObject(format, dataObj);
     var hasMeta = Boolean(usage);
 
+    function setCompletionReason(reason, forcedStatus) {
+      var normalized = normalizeFinishReason(reason, apiKey);
+      if (normalized) {
+        finishReason = normalized;
+      }
+      var status = completionStatusForReason(format, reason, forcedStatus);
+      if (status === "blocked" || (status === "truncated" && completionStatus !== "blocked")) {
+        completionStatus = status;
+      }
+    }
+
     if (!dataObj || typeof dataObj !== "object") {
-      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: null, hasMeta: false };
+      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: null, hasMeta: false, terminal: terminal, finishReason: finishReason, completionStatus: completionStatus };
     }
 
     if (dataObj.error) {
       errMessage = extractErrorMessageFromJson(dataObj) || "Stream error";
-      return { text: "", reasoning: "", done: false, error: errMessage, usage: usage, hasMeta: false };
+      return { text: "", reasoning: "", done: false, error: errMessage, usage: usage, hasMeta: false, terminal: terminal, finishReason: finishReason, completionStatus: completionStatus };
     }
 
     if (format === "openai-chat") {
@@ -1065,6 +1137,8 @@
       if (choice && typeof choice === "object") {
         if (typeof choice.finish_reason === "string" && choice.finish_reason) {
           hasMeta = true;
+          terminal = true;
+          setCompletionReason(choice.finish_reason);
         }
         var delta = choice.delta;
         if (delta && typeof delta === "object") {
@@ -1097,16 +1171,30 @@
           }
         }
       }
-      return { text: text, reasoning: reasoning, done: done, error: "", usage: usage, hasMeta: hasMeta };
+      return { text: text, reasoning: reasoning, done: done, error: "", usage: usage, hasMeta: hasMeta, terminal: terminal, finishReason: finishReason, completionStatus: completionStatus };
     }
 
     if (format === "openai-responses") {
       var evType = trimString(dataObj.type) || trimString(eventName);
+      var responseObj = dataObj.response && typeof dataObj.response === "object" ? dataObj.response : dataObj;
+      var incompleteDetails = responseObj.incomplete_details && typeof responseObj.incomplete_details === "object"
+        ? responseObj.incomplete_details
+        : null;
+      if (evType === "response.incomplete" || responseObj.status === "incomplete") {
+        terminal = true;
+        var incompleteReason = incompleteDetails && typeof incompleteDetails.reason === "string"
+          ? incompleteDetails.reason
+          : "incomplete";
+        var incompleteStatus = completionStatusForReason(format, incompleteReason);
+        setCompletionReason(incompleteReason, incompleteStatus === "blocked" ? "blocked" : "truncated");
+      }
       if (evType === "response.completed" || evType === "response.incomplete") {
         hasMeta = true;
+        terminal = true;
       }
       if (dataObj.object === "response" && (dataObj.status === "completed" || dataObj.status === "incomplete")) {
         hasMeta = true;
+        terminal = true;
       }
       if (evType === "response.output_text.delta" && typeof dataObj.delta === "string") {
         text += dataObj.delta;
@@ -1150,7 +1238,7 @@
           }
         }
       }
-      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: usage, hasMeta: hasMeta };
+      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: usage, hasMeta: hasMeta, terminal: terminal, finishReason: finishReason, completionStatus: completionStatus };
     }
 
     if (format === "anthropic-messages") {
@@ -1163,6 +1251,13 @@
       ) {
         hasMeta = true;
       }
+      var stopReason = aType === "message_delta" && dataObj.delta && typeof dataObj.delta.stop_reason === "string"
+        ? dataObj.delta.stop_reason
+        : (typeof dataObj.stop_reason === "string" ? dataObj.stop_reason : "");
+      if (stopReason) {
+        terminal = true;
+        setCompletionReason(stopReason);
+      }
       if (aType === "content_block_delta" && dataObj.delta && typeof dataObj.delta === "object") {
         if (dataObj.delta.type === "text_delta" && typeof dataObj.delta.text === "string") {
           text += dataObj.delta.text;
@@ -1171,6 +1266,7 @@
         }
       } else if (aType === "message_stop") {
         done = true;
+        terminal = true;
       } else if (aType === "error") {
         errMessage = extractErrorMessageFromJson(dataObj) || "Anthropic stream error";
       } else if (Array.isArray(dataObj.content)) {
@@ -1189,16 +1285,30 @@
           }
         }
       }
-      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: usage, hasMeta: hasMeta };
+      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: usage, hasMeta: hasMeta, terminal: terminal, finishReason: finishReason, completionStatus: completionStatus };
     }
 
     if (format === "gemini-aistudio" || format === "gemini-vertex") {
       var candidates = Array.isArray(dataObj.candidates) ? dataObj.candidates : [];
       var candidate = candidates[0];
+      var promptFeedback = dataObj.promptFeedback && typeof dataObj.promptFeedback === "object" ? dataObj.promptFeedback : null;
+      var promptBlockReason = promptFeedback && typeof promptFeedback.blockReason === "string"
+        ? promptFeedback.blockReason
+        : "";
+      var hasPromptBlockReason = Boolean(promptBlockReason && promptBlockReason !== "BLOCK_REASON_UNSPECIFIED");
+      if (hasPromptBlockReason) {
+        hasMeta = true;
+        terminal = true;
+        setCompletionReason(promptBlockReason, "blocked");
+      }
       if (candidate && typeof candidate === "object") {
         if ((typeof candidate.finishReason === "string" && candidate.finishReason)
           || (candidate.content && candidate.content.role === "model")) {
           hasMeta = true;
+        }
+        if (!hasPromptBlockReason && typeof candidate.finishReason === "string" && candidate.finishReason) {
+          terminal = true;
+          setCompletionReason(candidate.finishReason);
         }
       }
       if (candidate && candidate.content && Array.isArray(candidate.content.parts)) {
@@ -1215,10 +1325,14 @@
           }
         }
       }
-      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: usage, hasMeta: hasMeta };
+      return { text: text, reasoning: reasoning, done: done, error: errMessage, usage: usage, hasMeta: hasMeta, terminal: terminal, finishReason: finishReason, completionStatus: completionStatus };
     }
 
-    return { text: text, reasoning: reasoning, done: done, error: "", usage: usage, hasMeta: hasMeta };
+    return { text: text, reasoning: reasoning, done: done, error: "", usage: usage, hasMeta: hasMeta, terminal: terminal, finishReason: finishReason, completionStatus: completionStatus };
+  }
+
+  function looksLikeSsePayload(rawText) {
+    return /^(?:data|event|id|retry):|^:/m.test(typeof rawText === "string" ? rawText : "");
   }
 
   function parseSseEventBlock(block) {
@@ -1254,17 +1368,15 @@
     var parsed;
     try {
       parsed = JSON.parse(trimmed);
-    } catch (err) {
-      var safeDetail = sanitizeSecretText(err && err.message ? err.message : "", apiKey);
-      throw AiProviderError("parse_error", "Failed to parse provider JSON response", {
-        format: format,
-        detail: safeDetail,
-        cause: err
-      });
+    } catch (_err) {
+      throw invalidResponseError(trimmed, format, apiKey);
     }
     var items = Array.isArray(parsed) ? parsed : [parsed];
     for (var i = 0; i < items.length; i += 1) {
-      var extracted = extractFromChunk(format, "", items[i]);
+      if (typeof callbacks.onPayload === "function") {
+        callbacks.onPayload();
+      }
+      var extracted = extractFromChunk(format, "", items[i], apiKey);
       if (extracted.error) {
         throw AiProviderError("http_error", sanitizeSecretText(extracted.error, apiKey), {
           format: format,
@@ -1276,6 +1388,9 @@
       }
       if (extracted.usage && typeof callbacks.onUsage === "function") {
         callbacks.onUsage(extracted.usage);
+      }
+      if ((extracted.finishReason || extracted.completionStatus !== "complete") && typeof callbacks.onCompletion === "function") {
+        callbacks.onCompletion(extracted.completionStatus, extracted.finishReason);
       }
       if (extracted.reasoning) {
         callbacks.onReasoning(extracted.reasoning);
@@ -1303,21 +1418,35 @@
       if (!block || !block.trim()) {
         continue;
       }
+      if (typeof callbacks.onSseFrame === "function") {
+        callbacks.onSseFrame();
+      }
       var parsedEvent = parseSseEventBlock(block);
       if (!parsedEvent.data) {
+        // SSE ignores unknown field names, including extension-only blocks.
+        // Keep a bounded diagnostic only if the entire response has no data.
+        if (!looksLikeSsePayload(block) && typeof callbacks.onIgnoredBlock === "function") {
+          callbacks.onIgnoredBlock(block);
+        }
         continue;
       }
       var trimmedData = parsedEvent.data.trim();
       if (trimmedData === "[DONE]") {
+        if (typeof callbacks.onTerminal === "function") {
+          callbacks.onTerminal();
+        }
         return true;
       }
       var dataObj;
       try {
         dataObj = JSON.parse(trimmedData);
       } catch (_err) {
-        continue;
+        throw invalidResponseError(trimmedData, format, apiKey);
       }
-      var extracted = extractFromChunk(format, parsedEvent.eventName, dataObj);
+      if (typeof callbacks.onPayload === "function") {
+        callbacks.onPayload();
+      }
+      var extracted = extractFromChunk(format, parsedEvent.eventName, dataObj, apiKey);
       if (extracted.error) {
         throw AiProviderError("http_error", sanitizeSecretText(extracted.error, apiKey), {
           format: format,
@@ -1327,8 +1456,14 @@
       if (extracted.hasMeta && typeof callbacks.onMeta === "function") {
         callbacks.onMeta();
       }
+      if (extracted.terminal && typeof callbacks.onTerminal === "function") {
+        callbacks.onTerminal();
+      }
       if (extracted.usage && typeof callbacks.onUsage === "function") {
         callbacks.onUsage(extracted.usage);
+      }
+      if ((extracted.finishReason || extracted.completionStatus !== "complete") && typeof callbacks.onCompletion === "function") {
+        callbacks.onCompletion(extracted.completionStatus, extracted.finishReason);
       }
       if (extracted.reasoning) {
         callbacks.onReasoning(extracted.reasoning);
@@ -1414,9 +1549,41 @@
     var fullReasoning = "";
     var latestUsage = null;
     var sawCompletionMeta = false;
+    var sawSseStream = false;
+    var sawSseFrame = false;
+    var sawNonSsePayload = false;
+    var sawTerminalCompletion = false;
+    var sawParsedPayload = false;
+    var ignoredBlockDetail = "";
+    var completionStatus = "complete";
+    var finishReason = "";
     var callbacks = {
       onMeta: function () {
         sawCompletionMeta = true;
+      },
+      onPayload: function () {
+        sawParsedPayload = true;
+        if (!sawSseFrame) {
+          sawNonSsePayload = true;
+        }
+      },
+      onIgnoredBlock: function (rawText) {
+        if (!ignoredBlockDetail) ignoredBlockDetail = sanitizeResponseDetail(rawText, profile.apiKey);
+      },
+      onSseFrame: function () {
+        sawSseStream = true;
+        sawSseFrame = true;
+      },
+      onTerminal: function () {
+        sawTerminalCompletion = true;
+      },
+      onCompletion: function (status, reason) {
+        if (reason) {
+          finishReason = reason;
+        }
+        if (status === "blocked" || (status === "truncated" && completionStatus !== "blocked")) {
+          completionStatus = status;
+        }
       },
       onText: function (delta) {
         if (!delta) {
@@ -1464,6 +1631,9 @@
       var contentType = response.headers && typeof response.headers.get === "function"
         ? (response.headers.get("content-type") || "").toLowerCase()
         : "";
+      if (contentType.indexOf("event-stream") !== -1) {
+        sawSseStream = true;
+      }
       var forceJsonFallback = opts.stream === false
         || (contentType.indexOf("application/json") !== -1 && contentType.indexOf("event-stream") === -1)
         || !response.body
@@ -1472,7 +1642,7 @@
       if (forceJsonFallback) {
         return response.text().then(function (rawText) {
           var trimmedRaw = rawText.trim();
-          if (/^(?:event:|data:)/m.test(rawText) && trimmedRaw.charAt(0) !== "{" && trimmedRaw.charAt(0) !== "[") {
+          if (looksLikeSsePayload(rawText) && trimmedRaw.charAt(0) !== "{" && trimmedRaw.charAt(0) !== "[") {
             consumeSseEvents({ raw: rawText }, true, profile.format, profile.apiKey, callbacks);
           } else {
             applyNonSsePayload(rawText, profile.format, profile.apiKey, callbacks);
@@ -1506,8 +1676,10 @@
           if (step.done) {
             bufferObj.raw += decoder.decode();
             var trimmedBuf = bufferObj.raw.trim();
-            if (trimmedBuf && (trimmedBuf.charAt(0) === "{" || trimmedBuf.charAt(0) === "[") && !/^(?:event:|data:)/m.test(trimmedBuf)) {
+            if (trimmedBuf && (trimmedBuf.charAt(0) === "{" || trimmedBuf.charAt(0) === "[") && !looksLikeSsePayload(trimmedBuf)) {
               applyNonSsePayload(trimmedBuf, profile.format, profile.apiKey, callbacks);
+            } else if (trimmedBuf && !looksLikeSsePayload(trimmedBuf) && !sawSseFrame) {
+              throw invalidResponseError(trimmedBuf, profile.format, profile.apiKey);
             } else {
               consumeSseEvents(bufferObj, true, profile.format, profile.apiKey, callbacks);
             }
@@ -1515,6 +1687,10 @@
           }
 
           bufferObj.raw += decoder.decode(step.value, { stream: true });
+          var pendingText = bufferObj.raw.replace(/^\s+/, "");
+          if (!sawSseFrame && contentType.indexOf("event-stream") === -1 && /^(?:\{|\[)/.test(pendingText)) {
+            return pump();
+          }
           var stopped = consumeSseEvents(bufferObj, false, profile.format, profile.apiKey, callbacks);
           if (stopped) {
             cancelReaderSafely(reader);
@@ -1526,6 +1702,31 @@
 
       function finalizeStreamResult() {
         var allowEmpty = Boolean(opts.allowEmptyOutput) && (sawCompletionMeta || Boolean(latestUsage));
+        if (!sawParsedPayload && ignoredBlockDetail) {
+          throw invalidResponseError(ignoredBlockDetail, profile.format, profile.apiKey);
+        }
+        if (sawSseStream && !sawNonSsePayload && !sawTerminalCompletion) {
+          if (!fullText && !fullReasoning) {
+            throw AiProviderError("response_incomplete", "Provider stream ended before a terminal completion marker", {
+              format: profile.format,
+              detail: "stream_closed"
+            });
+          }
+          completionStatus = "truncated";
+          finishReason = "stream_closed";
+        }
+        if (!fullText && !fullReasoning && completionStatus === "blocked") {
+          throw AiProviderError("content_blocked", "Model output was blocked by a safety policy", {
+            format: profile.format,
+            detail: finishReason
+          });
+        }
+        if (!fullText && !fullReasoning && completionStatus === "truncated") {
+          throw AiProviderError("output_truncated", "Model output was truncated before producing content", {
+            format: profile.format,
+            detail: finishReason
+          });
+        }
         if (!fullText && !fullReasoning && !allowEmpty) {
           throw AiProviderError("empty_response", "Model returned an empty response", {
             format: profile.format
@@ -1536,7 +1737,9 @@
           reasoning: fullReasoning,
           usage: latestUsage,
           format: profile.format,
-          model: profile.model
+          model: profile.model,
+          completionStatus: completionStatus,
+          finishReason: finishReason
         };
       }
 

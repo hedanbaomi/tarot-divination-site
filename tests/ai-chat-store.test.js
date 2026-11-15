@@ -182,6 +182,76 @@ function createFakeIndexedDb() {
   };
 }
 
+test("memory fallback announces nonpersistent storage and stays on the same adapter", async () => {
+  let attempts = 0;
+  const persistentIdb = createFakeIndexedDb();
+  const modes = [];
+  const store = chatStore.createStore({
+    memoryFallback: true,
+    onStorageModeChange: mode => modes.push(mode),
+    indexedDB: {
+      open(...args) {
+        attempts += 1;
+        if (attempts > 1) return persistentIdb.open(...args);
+        const request = {};
+        queueMicrotask(() => request.onerror({ target: { error: new Error("unavailable") } }));
+        return request;
+      }
+    }
+  });
+  await store.createConversation({ id: "temporary", messages: [{ role: "user", content: "keep for export" }] });
+  assert.deepEqual(modes, ["memory"]);
+  assert.equal((await store.open()).__memory, true);
+  assert.equal((await store.exportBackup()).conversations[0].messages[0].content, "keep for export");
+  assert.equal(attempts, 1, "A recovered database must not silently hide in-memory conversations");
+});
+
+test("a failed synchronous database open can be retried without a memory fallback", async () => {
+  const idb = createFakeIndexedDb();
+  let attempts = 0;
+  const modes = [];
+  const store = chatStore.createStore({
+    indexedDB: {
+      open(...args) {
+        if (++attempts === 1) throw new Error("temporary open failure");
+        return idb.open(...args);
+      }
+    },
+    onStorageModeChange: mode => modes.push(mode)
+  });
+  await assert.rejects(store.open(), /temporary open failure/);
+  await store.createConversation({ id: "retry" });
+  assert.equal((await store.getConversation("retry")).id, "retry");
+  assert.deepEqual(modes, ["persistent"]);
+});
+
+test("backup import rejects oversized UTF-8 data before parsing or replacing existing chats", async () => {
+  const store = chatStore.createStore({ indexedDB: null, memoryFallback: true });
+  await store.createConversation({ id: "keep" });
+  for (const raw of [
+    " ".repeat(chatStore.MAX_BACKUP_BYTES + 1),
+    "汉".repeat(Math.floor(chatStore.MAX_BACKUP_BYTES / 3) + 1),
+    { conversations: [{ id: "too-large", messages: [{ content: "😀".repeat(chatStore.MAX_BACKUP_BYTES / 4) }] }] }
+  ]) {
+    await assert.rejects(store.importBackup(raw, { mode: "replace" }), { code: "backup_too_large" });
+    assert.equal((await store.getConversation("keep")).id, "keep");
+  }
+  const small = JSON.stringify({ format: chatStore.BACKUP_FORMAT, version: 1, conversations: [{ id: "boundary" }] });
+  const exactLimit = small + " ".repeat(chatStore.MAX_BACKUP_BYTES - Buffer.byteLength(small));
+  assert.equal(Buffer.byteLength(exactLimit), chatStore.MAX_BACKUP_BYTES);
+  const result = await store.importBackup(exactLimit);
+  assert.equal(result.importedCount, 1);
+  assert.equal(result.totalCount, 2);
+});
+
+test("Markdown exports preserve notices on incomplete responses", () => {
+  const markdown = chatStore.formatConversationMarkdown({
+    messages: [{ role: "assistant", content: "Partial answer", error: "Output was truncated" }]
+  }, { locale: "en" });
+  assert.match(markdown, /Partial answer/);
+  assert.match(markdown, /Response notice:.*Output was truncated/);
+});
+
 test("ai-chat-store persists, archives, pins, searches, exports and imports conversations", async () => {
   const store = chatStore.createStore({ indexedDB: createFakeIndexedDb() });
 

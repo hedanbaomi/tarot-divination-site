@@ -2,6 +2,7 @@
 
 Requires Python 3.11+ and playwright with Chrome installed.
 Run: python tools/test-ai-browser.py [--android] [--output /path/to/evidence]
+     [--browser-executable /path/to/chrome]
 Every scenario uses a disposable browser context. No real API key is used.
 """
 import argparse
@@ -16,6 +17,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--android", action="store_true")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--browser-executable", type=Path)
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parents[1]
     if args.android:
@@ -32,7 +34,11 @@ def main(argv=None):
 
         def do_POST(self):
             data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-            question = data["messages"][-1]["content"]
+            # Pending empty assistant messages are omitted from API requests,
+            # so consecutive user turns may be joined with two newlines. Route
+            # this fake service by the newest fixture prompt, but retain the
+            # full request in bodies for assertions about the actual payload.
+            question = data["messages"][-1]["content"].rsplit("\n\n", 1)[-1]
             seen.append(question)
             bodies.append(data)
             slow = question.startswith("slow") and seen.count(question) == 1
@@ -40,7 +46,10 @@ def main(argv=None):
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
             try:
-                chunks = ["answer " + question, " complete"]
+                self.wfile.write(b"trace-id: local-fixture\r\n\r\n")
+                chunks = ["answer " + question]
+                if question != "interrupted-fixture":
+                    chunks.append(" complete")
                 for i, chunk in enumerate(chunks):
                     # Multiline CRLF SSE is valid even when split between CR and LF.
                     payload = json.dumps({"choices": [{"delta": {"content": chunk}}]})
@@ -51,7 +60,11 @@ def main(argv=None):
                     if slow and i == 0:
                         if not gate.wait(20):
                             raise TimeoutError("Test did not release slow provider")
-                self.wfile.write(b"data: [DONE]\r\n\r\n")
+                if question == "truncated-fixture":
+                    ending = {"choices": [{"delta": {}, "finish_reason": "length"}]}
+                    self.wfile.write(("data: " + json.dumps(ending) + "\r\n\r\n").encode())
+                if question != "interrupted-fixture":
+                    self.wfile.write(b"data: [DONE]\r\n\r\n")
                 self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
                 pass
@@ -84,10 +97,22 @@ def main(argv=None):
         # A completed IDB transaction is the boundary, not merely the hidden button.
         p.wait_for_function("!document.querySelector('#aiPromptInput').disabled")
 
+    def toggle_language(p):
+        if args.android:
+            p.locator("#menuToggle").click()
+        p.locator("#languageToggle").click()
+        if args.android:
+            p.locator("#menuClose").click()
+
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(channel="chrome", headless=True)
+            browser_options = {"headless": True}
+            if args.browser_executable:
+                browser_options["executable_path"] = str(args.browser_executable)
+            else:
+                browser_options["channel"] = "chrome"
+            browser = pw.chromium.launch(**browser_options)
 
             def context():
                 gate.clear()
@@ -100,6 +125,7 @@ def main(argv=None):
 
             with context() as c:
                 a = page(c)
+                assert a.locator("#aiStorageWarning").is_hidden()
                 send(a, "slow-pin")
                 a.locator(".ai-chat-item.is-active").get_by_role("button", name="置顶", exact=True).click()
                 a.locator(".ai-chat-item.is-active").get_by_role("button", name="取消置顶", exact=True).wait_for()
@@ -141,6 +167,7 @@ def main(argv=None):
                 b = page(c)
                 send(b, "B")
                 done(b)
+                assert bodies[-1]["messages"][-1]["content"] == "slow-A\n\nB"
                 assert len(b.evaluate(read)["messages"]) == 4
                 gate.set()
                 done(a)
@@ -258,6 +285,141 @@ def main(argv=None):
                 }""")
                 assert tx_results == {"count": 40, "rejected": True, "pinned": False}, tx_results
                 results["real_indexeddb_concurrency_and_abort"] = tx_results
+
+            with context() as c:
+                c.add_init_script("""const original = indexedDB.open.bind(indexedDB);
+                    indexedDB.open = function(name, ...rest) {
+                        if (name === 'quareia-divination-ai-chats') {
+                            throw new DOMException('Fixture storage failure', 'InvalidStateError');
+                        }
+                        return original(name, ...rest);
+                    };""")
+                a = page(c)
+                warning = a.locator("#aiStorageWarning")
+                warning.wait_for(state="visible")
+                assert "刷新或离开页面会丢失" in warning.inner_text()
+                send(a, "memory-export")
+                done(a)
+                with a.expect_download() as downloaded:
+                    a.locator("#aiStorageExportBtn").click()
+                payload = json.loads(Path(downloaded.value.path()).read_text(encoding="utf-8"))
+                assert payload["conversations"][0]["messages"][-1]["content"] == "answer memory-export complete"
+                assert "local-fixture-key" not in json.dumps(payload)
+                toggle_language(a)
+                assert "only in memory" in warning.inner_text()
+                toggle_language(a)
+                if args.output:
+                    a.screenshot(path=str(args.output / "ai-memory-warning.png"))
+                    a.set_viewport_size({"width": 390, "height": 844})
+                    assert a.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                    a.screenshot(path=str(args.output / "ai-memory-warning-mobile.png"))
+                a.reload()
+                warning.wait_for(state="visible")
+                assert "answer memory-export" not in a.locator("#aiMessages").inner_text()
+                results["memory_fallback_warning_and_backup"] = "pass"
+
+            with context() as c:
+                a = page(c)
+                a.evaluate("""() => {
+                    window.fixtureFileRead = false;
+                    const input = document.querySelector('#aiImportFileInput');
+                    Object.defineProperty(input, 'files', {configurable:true, value:[{
+                        name:'too-large.json', size:DivinationAiChatStore.MAX_BACKUP_BYTES + 1,
+                        text() { window.fixtureFileRead=true; return Promise.resolve('{}'); }
+                    }]});
+                    input.dispatchEvent(new Event('change', {bubbles:true}));
+                }""")
+                a.get_by_text("AI 对话备份不能超过 8 MiB。请选择较小的备份文件。", exact=True).wait_for()
+                assert a.evaluate("window.fixtureFileRead") is False
+                assert not a.evaluate(read)["messages"]
+                a.locator("#confirmCancelBtn").click()
+                a.evaluate("delete document.querySelector('#aiImportFileInput').files")
+                a.locator("#aiImportFileInput").set_input_files({
+                    "name": "memory-backup.json", "mimeType": "application/json",
+                    "buffer": json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                })
+                a.get_by_text("导入完成", exact=True).wait_for()
+                restored = a.evaluate("""async () => (await DivinationAiChatStore.createStore()
+                    .listConversations({archived:'all'})).some(c =>
+                    c.messages.some(m => m.content === 'answer memory-export complete'))""")
+                assert restored
+                results["oversize_backup_rejected_and_memory_backup_restored"] = "pass"
+
+            with context() as c:
+                a = page(c)
+                a.locator("#aiRenameChatBtn").click()
+                rename = a.locator("#aiRenameInput")
+                rename.fill("正在选词")
+                rename.dispatch_event("keydown", {"key":"Enter", "isComposing":True, "keyCode":229})
+                assert a.locator("#aiRenameModal").is_visible()
+                rename.dispatch_event("keydown", {"key":"Enter", "isComposing":False, "keyCode":229})
+                assert a.locator("#aiRenameModal").is_visible()
+                assert a.evaluate(read)["title"] != "正在选词"
+                rename.press("Enter")
+                a.wait_for_function("document.querySelector('#aiActiveChatTitle').textContent === '正在选词'")
+                prompt = a.locator("#aiPromptInput")
+                prompt.fill("候选词")
+                prompt.dispatch_event("keydown", {"key":"Enter", "isComposing":False, "keyCode":229})
+                assert prompt.input_value() == "候选词"
+                assert not a.evaluate(read)["messages"]
+                assert not seen
+                results["ime_enter_does_not_submit"] = "pass"
+
+            with context() as c:
+                a = page(c)
+                send(a, "truncated-fixture")
+                done(a)
+                saved = a.evaluate(read)
+                assert saved["messages"][-1]["content"] == "answer truncated-fixture complete"
+                assert "输出上限" in saved["messages"][-1]["error"]
+                a.reload()
+                a.wait_for_function("document.querySelector('#aiMessages').textContent.includes('输出上限')")
+                assert "answer truncated-fixture complete" in a.locator("#aiMessages").inner_text()
+                with a.expect_download() as downloaded:
+                    a.locator("#aiExportMdBtn").click()
+                markdown = Path(downloaded.value.path()).read_text(encoding="utf-8")
+                assert "输出上限" in markdown and "answer truncated-fixture complete" in markdown
+                results["truncated_answer_notice_persists_and_exports"] = "pass"
+
+            with context() as c:
+                a = page(c)
+                send(a, "interrupted-fixture")
+                done(a)
+                saved = a.evaluate(read)["messages"][-1]
+                assert saved["content"] == "answer interrupted-fixture"
+                assert "连接在回答完成前结束" in saved["error"]
+                assert "输出上限" not in saved["error"]
+                a.reload()
+                a.wait_for_function("document.querySelector('#aiMessages').textContent.includes('连接在回答完成前结束')")
+                assert "answer interrupted-fixture" in a.locator("#aiMessages").inner_text()
+                results["early_stream_eof_keeps_partial_with_distinct_notice"] = "pass"
+
+            with context() as c:
+                a = page(c)
+                a.evaluate("""async () => {
+                    await DivinationAiChatStore.createStore().createConversation({
+                        id:'large-archive', title:'Large archive fixture', archived:true,
+                        messages:[{role:'user',content:'ARCHIVE_BEGIN'+
+                            'x'.repeat(DivinationAiChatStore.MAX_BACKUP_BYTES)+'ARCHIVE_END'}]
+                    });
+                }""")
+                a.locator("#aiExportBackupBtn").click()
+                a.get_by_text("备份超过导入上限", exact=True).wait_for()
+                assert "Markdown 存档不能导入聊天列表" in a.locator("#confirmDialog").inner_text()
+                downloads = []
+                a.on("download", lambda download: downloads.append(download.suggested_filename))
+                a.locator("#confirmCancelBtn").click()
+                a.locator("#aiExportBackupBtn").click()
+                a.get_by_text("备份超过导入上限", exact=True).wait_for()
+                assert not downloads, "Cancelling the archive prompt must not download an unrestorable JSON file"
+                with a.expect_download() as downloaded:
+                    a.get_by_role("button", name="导出 Markdown 存档", exact=True).click()
+                assert downloaded.value.suggested_filename.endswith(".md")
+                archive = Path(downloaded.value.path()).read_text(encoding="utf-8")
+                assert "ARCHIVE_BEGIN" in archive and "ARCHIVE_END" in archive
+                assert len(archive) > 8 * 1024 * 1024
+                assert "Large archive fixture" in archive
+                results["oversize_export_offers_explicit_readable_archive"] = "pass"
             assert not errors, errors
             browser.close()
     finally:
