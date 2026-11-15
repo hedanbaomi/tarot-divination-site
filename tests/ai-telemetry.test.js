@@ -39,12 +39,20 @@ test("AI observer ignores opt-out, invalid model IDs and unstarted calls", () =>
   assert.equal(draws,0); assert.equal(calls,0);
 });
 
-test("incomplete responses are unknown and optional observer failures never escape", () => {
-  let reported;
-  const observer = reporter.createObserver("model", "compression", {crypto:webcrypto, receiver:{beginAiUsage:()=>"2",logAiUsage:(...args)=>{reported=args;throw Error("optional");}}});
-  observer.onRequestStart();
-  assert.doesNotThrow(()=>observer.onRequestEnd({complete:false,usage:{totalTokens:50}}));
-  assert.equal(reported[3],-1); assert.equal(reported[2],"compression");
+test("AI observer drops unsuccessful completions and optional reporting failures never escape", () => {
+  const calls = [];
+  const receiver = {beginAiUsage:()=>"2",logAiUsage:(...args)=>{calls.push(args);throw Error("optional");}};
+  for (const result of [undefined, {}, {complete:false,usage:{totalTokens:50}}]) {
+    const observer = reporter.createObserver("model", "compression", {crypto:webcrypto,receiver});
+    observer.onRequestStart();
+    assert.doesNotThrow(()=>observer.onRequestEnd(result));
+    observer.onRequestEnd({complete:true,usage:{totalTokens:999}});
+  }
+  assert.equal(calls.length,0,"A failure must not report now or on a repeated callback");
+  const successful = reporter.createObserver("model", "compression", {crypto:webcrypto,receiver});
+  successful.onRequestStart();
+  assert.doesNotThrow(()=>successful.onRequestEnd({complete:true,usage:{totalTokens:50}}));
+  assert.equal(calls.length,1); assert.equal(calls[0][3],50);
 });
 
 function collector() {
@@ -72,4 +80,52 @@ test("web collector rejects stale consent after off/on and sends a closed nullab
   c.api.setEnabled(false);
   assert.equal(c.api.beginAiUsage(),"");
   assert.equal(c.values.has("quareia-web-telemetry-id"),false);
+});
+
+test("provider-to-collector pipeline counts only successful conversation and compression calls", async (t) => {
+  const providers = require("../js/ai-providers.js");
+  const profile = providers.createDefaultProfile("openai-chat", {
+    model:"gpt-4o-mini",baseUrl:"https://provider.invalid/v1",apiKey:"offline-fixture-key"
+  });
+  function sse(reason, usage, terminal=true) {
+    const payload = {choices:[{delta:{content:"Synthetic reply"},finish_reason:reason}]};
+    if (usage !== undefined) payload.usage={total_tokens:usage};
+    return new Response("data: "+JSON.stringify(payload)+"\n\n"+(terminal?"data: [DONE]\n\n":""),
+      {headers:{"Content-Type":"text/event-stream"}});
+  }
+  const scenarios = [
+    {name:"HTTP 401", fetch:async()=>new Response("Unauthorized",{status:401}), error:"auth_failed"},
+    {name:"HTTP 500", fetch:async()=>new Response("Unavailable",{status:500}), error:true},
+    {name:"network failure", fetch:async()=>{throw new TypeError("offline");}, error:"network_error"},
+    {name:"cancelled", fetch:async(_url,opts)=>{throw new DOMException("cancelled","AbortError");}, error:"aborted"},
+    {name:"malformed response", fetch:async()=>new Response("invalid-json",{headers:{"Content-Type":"application/json"}}), error:true},
+    {name:"premature EOF", fetch:async()=>sse(null,150,false), status:"truncated"},
+    {name:"output limit", fetch:async()=>sse("length",150), status:"truncated"},
+    {name:"blocked partial output", fetch:async()=>sse("content_filter",150), status:"blocked"},
+    {name:"success with tokens", fetch:async()=>sse("stop",150), count:150},
+    {name:"success with zero tokens", fetch:async()=>sse("stop",0), count:0},
+    {name:"success without usage", fetch:async()=>sse("stop"), count:-1},
+    {name:"JSON success without usage", fetch:async()=>new Response(JSON.stringify({choices:[{message:{content:"Synthetic reply"},finish_reason:"stop"}]}),{headers:{"Content-Type":"application/json"}}), count:-1}
+  ];
+  for (const kind of ["conversation","compression"]) for (const scenario of scenarios) {
+    await t.test(kind+" / "+scenario.name, async () => {
+      const calls=[];
+      const observer=reporter.createObserver(profile.model,kind,{
+        crypto:webcrypto,receiver:{beginAiUsage:()=>"1",logAiUsage:(...args)=>calls.push(args)}
+      });
+      const payload=Object.assign({},observer,{
+        messages:[{role:"user",content:"Offline usage test"}],fetchImpl:scenario.fetch
+      });
+      const result=kind==="compression"?providers.compressMessages(profile,payload):providers.streamChat(profile,payload);
+      if (scenario.error) await assert.rejects(result);
+      else {
+        const response=await result;
+        if (scenario.status && kind==="conversation") assert.equal(response.completionStatus,scenario.status);
+      }
+      if (scenario.count !== undefined) {
+        assert.equal(calls.length,1,"successful call must report exactly once");
+        assert.equal(calls[0][2],kind); assert.equal(calls[0][3],scenario.count);
+      } else assert.equal(calls.length,0,"unsuccessful call must not reach telemetry");
+    });
+  }
 });

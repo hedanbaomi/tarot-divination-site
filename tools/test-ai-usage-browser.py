@@ -20,10 +20,10 @@ def main():
     events,pending,errors=[],[],[]
     config={"version":1,"activeProfileId":"fixture","profiles":[{"id":"fixture","name":"Offline fixture","format":"openai-chat","model":"gpt-6.1-terra","baseUrl":"https://provider.invalid/v1","apiKey":"fixture-only-key","contextWindow":65536}]}
 
-    def answer(route, unknown=False):
-        payload={"choices":[{"delta":{"content":"Synthetic reply"},"finish_reason":"stop"}]}
+    def answer(route, unknown=False, finish="stop", terminal=True):
+        payload={"choices":[{"delta":{"content":"Synthetic reply"},"finish_reason":finish}]}
         if not unknown: payload["usage"]={"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}
-        route.fulfill(status=200,content_type="text/event-stream",body="data: "+json.dumps(payload)+"\n\ndata: [DONE]\n\n")
+        route.fulfill(status=200,content_type="text/event-stream",body="data: "+json.dumps(payload)+"\n\n"+("data: [DONE]\n\n" if terminal else ""))
 
     def handle(route):
         url=route.request.url
@@ -43,7 +43,11 @@ def main():
             else:
                 data=route.request.post_data_json
                 prompt=data["messages"][-1]["content"]
-                if prompt.endswith("hold-fixture"): pending.append(route)
+                if prompt.endswith("http-failure-fixture"): route.fulfill(status=401,headers={"Access-Control-Allow-Origin":"*"},body="Unauthorized")
+                elif prompt.endswith("limit-fixture"): answer(route, finish="length")
+                elif prompt.endswith("blocked-fixture"): answer(route, finish="content_filter")
+                elif prompt.endswith("cutoff-fixture"): answer(route, finish=None, terminal=False)
+                elif prompt.endswith("hold-fixture"): pending.append(route)
                 else: answer(route, prompt.endswith("unknown-fixture"))
         else: route.abort()
 
@@ -86,6 +90,9 @@ def main():
                 assert get_events()[0]["request_id"]!=get_events()[1]["request_id"]
                 send("unknown-fixture")
                 assert len(get_events())==3 and get_events()[-1]["total_tokens"] is None
+                for failure in ["http-failure-fixture", "limit-fixture", "blocked-fixture", "cutoff-fixture"]:
+                    send(failure)
+                    assert len(get_events())==3, "Failed or incomplete generation was counted: "+failure
                 page.locator("#aiPromptInput").fill("hold-fixture")
                 page.locator("#aiSendBtn").click()
                 page.wait_for_timeout(100)
@@ -103,7 +110,7 @@ def main():
                 if args.output:
                     args.output.mkdir(parents=True,exist_ok=True)
                     page.screenshot(path=str(args.output/"ai-usage.png"))
-                    (args.output/"ai-usage.json").write_text(json.dumps({"passed":True,"events":get_events(),"checks":["known tokens","regeneration new round","unknown usage null","opt-out then on drops old result","disabled no event","no private content"]},indent=2),encoding="utf-8")
+                    (args.output/"ai-usage.json").write_text(json.dumps({"passed":True,"events":get_events(),"checks":["known tokens","regeneration new round","unknown usage null","HTTP failure excluded","truncated and blocked excluded","early EOF excluded","opt-out then on drops old result","disabled no event","no private content"]},indent=2),encoding="utf-8")
                 assert not errors, errors
     print("AI usage browser checks passed: "+("android" if args.android else "web"))
 

@@ -1745,7 +1745,7 @@
         cause: err
       });
     }).then(function (result) {
-      notifyObserver("onRequestEnd", { usage: latestUsage, complete: sawTerminalCompletion || sawNonSsePayload });
+      notifyObserver("onRequestEnd", { usage: latestUsage, complete: result.completionStatus === "complete" && !(signal && signal.aborted) && (sawTerminalCompletion || sawNonSsePayload) });
       return result;
     }, function (error) {
       notifyObserver("onRequestEnd", { usage: null, complete: false });
