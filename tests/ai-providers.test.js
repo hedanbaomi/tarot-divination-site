@@ -1183,3 +1183,36 @@ test("catalog/default contextWindowSource stays auto, Anthropic usage merge pres
   }), (err) => err.code === "aborted");
   assert.equal(readerCancelled, true);
 });
+
+
+test("current OpenAI context catalog covers Terra without claiming live metadata", async () => {
+  for (const model of ["gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-sol", "gpt-6.1-terra", "openai/gpt-6.1-terra", "gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"]) {
+    assert.deepEqual(providers.inferModelContextWindow(model, "openai-responses"), { contextWindow: 1050000, source: "catalog" });
+  }
+  assert.equal(providers.inferModelContextWindow("gpt-6.1-terra-unknown", "openai-responses").source, "default");
+  const profile = { format: "openai-responses", model: "gpt-6.1-terra", apiKey: "fixture-only-key" };
+  const result = await providers.fetchModelContextWindow(profile, {
+    fetchImpl: async url => ({ ok: true, text: async () => JSON.stringify(url.endsWith("/models")
+      ? { data: [{ id: profile.model, object: "model", owned_by: "openai" }] }
+      : { id: profile.model, object: "model", owned_by: "openai" }) })
+  });
+  assert.equal(result.contextWindow, 1050000);
+  assert.equal(result.source, "catalog");
+  assert.equal(result.live, false);
+  assert.deepEqual(providers.resolveContextWindow({ ...profile, contextWindow: 260000 }), { contextWindow: 260000, source: "manual" });
+  assert.deepEqual(providers.resolveContextWindow({ ...profile, detectedContextWindow: 131072, contextWindowSource: "api" }), { contextWindow: 131072, source: "api" });
+});
+
+
+test("recent Claude and Gemini catalogs keep unknown and specialised IDs out", () => {
+  for (const model of ["claude-fable-5", "claude-fable-5-1", "claude-fable-5-2", "claude-mythos-preview", "claude-mythos-5", "claude-mythos-5-1", "claude-mythos-5-2", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-opus-5-5", "claude-sonnet-4-6", "claude-sonnet-5", "claude-sonnet-5-5", "claude-haiku-5-5"]) {
+    assert.deepEqual(providers.inferModelContextWindow("anthropic/" + model, "anthropic-messages"), { contextWindow: 1000000, source: "catalog" }, model);
+  }
+  for (const model of ["gemini-4-carbon", "gemini-4-argon", "gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"]) {
+    assert.deepEqual(providers.inferModelContextWindow("models/" + model, "gemini-aistudio"), { contextWindow: 1048576, source: "catalog" }, model);
+  }
+  for (const model of ["gpt-5.6-unknown", "gpt-6.1-terra-unknown", "claude-opus-99", "claude-haiku-5-5-unknown", "claude-sonnet-4-5:1m", "gemini-3.8-live", "gemini-3.8-flash-tts", "gemini-3.1-flash-image", "gemini-4-unknown"]) {
+    assert.equal(providers.inferModelContextWindow(model, "openai-chat").source, "default", model);
+  }
+  assert.deepEqual(providers.inferModelContextWindow("claude-haiku-4-5-20251001", "anthropic-messages"), { contextWindow: 200000, source: "catalog" });
+});

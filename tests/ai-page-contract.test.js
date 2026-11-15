@@ -969,6 +969,51 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   assert.equal(Boolean(savedCfgAfterProbe.profiles[0].detectedContextWindow), false, "Catalog fallback (live=false) must not persist detectedContextWindow");
   assert.notEqual(savedCfgAfterProbe.profiles[0].contextWindowSource, "api");
 
+  // Failed detection must preserve manual limits and report an unknown window.
+  doc.getElementById("aiSettingsBtn").click();
+  const modelField = doc.getElementById("aiProfileModel");
+  const contextField = doc.getElementById("aiFieldContextWindow");
+  modelField.value = "unknown-context-model";
+  modelField.dispatchEvent({ type: "input" });
+  contextField.value = "260000";
+  contextField.dispatchEvent({ type: "input" });
+  probeResult = { contextWindow: 32768, source: "default", live: false };
+  detectContextBtn.click();
+  await flush();
+  assert.equal(contextField.value, "260000");
+  assert.match(doc.getElementById("aiSettingsStatus").textContent, /未能识别/);
+  assert.doesNotMatch(doc.getElementById("aiSettingsStatus").textContent, /已识别/);
+  assert.match(doc.getElementById("aiContextWindowHint").textContent, /260,000/);
+
+  // A response for the old model must not mutate a newly edited form.
+  let finishContextProbe;
+  probeResult = new Promise(resolve => { finishContextProbe = resolve; });
+  detectContextBtn.click();
+  modelField.value = "gpt-6.1-terra";
+  modelField.dispatchEvent({ type: "input" });
+  contextField.value = "300000";
+  contextField.dispatchEvent({ type: "input" });
+  finishContextProbe({ contextWindow: 8192, source: "api", live: true });
+  await flush();
+  assert.equal(contextField.value, "300000");
+  assert.match(doc.getElementById("aiSettingsStatus").textContent, /配置已更改/);
+  assert.match(doc.getElementById("aiContextWindowHint").textContent, /300,000/);
+
+  // Catalog fallback must not be persisted as live API metadata.
+  modelField.value = "gpt-6.1-terra";
+  modelField.dispatchEvent({ type: "input" });
+  probeResult = { contextWindow: 1050000, source: "catalog", live: false };
+  detectContextBtn.click();
+  await flush();
+  assert.equal(contextField.value, "");
+  assert.match(doc.getElementById("aiContextWindowHint").textContent, /1,050,000/);
+  assert.match(doc.getElementById("aiSettingsStatus").textContent, /模型目录/);
+  saveProfileBtn.click();
+  const terraProfile = JSON.parse(storage.getItem(realProviders.STORAGE_KEY)).profiles[0];
+  assert.equal(terraProfile.detectedContextWindow, 0);
+  assert.equal(terraProfile.contextWindowSource, "auto");
+  assert.match(doc.getElementById("aiContextMeter").textContent, /1,050,000/);
+
   doc.getElementById("aiSettingsBtn").click();
   confirmNext = true;
   clearConfigBtn.click();

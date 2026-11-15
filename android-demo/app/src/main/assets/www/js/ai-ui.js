@@ -2224,32 +2224,50 @@
       syncFormIntoDraft();
       var active = getDraftActiveProfile();
       if (!active) return;
-      active.contextWindow = null;
-      if (els.fieldContextWindow) {
-        els.fieldContextWindow.value = "";
-      }
+      var draftAtStart = state.settingsDraft;
       var normalized = providers.normalizeProfile(active);
       setStatusText(els.settingsStatus, tr("ai.detectingContext", null, "正在获取模型上下文窗口大小…", "Detecting model context window…"), false);
       if (els.detectContextBtn) els.detectContextBtn.disabled = true;
 
       providers.fetchModelContextWindow(normalized).then(function (res) {
-        if (res && res.live === true && res.contextWindow > 0) {
-          active.detectedContextWindow = res.contextWindow;
-          active.contextWindowSource = "api";
-        } else {
-          active.detectedContextWindow = null;
-          active.contextWindowSource = (res && res.source) || "";
+        // Ignore responses for a profile or form that changed while probing.
+        if (state.settingsDraft !== draftAtStart || getDraftActiveProfile() !== active) return;
+        syncFormIntoDraft();
+        var current = providers.normalizeProfile(active);
+        var unchanged = ["format", "baseUrl", "apiKey", "model", "vertexProject", "vertexLocation", "contextWindow"]
+          .every(function (key) { return current[key] === normalized[key]; });
+        if (!unchanged) {
+          setStatusText(els.settingsStatus, tr("ai.detectContextChanged", null,
+            "配置已更改，请重新获取上下文窗口。",
+            "Configuration changed. Detect the context window again."), false);
+          return;
         }
-        var resolved = providers.resolveContextWindow(active);
-        var displayWindow = res && res.contextWindow > 0 ? res.contextWindow : resolved.contextWindow;
-        var displaySource = (res && res.source) || resolved.source;
+        var known = res && res.contextWindow > 0 && (res.live === true || res.source === "catalog");
+        if (known) {
+          active.contextWindow = null;
+          if (els.fieldContextWindow) els.fieldContextWindow.value = "";
+          active.detectedContextWindow = res.live === true ? res.contextWindow : null;
+          active.contextWindowSource = res.live === true ? "api" : "auto";
+        }
+        // An unknown-model fallback must never erase a manual or API limit.
         updateContextWindowHintUI(active);
-        setStatusText(els.settingsStatus, tr("ai.detectContextDone", {
-          count: formatTokenCount(displayWindow),
-          source: contextSourceLabel(displaySource)
-        },
-        "已识别模型上下文窗口：" + formatTokenCount(displayWindow) + " tokens（" + contextSourceLabel(displaySource) + "）",
-        "Detected model context window: " + formatTokenCount(displayWindow) + " tokens (" + contextSourceLabel(displaySource) + ")"), false);
+        var resolved = providers.resolveContextWindow(active);
+        var vars = { count: formatTokenCount(resolved.contextWindow), source: contextSourceLabel(resolved.source) };
+        var status;
+        if (!known) {
+          status = tr("ai.detectContextUnknown", vars,
+            "未能识别此模型的上下文窗口。当前使用 {count} tokens（{source}）；请按服务商说明手动填写。",
+            "Could not identify this model's context window. Using {count} tokens ({source}); enter the provider's limit manually.");
+        } else if (res.live === true) {
+          status = tr("ai.detectContextDone", vars,
+            "已从接口获取上下文窗口：{count} tokens",
+            "Context window fetched from API: {count} tokens");
+        } else {
+          status = tr("ai.detectContextCatalog", vars,
+            "接口未返回上下文长度，已使用模型目录：{count} tokens。代理限制可能不同，可手动覆盖。",
+            "The API did not return a context limit. Using the model catalog: {count} tokens. Proxy limits may differ; you can override this manually.");
+        }
+        setStatusText(els.settingsStatus, status, !known);
         renderContextMeter();
       }).catch(function (err) {
         setStatusText(els.settingsStatus, formatProviderError(err), true);
