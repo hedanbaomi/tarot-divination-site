@@ -367,10 +367,30 @@ test("白盒：只有画板变窄才收横向坐标，刷新恢复与纵向位�
   assert.equal(shrinking[1].x, 133, "越界只做最小内推，不丢回默认网格");
   assert.equal(shrinking[1].y, 470);
 
-  /* 收进同一个点时要错开，不能叠成一张 */
-  var collided = [{ x: 300, y: 100 }, { x: 300, y: 100 }];
-  assert.equal(fit(collided, 100, 400, 44), true);
-  assert.notEqual(collided[0].x + ":" + collided[0].y, collided[1].x + ":" + collided[1].y);
+  /* 第一次渲染（刷新恢复草稿）没有上一次的宽度：没有比例可算，只做最小内推 */
+  var first = [{ x: 700, y: 300 }, { x: 120, y: 300 }, { x: -30, y: 40 }];
+  assert.equal(fit(first, 354, 0, 44), true);
+  assert.deepEqual(first.map(function (item) { return [item.x, item.y]; }),
+    [[310, 300], [120, 300], [44, 40]],
+    "框内的牌不动，只把越界的收回边界");
+
+  /* 收进同一个点时按半个牌宽左右交错，不能叠成一张 */
+  var collided = [{ x: 900, y: 100 }, { x: 900, y: 100 }];
+  assert.equal(fit(collided, 354, 900, 44), true);
+  assert.equal(collided[0].x, 310);
+  assert.equal(Math.abs(collided[1].x - collided[0].x), 44, "错开步长要按牌宽，不是 10px");
+  assert.ok(collided[1].x >= 44 && collided[1].x <= 310);
+});
+
+test("白盒：窗口尺寸变化只在宽度变了才重绘，并且合帧（拖动窗口不掉帧）", function () {
+  var resize = grab("scheduleFreeformResizeRender");
+  assert.match(resize, /requestAnimationFrame/, "resize 重绘要合帧");
+  assert.match(resize, /box\.clientWidth === freeformLayerW/, "只是高度变化（地址栏、软键盘）不该重绘");
+  assert.match(resize, /renderFreeDraw\(\)/);
+  assert.match(appSource, /if \(isFreeform\(\) && freeDrawn\.length\) scheduleFreeformResizeRender\(\);/);
+  assert.doesNotMatch(appSource, /if \(isFreeform\(\) && freeDrawn\.length\) renderFreeDraw\(\);/,
+    "resize 里不能直接整块重建");
+  assert.doesNotMatch(appSource, /freeformLayerH/, "高度不用记，牌根本不按高度排");
 });
 
 test("白盒：翻牌与重绘的分工（不整块重绘、不丢回默认网格、不按高度重排）", function () {

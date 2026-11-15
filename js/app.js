@@ -805,37 +805,62 @@
     el.revealBtn.textContent = total > 0 && revealed === total ? t("app.revealedAll") : t("spread.reveal");
   }
 
-  /* 画板变窄（转屏、窗口缩小、换成窄屏设备）时，只把横向越界的牌按宽度比例收回来，
+  /* 画板变窄（转屏、窗口缩小、换成窄屏设备）时，把横向坐标按宽度比例收回画板内，
      尽量避免破坏用户摆好的牌阵；纵向坐标一律不动 —— 手机上地址栏收起、软键盘、
-     甚至刷新恢复草稿都会改变画板高度，那些都不该让牌挪位。 */
+     甚至刷新恢复草稿都会改变画板高度，那些都不该让牌挪位。
+     第一次渲染（刷新恢复草稿）拿不到上一次的宽度，没有比例可算，只做最小内推：
+     越界的牌收回边界，画板内的牌一张都不动，也不会丢回默认网格。 */
   function fitFreeCardsToWidth(items, layerW, prevW, halfW) {
-    if (!items || !items.length || !layerW || !prevW || layerW >= prevW) return false;
-    var ratio = layerW / prevW;
+    if (!items || !items.length || !layerW) return false;
+    /* 变宽、等宽都不碰坐标，只有确实变窄才收 */
+    if (prevW > 0 && layerW >= prevW) return false;
+    var ratio = prevW > 0 ? layerW / prevW : 1;
     var minX = halfW;
     var maxX = Math.max(halfW, layerW - halfW);
-    var used = Object.create(null);
+    /* 错开用牌宽做步长：10px 比牌窄太多，同等高度收进来十来张还是一坨 */
+    var step = Math.max(12, Math.round(halfW));
     var changed = false;
+    var rows = Object.create(null);
     items.forEach(function (item) {
       var source = typeof item.x === "number" && isFinite(item.x) ? item.x : minX;
       var x = Math.round(source * ratio);
       if (x < minX) x = minX;
       else if (x > maxX) x = maxX;
-      var key = x + ":" + Math.round(item.y || 0);
-      var guard = 0;
-      /* 收进来之后如果和前面的牌落到同一点，先往右错开；右边就是边界了就往左，别叠成一张 */
-      while (used[key] && guard < 6) {
-        var next = x + 10;
-        if (next > maxX) next = x - 10;
-        if (next < minX || next === x) break;
-        x = next;
-        key = x + ":" + Math.round(item.y || 0);
-        guard += 1;
-      }
-      used[key] = true;
       if (x !== item.x) {
         item.x = x;
         changed = true;
       }
+      var rowKey = String(Math.round(typeof item.y === "number" && isFinite(item.y) ? item.y : 0));
+      (rows[rowKey] || (rows[rowKey] = [])).push(item);
+    });
+    /* 同一行（y 相同）里落到同一列时，沿这一行左右交替错开，别叠成一张。
+       画板比牌阵窄得多时仍然会叠，这里只能尽量把牌摊开 */
+    Object.keys(rows).forEach(function (rowKey) {
+      var row = rows[rowKey];
+      if (row.length < 2) return;
+      var used = Object.create(null);
+      row.forEach(function (item) {
+        if (!used[item.x]) {
+          used[item.x] = true;
+          return;
+        }
+        var x = item.x;
+        var offset = step;
+        var guard = 0;
+        while (used[x] && guard < 24) {
+          var right = item.x + offset;
+          var left = item.x - offset;
+          if (right <= maxX && !used[right]) { x = right; break; }
+          if (left >= minX && !used[left]) { x = left; break; }
+          offset += step;
+          guard += 1;
+        }
+        used[x] = true;
+        if (x !== item.x) {
+          item.x = x;
+          changed = true;
+        }
+      });
     });
     return changed;
   }
@@ -873,7 +898,6 @@
         scheduleFreeformDraft();
       }
       freeformLayerW = layerW;
-      freeformLayerH = layerH;
       if (layerW && layerH) legacyViewport = null;
     }
     var undo = document.getElementById("freeUndoBtn");
@@ -883,6 +907,24 @@
     syncFreeActions();
   }
 
+  /* 窗口尺寸变化：只有画板「宽度」真的变了才需要重绘。
+     手机上地址栏收起/展开、软键盘只改高度，牌本来就不按高度排，重绘纯属白花钱；
+     而拖动窗口时 resize 每帧都来，这里用 rAF 合帧再重建，避免掉帧。 */
+  var freeformResizeFrame = 0;
+  function scheduleFreeformResizeRender() {
+    if (freeformResizeFrame) return;
+    var raf = window.requestAnimationFrame || function (cb) {
+      return window.setTimeout(cb, 16);
+    };
+    freeformResizeFrame = raf(function () {
+      freeformResizeFrame = 0;
+      if (!isFreeform() || !freeDrawn.length) return;
+      var box = document.getElementById("freeDrawCards");
+      if (!box || box.clientWidth === freeformLayerW) return;
+      renderFreeDraw();
+    });
+  }
+
   /* ---------- freeform draft ----------
      和旧画板用同一份 schema（free-board/v1），所以主分支存下的草稿也能恢复；
      画板面板移除后这块逻辑改由牌桌自己维护。 */
@@ -890,7 +932,6 @@
   var freeformDraftTimer = 0;
   var legacyViewport = null;
   var freeformLayerW = 0;
-  var freeformLayerH = 0;
   var parkedDraft = null;
 
   function isShuffleRunning() {
@@ -2531,9 +2572,9 @@
     if (freeformDraftTimer) saveFreeformDraftNow();
   });
 
-  /* 屏幕尺寸变了：把自由画板上的牌拉回可视范围 */
+  /* 屏幕尺寸变了：只有画板宽度变了才把牌收进画板内，并且合帧，避免拖动窗口时掉帧 */
   window.addEventListener("resize", function () {
-    if (isFreeform() && freeDrawn.length) renderFreeDraw();
+    if (isFreeform() && freeDrawn.length) scheduleFreeformResizeRender();
   });
 
   if (document.readyState === "loading") {
