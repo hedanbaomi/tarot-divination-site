@@ -1785,25 +1785,69 @@
     return lower;
   }
 
+  // Verified 2026-11-15 against official model specifications. See docs/ai-model-context.md.
+  // Exact IDs keep future variants and specialised models out of broad family guesses.
+  var MODEL_CONTEXT_WINDOWS = {
+    "gpt-5.6": 1050000,
+    "gpt-5.6-sol": 1050000,
+    "gpt-5.6-terra": 1050000,
+    "gpt-5.6-luna": 1050000,
+    "gpt-6-sol": 1050000,
+    "gpt-6-astra": 1050000,
+    "gpt-6-luna": 1050000,
+    "gpt-6.1-sol": 1050000,
+    "gpt-6.1-terra": 1050000,
+    "claude-fable-5": 1000000,
+    "claude-fable-5-1": 1000000,
+    "claude-fable-5-2": 1000000,
+    "claude-mythos-preview": 1000000,
+    "claude-mythos-5": 1000000,
+    "claude-mythos-5-1": 1000000,
+    "claude-mythos-5-2": 1000000,
+    "claude-opus-4-6": 1000000,
+    "claude-opus-4-7": 1000000,
+    "claude-opus-4-8": 1000000,
+    "claude-opus-5": 1000000,
+    "claude-opus-5-5": 1000000,
+    "claude-sonnet-4-6": 1000000,
+    "claude-sonnet-5": 1000000,
+    "claude-sonnet-5-5": 1000000,
+    "claude-haiku-5-5": 1000000,
+    "gemini-4-carbon": 1048576,
+    "gemini-4-argon": 1048576,
+    "gemini-4-hydrogen": 1048576,
+    "gemini-3.8-flash": 1048576,
+    "gemini-3.6-flash": 1048576,
+    "gemini-3.5-flash-lite": 1048576,
+    "gemini-3.1-flash-lite": 1048576,
+    "gemini-3.1-flash-lite-preview": 1048576,
+    "gemini-3.1-pro-preview": 1048576,
+    "gemini-3-flash-preview": 1048576,
+    "gemini-3-pro-preview": 1048576,
+    "gemini-2.5-pro": 1048576,
+    "gemini-2.5-flash": 1048576,
+    "gemini-2.5-flash-lite": 1048576
+  };
+
   function inferModelContextWindow(model, format) {
     var key = normalizeModelCatalogKey(model);
+    if (Object.prototype.hasOwnProperty.call(MODEL_CONTEXT_WINDOWS, key)) {
+      return { contextWindow: MODEL_CONTEXT_WINDOWS[key], source: "catalog" };
+    }
     if (key) {
       if (key.indexOf("gemini-1.5-pro") === 0) {
         return { contextWindow: 2097152, source: "catalog" };
       }
-      if (/^gemini-(?:3|2\.5|2\.0|1\.5-flash|flash|pro-latest|exp)/.test(key)) {
+      if (/^gemini-(?:2\.0-flash(?:-lite)?(?:-001)?|1\.5-flash(?:-8b)?(?:-00[12])?|flash-latest|flash-lite-latest|pro-latest)$/.test(key)) {
         return { contextWindow: 1048576, source: "catalog" };
       }
-      if (key.indexOf("claude-") === 0) {
-        if (key.indexOf("1m") !== -1 || key.indexOf("1000k") !== -1) {
-          return { contextWindow: 1000000, source: "catalog" };
-        }
+      if (/^claude-(?:opus-(?:4|4-1|4-5)|sonnet-(?:4|4-5)|haiku-4-5|3(?:-5|-7)?-(?:opus|sonnet|haiku))(?:-\d{8}|-latest)?$/.test(key)) {
         return { contextWindow: 200000, source: "catalog" };
       }
       if (key.indexOf("gpt-4.1") === 0) {
         return { contextWindow: 1047576, source: "catalog" };
       }
-      if (key.indexOf("gpt-5") === 0) {
+      if (/^gpt-5(?:$|[-_]|\.[0-5](?:$|[-_]))/.test(key)) {
         return { contextWindow: 400000, source: "catalog" };
       }
       if (/^(?:o1|o3|o4)(?:$|[-_])/.test(key)) {

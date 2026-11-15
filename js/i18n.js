@@ -519,7 +519,10 @@
       ,"ai.contextWindowAutoPlaceholder": "自动识别（当前约 {count} tokens）"
       ,"ai.detectContextWindow": "自动获取"
       ,"ai.detectingContext": "正在获取模型上下文窗口大小…"
-      ,"ai.detectContextDone": "已识别模型上下文窗口：{count} tokens（{source}）"
+      ,"ai.detectContextDone": "已从接口获取上下文窗口：{count} tokens"
+      ,"ai.detectContextCatalog": "接口未返回上下文长度，已使用模型目录：{count} tokens。代理限制可能不同，可手动覆盖。"
+      ,"ai.detectContextUnknown": "未能识别此模型的上下文窗口。当前使用 {count} tokens（{source}）；请按服务商说明手动填写。"
+      ,"ai.detectContextChanged": "配置已更改，请重新获取上下文窗口。"
       ,"ai.contextWindowStatus": "当前生效上限：{count} tokens（来源：{source}）"
       ,"ai.contextSource.manual": "手动指定"
       ,"ai.contextSource.api": "接口实时获取"
@@ -1115,7 +1118,10 @@
       "ai.contextWindowAutoPlaceholder": "Auto ({count} tokens)",
       "ai.detectContextWindow": "Auto Detect",
       "ai.detectingContext": "Detecting model context window…",
-      "ai.detectContextDone": "Detected model context window: {count} tokens ({source})",
+      "ai.detectContextDone": "Context window fetched from API: {count} tokens",
+      "ai.detectContextCatalog": "The API did not return a context limit. Using the model catalog: {count} tokens. Proxy limits may differ; you can override this manually.",
+      "ai.detectContextUnknown": "Could not identify this model's context window. Using {count} tokens ({source}); enter the provider's limit manually.",
+      "ai.detectContextChanged": "Configuration changed. Detect the context window again.",
       "ai.contextWindowStatus": "Active window: {count} tokens ({source})",
       "ai.contextSource.manual": "Manual",
       "ai.contextSource.api": "Fetched from API",
