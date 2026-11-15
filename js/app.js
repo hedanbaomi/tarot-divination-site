@@ -552,6 +552,32 @@
     };
   }
 
+  /* 牌面状态（翻开 / 朝向 / 牌名 / 读屏文案）统一在这里更新。
+     翻牌时只改状态、不重建元素：重建会让牌按新的钳制范围重新定位，看起来就是「瞬移」。 */
+  function applyFreeCardFace(el, item, index, card) {
+    if (!el || !item) return;
+    var found = card || cardById(item.id);
+    if (!found) return;
+    var front = el.querySelector(".spread-card-front");
+    var img = el.querySelector(".spread-card-front .card-image");
+    var nameEl = el.querySelector(".spread-card-caption .name");
+    el.classList.toggle("revealed", !!item.revealed);
+    if (front) {
+      front.classList.toggle("reversed", item.orientation === "reversed");
+      if (item.revealed) front.removeAttribute("aria-hidden");
+      else front.setAttribute("aria-hidden", "true");
+    }
+    if (img) img.alt = item.revealed ? localizedCardName(found) : "";
+    if (nameEl) nameEl.textContent = item.revealed ? localizedCardName(found) : "";
+    el.setAttribute("aria-label", item.revealed
+      ? t("freeBoard.cardAria", {
+          index: index + 1,
+          name: localizedCardName(found),
+          orientation: t(item.orientation === "reversed" ? "orientation.reversed" : "orientation.upright")
+        })
+      : t("freeBoard.cardHiddenAria", { index: index + 1 }));
+  }
+
   function buildFreeTableCard(item, index) {
     var card = cardById(item.id);
     if (!card) return null;
@@ -564,13 +590,7 @@
     /* 未翻开的牌不给辅助技术读牌名，只报「第几张、未翻开」 */
     el.setAttribute("role", "button");
     el.setAttribute("tabindex", "0");
-    el.setAttribute("aria-label", item.revealed
-      ? t("freeBoard.cardAria", {
-          index: index + 1,
-          name: localizedCardName(card),
-          orientation: t(item.orientation === "reversed" ? "orientation.reversed" : "orientation.upright")
-        })
-      : t("freeBoard.cardHiddenAria", { index: index + 1 }));
+    /* 牌名与读屏文案统一由 applyFreeCardFace 维护（翻牌时也只改状态，不重建元素） */
 
     var inner = document.createElement("div");
     inner.className = "spread-card-inner";
@@ -586,12 +606,8 @@
 
     var front = document.createElement("div");
     front.className = "spread-card-face spread-card-front";
-    /* 逆位要靠 front 上的 reversed 类把牌面转 180°，只给 img 加类不会转 */
-    if (item.orientation === "reversed") front.classList.add("reversed");
-    if (!item.revealed) front.setAttribute("aria-hidden", "true");
-    /* 方向在抽牌那一刻就定下来，翻面、重绘、撤销重做都沿用同一个结果 */
+    /* 逆位、aria-hidden、alt、牌名都交给 applyFreeCardFace 统一设置，避免两处各写一半 */
     var img = createCardImage(card, "card-image", item.orientation || "upright");
-    if (!item.revealed) img.alt = "";
     if (deckType === "mystagogus") img.classList.add("card-image-m");
     if (deckType === "lxxxi") img.classList.add("card-image-lxxxi");
     front.appendChild(img);
@@ -599,13 +615,13 @@
     caption.className = "spread-card-caption";
     var nameEl = document.createElement("span");
     nameEl.className = "name";
-    nameEl.textContent = item.revealed ? localizedCardName(card) : "";
     caption.appendChild(nameEl);
     front.appendChild(caption);
 
     inner.appendChild(back);
     inner.appendChild(front);
     el.appendChild(inner);
+    applyFreeCardFace(el, item, index, card);
     return el;
   }
 
@@ -759,6 +775,7 @@
         if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
         item.x = originX + dx;
         item.y = originY + dy;
+        if (item._fit) delete item._fit;
         el.style.left = item.x + "px";
         el.style.top = item.y + "px";
       }
@@ -789,6 +806,123 @@
     el.revealBtn.textContent = total > 0 && revealed === total ? t("app.revealedAll") : t("spread.reveal");
   }
 
+  /* 画板变窄（转屏、窗口缩小、换成窄屏设备）时，把横向坐标按宽度比例收回画板内，
+     尽量避免破坏用户摆好的牌阵；纵向坐标一律不动 —— 手机上地址栏收起、软键盘、
+     甚至刷新恢复草稿都会改变画板高度，那些都不该让牌挪位。
+     第一次渲染（刷新恢复草稿）拿不到上一次的宽度，没有比例可算，只做最小内推：
+     越界的牌收回边界，画板内的牌一张都不动，也不会丢回默认网格。 */
+  function fitFreeCardsToWidth(items, layerW, prevW, halfW) {
+    if (!items || !items.length || !layerW) return false;
+    function setFitState(item, raw, at) {
+      Object.defineProperty(item, "_fit", {
+        value: { raw: raw, at: at },
+        writable: true,
+        configurable: true
+      });
+    }
+    /* 变宽、等宽都不碰坐标，只有确实变窄才收 */
+    if (prevW > 0 && layerW >= prevW) {
+      if (layerW > prevW) {
+        items.forEach(function (item) {
+          if (item._fit && typeof item.x === "number" && isFinite(item.x)) {
+            setFitState(item, item.x, item.x);
+          }
+        });
+      }
+      return false;
+    }
+    var ratio = prevW > 0 ? layerW / prevW : 1;
+    var padX = Math.ceil(halfW);
+    var minX = padX;
+    var maxX = Math.max(minX, Math.floor(layerW - padX));
+    /* 错开用牌宽做步长：10px 比牌窄太多，同等高度收进来十来张还是一坨 */
+    var step = Math.max(12, Math.round(halfW));
+    var rowBandY = Math.max(24, Math.round(step * 1.4));
+    var changed = false;
+
+    var entries = items.map(function (item, index) {
+      var validX = typeof item.x === "number" && isFinite(item.x);
+      var rawItemX = validX ? item.x : minX;
+      var hasState = prevW > 0 && validX && item._fit &&
+        typeof item._fit.raw === "number" && isFinite(item._fit.raw) &&
+        item._fit.at === rawItemX;
+      var source = hasState ? item._fit.raw : rawItemX;
+      var scaled = source * ratio;
+      var y = typeof item.y === "number" && isFinite(item.y) ? item.y : 0;
+      var clampedLeft = scaled < minX;
+      var clampedRight = scaled > maxX;
+      var clampedVal = clampedLeft ? minX : (clampedRight ? maxX : scaled);
+      return {
+        item: item,
+        index: index,
+        raw: scaled,
+        x: Math.round(clampedVal),
+        y: y,
+        clampedLeft: clampedLeft,
+        clampedRight: clampedRight,
+        pushedLeft: clampedRight,
+        pushedRight: clampedLeft
+      };
+    });
+
+    function gapBetween(mover, anchor, bothClamped) {
+      if (bothClamped) return step;
+      var diff = Math.abs(anchor.raw - mover.raw);
+      return Math.min(step, Math.max(12, Math.round(diff)));
+    }
+
+    /* 左边界内推：按原始横向位置从左往右，被左边界收进来的牌依次向右推开同排邻牌 */
+    var byLeft = entries.slice().sort(function (a, b) {
+      return a.raw - b.raw || a.index - b.index;
+    });
+    for (var i = 0; i < byLeft.length; i += 1) {
+      var cur = byLeft[i];
+      for (var j = 0; j < i; j += 1) {
+        var prev = byLeft[j];
+        if (!prev.pushedRight) continue;
+        if (Math.abs(cur.y - prev.y) >= rowBandY) continue;
+        var need = gapBetween(cur, prev, prev.clampedLeft && cur.clampedLeft);
+        if (cur.x - prev.x < need) {
+          var nextRight = Math.min(maxX, prev.x + need);
+          if (nextRight > cur.x) {
+            cur.x = nextRight;
+            cur.pushedRight = true;
+          }
+        }
+      }
+    }
+
+    /* 右边界内推：按原始横向位置从右往左，被右边界收进来的牌依次向左推开同排邻牌 */
+    var byRight = entries.slice().sort(function (a, b) {
+      return b.raw - a.raw || a.index - b.index;
+    });
+    for (var r = 0; r < byRight.length; r += 1) {
+      var curR = byRight[r];
+      for (var k = 0; k < r; k += 1) {
+        var prevR = byRight[k];
+        if (!prevR.pushedLeft) continue;
+        if (Math.abs(curR.y - prevR.y) >= rowBandY) continue;
+        var needL = gapBetween(curR, prevR, prevR.clampedRight && curR.clampedRight);
+        if (prevR.x - curR.x < needL) {
+          var nextLeft = Math.max(minX, prevR.x - needL);
+          if (nextLeft < curR.x) {
+            curR.x = nextLeft;
+            curR.pushedLeft = true;
+          }
+        }
+      }
+    }
+
+    entries.forEach(function (e) {
+      if (prevW > 0) setFitState(e.item, e.raw, e.x);
+      if (e.x !== e.item.x) {
+        e.item.x = e.x;
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
   function renderFreeDraw() {
     var wrap = document.getElementById("freeDraw");
     if (!wrap) return;
@@ -798,14 +932,13 @@
       box.innerHTML = "";
       var layerW = box.clientWidth;
       var layerH = box.clientHeight;
+      var placed = [];
       freeDrawn.forEach(function (item, index) {
         if (legacyViewport && layerW && layerH) {
           // The original board used world coordinates anchored at its center.
           item.x = layerW / 2 + legacyViewport.panX + item.x * legacyViewport.zoom;
           item.y = layerH / 2 + legacyViewport.panY + item.y * legacyViewport.zoom;
         }
-        if (layerW) item.x = Math.max(46, Math.min(layerW - 46, item.x));
-        if (layerH) item.y = Math.max(70, Math.min(layerH - 70, item.y));
         var el = buildFreeTableCard(item, index);
         if (!el) return;
         el.style.zIndex = String(10 + freeIndex(item.id));
@@ -813,8 +946,20 @@
         el.style.left = item.x + "px";
         el.style.top = item.y + "px";
         box.appendChild(el);
+        placed.push({ item: item, el: el });
       });
-      if (layerW && layerH) legacyViewport = null;
+      var halfW = ((placed[0] && placed[0].el.offsetWidth) || 84) / 2 + 2;
+      if (fitFreeCardsToWidth(freeDrawn, layerW, freeformLayerW, halfW)) {
+        placed.forEach(function (entry) {
+          entry.el.style.left = entry.item.x + "px";
+        });
+        scheduleFreeformDraft();
+      }
+      if (isFreeform() && layerW > 0) freeformLayerW = layerW;
+      if (layerW && layerH && legacyViewport) {
+        legacyViewport = null;
+        scheduleFreeformDraft();
+      }
     }
     var undo = document.getElementById("freeUndoBtn");
     var redo = document.getElementById("freeRedoBtn");
@@ -823,12 +968,31 @@
     syncFreeActions();
   }
 
+  /* 窗口尺寸变化：只有画板「宽度」真的变了才需要重绘。
+     手机上地址栏收起/展开、软键盘只改高度，牌本来就不按高度排，重绘纯属白花钱；
+     而拖动窗口时 resize 每帧都来，这里用 rAF 合帧再重建，避免掉帧。 */
+  var freeformResizeFrame = 0;
+  function scheduleFreeformResizeRender() {
+    if (freeformResizeFrame) return;
+    var raf = window.requestAnimationFrame || function (cb) {
+      return window.setTimeout(cb, 16);
+    };
+    freeformResizeFrame = raf(function () {
+      freeformResizeFrame = 0;
+      if (!isFreeform() || !freeDrawn.length) return;
+      var box = document.getElementById("freeDrawCards");
+      if (!box || box.clientWidth === freeformLayerW) return;
+      renderFreeDraw();
+    });
+  }
+
   /* ---------- freeform draft ----------
      和旧画板用同一份 schema（free-board/v1），所以主分支存下的草稿也能恢复；
      画板面板移除后这块逻辑改由牌桌自己维护。 */
   var FREEFORM_DRAFT_KEY = "quareia-divination-free-board-draft-v1";
   var freeformDraftTimer = 0;
   var legacyViewport = null;
+  var freeformLayerW = 0;
   var parkedDraft = null;
 
   function isShuffleRunning() {
@@ -907,6 +1071,7 @@
   }
 
   function clearFreeformDraft() {
+    freeformLayerW = 0;
     parkedDraft = null;
     if (freeformDraftTimer) {
       window.clearTimeout(freeformDraftTimer);
@@ -1403,6 +1568,15 @@
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape") hideCardMeaning();
   });
+  var meaningCloseBtn = document.getElementById("cardMeaningClose");
+  if (meaningCloseBtn) {
+    meaningCloseBtn.addEventListener("click", function () { hideCardMeaning(); });
+  }
+  /* 面板在脚本之后才解析出来，直接绑会拿到 null；用事件委托兜住关闭按钮 */
+  document.addEventListener("click", function (event) {
+    if (!event.target || !event.target.closest) return;
+    if (event.target.closest("#cardMeaningClose")) hideCardMeaning();
+  });
 
   function renderSpreadCards() {
     if (isFreeform()) return;
@@ -1586,9 +1760,17 @@
   }
 
   function revealFreeCards(items) {
-    if (!items.some(function (item) { return !item.revealed; })) return;
-    items.forEach(function (item) { item.revealed = true; });
-    renderFreeDraw();
+    /* 只处理这次真正翻开的牌：一键开牌时会带着已经翻开的牌一起传进来 */
+    var pending = items.filter(function (item) { return !item.revealed; });
+    if (!pending.length) return;
+    pending.forEach(function (item) { item.revealed = true; });
+    /* 只更新被翻开的牌本身：整块重绘会重排位置，牌会「瞬移」 */
+    freeDrawn.forEach(function (item, index) {
+      if (pending.indexOf(item) === -1) return;
+      var cardEl = document.querySelector('.free-table-card[data-card-id="' + item.id + '"]');
+      if (cardEl) applyFreeCardFace(cardEl, item, index);
+    });
+    syncFreeActions();
     renderResults();
     saveFreeformDraftNow();
     if (freeDrawn.every(function (item) { return item.revealed; })) {
@@ -2452,9 +2634,9 @@
     if (freeformDraftTimer) saveFreeformDraftNow();
   });
 
-  /* 屏幕尺寸变了：把自由画板上的牌拉回可视范围 */
+  /* 屏幕尺寸变了：只有画板宽度变了才把牌收进画板内，并且合帧，避免拖动窗口时掉帧 */
   window.addEventListener("resize", function () {
-    if (isFreeform() && freeDrawn.length) renderFreeDraw();
+    if (isFreeform() && freeDrawn.length) scheduleFreeformResizeRender();
   });
 
   if (document.readyState === "loading") {

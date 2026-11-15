@@ -107,6 +107,65 @@
     if (!style.transform || style.transform === "none") throw new Error("牌没有定位");
   });
 
+  step("牌堆两端拖动有阻力，松手回到边界", async function () {
+    var stage = q(".table-stage");
+    var hint = q(".table-hint");
+    var originalHint = hint.textContent;
+    async function checkEnd(key, dx) {
+      stage.dispatchEvent(new KeyboardEvent("keydown", { key: key, bubbles: true, cancelable: true }));
+      var visible = qa("#deckSpread .deck-card").filter(function (card) {
+        return card.style.visibility === "visible";
+      });
+      var card = visible[Math.floor(visible.length / 2)];
+      function x() { return parseFloat(card.style.getPropertyValue("--tx")); }
+      function pointer(type, clientX) {
+        stage.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: clientX, pointerId: 2 }));
+      }
+      var initialX = x();
+      pointer("pointerdown", 200);
+      try {
+        pointer("pointermove", 200 + dx);
+        await wait("牌弧跟随拖动", function () { return x() !== initialX; });
+        var fraction = (x() - initialX) / dx;
+        if (!(fraction > 0 && fraction < 1) || hint.textContent !== originalHint) {
+          throw new Error("牌堆边界反馈异常：" + key);
+        }
+      } finally {
+        pointer("pointerup", 200 + dx);
+      }
+      await wait("牌弧回到原位", function () { return x() === initialX; });
+    }
+    await checkEnd("End", -100);
+    await checkEnd("Home", 100);
+  });
+
+  step("牌阵滚动区保留方向键，牌桌保留翻页键", function () {
+    function handled(target, key) {
+      var event = new KeyboardEvent("keydown", { key: key, bubbles: true, cancelable: true });
+      return !target.dispatchEvent(event);
+    }
+    var scroll = q("#spreadBoardScroll");
+    var stage = q(".table-stage");
+    ["ArrowLeft", "ArrowRight", "Home", "End"].forEach(function (key) {
+      if (handled(scroll, key)) throw new Error("牌堆截获了牌阵的 " + key);
+    });
+    if (!handled(stage, "End") || !q("#deckNextBtn").disabled) throw new Error("End 未到牌堆末尾");
+    if (!handled(stage, "Home") || !q("#deckPrevBtn").disabled) throw new Error("Home 未回牌堆开头");
+  });
+
+  step("洗牌期间键盘不能抽牌", async function () {
+    var ring = q("#deckSpread");
+    var count = q("#spreadCount").textContent;
+    q("#shuffleBtn").click();
+    await wait("开始洗牌", function () { return ring.classList.contains("is-shuffling"); });
+    var stage = q(".table-stage");
+    stage.focus();
+    stage.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    ring.querySelector(".deck-card").click();
+    if (q("#spreadCount").textContent !== count || q(".is-flying")) throw new Error("洗牌时触发了抽牌");
+    await wait("洗牌结束", function () { return !ring.classList.contains("is-shuffling"); }, 4000);
+  });
+
   step("抽一张牌进入第一个牌位", function () {
     var card = q("#deckSpread .deck-card");
     card.click();

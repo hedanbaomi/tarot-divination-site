@@ -402,7 +402,6 @@
       ,"freeBoard.meaning": "牌意"
       ,"freeBoard.revealed": "已开牌"
       ,"freeBoard.unrevealed": "未开牌"
-      ,"freeBoard.cardAria": "{card}，{state}{orientation}。拖动改变位置，轻点选中"
       ,"freeBoard.selectedControls": "当前选择：{card}"
       ,"freeBoard.drawOrder": "牌位{order}"
       ,"freeBoard.cardsDrawn": "已放置 {count} 张"
@@ -990,7 +989,6 @@
       "freeBoard.meaning": "Meaning",
       "freeBoard.revealed": "Revealed",
       "freeBoard.unrevealed": "Not revealed",
-      "freeBoard.cardAria": "{card}, {state}{orientation}. Drag to move; tap to select.",
       "freeBoard.selectedControls": "Selected: {card}",
       "freeBoard.drawOrder": "Position {order}",
       "freeBoard.cardsDrawn": "{count} placed",
