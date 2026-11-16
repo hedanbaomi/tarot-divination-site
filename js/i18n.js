@@ -507,6 +507,10 @@
       ,"ai.deleteProfile": "删除配置"
       ,"ai.newProfileDefaultName": "新模型配置"
       ,"ai.lockedPromptNote": "系统提示词已锁定为 Quareia 占卜辅助助手（依据应用内牌意与叠牌法法则），不可修改，且不限制日常非占卜主题正常对话。"
+      ,"ai.presetLabel": "快速填入"
+      ,"ai.preset.deepseek": "DeepSeek Chat"
+      ,"ai.preset.deepseekReasoner": "DeepSeek Reasoner"
+      ,"ai.presetApplied": "已填入 {preset} 预设，填写 API Key 后点保存即可。"
       ,"ai.fieldName": "配置名称"
       ,"ai.fieldFormat": "接口格式"
       ,"ai.fieldBaseUrl": "Base URL（接口地址 / 代理地址）"
@@ -1108,6 +1112,10 @@
       "ai.deleteProfile": "Delete Profile",
       "ai.newProfileDefaultName": "New Profile",
       "ai.lockedPromptNote": "The system prompt is locked to the Quareia divination assistant (grounded in in-app card meanings and stacking rules), cannot be edited, and never blocks normal non-divination chat.",
+      "ai.presetLabel": "Quick fill",
+      "ai.preset.deepseek": "DeepSeek Chat",
+      "ai.preset.deepseekReasoner": "DeepSeek Reasoner",
+      "ai.presetApplied": "Filled the {preset} preset — add your API key, then save.",
       "ai.fieldName": "Profile Name",
       "ai.fieldFormat": "API Format",
       "ai.fieldBaseUrl": "Base URL (Endpoint or Proxy)",

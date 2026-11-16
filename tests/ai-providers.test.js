@@ -1247,3 +1247,31 @@ test("compression usage callbacks are forwarded and official chat requests ask f
   await providers.compressMessages(profile,{messages:[{role:"user",content:"old"}],onRequestStart:()=>starts++,onRequestEnd:r=>{ended=r;},fetchImpl:async()=>createSseResponse(['data: {"choices":[{"delta":{"content":"summary"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}\n\n'])});
   assert.equal(starts,1);assert.equal(ended.usage.totalTokens,15);assert.equal(ended.complete,true);
 });
+
+test("quick presets fill valid openai-chat profiles and correct DeepSeek windows", () => {
+  const presets = providers.QUICK_PRESETS;
+  assert.ok(Array.isArray(presets), "QUICK_PRESETS must be exported as an array");
+  assert.ok(presets.length >= 2, "expected at least the DeepSeek chat and reasoner presets");
+  const seen = new Set();
+  for (const preset of presets) {
+    assert.equal(seen.has(preset.id), false, `duplicate preset id: ${preset.id}`);
+    seen.add(preset.id);
+    assert.ok(providers.FORMAT_IDS.includes(preset.format), `${preset.id} uses an unsupported format`);
+    assert.match(preset.baseUrl, /^https:\/\//, `${preset.id} must use https`);
+    assert.ok(preset.model, `${preset.id} must set a model`);
+    assert.ok(preset.contextWindow >= 1024, `${preset.id} must set a usable context window`);
+    assert.match(preset.labelKey, /^ai\.preset\./);
+    const profile = providers.normalizeProfile({ ...preset, apiKey: "fixture-only" });
+    assert.deepEqual(providers.validateProfile(profile).errors, [], `${preset.id} must validate`);
+    assert.equal(profile.contextWindow, preset.contextWindow);
+    assert.equal(profile.contextWindowSource, "manual");
+  }
+  const deepseek = presets.find((preset) => preset.id === "deepseek");
+  assert.equal(deepseek.format, "openai-chat");
+  assert.equal(deepseek.baseUrl, "https://api.deepseek.com/v1");
+  assert.equal(deepseek.model, "deepseek-chat");
+  assert.equal(deepseek.contextWindow, 131072);
+  assert.equal(presets.find((preset) => preset.id === "deepseek-reasoner").model, "deepseek-reasoner");
+  assert.deepEqual(providers.inferModelContextWindow("deepseek-chat", "openai-chat"), { contextWindow: 131072, source: "catalog" });
+  assert.deepEqual(providers.inferModelContextWindow("deepseek-reasoner", "openai-chat"), { contextWindow: 131072, source: "catalog" });
+});

@@ -27,6 +27,28 @@
     "gemini-vertex": "gemini-2.5-flash"
   };
 
+  // Quick-fill chips shown inside the settings modal. A preset only prefills
+  // format / baseUrl / model / contextWindow; the API key always stays with the
+  // user and is never touched by applying a preset.
+  var QUICK_PRESETS = [
+    {
+      id: "deepseek",
+      format: "openai-chat",
+      baseUrl: "https://api.deepseek.com/v1",
+      model: "deepseek-chat",
+      contextWindow: 131072,
+      labelKey: "ai.preset.deepseek"
+    },
+    {
+      id: "deepseek-reasoner",
+      format: "openai-chat",
+      baseUrl: "https://api.deepseek.com/v1",
+      model: "deepseek-reasoner",
+      contextWindow: 131072,
+      labelKey: "ai.preset.deepseekReasoner"
+    }
+  ];
+
   var ANTHROPIC_DEFAULT_MAX_TOKENS = 4096;
   var DEFAULT_TEST_TIMEOUT_MS = 15000;
   var OPENAI_REASONING_MODEL_RE = /^(?:.*\/)?(o[134](?:[-_]|$)|gpt-5)/i;
@@ -1850,7 +1872,8 @@
         return { contextWindow: 16385, source: "catalog" };
       }
       if (key.indexOf("deepseek") === 0) {
-        return { contextWindow: 65536, source: "catalog" };
+        // deepseek-chat / deepseek-reasoner both ship a 128K context window.
+        return { contextWindow: 131072, source: "catalog" };
       }
       if (key.indexOf("qwen-long") === 0) {
         return { contextWindow: 1000000, source: "catalog" };
@@ -2318,6 +2341,7 @@
     FORMAT_IDS: FORMAT_IDS.slice(),
     DEFAULT_BASE_URLS: Object.assign({}, DEFAULT_BASE_URLS),
     DEFAULT_MODELS: Object.assign({}, DEFAULT_MODELS),
+    QUICK_PRESETS: QUICK_PRESETS.map(function (preset) { return Object.assign({}, preset); }),
     AiProviderError: AiProviderError,
     createDefaultProfile: createDefaultProfile,
     normalizeProfile: normalizeProfile,

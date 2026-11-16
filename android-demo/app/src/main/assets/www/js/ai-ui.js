@@ -562,6 +562,7 @@
       profileList: byId("aiProfileList"),
       newProfileBtn: byId("aiNewProfileBtn"),
       profileDeleteBtn: byId("aiProfileDeleteBtn"),
+      presetRow: byId("aiPresetRow"),
       profileName: byId("aiProfileName"),
       profileFormat: byId("aiProfileFormat"),
       profileBaseUrl: byId("aiProfileBaseUrl"),
@@ -2097,6 +2098,52 @@
       }
     }
 
+    function findQuickPreset(id) {
+      var list = providers && Array.isArray(providers.QUICK_PRESETS) ? providers.QUICK_PRESETS : [];
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] && list[i].id === id) return list[i];
+      }
+      return null;
+    }
+
+    function quickPresetLabel(preset) {
+      if (!preset) return "";
+      return tr(preset.labelKey, null, preset.model || preset.id, preset.model || preset.id);
+    }
+
+    function markActiveQuickPreset(profileObj) {
+      if (!els.presetRow) return;
+      var chips = els.presetRow.querySelectorAll("[data-preset]");
+      Array.prototype.forEach.call(chips, function (chip) {
+        var preset = findQuickPreset(chip.getAttribute("data-preset"));
+        var isActive = Boolean(preset && profileObj
+          && profileObj.format === preset.format
+          && (profileObj.baseUrl || "") === preset.baseUrl
+          && (profileObj.model || "") === preset.model);
+        chip.classList.toggle("is-active", isActive);
+        chip.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    }
+
+    function applyQuickPreset(preset) {
+      var active = getDraftActiveProfile();
+      if (!active || !preset) return false;
+      syncFormIntoDraft();
+      active.format = preset.format;
+      active.baseUrl = preset.baseUrl;
+      active.model = preset.model;
+      if (Number(preset.contextWindow) >= 1024) {
+        active.contextWindow = Number(preset.contextWindow);
+        active.contextWindowSource = "manual";
+      }
+      active.detectedContextWindow = null;
+      renderSettingsModal();
+      setStatusText(els.settingsStatus, tr("ai.presetApplied", { preset: quickPresetLabel(preset) },
+        "已填入 " + quickPresetLabel(preset) + " 预设，填写 API Key 后点保存即可。",
+        "Filled the " + quickPresetLabel(preset) + " preset — add your API key, then save."), false);
+      return true;
+    }
+
     function syncFormIntoDraft() {
       var p = getDraftActiveProfile();
       if (!p) return;
@@ -2189,6 +2236,7 @@
       }
       updateContextWindowHintUI(active);
       if (els.formatHint) els.formatHint.textContent = formatHintText(active.format);
+      markActiveQuickPreset(active);
       if (els.profileDeleteBtn) els.profileDeleteBtn.disabled = draft.profiles.length <= 1;
     }
 
@@ -3039,6 +3087,14 @@
         draft.profiles = draft.profiles.filter(function (p) { return p.id !== current.id; });
         draft.activeProfileId = draft.profiles[0] ? draft.profiles[0].id : "";
         renderSettingsModal();
+      });
+    }
+    if (els.presetRow) {
+      Array.prototype.forEach.call(els.presetRow.querySelectorAll("[data-preset]"), function (chip) {
+        chip.addEventListener("click", function () {
+          var preset = findQuickPreset(chip.getAttribute("data-preset"));
+          if (preset) applyQuickPreset(preset);
+        });
       });
     }
     if (els.profileFormat) {
