@@ -1,11 +1,13 @@
 # AI context-window catalog
 
-Verified 2026-11-15. Values are tokens, not bytes. The catalog is a fallback when the configured endpoint supplies no model limit; it does not guarantee access or override proxy restrictions. Manual limits and real API metadata take precedence. The Model ID sent to the provider is never rewritten.
+Base catalog verified 2026-11-15; DeepSeek entries verified 2026-11-16. Values are tokens, not bytes. The catalog is a fallback when the configured endpoint supplies no model limit; it does not guarantee access or override proxy restrictions. Manual limits and real API metadata take precedence. The Model ID sent to the provider is never rewritten.
 
 ## Sources and coverage
 
 | Models | Window | Official source |
 | --- | ---: | --- |
+| DeepSeek Flash (`deepseek-flash`), V4 Pro (`deepseek-v4-pro`) | 1,048,576 shared input and output | https://api-docs.deepseek.com/api/list-models/ |
+| DeepSeek V4 Flash / V4 Flash Vision Exp compatibility IDs | 1,048,576 (officially routed to the current Flash model) | https://api-docs.deepseek.com/quick_start/pricing/ |
 | GPT-5.6 (alias), GPT-5.6 Sol | 1,050,000 | https://developers.openai.com/api/docs/models/gpt-5.6-sol |
 | GPT-5.6 Terra | 1,050,000 | https://developers.openai.com/api/docs/models/gpt-5.6-terra |
 | GPT-5.6 Luna | 1,050,000 | https://developers.openai.com/api/docs/models/gpt-5.6-luna |
@@ -30,3 +32,11 @@ OpenAI's model metadata response documents ID, creation time, owner, and retirem
 - Test fixtures use fake keys and local responses only. Android web assets stay synchronized, but Android packaging and release remain paused at the user's request.
 
 The former blanket rule treating any Claude ID containing `1m`/`1000k` as a million-token model was removed. Anthropic retired the Sonnet 4/4.5 long-context beta on 2026-04-30; unknown gateway aliases require metadata or manual confirmation. Source: https://platform.claude.com/docs/en/release-notes/overview .
+
+## DeepSeek quick presets (PR #14 review, 2026-11-16)
+
+The two presets use the current official `deepseek-flash` and `deepseek-v4-pro` IDs with a 1,048,576-token catalog fallback. The former `deepseek-chat` / `deepseek-reasoner` aliases were announced as inaccessible after 2026-07-24 15:59 UTC: https://api-docs.deepseek.com/news/news260424/ . They are not offered as official presets and are not assigned a universal 1M limit for third-party gateways. Unlisted, retired and future DeepSeek names require live metadata or an explicit manual limit. The old blanket `deepseek*` rule is removed.
+
+Selecting a preset edits the current settings draft. It clears the draft API key when the endpoint changes, retains it when switching models on the same endpoint, and never saves until Save is pressed. Cancel restores the saved configuration. The context field uses Auto so real metadata can override the catalog; the user can still supply a manual limit. Model/endpoint edits immediately update preset selection state. Late connection-test and automatic-metadata results are ignored when the form, endpoint, credentials or saved context settings have changed.
+
+Validation covers provider/controller tests plus a completely intercepted browser suite (`tools/test-ai-presets-browser.py`) for web and Android resources, including desktop/mobile layouts, credential isolation, cancellation, stale metadata, API limit precedence and manual overrides. The public DeepSeek OPTIONS response accepted the website Origin and requested headers without a key; no real authenticated generation or billing test was performed. Android packaging remains paused.

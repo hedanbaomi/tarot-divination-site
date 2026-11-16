@@ -2129,18 +2129,21 @@
       var active = getDraftActiveProfile();
       if (!active || !preset) return false;
       syncFormIntoDraft();
+      // Changing endpoints must never carry a key issued for another service.
+      // This only edits the draft; Cancel leaves the saved profile untouched.
+      var sameEndpoint = String(active.baseUrl || "").replace(/\/+$/, "") === String(preset.baseUrl || "").replace(/\/+$/, "");
+      if (!sameEndpoint) active.apiKey = "";
       active.format = preset.format;
       active.baseUrl = preset.baseUrl;
       active.model = preset.model;
-      if (Number(preset.contextWindow) >= 1024) {
-        active.contextWindow = Number(preset.contextWindow);
-        active.contextWindowSource = "manual";
-      }
+      // Use the verified catalog as the fallback, allowing live metadata to win.
+      active.contextWindow = null;
+      active.contextWindowSource = "auto";
       active.detectedContextWindow = null;
       renderSettingsModal();
       setStatusText(els.settingsStatus, tr("ai.presetApplied", { preset: quickPresetLabel(preset) },
-        "已填入 " + quickPresetLabel(preset) + " 预设，填写 API Key 后点保存即可。",
-        "Filled the " + quickPresetLabel(preset) + " preset — add your API key, then save."), false);
+        "已填入 " + quickPresetLabel(preset) + "；请确认此接口的 API Key 后保存。",
+        "Filled " + quickPresetLabel(preset) + "; confirm the API key for this endpoint, then save."), false);
       return true;
     }
 
@@ -2257,7 +2260,8 @@
       providers.fetchModelContextWindow(active).then(function (res) {
         if (!res || !res.live || !(res.contextWindow > 0)) return;
         var latest = configStore.getActiveProfile();
-        if (!latest || latest.id !== active.id || latest.model !== active.model) return;
+        if (!latest || !["id", "format", "baseUrl", "apiKey", "model", "vertexProject", "vertexLocation", "contextWindow", "contextWindowSource", "detectedContextWindow"]
+          .every(function (key) { return latest[key] === active[key]; })) return;
         configStore.upsertProfile(Object.assign({}, latest, {
           detectedContextWindow: res.contextWindow,
           contextWindowSource: Number(latest.contextWindow) >= 1024 ? "manual" : "api"
@@ -2378,7 +2382,15 @@
       syncFormIntoDraft();
       var active = getDraftActiveProfile();
       if (!active) return;
+      var draftAtStart = state.settingsDraft;
       var normalized = providers.normalizeProfile(active);
+      function isCurrentConnectionTest() {
+        if (state.settingsDraft !== draftAtStart || getDraftActiveProfile() !== active) return false;
+        syncFormIntoDraft();
+        var current = providers.normalizeProfile(active);
+        return ["format", "baseUrl", "apiKey", "model", "vertexProject", "vertexLocation", "contextWindow"]
+          .every(function (key) { return current[key] === normalized[key]; });
+      }
       var check = providers.validateProfile(normalized);
       if (!check.ok) {
         setStatusText(els.settingsStatus, formatValidationError(check.errors), true);
@@ -2391,6 +2403,7 @@
         providers.testConnection(normalized),
         providers.fetchModelContextWindow(normalized)
       ]).then(function (results) {
+        if (!isCurrentConnectionTest()) return;
         var res = results[0];
         var ctxRes = results[1];
         if (ctxRes && ctxRes.contextWindow > 0) {
@@ -2411,6 +2424,7 @@
           "连接成功（" + res.model + "），可保存使用。",
           "Connection succeeded (" + res.model + "). Ready to save."), false);
       }).catch(function (err) {
+        if (!isCurrentConnectionTest()) return;
         setStatusText(els.settingsStatus, formatProviderError(err), true);
       }).finally(function () {
         if (els.testConnectionBtn) els.testConnectionBtn.disabled = false;
@@ -3128,6 +3142,13 @@
           active.contextWindowSource = "";
         }
         updateContextWindowHintUI(active);
+        markActiveQuickPreset(active);
+      });
+    }
+    if (els.profileBaseUrl) {
+      els.profileBaseUrl.addEventListener("input", function () {
+        syncFormIntoDraft();
+        markActiveQuickPreset(getDraftActiveProfile());
       });
     }
     if (els.fieldContextWindow) {

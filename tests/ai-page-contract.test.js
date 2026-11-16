@@ -394,7 +394,7 @@ const REQUIRED_I18N_KEYS = [
   "ai.open", "ai.pageTitle", "ai.pageDescription", "ai.contextBarAria", "ai.deckTarot",
   "ai.settingsTitle", "history.openInAi", "privacy.ai",
   "ai.lockedPromptNote", "ai.fieldContextWindow", "ai.fieldAutoCompress", "ai.contextMeter",
-  "ai.presetLabel", "ai.preset.deepseek", "ai.preset.deepseekReasoner", "ai.presetApplied",
+  "ai.presetLabel", "ai.preset.deepseekFlash", "ai.preset.deepseekPro", "ai.presetApplied",
   "ai.clearConfig", "ai.clearConfigTitle", "ai.clearConfigMsg", "ai.clearConfigConfirm", "ai.configCleared",
   "ai.exportedTo", "ai.exportCancelled", "ai.exportFailed",
   "ai.chatChangedTitle", "ai.saveFailedTitle"
@@ -417,8 +417,8 @@ function assertAiHtmlContract(label, html) {
   assert.ok(html.includes('src="js/custom-selects.js"'), `${label} ai.html must load js/custom-selects.js to replace native <select> UI`);
   assert.ok(/<label[^>]+for="aiPickerDeckFilter"/i.test(html), `${label} ai.html must bind an explicit <label for="aiPickerDeckFilter">`);
   assert.ok(/<label[^>]+for="aiProfileFormat"/i.test(html), `${label} ai.html must bind an explicit <label for="aiProfileFormat">`);
-  assert.ok(html.includes('data-preset="deepseek"'), `${label} ai.html missing the DeepSeek quick preset chip`);
-  assert.ok(html.includes('data-preset="deepseek-reasoner"'), `${label} ai.html missing the DeepSeek reasoner quick preset chip`);
+  assert.ok(html.includes('data-preset="deepseek-flash"'), `${label} ai.html missing the DeepSeek quick preset chip`);
+  assert.ok(html.includes('data-preset="deepseek-v4-pro"'), `${label} ai.html missing the DeepSeek reasoner quick preset chip`);
   assert.ok(html.includes('id="aiPresetLabel"'), `${label} ai.html quick presets must carry a group label`);
   assert.equal(/<label\b[^>]*>(?:(?!<\/label>)[\s\S])*?<select\b/i.test(html), false, `${label} ai.html must not wrap <select> inside <label> (prevents option-text concatenation in choiceDialogTitle)`);
   assert.ok(html.includes("quareia-divination-theme"), `${label} ai.html missing synchronous head theme boot script`);
@@ -739,11 +739,11 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   el("button", "aiProfileDeleteBtn");
   const presetRow = el("div", "aiPresetRow");
   const deepseekChip = doc.createElement("button");
-  deepseekChip.setAttribute("data-preset", "deepseek");
+  deepseekChip.setAttribute("data-preset", "deepseek-flash");
   presetRow.appendChild(deepseekChip);
-  const reasonerChip = doc.createElement("button");
-  reasonerChip.setAttribute("data-preset", "deepseek-reasoner");
-  presetRow.appendChild(reasonerChip);
+  const proChip = doc.createElement("button");
+  proChip.setAttribute("data-preset", "deepseek-v4-pro");
+  presetRow.appendChild(proChip);
   el("input", "aiProfileName");
   el("select", "aiProfileFormat");
   el("input", "aiProfileBaseUrl");
@@ -1025,32 +1025,49 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   assert.equal(terraProfile.contextWindowSource, "auto");
   assert.match(doc.getElementById("aiContextMeter").textContent, /1,050,000/);
 
-  // 4b. Quick presets fill the DeepSeek endpoint/model/manual window and never touch the typed key.
+  // 4b. Presets isolate endpoint credentials, use catalog limits, and only persist on Save.
   doc.getElementById("aiSettingsBtn").click();
   const baseUrlField = doc.getElementById("aiProfileBaseUrl");
   const apiKeyField = doc.getElementById("aiProfileApiKey");
+  const savedBeforePreset = storage.getItem(realProviders.STORAGE_KEY);
   const keyBeforePreset = apiKeyField.value;
   assert.ok(keyBeforePreset.length > 0, "fixture must start with a saved API key");
   deepseekChip.click();
   assert.equal(baseUrlField.value, "https://api.deepseek.com/v1");
-  assert.equal(modelField.value, "deepseek-chat");
-  assert.equal(contextField.value, "131072");
-  assert.equal(apiKeyField.value, keyBeforePreset, "presets must not overwrite the API key");
+  assert.equal(modelField.value, "deepseek-flash");
+  assert.equal(contextField.value, "");
+  assert.match(doc.getElementById("aiContextWindowHint").textContent, /1,048,576/);
+  assert.equal(apiKeyField.value, "", "cross-endpoint presets must not carry the previous provider key");
   assert.equal(deepseekChip.classList.contains("is-active"), true);
-  assert.equal(reasonerChip.classList.contains("is-active"), false);
-  assert.match(doc.getElementById("aiSettingsStatus").textContent, /DeepSeek Chat/);
-  reasonerChip.click();
-  assert.equal(modelField.value, "deepseek-reasoner");
-  assert.equal(reasonerChip.classList.contains("is-active"), true);
+  assert.equal(proChip.classList.contains("is-active"), false);
+  assert.match(doc.getElementById("aiSettingsStatus").textContent, /DeepSeek Flash/);
+  assert.equal(storage.getItem(realProviders.STORAGE_KEY),savedBeforePreset);
+  apiKeyField.value = "fixture-deepseek-key";
+  proChip.click();
+  assert.equal(modelField.value, "deepseek-v4-pro");
+  assert.equal(apiKeyField.value,"fixture-deepseek-key","same endpoint preserves its key");
+  assert.equal(proChip.classList.contains("is-active"), true);
   assert.equal(deepseekChip.classList.contains("is-active"), false);
+  modelField.value = "custom-model";
+  modelField.dispatchEvent({type:"input"});
+  assert.equal(proChip.getAttribute("aria-pressed"),"false");
+  modelField.value = "deepseek-v4-pro";
+  modelField.dispatchEvent({type:"input"});
+  assert.equal(proChip.getAttribute("aria-pressed"),"true");
+  baseUrlField.value = "https://other.invalid/v1";
+  baseUrlField.dispatchEvent({type:"input"});
+  assert.equal(proChip.getAttribute("aria-pressed"),"false");
+  proChip.click();
+  assert.equal(apiKeyField.value,"");
+  apiKeyField.value = "fixture-deepseek-key";
   saveProfileBtn.click();
   const presetSaved = JSON.parse(storage.getItem(realProviders.STORAGE_KEY)).profiles[0];
   assert.equal(presetSaved.format, "openai-chat");
   assert.equal(presetSaved.baseUrl, "https://api.deepseek.com/v1");
-  assert.equal(presetSaved.model, "deepseek-reasoner");
-  assert.equal(presetSaved.contextWindow, 131072);
-  assert.equal(presetSaved.contextWindowSource, "manual");
-  assert.equal(presetSaved.apiKey, keyBeforePreset);
+  assert.equal(presetSaved.model, "deepseek-v4-pro");
+  assert.equal(Number(presetSaved.contextWindow)||0,0);
+  assert.equal(presetSaved.contextWindowSource, "auto");
+  assert.equal(presetSaved.apiKey, "fixture-deepseek-key");
 
   doc.getElementById("aiSettingsBtn").click();
   confirmNext = true;

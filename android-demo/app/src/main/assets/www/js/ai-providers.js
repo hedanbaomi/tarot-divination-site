@@ -28,24 +28,24 @@
   };
 
   // Quick-fill chips shown inside the settings modal. A preset only prefills
-  // format / baseUrl / model / contextWindow; the API key always stays with the
-  // user and is never touched by applying a preset.
+  // format / baseUrl / model; the UI uses the catalog window and clears draft
+  // credentials when the endpoint changes. Saved settings change only on Save.
   var QUICK_PRESETS = [
     {
-      id: "deepseek",
+      id: "deepseek-flash",
       format: "openai-chat",
       baseUrl: "https://api.deepseek.com/v1",
-      model: "deepseek-chat",
-      contextWindow: 131072,
-      labelKey: "ai.preset.deepseek"
+      model: "deepseek-flash",
+      contextWindow: 1048576,
+      labelKey: "ai.preset.deepseekFlash"
     },
     {
-      id: "deepseek-reasoner",
+      id: "deepseek-v4-pro",
       format: "openai-chat",
       baseUrl: "https://api.deepseek.com/v1",
-      model: "deepseek-reasoner",
-      contextWindow: 131072,
-      labelKey: "ai.preset.deepseekReasoner"
+      model: "deepseek-v4-pro",
+      contextWindow: 1048576,
+      labelKey: "ai.preset.deepseekPro"
     }
   ];
 
@@ -1794,6 +1794,11 @@
   // Verified 2026-11-15 against official model specifications. See docs/ai-model-context.md.
   // Exact IDs keep future variants and specialised models out of broad family guesses.
   var MODEL_CONTEXT_WINDOWS = {
+    // DeepSeek official model metadata, verified 2026-11-16.
+    "deepseek-flash": 1048576,
+    "deepseek-v4-pro": 1048576,
+    "deepseek-v4-flash": 1048576,
+    "deepseek-v4-flash-vision-exp": 1048576,
     "gpt-5.6": 1050000,
     "gpt-5.6-sol": 1050000,
     "gpt-5.6-terra": 1050000,
@@ -1870,10 +1875,6 @@
       }
       if (key.indexOf("gpt-3.5") === 0) {
         return { contextWindow: 16385, source: "catalog" };
-      }
-      if (key.indexOf("deepseek") === 0) {
-        // deepseek-chat / deepseek-reasoner both ship a 128K context window.
-        return { contextWindow: 131072, source: "catalog" };
       }
       if (key.indexOf("qwen-long") === 0) {
         return { contextWindow: 1000000, source: "catalog" };

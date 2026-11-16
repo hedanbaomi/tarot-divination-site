@@ -1251,7 +1251,7 @@ test("compression usage callbacks are forwarded and official chat requests ask f
 test("quick presets fill valid openai-chat profiles and correct DeepSeek windows", () => {
   const presets = providers.QUICK_PRESETS;
   assert.ok(Array.isArray(presets), "QUICK_PRESETS must be exported as an array");
-  assert.ok(presets.length >= 2, "expected at least the DeepSeek chat and reasoner presets");
+  assert.ok(presets.length >= 2, "expected at least the current DeepSeek Flash and Pro presets");
   const seen = new Set();
   for (const preset of presets) {
     assert.equal(seen.has(preset.id), false, `duplicate preset id: ${preset.id}`);
@@ -1266,12 +1266,17 @@ test("quick presets fill valid openai-chat profiles and correct DeepSeek windows
     assert.equal(profile.contextWindow, preset.contextWindow);
     assert.equal(profile.contextWindowSource, "manual");
   }
-  const deepseek = presets.find((preset) => preset.id === "deepseek");
+  const deepseek = presets.find((preset) => preset.id === "deepseek-flash");
   assert.equal(deepseek.format, "openai-chat");
   assert.equal(deepseek.baseUrl, "https://api.deepseek.com/v1");
-  assert.equal(deepseek.model, "deepseek-chat");
-  assert.equal(deepseek.contextWindow, 131072);
-  assert.equal(presets.find((preset) => preset.id === "deepseek-reasoner").model, "deepseek-reasoner");
-  assert.deepEqual(providers.inferModelContextWindow("deepseek-chat", "openai-chat"), { contextWindow: 131072, source: "catalog" });
-  assert.deepEqual(providers.inferModelContextWindow("deepseek-reasoner", "openai-chat"), { contextWindow: 131072, source: "catalog" });
+  assert.equal(deepseek.model, "deepseek-flash");
+  assert.equal(deepseek.contextWindow, 1048576);
+  assert.equal(presets.find((preset) => preset.id === "deepseek-v4-pro").model, "deepseek-v4-pro");
+  for (const model of ["deepseek-chat", "deepseek-reasoner", "deepseek-coder", "deepseek-v5-future", "deepseek-flash-unknown"]) {
+    assert.equal(providers.inferModelContextWindow(model, "openai-chat").source, "default", model);
+  }
+  assert.equal(providers.resolveContextWindow({ ...deepseek, apiKey:"fixture", contextWindow:65536 }).contextWindow,65536);
+  assert.equal(providers.resolveContextWindow({ ...deepseek, apiKey:"fixture", contextWindow:null, detectedContextWindow:262144, contextWindowSource:"api" }).contextWindow,262144);
+  assert.deepEqual(providers.inferModelContextWindow("deepseek-flash", "openai-chat"), { contextWindow: 1048576, source: "catalog" });
+  assert.deepEqual(providers.inferModelContextWindow("deepseek-v4-pro", "openai-chat"), { contextWindow: 1048576, source: "catalog" });
 });
