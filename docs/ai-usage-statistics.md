@@ -31,4 +31,8 @@ The real admin UI with synthetic input reconciled 400 known tokens, three conver
 
 Local evidence is retained outside the repository at `E:/quareia-ai-usage-evidence-20261115`. DSH / DeepSeek V4.1 Flash completed an independent read-only review of client privacy, the native bridge, backend authentication and the additive migration; no blocking findings remained.
 
-Android source changes require a new app build to reach installed apps. Android 1.5.2 packaging is paused by the owner; no APK or release is published by this change. Real provider billing and physical-device acceptance are not part of these local tests.
+At the initial statistics rollout, Android 1.5.2 packaging was paused; that rollout did not publish an APK. The owner subsequently requested the signed 1.5.2 release. Real provider billing and physical-device acceptance are not part of the local tests.
+
+## Statistics control entry points
+
+The AI reading page does not duplicate the anonymous-statistics switch. The existing website statistics control and Android About / Copyright setting remain the authoritative controls, including for AI usage. Removing the AI-page button does not change saved consent, collection defaults, or in-flight opt-out handling.

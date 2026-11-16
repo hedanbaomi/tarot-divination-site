@@ -443,8 +443,6 @@
       ,"history.duplicateFreeBoard": "这份自由画板刚刚已经保存，无需重复保存。"
       ,"history.openInAi": "去 AI 解牌"
       ,"privacy.ai": "AI 密钥与聊天记录只保存在本机，请求直连你配置的模型接口。开启匿名使用统计时，会发送模型 ID、接口回传的 Token 用量和对话轮数；后台不接收密钥、接口地址、问题或回答内容。"
-      ,"ai.telemetryDisable": "关闭匿名使用统计"
-      ,"ai.telemetryEnable": "开启匿名使用统计"
       ,"ai.open": "AI 解牌"
       ,"ai.pageTitle": "AI 辅助解牌 · Quareia 占卜"
       ,"ai.title": "AI 辅助解牌"
@@ -1048,8 +1046,6 @@
       "history.duplicateFreeBoard": "This Free Board was just saved; no duplicate was created.",
       "history.openInAi": "Open in AI",
       "privacy.ai": "API keys and chats stay on this device; requests go directly to your configured model endpoint. When anonymous usage statistics are enabled, we report model IDs, provider-reported token usage, and conversation rounds. The backend never receives keys, endpoint URLs, questions, or answers.",
-      "ai.telemetryDisable": "Turn off anonymous statistics",
-      "ai.telemetryEnable": "Turn on anonymous statistics",
       "ai.open": "AI Reading",
       "ai.pageTitle": "AI Assisted Reading · Quareia Divination",
       "ai.title": "AI Assisted Reading",

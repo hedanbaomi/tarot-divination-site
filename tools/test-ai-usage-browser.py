@@ -66,7 +66,7 @@ def main():
                 page.on("pageerror",lambda error:errors.append(str(error)))
                 page.goto(site+"ai.html")
                 page.wait_for_function("document.querySelectorAll('.ai-chat-item').length>0")
-                expect(page.locator("#aiTelemetryToggle")).to_be_visible()
+                expect(page.locator("#aiTelemetryToggle")).to_have_count(0)
 
                 def get_events():
                     return page.evaluate("window._fixtureEvents") if args.android else list(events)
@@ -97,12 +97,12 @@ def main():
                 page.locator("#aiSendBtn").click()
                 page.wait_for_timeout(100)
                 assert len(pending)==1
-                page.locator("#aiTelemetryToggle").click()
-                page.locator("#aiTelemetryToggle").click()
+                page.evaluate("(window.androidTelemetry || window.DivinationWebTelemetry).setEnabled(false)")
+                page.evaluate("(window.androidTelemetry || window.DivinationWebTelemetry).setEnabled(true)")
                 answer(pending.pop())
                 complete()
                 assert len(get_events())==3, "A pre-opt-out request was reported after re-enable"
-                page.locator("#aiTelemetryToggle").click()
+                page.evaluate("(window.androidTelemetry || window.DivinationWebTelemetry).setEnabled(false)")
                 send("disabled-fixture")
                 assert len(get_events())==3
                 assert all(x["model_id"]=="gpt-6.1-terra" and x["usage_kind"]=="conversation" for x in get_events())
@@ -110,7 +110,7 @@ def main():
                 if args.output:
                     args.output.mkdir(parents=True,exist_ok=True)
                     page.screenshot(path=str(args.output/"ai-usage.png"))
-                    (args.output/"ai-usage.json").write_text(json.dumps({"passed":True,"events":get_events(),"checks":["known tokens","regeneration new round","unknown usage null","HTTP failure excluded","truncated and blocked excluded","early EOF excluded","opt-out then on drops old result","disabled no event","no private content"]},indent=2),encoding="utf-8")
+                    (args.output/"ai-usage.json").write_text(json.dumps({"passed":True,"events":get_events(),"checks":["no duplicate AI-page statistics toggle","known tokens","regeneration new round","unknown usage null","HTTP failure excluded","truncated and blocked excluded","early EOF excluded","opt-out then on drops old result","disabled no event","no private content"]},indent=2),encoding="utf-8")
                 assert not errors, errors
     print("AI usage browser checks passed: "+("android" if args.android else "web"))
 

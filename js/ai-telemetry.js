@@ -31,35 +31,7 @@
       }
     };
   }
-  function refreshToggle() {
-    if (!global.document) return;
-    var button = global.document.getElementById("aiTelemetryToggle"), receiver = target();
-    if (!button || !receiver || typeof receiver.isEnabled !== "function" || typeof receiver.setEnabled !== "function") return;
-    try {
-      var enabled = receiver.isEnabled();
-      var key = enabled ? "ai.telemetryDisable" : "ai.telemetryEnable";
-      var i18n = global.DivinationI18n;
-      button.hidden = false;
-      button.textContent = i18n && typeof i18n.t === "function" ? i18n.t(key) : (enabled ? "关闭匿名使用统计" : "开启匿名使用统计");
-      button.setAttribute("aria-pressed", String(enabled));
-    } catch (_error) {}
-  }
-  function initToggle() {
-    var button = global.document && global.document.getElementById("aiTelemetryToggle");
-    if (button) button.addEventListener("click", function () {
-      try { var receiver = target(); receiver.setEnabled(!receiver.isEnabled()); } catch (_error) {}
-      refreshToggle();
-    });
-    refreshToggle();
-  }
   var api = { createObserver: createObserver };
   if (typeof module === "object" && module.exports) module.exports = api;
   global.DivinationAiTelemetry = api;
-  if (global.document) {
-    if (global.document.readyState === "loading") global.document.addEventListener("DOMContentLoaded", initToggle);
-    else initToggle();
-    global.addEventListener("quareia:languagechange", refreshToggle);
-    global.addEventListener("storage", refreshToggle);
-    global.addEventListener("pageshow", refreshToggle);
-  }
 }(typeof window !== "undefined" ? window : globalThis));
