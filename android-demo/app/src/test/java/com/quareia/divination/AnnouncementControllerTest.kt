@@ -63,7 +63,9 @@ class AnnouncementControllerTest {
         assertEquals("update", result!![1].severity)
         assertEquals(1L, result!![0].id)
         assertTrue(seen.single().contains("platform=android"))
-        assertTrue(Regex("[?&]version_code=12(?:&|$)").containsMatchIn(seen.single()))
+        val installedVersionCode = application.packageManager
+            .getPackageInfo(application.packageName, 0).longVersionCode
+        assertTrue(Regex("[?&]version_code=$installedVersionCode(?:&|$)").containsMatchIn(seen.single()))
         // Store was updated for offline display.
         assertEquals(2, AnnouncementsStore.lastList().size)
     }
