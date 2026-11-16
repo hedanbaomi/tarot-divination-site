@@ -2129,6 +2129,7 @@
       var active = getDraftActiveProfile();
       if (!active || !preset) return false;
       syncFormIntoDraft();
+      active.name = quickPresetLabel(preset);
       active.format = preset.format;
       active.baseUrl = preset.baseUrl;
       active.model = preset.model;
@@ -2138,6 +2139,13 @@
       }
       active.detectedContextWindow = null;
       renderSettingsModal();
+      // renderSettingsModal() fills the inputs, but write the two fields the
+      // preset is responsible for once more so a future render path can never
+      // leave a stale name or context window behind.
+      if (els.profileName) els.profileName.value = active.name;
+      if (els.fieldContextWindow && Number(active.contextWindow) >= 1024) {
+        els.fieldContextWindow.value = String(active.contextWindow);
+      }
       setStatusText(els.settingsStatus, tr("ai.presetApplied", { preset: quickPresetLabel(preset) },
         "已填入 " + quickPresetLabel(preset) + " 预设，填写 API Key 后点保存即可。",
         "Filled the " + quickPresetLabel(preset) + " preset — add your API key, then save."), false);
