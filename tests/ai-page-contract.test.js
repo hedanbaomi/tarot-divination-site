@@ -1029,13 +1029,15 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   doc.getElementById("aiSettingsBtn").click();
   const baseUrlField = doc.getElementById("aiProfileBaseUrl");
   const apiKeyField = doc.getElementById("aiProfileApiKey");
+  const nameField = doc.getElementById("aiProfileName");
   const savedBeforePreset = storage.getItem(realProviders.STORAGE_KEY);
   const keyBeforePreset = apiKeyField.value;
   assert.ok(keyBeforePreset.length > 0, "fixture must start with a saved API key");
   deepseekChip.click();
   assert.equal(baseUrlField.value, "https://api.deepseek.com/v1");
   assert.equal(modelField.value, "deepseek-flash");
-  assert.equal(contextField.value, "");
+  assert.equal(nameField.value, "DeepSeek Flash", "a preset must name the profile after itself");
+  assert.equal(contextField.value, "1048576", "a preset must fill the catalog context window");
   assert.match(doc.getElementById("aiContextWindowHint").textContent, /1,048,576/);
   assert.equal(apiKeyField.value, "", "cross-endpoint presets must not carry the previous provider key");
   assert.equal(deepseekChip.classList.contains("is-active"), true);
@@ -1045,6 +1047,7 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   apiKeyField.value = "fixture-deepseek-key";
   proChip.click();
   assert.equal(modelField.value, "deepseek-v4-pro");
+  assert.equal(nameField.value, "DeepSeek V4 Pro", "switching presets must rename the profile");
   assert.equal(apiKeyField.value,"fixture-deepseek-key","same endpoint preserves its key");
   assert.equal(proChip.classList.contains("is-active"), true);
   assert.equal(deepseekChip.classList.contains("is-active"), false);
@@ -1065,8 +1068,9 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   assert.equal(presetSaved.format, "openai-chat");
   assert.equal(presetSaved.baseUrl, "https://api.deepseek.com/v1");
   assert.equal(presetSaved.model, "deepseek-v4-pro");
-  assert.equal(Number(presetSaved.contextWindow)||0,0);
-  assert.equal(presetSaved.contextWindowSource, "auto");
+  assert.equal(presetSaved.name, "DeepSeek V4 Pro");
+  assert.equal(Number(presetSaved.contextWindow)||0,1048576);
+  assert.equal(presetSaved.contextWindowSource, "manual");
   assert.equal(presetSaved.apiKey, "fixture-deepseek-key");
 
   doc.getElementById("aiSettingsBtn").click();

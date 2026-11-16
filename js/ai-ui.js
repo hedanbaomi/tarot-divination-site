@@ -2136,11 +2136,29 @@
       active.format = preset.format;
       active.baseUrl = preset.baseUrl;
       active.model = preset.model;
-      // Use the verified catalog as the fallback, allowing live metadata to win.
-      active.contextWindow = null;
-      active.contextWindowSource = "auto";
+      // A preset must also be recognisable in the UI, so the profile name follows it.
+      active.name = quickPresetLabel(preset);
+      // Seed the context window from the verified catalog so the field visibly updates;
+      // "Auto detect" can still fetch live metadata later.
+      var inferred = providers && typeof providers.inferModelContextWindow === "function"
+        ? providers.inferModelContextWindow(preset.model, preset.format)
+        : null;
+      var windowSize = inferred && Number(inferred.contextWindow) >= 1024
+        ? Number(inferred.contextWindow)
+        : Number(preset.contextWindow);
+      if (windowSize >= 1024) {
+        active.contextWindow = windowSize;
+        active.contextWindowSource = "manual";
+      } else {
+        active.contextWindow = null;
+        active.contextWindowSource = "auto";
+      }
       active.detectedContextWindow = null;
       renderSettingsModal();
+      if (els.profileName) els.profileName.value = active.name;
+      if (els.fieldContextWindow && Number(active.contextWindow) >= 1024) {
+        els.fieldContextWindow.value = String(active.contextWindow);
+      }
       setStatusText(els.settingsStatus, tr("ai.presetApplied", { preset: quickPresetLabel(preset) },
         "已填入 " + quickPresetLabel(preset) + "；请确认此接口的 API Key 后保存。",
         "Filled " + quickPresetLabel(preset) + "; confirm the API key for this endpoint, then save."), false);
