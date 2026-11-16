@@ -1250,6 +1250,50 @@ html.ui2 body.ai-chat-page .themed-select-chevron {
   flex: 1;
 }
 
+.ai-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ai-preset-label {
+  font-size: 12px;
+  color: var(--text-muted, #8c909c);
+}
+
+.ai-preset-chip {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line, rgba(236, 230, 216, 0.14));
+  background: var(--surface-2, #181f34);
+  color: var(--text-secondary, #c8c3b8);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.ai-preset-chip:hover {
+  border-color: var(--accent-border, rgba(200, 176, 120, 0.45));
+  color: var(--text-primary, #ece6d8);
+}
+
+.ai-preset-chip.is-active {
+  border-color: var(--accent-border, rgba(200, 176, 120, 0.45));
+  background: var(--accent-soft, rgba(200, 176, 120, 0.1));
+  color: var(--text-primary, #ece6d8);
+}
+
+.ai-preset-chip:focus-visible {
+  outline: 2px solid var(--accent-border, rgba(200, 176, 120, 0.45));
+  outline-offset: 2px;
+}
+
 .ai-checkbox-row {
   display: flex;
   align-items: flex-start;

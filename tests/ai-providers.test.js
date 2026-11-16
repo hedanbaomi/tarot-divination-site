@@ -1247,3 +1247,36 @@ test("compression usage callbacks are forwarded and official chat requests ask f
   await providers.compressMessages(profile,{messages:[{role:"user",content:"old"}],onRequestStart:()=>starts++,onRequestEnd:r=>{ended=r;},fetchImpl:async()=>createSseResponse(['data: {"choices":[{"delta":{"content":"summary"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}\n\n'])});
   assert.equal(starts,1);assert.equal(ended.usage.totalTokens,15);assert.equal(ended.complete,true);
 });
+
+test("quick presets fill valid openai-chat profiles and correct DeepSeek windows", () => {
+  const presets = providers.QUICK_PRESETS;
+  assert.ok(Array.isArray(presets), "QUICK_PRESETS must be exported as an array");
+  assert.ok(presets.length >= 2, "expected at least the current DeepSeek Flash and Pro presets");
+  const seen = new Set();
+  for (const preset of presets) {
+    assert.equal(seen.has(preset.id), false, `duplicate preset id: ${preset.id}`);
+    seen.add(preset.id);
+    assert.ok(providers.FORMAT_IDS.includes(preset.format), `${preset.id} uses an unsupported format`);
+    assert.match(preset.baseUrl, /^https:\/\//, `${preset.id} must use https`);
+    assert.ok(preset.model, `${preset.id} must set a model`);
+    assert.ok(preset.contextWindow >= 1024, `${preset.id} must set a usable context window`);
+    assert.match(preset.labelKey, /^ai\.preset\./);
+    const profile = providers.normalizeProfile({ ...preset, apiKey: "fixture-only" });
+    assert.deepEqual(providers.validateProfile(profile).errors, [], `${preset.id} must validate`);
+    assert.equal(profile.contextWindow, preset.contextWindow);
+    assert.equal(profile.contextWindowSource, "manual");
+  }
+  const deepseek = presets.find((preset) => preset.id === "deepseek-flash");
+  assert.equal(deepseek.format, "openai-chat");
+  assert.equal(deepseek.baseUrl, "https://api.deepseek.com/v1");
+  assert.equal(deepseek.model, "deepseek-flash");
+  assert.equal(deepseek.contextWindow, 1048576);
+  assert.equal(presets.find((preset) => preset.id === "deepseek-v4-pro").model, "deepseek-v4-pro");
+  for (const model of ["deepseek-chat", "deepseek-reasoner", "deepseek-coder", "deepseek-v5-future", "deepseek-flash-unknown"]) {
+    assert.equal(providers.inferModelContextWindow(model, "openai-chat").source, "default", model);
+  }
+  assert.equal(providers.resolveContextWindow({ ...deepseek, apiKey:"fixture", contextWindow:65536 }).contextWindow,65536);
+  assert.equal(providers.resolveContextWindow({ ...deepseek, apiKey:"fixture", contextWindow:null, detectedContextWindow:262144, contextWindowSource:"api" }).contextWindow,262144);
+  assert.deepEqual(providers.inferModelContextWindow("deepseek-flash", "openai-chat"), { contextWindow: 1048576, source: "catalog" });
+  assert.deepEqual(providers.inferModelContextWindow("deepseek-v4-pro", "openai-chat"), { contextWindow: 1048576, source: "catalog" });
+});

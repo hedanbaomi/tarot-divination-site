@@ -27,6 +27,28 @@
     "gemini-vertex": "gemini-2.5-flash"
   };
 
+  // Quick-fill chips shown inside the settings modal. A preset only prefills
+  // format / baseUrl / model; the UI uses the catalog window and clears draft
+  // credentials when the endpoint changes. Saved settings change only on Save.
+  var QUICK_PRESETS = [
+    {
+      id: "deepseek-flash",
+      format: "openai-chat",
+      baseUrl: "https://api.deepseek.com/v1",
+      model: "deepseek-flash",
+      contextWindow: 1048576,
+      labelKey: "ai.preset.deepseekFlash"
+    },
+    {
+      id: "deepseek-v4-pro",
+      format: "openai-chat",
+      baseUrl: "https://api.deepseek.com/v1",
+      model: "deepseek-v4-pro",
+      contextWindow: 1048576,
+      labelKey: "ai.preset.deepseekPro"
+    }
+  ];
+
   var ANTHROPIC_DEFAULT_MAX_TOKENS = 4096;
   var DEFAULT_TEST_TIMEOUT_MS = 15000;
   var OPENAI_REASONING_MODEL_RE = /^(?:.*\/)?(o[134](?:[-_]|$)|gpt-5)/i;
@@ -1772,6 +1794,11 @@
   // Verified 2026-11-15 against official model specifications. See docs/ai-model-context.md.
   // Exact IDs keep future variants and specialised models out of broad family guesses.
   var MODEL_CONTEXT_WINDOWS = {
+    // DeepSeek official model metadata, verified 2026-11-16.
+    "deepseek-flash": 1048576,
+    "deepseek-v4-pro": 1048576,
+    "deepseek-v4-flash": 1048576,
+    "deepseek-v4-flash-vision-exp": 1048576,
     "gpt-5.6": 1050000,
     "gpt-5.6-sol": 1050000,
     "gpt-5.6-terra": 1050000,
@@ -1848,9 +1875,6 @@
       }
       if (key.indexOf("gpt-3.5") === 0) {
         return { contextWindow: 16385, source: "catalog" };
-      }
-      if (key.indexOf("deepseek") === 0) {
-        return { contextWindow: 65536, source: "catalog" };
       }
       if (key.indexOf("qwen-long") === 0) {
         return { contextWindow: 1000000, source: "catalog" };
@@ -2318,6 +2342,7 @@
     FORMAT_IDS: FORMAT_IDS.slice(),
     DEFAULT_BASE_URLS: Object.assign({}, DEFAULT_BASE_URLS),
     DEFAULT_MODELS: Object.assign({}, DEFAULT_MODELS),
+    QUICK_PRESETS: QUICK_PRESETS.map(function (preset) { return Object.assign({}, preset); }),
     AiProviderError: AiProviderError,
     createDefaultProfile: createDefaultProfile,
     normalizeProfile: normalizeProfile,
