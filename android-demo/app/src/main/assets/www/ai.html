@@ -178,6 +178,17 @@
       <section class="ai-messages" id="aiMessages" aria-live="polite"></section>
 
       <footer class="ai-composer">
+        <div class="ai-skills-bar" id="aiSkillsBar">
+          <div class="ai-skill-modes" id="aiSkillModeGroup" role="group"
+            aria-label="选择 AI 解牌技法编排风格" data-i18n-aria-label="ai.skillModeAria">
+            <span class="ai-skill-mode-label" id="aiSkillModeLabel" data-i18n="ai.skillModeLabel">解牌风格</span>
+            <button class="ai-skill-mode-pill is-active" type="button" data-skill-mode="auto" aria-pressed="true" data-i18n="ai.skillMode.auto">智能编排</button>
+            <button class="ai-skill-mode-pill" type="button" data-skill-mode="direct" aria-pressed="false" data-i18n="ai.skillMode.direct">直断破局</button>
+            <button class="ai-skill-mode-pill" type="button" data-skill-mode="deep" aria-pressed="false" data-i18n="ai.skillMode.deep">全局深剖</button>
+            <button class="ai-skill-mode-pill" type="button" data-skill-mode="action" aria-pressed="false" data-i18n="ai.skillMode.action">现实处方</button>
+          </div>
+          <div class="ai-active-skills" id="aiActiveSkillsList" aria-live="polite"></div>
+        </div>
         <div class="ai-composer-box">
           <textarea class="ai-prompt-input" id="aiPromptInput" rows="2"
             placeholder="输入你的困惑或追问（Enter 发送，Shift+Enter 换行）"
@@ -263,7 +274,7 @@
         </div>
 
         <p class="ai-locked-prompt-note" id="aiLockedPromptNote" data-i18n="ai.lockedPromptNote">
-          系统提示词已锁定为 Quareia 占卜辅助助手（依据应用内牌意与叠牌法法则），不可修改，且不限制日常非占卜主题正常对话。
+          系统提示词与内置 Quareia 解牌技法引擎已锁定（自动按牌组、牌阵电路与追问轮次挂载，依据应用内牌意推演且严禁照搬说明书），不可手动篡改，且不限制日常非占卜正常对话。
         </p>
 
         <div class="ai-preset-row" id="aiPresetRow" role="group" aria-labelledby="aiPresetLabel">
@@ -388,6 +399,7 @@
   <script src="js/history-records.js"></script>
   <script src="js/history-store.js"></script>
   <script src="js/ai-providers.js"></script>
+  <script src="js/ai-skills.js"></script>
   <script src="js/ai-context.js"></script>
   <script src="js/ai-chat-store.js"></script>
   <script src="js/ai-telemetry.js"></script>

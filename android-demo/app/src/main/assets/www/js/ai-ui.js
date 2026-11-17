@@ -491,6 +491,7 @@
       abortController: null,
       activeStreamContext: null,
       editingMessageId: "",
+      editingQuestionReadingId: "",
       settingsDraft: null,
       keyVisible: false,
       lastFocusedBeforeModal: null,
@@ -535,6 +536,9 @@
       bannerSettingsBtn: byId("aiBannerSettingsBtn"),
       bannerPickBtn: byId("aiBannerPickBtn"),
       messages: byId("aiMessages"),
+      skillsBar: byId("aiSkillsBar"),
+      skillModeGroup: byId("aiSkillModeGroup"),
+      activeSkillsList: byId("aiActiveSkillsList"),
       promptInput: byId("aiPromptInput"),
       sendBtn: byId("aiSendBtn"),
       stopBtn: byId("aiStopBtn"),
@@ -750,7 +754,12 @@
         var rec = state.readingsById[rid];
         var snap = snapById[rid];
         if (rec && (!snap || contextApi.resolveReadingDetails(rec, { customLibrary: customLibrary }).spreadFound)) {
-          records.push(rec);
+          var hasSnapQuestion = Boolean(snap && typeof snap.question === "string");
+          if (hasSnapQuestion) {
+            records.push(Object.assign({}, rec, { question: snap.question }));
+          } else {
+            records.push(rec);
+          }
           continue;
         }
         if (snap && Array.isArray(snap.cards) && snap.cards.length > 0) {
@@ -780,6 +789,14 @@
             customLibrary: customLibrary
           });
           if (built) {
+            if (prevById[rid]) {
+              if (typeof prevById[rid].question === "string") {
+                built.question = prevById[rid].question;
+              }
+              if (Number(prevById[rid].attachedAt) > 0) {
+                built.attachedAt = Number(prevById[rid].attachedAt);
+              }
+            }
             snaps.push(built);
           }
         } else if (prevById[rid]) {
@@ -789,29 +806,48 @@
       return snaps;
     }
 
-    function deriveAutoTitle(readingIds, firstUserMessage) {
-      if (Array.isArray(readingIds) && readingIds.length > 0) {
-        var targetId = readingIds[0];
-        var firstRec = state.readingsById[targetId] || null;
-        if (!firstRec && state.activeConversation && Array.isArray(state.activeConversation.readingSnapshots)) {
-          for (var s = 0; s < state.activeConversation.readingSnapshots.length; s += 1) {
-            if (state.activeConversation.readingSnapshots[s].id === targetId) {
-              firstRec = state.activeConversation.readingSnapshots[s];
-              break;
-            }
+    function deriveReadingBaseAndQuestion(readingIds, snapshotsOverride) {
+      if (!Array.isArray(readingIds) || readingIds.length === 0) {
+        return null;
+      }
+      var targetId = readingIds[0];
+      var firstRec = state.readingsById[targetId] || null;
+      var snapList = Array.isArray(snapshotsOverride)
+        ? snapshotsOverride
+        : ((state.activeConversation && state.activeConversation.readingSnapshots) || []);
+      var targetSnap = null;
+      for (var s = 0; s < snapList.length; s += 1) {
+        if (snapList[s] && snapList[s].id === targetId) {
+          targetSnap = snapList[s];
+          if (!firstRec) {
+            firstRec = snapList[s];
           }
+          break;
         }
-        if (firstRec) {
-          var resolved = contextApi.resolveReadingDetails(firstRec, {
-            locale: currentLocale(),
-            customLibrary: customLibrary
-          });
-          var base = resolved ? resolved.spreadName : (firstRec.spreadName || firstRec.spreadNameSnapshot || "");
-          if (firstRec.question) {
-            return (base ? base + " · " : "") + firstRec.question.slice(0, 24);
-          }
-          if (base) return base;
+      }
+      if (!firstRec) {
+        return null;
+      }
+      var resolved = contextApi.resolveReadingDetails(firstRec, {
+        locale: currentLocale(),
+        customLibrary: customLibrary
+      });
+      var base = resolved ? resolved.spreadName : (firstRec.spreadName || firstRec.spreadNameSnapshot || "");
+      var hasSnapQ = Boolean(targetSnap && typeof targetSnap.question === "string");
+      var effectiveQ = hasSnapQ ? targetSnap.question : (firstRec.question || "");
+      return {
+        base: base || "",
+        question: String(effectiveQ || "").trim()
+      };
+    }
+
+    function deriveAutoTitle(readingIds, firstUserMessage, snapshotsOverride) {
+      var info = deriveReadingBaseAndQuestion(readingIds, snapshotsOverride);
+      if (info) {
+        if (info.question) {
+          return (info.base ? info.base + " · " : "") + info.question.slice(0, 24);
         }
+        if (info.base) return info.base;
       }
       if (firstUserMessage && firstUserMessage.trim()) {
         return firstUserMessage.trim().replace(/\s+/g, " ").slice(0, 28);
@@ -1037,15 +1073,61 @@
       return tr("ai.contextSource.default", null, "默认保守估计", "Default estimate");
     }
 
+    function resolveConversationSkillMode(conv) {
+      var raw = conv && typeof conv.skillMode === "string" ? conv.skillMode : "auto";
+      if (typeof chatStoreApi.normalizeSkillMode === "function") {
+        return chatStoreApi.normalizeSkillMode(raw);
+      }
+      return ["auto", "direct", "deep", "action"].indexOf(raw) !== -1 ? raw : "auto";
+    }
+
+    function computeHasUninterpretedReading(conv, uptoIndex) {
+      if (!conv || !Array.isArray(conv.readingIds) || conv.readingIds.length === 0) {
+        return false;
+      }
+      var msgs = Array.isArray(conv.messages) ? conv.messages : [];
+      var limit = typeof uptoIndex === "number" ? Math.min(msgs.length, Math.max(0, uptoIndex)) : msgs.length;
+      var lastAssistantAt = 0;
+      var hasAnyAssistant = false;
+      for (var i = 0; i < limit; i += 1) {
+        var m = msgs[i];
+        if (m && m.role === "assistant" && typeof m.content === "string" && m.content.trim()) {
+          hasAnyAssistant = true;
+          var ts = Number(m.createdAt) || 0;
+          if (ts > lastAssistantAt) {
+            lastAssistantAt = ts;
+          }
+        }
+      }
+      if (!hasAnyAssistant) {
+        return true;
+      }
+      var activeIdSet = Object.create(null);
+      for (var r = 0; r < conv.readingIds.length; r += 1) {
+        if (conv.readingIds[r]) {
+          activeIdSet[conv.readingIds[r]] = true;
+        }
+      }
+      var snaps = Array.isArray(conv.readingSnapshots) ? conv.readingSnapshots : [];
+      for (var s = 0; s < snaps.length; s += 1) {
+        var snap = snaps[s];
+        if (!snap || !activeIdSet[snap.id]) continue;
+        var attTs = Number(snap.attachedAt) || 0;
+        if (attTs > 0 && attTs > lastAssistantAt) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     function buildPromptPayloadForConversation(conv, uptoIndex) {
       var targetConv = conv || state.activeConversation;
+      var locale = currentLocale();
+      var skillMode = resolveConversationSkillMode(targetConv);
       var records = getAttachedRecordsForConversation(targetConv);
-      var readingsMd = contextApi.formatReadingsForPrompt(records, {
-        locale: currentLocale(),
-        customLibrary: customLibrary
-      });
       var messages = targetConv && Array.isArray(targetConv.messages) ? targetConv.messages : [];
       var limitIdx = typeof uptoIndex === "number" ? Math.min(messages.length, Math.max(0, uptoIndex)) : messages.length;
+      var hasUninterpretedReading = computeHasUninterpretedReading(targetConv, limitIdx);
       var summaryObj = targetConv && targetConv.contextSummary && targetConv.contextSummary.text
         ? targetConv.contextSummary
         : null;
@@ -1072,10 +1154,29 @@
       }
 
       var validMessages = normalizeConversationMessagesForApi(messages, startIndex, limitIdx);
-
-      var systemPrompt = contextApi.buildSystemPrompt(currentLocale(), readingsMd, summaryText);
       var apiMessages = validMessages.map(function (item) {
         return { role: item.role, content: item.content };
+      });
+      var resolvedReadings = typeof contextApi.resolveOrderedReadings === "function"
+        ? contextApi.resolveOrderedReadings(records, { locale: locale, customLibrary: customLibrary })
+        : null;
+      var readingsMd = contextApi.formatReadingsForPrompt(records, {
+        locale: locale,
+        customLibrary: customLibrary,
+        resolvedReadings: resolvedReadings,
+        messages: apiMessages,
+        skillMode: skillMode,
+        hasUninterpretedReading: hasUninterpretedReading,
+        omitCircuitHint: true
+      });
+      var systemPrompt = contextApi.buildSystemPrompt(locale, readingsMd, summaryText, {
+        locale: locale,
+        customLibrary: customLibrary,
+        records: records,
+        resolvedReadings: resolvedReadings,
+        messages: apiMessages,
+        skillMode: skillMode,
+        hasUninterpretedReading: hasUninterpretedReading
       });
       var estimatedTokens = contextApi.estimateConversationTokens({
         systemPrompt: systemPrompt,
@@ -1083,6 +1184,9 @@
       });
 
       return {
+        skillMode: skillMode,
+        hasUninterpretedReading: hasUninterpretedReading,
+        resolvedReadings: resolvedReadings,
         readingsMd: readingsMd,
         summaryText: summaryText,
         compressedCount: compressedCount,
@@ -1091,6 +1195,153 @@
         systemPrompt: systemPrompt,
         estimatedTokens: estimatedTokens
       };
+    }
+
+    function skillModeFallbackLabel(modeId) {
+      if (modeId === "direct") return tr("ai.skillMode.direct", null, "直断破局", "Direct");
+      if (modeId === "deep") return tr("ai.skillMode.deep", null, "全局深剖", "Deep");
+      if (modeId === "action") return tr("ai.skillMode.action", null, "现实处方", "Action");
+      return tr("ai.skillMode.auto", null, "智能编排", "Auto");
+    }
+
+    function skillModeFallbackHint(modeId) {
+      if (modeId === "direct") {
+        return tr("ai.skillModeHint.direct", null,
+          "开门见山先拍板核心结论与最关键的破局抓手",
+          "Leads with a direct verdict and the single decisive turning point");
+      }
+      if (modeId === "deep") {
+        return tr("ai.skillModeHint.deep", null,
+          "沿牌阵轴线深挖深层因果、移位共振与潜在暗流",
+          "Traces cross-axis causality, displacement circuits, and hidden currents");
+      }
+      if (modeId === "action") {
+        return tr("ai.skillModeHint.action", null,
+          "聚焦当事人可控位置、止损边界与接地气的现实步骤",
+          "Focuses on controllable positions, boundaries, and concrete next steps");
+      }
+      return tr("ai.skillModeHint.auto", null,
+        "按牌阵拓扑、牌组特性、问题意图与追问轮次自动组合内置技法",
+        "Automatically mounts built-in skills by spread topology, deck, intent, and turn");
+    }
+
+    function renderSkillsBar() {
+      var conv = state.activeConversation;
+      var activeMode = resolveConversationSkillMode(conv);
+      if (els.skillModeGroup && typeof els.skillModeGroup.querySelectorAll === "function") {
+        var pills = els.skillModeGroup.querySelectorAll("[data-skill-mode]");
+        Array.prototype.forEach.call(pills, function (pill) {
+          var mId = pill.getAttribute("data-skill-mode") || "auto";
+          var isOn = mId === activeMode;
+          pill.classList.toggle("is-active", isOn);
+          pill.setAttribute("aria-pressed", isOn ? "true" : "false");
+          pill.dataset.streamLock = "true";
+          pill.disabled = state.streaming || !conv;
+          pill.textContent = skillModeFallbackLabel(mId);
+          pill.title = skillModeFallbackHint(mId);
+        });
+      }
+
+      if (!els.activeSkillsList) return;
+      var records = getAttachedRecordsForConversation(conv);
+      var rawMsgs = conv && Array.isArray(conv.messages) ? conv.messages : [];
+      var previewMsgs = normalizeConversationMessagesForApi(rawMsgs, 0, rawMsgs.length).map(function (m) {
+        return { role: m.role, content: m.content };
+      });
+      var draftPrompt = els.promptInput && typeof els.promptInput.value === "string"
+        ? els.promptInput.value.trim()
+        : "";
+      if (draftPrompt) {
+        previewMsgs.push({ role: "user", content: draftPrompt });
+      }
+      var hasUninterpretedReading = computeHasUninterpretedReading(conv, rawMsgs.length);
+      var preview = typeof contextApi.previewActiveSkills === "function"
+        ? contextApi.previewActiveSkills({
+            locale: currentLocale(),
+            records: records,
+            messages: previewMsgs,
+            skillMode: activeMode,
+            hasUninterpretedReading: hasUninterpretedReading,
+            customLibrary: customLibrary
+          })
+        : null;
+
+      var activeSkills = preview && Array.isArray(preview.activeSkills) ? preview.activeSkills : [];
+      if (activeSkills.length === 0) {
+        var idleSpan = document.createElement("span");
+        idleSpan.className = "ai-skill-badge-idle";
+        idleSpan.textContent = tr("ai.activeSkillsNone", null,
+          "自由对话（附加排盘后自动挂载专属占卜技法）",
+          "Free chat (attach a reading to auto-mount Quareia skills)");
+        els.activeSkillsList.replaceChildren(idleSpan);
+        return;
+      }
+
+      var frag = document.createDocumentFragment();
+      activeSkills.forEach(function (skill) {
+        if (!skill || !skill.name) return;
+        var badge = document.createElement("span");
+        badge.className = "ai-skill-badge";
+        badge.textContent = "✦ " + skill.name;
+        badge.title = skill.reason ? (skill.name + " — " + skill.reason) : skill.name;
+        frag.appendChild(badge);
+      });
+      els.activeSkillsList.replaceChildren(frag);
+    }
+
+    function selectSkillMode(modeId) {
+      var conv = state.activeConversation;
+      if (!conv || state.streaming) return Promise.resolve();
+      var nextMode = resolveConversationSkillMode({ skillMode: modeId });
+      if (resolveConversationSkillMode(conv) === nextMode) return Promise.resolve();
+      var persistPromise = typeof chatStore.setSkillMode === "function"
+        ? chatStore.setSkillMode(conv.id, nextMode)
+        : chatStore.updateConversation(conv.id, { skillMode: nextMode }, { touchUpdatedAt: false });
+      return persistPromise.then(function (updated) {
+        if (updated) {
+          state.activeConversation = updated;
+        }
+        renderSkillsBar();
+        renderContextMeter();
+      });
+    }
+
+    function saveAttachedReadingQuestion(readingId, rawQuestion) {
+      var conv = state.activeConversation;
+      if (!conv || state.streaming) return Promise.resolve();
+      var cleanQuestion = String(rawQuestion || "").trim().slice(0, 240);
+      var baseSnaps = buildReadingSnapshots(conv.readingIds || [], conv.readingSnapshots);
+      var found = false;
+      var nextSnaps = baseSnaps.map(function (s) {
+        if (s && s.id === readingId) {
+          found = true;
+          return Object.assign({}, s, { question: cleanQuestion });
+        }
+        return s;
+      });
+      state.editingQuestionReadingId = "";
+      if (!found) {
+        renderContextHeader();
+        return Promise.resolve();
+      }
+      var prevInfo = deriveReadingBaseAndQuestion(conv.readingIds || [], conv.readingSnapshots);
+      var prevAutoTitle = deriveAutoTitle(conv.readingIds || [], "", conv.readingSnapshots);
+      var prevBaseTitle = prevInfo ? prevInfo.base : "";
+      var currentTitle = typeof conv.title === "string" ? conv.title.trim() : "";
+      var isAutoManagedTitle = !currentTitle
+        || currentTitle === prevAutoTitle
+        || (Boolean(prevBaseTitle) && currentTitle === prevBaseTitle);
+
+      var patch = { readingSnapshots: nextSnaps };
+      if (isAutoManagedTitle) {
+        patch.title = deriveAutoTitle(conv.readingIds || [], "", nextSnaps);
+      }
+      return chatStore.updateConversation(conv.id, patch, { touchUpdatedAt: false }).then(function (updated) {
+        if (updated) {
+          state.activeConversation = updated;
+        }
+        return refreshConversationsList(updated ? updated.id : conv.id);
+      });
     }
 
     function renderContextMeter() {
@@ -1149,6 +1400,7 @@
         }
         updateStreamingUi();
         updateProfileIndicator();
+        renderSkillsBar();
         renderContextMeter();
         return;
       }
@@ -1182,7 +1434,11 @@
           ids.forEach(function (rid) {
             var live = state.readingsById[rid];
             var snap = snapById[rid];
-            var sourceRec = live || snap || null;
+            var hasSnapQuestion = Boolean(snap && typeof snap.question === "string");
+            var effectiveQuestion = hasSnapQuestion ? snap.question : ((live && live.question) || "");
+            var sourceRec = live
+              ? Object.assign({}, live, { question: effectiveQuestion })
+              : (snap || null);
             var summary = sourceRec
               ? contextApi.buildReadingCardSummary(sourceRec, {
                   locale: currentLocale(),
@@ -1192,6 +1448,7 @@
 
             var card = document.createElement("article");
             card.className = "ai-reading-card";
+            card.dataset.readingId = rid;
 
             var top = document.createElement("div");
             top.className = "ai-reading-card-top";
@@ -1228,7 +1485,6 @@
             var metaParts = [];
             if (summary && summary.modeBadge) metaParts.push(summary.modeBadge);
             if (summary && summary.createdText) metaParts.push(summary.createdText);
-            if (summary && summary.question) metaParts.push(summary.question);
             if (!live && snap && Array.isArray(snap.cards) && snap.cards.length > 0) {
               metaParts.push(tr("ai.readingSnapshotSaved", null, "已使用对话内保存的牌阵快照", "Saved snapshot"));
             }
@@ -1248,6 +1504,99 @@
               card.appendChild(previewEl);
             }
 
+            var canEditQuestion = Boolean(live || (snap && Array.isArray(snap.cards) && snap.cards.length > 0));
+            if (canEditQuestion && state.editingQuestionReadingId === rid) {
+              var qEditor = document.createElement("div");
+              qEditor.className = "ai-reading-question-editor";
+
+              var qInput = document.createElement("input");
+              qInput.type = "text";
+              qInput.className = "ai-input ai-reading-question-input";
+              qInput.maxLength = 240;
+              qInput.value = effectiveQuestion;
+              qInput.placeholder = tr("ai.questionPlaceholder", null,
+                "补充当时抽牌的具体问题与时间范围（如：未来三个月跳槽是否合适）",
+                "Add what you asked and the timeframe (e.g. Changing jobs in the next 3 months)");
+
+              var qActions = document.createElement("div");
+              qActions.className = "ai-reading-question-actions";
+
+              var qSaveBtn = document.createElement("button");
+              qSaveBtn.type = "button";
+              qSaveBtn.className = "ai-mini-action";
+              qSaveBtn.textContent = tr("ai.save", null, "保存", "Save");
+              qSaveBtn.addEventListener("click", function () {
+                saveAttachedReadingQuestion(rid, qInput.value);
+              });
+
+              var qCancelBtn = document.createElement("button");
+              qCancelBtn.type = "button";
+              qCancelBtn.className = "ai-mini-action";
+              qCancelBtn.textContent = tr("ai.cancel", null, "取消", "Cancel");
+              qCancelBtn.addEventListener("click", function () {
+                state.editingQuestionReadingId = "";
+                renderContextHeader();
+              });
+
+              qInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) {
+                  e.preventDefault();
+                  saveAttachedReadingQuestion(rid, qInput.value);
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  state.editingQuestionReadingId = "";
+                  renderContextHeader();
+                }
+              });
+
+              qActions.appendChild(qSaveBtn);
+              qActions.appendChild(qCancelBtn);
+              qEditor.appendChild(qInput);
+              qEditor.appendChild(qActions);
+              card.appendChild(qEditor);
+              setTimeout(function () {
+                if (typeof qInput.focus === "function") qInput.focus();
+              }, 0);
+            } else if (canEditQuestion) {
+              var qRow = document.createElement("div");
+              qRow.className = "ai-reading-card-question-row";
+              if (effectiveQuestion) {
+                var qText = document.createElement("span");
+                qText.className = "ai-reading-card-question-text";
+                qText.textContent = tr("ai.questionPrefix", null, "所问：", "Question: ") + effectiveQuestion;
+                qText.title = qText.textContent;
+                qRow.appendChild(qText);
+
+                var qEditBtn = document.createElement("button");
+                qEditBtn.type = "button";
+                qEditBtn.className = "ai-mini-action ai-reading-question-edit-btn";
+                qEditBtn.dataset.streamLock = "true";
+                qEditBtn.disabled = state.streaming;
+                qEditBtn.textContent = tr("ai.questionEdit", null, "修改问题", "Edit question");
+                qEditBtn.addEventListener("click", function () {
+                  if (state.streaming) return;
+                  state.editingQuestionReadingId = rid;
+                  renderContextHeader();
+                });
+                qRow.appendChild(qEditBtn);
+              } else {
+                var qAddBtn = document.createElement("button");
+                qAddBtn.type = "button";
+                qAddBtn.className = "ai-reading-question-add-btn";
+                qAddBtn.dataset.streamLock = "true";
+                qAddBtn.disabled = state.streaming;
+                qAddBtn.textContent = tr("ai.questionAdd", null, "+ 补充当时所问之事", "+ Add question context");
+                qAddBtn.addEventListener("click", function () {
+                  if (state.streaming) return;
+                  state.editingQuestionReadingId = rid;
+                  renderContextHeader();
+                });
+                qRow.appendChild(qAddBtn);
+              }
+              card.appendChild(qRow);
+            }
+
             chipFrag.appendChild(card);
           });
           els.attachedChips.replaceChildren(chipFrag);
@@ -1255,6 +1604,7 @@
       }
 
       updateProfileIndicator();
+      renderSkillsBar();
       renderContextMeter();
     }
 
@@ -1268,21 +1618,21 @@
 
       var p = document.createElement("p");
       p.textContent = tr("ai.emptyDesc", null,
-        "选择一条或多条非自由画板占卜记录后，系统会将对应牌阵的牌位定义、应用内关键词与完整牌意整理发送给大模型。你可以输入自己的背景疑问，点击下方示例快速开始：",
-        "Attach one or more non-freeboard readings to provide spread positions, keywords, and in-app card meanings to your chosen LLM, then ask a question or pick a starter prompt:");
+        "选择一条或多条非自由画板占卜记录后，系统会自动挂载对应的牌阵拓扑与牌组解牌技法（提纯意象底稿、告别照念说明书）。建议在上方卡片补充当时所问之事，或点击下方提问直接开始：",
+        "Attach one or more non-freeboard readings to auto-mount Quareia spread topology and deck skills (synthesizing dynamic patterns rather than reciting a manual). Optionally add your question on the card chip above, or pick a starter:");
       box.appendChild(p);
 
-      var starters = isEnglishLocale()
-        ? [
-            "Synthesize the overall pattern across all positions for my question.",
-            "Focus on tensions, warnings, and practical next steps shown in this reading.",
-            "Compare how the attached readings relate to one another over time."
-          ]
-        : [
-            "请结合所附牌阵的牌位含义与应用内牌意，为我整体梳理和解读这次占卜。",
-            "请重点分析当前牌面中的阻力、警示以及可行的现实应对方向。",
-            "如果附加了多条占卜记录，请对比它们之间的关联与演变趋势。"
-          ];
+      var starters = [
+        tr("ai.starter.core", null,
+          "直说核心结论：这副牌眼下最核心的矛盾卡在哪？牌势正往哪边推？",
+          "Give me the straight verdict: what is the most central tension and momentum here?"),
+        tr("ai.starter.action", null,
+          "先一句话交代稳固的基本盘，再重点深挖我没意识到的盲点与破局抓手。",
+          "Briefly anchor what is stable on the board, then dig into the blind spots and key levers I haven't noticed."),
+        tr("ai.starter.compare", null,
+          "若关联了多条记录，请对比局势在时间线上的真实演变，看看哪些隐患正在缓解或加剧。",
+          "Across the attached readings, trace how the underlying pattern has shifted and which pressures are easing or intensifying.")
+      ];
 
       var list = document.createElement("div");
       list.className = "ai-starter-list";
@@ -1633,6 +1983,7 @@
 
     function startStreamingUi() {
       state.streaming = true;
+      state.editingQuestionReadingId = "";
       state.abortController = typeof AbortController === "function" ? new AbortController() : null;
       updateStreamingUi();
     }
@@ -1720,8 +2071,11 @@
 
     function createFreshConversation(initialReadings) {
       var ids = Array.isArray(initialReadings) ? initialReadings : [];
-      var snaps = buildReadingSnapshots(ids);
-      var title = deriveAutoTitle(ids, "");
+      var nowTs = Date.now();
+      var snaps = buildReadingSnapshots(ids).map(function (s) {
+        return s ? Object.assign({}, s, { attachedAt: nowTs }) : s;
+      });
+      var title = deriveAutoTitle(ids, "", snaps);
       return chatStore.createConversation({
         title: title,
         archived: false,
@@ -1738,6 +2092,7 @@
     function selectConversation(chatId) {
       if (state.streaming) return Promise.resolve();
       state.editingMessageId = "";
+      state.editingQuestionReadingId = "";
       return chatStore.getConversation(chatId).then(function (conv) {
         if (!conv) return;
         state.activeConversation = conv;
@@ -1865,6 +2220,9 @@
     function removeAttachedReading(readingId) {
       var conv = state.activeConversation;
       if (!conv || state.streaming) return;
+      if (state.editingQuestionReadingId === readingId) {
+        state.editingQuestionReadingId = "";
+      }
       var nextIds = (conv.readingIds || []).filter(function (id) { return id !== readingId; });
       var nextSnaps = (conv.readingSnapshots || []).filter(function (s) { return s.id !== readingId; });
       chatStore.updateConversation(conv.id, {
@@ -2029,12 +2387,19 @@
       if (!conv) return;
       var nextIds = state.pickerDraftIds.slice();
       var nextSnaps = buildReadingSnapshots(nextIds, conv.readingSnapshots);
-      var nextTitle = conv.title || deriveAutoTitle(nextIds, "");
-      chatStore.updateConversation(conv.id, {
-        title: nextTitle,
-        readingIds: nextIds,
-        readingSnapshots: nextSnaps
-      }).then(function (updated) {
+      var prevAuto = deriveAutoTitle(conv.readingIds || [], "", conv.readingSnapshots);
+      var curTitle = typeof conv.title === "string" ? conv.title.trim() : "";
+      var nextTitle = (!curTitle || curTitle === prevAuto)
+        ? deriveAutoTitle(nextIds, "", nextSnaps)
+        : conv.title;
+      var persistPromise = typeof chatStore.setAttachedReadings === "function"
+        ? chatStore.setAttachedReadings(conv.id, nextIds, nextSnaps, { title: nextTitle })
+        : chatStore.updateConversation(conv.id, {
+            title: nextTitle,
+            readingIds: nextIds,
+            readingSnapshots: nextSnaps
+          });
+      persistPromise.then(function (updated) {
         state.activeConversation = updated;
         return refreshConversationsList(updated.id);
       });
@@ -3039,6 +3404,15 @@
       });
     }
 
+    if (els.skillModeGroup && typeof els.skillModeGroup.querySelectorAll === "function") {
+      Array.prototype.forEach.call(els.skillModeGroup.querySelectorAll("[data-skill-mode]"), function (pill) {
+        pill.addEventListener("click", function () {
+          var targetMode = pill.getAttribute("data-skill-mode");
+          if (targetMode) selectSkillMode(targetMode);
+        });
+      });
+    }
+
     if (els.sendBtn) els.sendBtn.addEventListener("click", sendUserPrompt);
     if (els.stopBtn) {
       els.stopBtn.addEventListener("click", function () {
@@ -3046,6 +3420,9 @@
       });
     }
     if (els.promptInput) {
+      els.promptInput.addEventListener("input", function () {
+        renderSkillsBar();
+      });
       els.promptInput.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
           e.preventDefault();
@@ -3211,6 +3588,9 @@
         setSidebarOpen(false);
       } else if (state.themePopoverOpen) {
         setThemePopoverOpen(false);
+      } else if (state.editingQuestionReadingId) {
+        state.editingQuestionReadingId = "";
+        renderContextHeader();
       } else if (state.editingMessageId) {
         state.editingMessageId = "";
         renderMessages();
@@ -3343,6 +3723,11 @@
           } else {
             finishStreamingUi();
           }
+          return true;
+        }
+        if (state.editingQuestionReadingId) {
+          state.editingQuestionReadingId = "";
+          renderContextHeader();
           return true;
         }
         if (state.editingMessageId) {

@@ -257,7 +257,7 @@ def main(argv=None):
                         "snapshot-description",
                         "snapshot-source",
                         "交叉叠放于第 1 位之上",
-                        "尚未意识到自身处境的空白状态",
+                        "零点空白、天真无防备",
                         "魔法师代表有工具",
                     ]:
                         assert expected in system, expected

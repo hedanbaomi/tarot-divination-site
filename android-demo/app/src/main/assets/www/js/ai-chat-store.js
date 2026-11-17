@@ -7,9 +7,15 @@
   var BACKUP_FORMAT = "quareia-ai-chats-backup";
   var BACKUP_VERSION = 1;
   var MAX_BACKUP_BYTES = 8 * 1024 * 1024;
+  var VALID_SKILL_MODES = ["auto", "direct", "deep", "action"];
 
   function trimString(value) {
     return typeof value === "string" ? value.trim() : "";
+  }
+
+  function normalizeSkillMode(value) {
+    var clean = trimString(value).toLowerCase();
+    return VALID_SKILL_MODES.indexOf(clean) !== -1 ? clean : "auto";
   }
 
   function parseTimestampMs(value) {
@@ -128,7 +134,8 @@
     }
     var rawPosCount = Number(raw.positionCount);
     var positionCount = isFinite(rawPosCount) && rawPosCount > 0 ? Math.floor(rawPosCount) : cards.length;
-    return {
+    var attachedAt = parseTimestampMs(raw.attachedAt);
+    var snapshotObj = {
       id: id,
       layoutMode: "preset",
       deckType: trimString(raw.deckType),
@@ -144,6 +151,10 @@
       question: trimString(raw.question),
       cards: cards
     };
+    if (attachedAt > 0) {
+      snapshotObj.attachedAt = attachedAt;
+    }
+    return snapshotObj;
   }
 
   function normalizeContextSummary(raw, messages) {
@@ -262,6 +273,7 @@
       archived: Boolean(input.archived),
       pinned: Boolean(input.pinned),
       profileId: trimString(input.profileId),
+      skillMode: normalizeSkillMode(input.skillMode),
       readingIds: readingIds,
       readingSnapshots: snapshots,
       messages: messages,
@@ -597,11 +609,28 @@
       });
     }
 
+    function getMaxSnapshotAttachedAt(conv) {
+      var maxTs = 0;
+      var snaps = conv && Array.isArray(conv.readingSnapshots) ? conv.readingSnapshots : [];
+      for (var i = 0; i < snaps.length; i += 1) {
+        var ts = snaps[i] ? (Number(snaps[i].attachedAt) || 0) : 0;
+        if (ts > maxTs) maxTs = ts;
+      }
+      return maxTs;
+    }
+
     function appendMessages(id, messages, metadata) {
       var additions = messages.map(normalizeMessage);
       var meta = metadata || {};
       return updateConversation(id, function (conv) {
-        conv.messages = conv.messages.concat(additions);
+        var maxAttach = getMaxSnapshotAttachedAt(conv);
+        var adjusted = additions.map(function (m) {
+          if (m.role === "assistant" && m.content && m.content.trim() && maxAttach > m.createdAt) {
+            return Object.assign({}, m, { createdAt: maxAttach });
+          }
+          return m;
+        });
+        conv.messages = conv.messages.concat(adjusted);
         if (!conv.title && meta.title) conv.title = meta.title;
         if (meta.profileId) conv.profileId = meta.profileId;
         return conv;
@@ -615,6 +644,10 @@
         var index = conv.messages.findIndex(function (m) { return m.id === completed.id; });
         // Deletion/edit-and-resend in another tab wins over a late completion.
         if (index === -1) return null;
+        var maxAttach = getMaxSnapshotAttachedAt(conv);
+        if (completed.role === "assistant" && completed.content && completed.content.trim() && maxAttach > completed.createdAt) {
+          completed = Object.assign({}, completed, { createdAt: maxAttach });
+        }
         conv.messages[index] = completed;
         if (meta.profileId) conv.profileId = meta.profileId;
         if (meta.lastUsage) conv.lastUsage = meta.lastUsage;
@@ -629,12 +662,87 @@
       });
     }
 
+    function setAttachedReadings(id, readingIds, readingSnapshots, metadata) {
+      var meta = metadata && typeof metadata === "object" ? metadata : {};
+      var rawIds = Array.isArray(readingIds) ? readingIds : [];
+      var rawSnaps = Array.isArray(readingSnapshots) ? readingSnapshots : [];
+      return updateConversation(id, function (conv) {
+        var maxMsgTs = 0;
+        var existingMsgs = Array.isArray(conv.messages) ? conv.messages : [];
+        for (var m = 0; m < existingMsgs.length; m += 1) {
+          var mts = existingMsgs[m] ? (Number(existingMsgs[m].createdAt) || 0) : 0;
+          if (mts > maxMsgTs) maxMsgTs = mts;
+        }
+        var stampTs = Math.max(Date.now(), maxMsgTs > 0 ? (maxMsgTs + 1) : 0);
+        var prevIdsSet = Object.create(null);
+        var prevAttachedById = Object.create(null);
+        (conv.readingIds || []).forEach(function (rid) {
+          var cleanRid = trimString(rid);
+          if (cleanRid) prevIdsSet[cleanRid] = true;
+        });
+        (conv.readingSnapshots || []).forEach(function (s) {
+          if (s && s.id) {
+            prevIdsSet[s.id] = true;
+            if (Number(s.attachedAt) > 0) {
+              prevAttachedById[s.id] = Number(s.attachedAt);
+            }
+          }
+        });
+        var nextSnaps = rawSnaps.map(function (s) {
+          if (!s || typeof s !== "object") return s;
+          var sid = trimString(s.id);
+          if (!sid) return s;
+          if (prevAttachedById[sid]) {
+            return Object.assign({}, s, { attachedAt: prevAttachedById[sid] });
+          }
+          if (!prevIdsSet[sid]) {
+            var explicitAttach = parseTimestampMs(s.attachedAt);
+            return Object.assign({}, s, {
+              attachedAt: explicitAttach > maxMsgTs ? explicitAttach : stampTs
+            });
+          }
+          return s;
+        });
+        var nextConv = Object.assign({}, conv, {
+          readingIds: rawIds,
+          readingSnapshots: nextSnaps
+        });
+        if (typeof meta.title === "string") {
+          nextConv.title = meta.title;
+        }
+        return nextConv;
+      }, { touchUpdatedAt: meta.touchUpdatedAt !== false });
+    }
+
     function setArchived(id, archived) {
       return updateConversation(id, { archived: Boolean(archived) }, { touchUpdatedAt: false });
     }
 
     function setPinned(id, pinned) {
       return updateConversation(id, { pinned: Boolean(pinned) }, { touchUpdatedAt: false });
+    }
+
+    function setSkillMode(id, skillMode) {
+      return updateConversation(id, { skillMode: normalizeSkillMode(skillMode) }, { touchUpdatedAt: false });
+    }
+
+    function setReadingQuestion(id, readingId, questionText) {
+      var cleanReadId = trimString(readingId);
+      var cleanQuestion = trimString(questionText).slice(0, 300);
+      if (!cleanReadId) {
+        return getConversation(id);
+      }
+      return updateConversation(id, function (conv) {
+        var nextSnaps = (conv.readingSnapshots || []).map(function (s) {
+          if (s && s.id === cleanReadId) {
+            return Object.assign({}, s, { question: cleanQuestion });
+          }
+          return s;
+        });
+        return Object.assign({}, conv, {
+          readingSnapshots: nextSnaps
+        });
+      }, { touchUpdatedAt: false });
     }
 
     function setContextSummary(id, summary) {
@@ -965,8 +1073,11 @@
       updateConversation: updateConversation,
       appendMessages: appendMessages,
       completeMessage: completeMessage,
+      setAttachedReadings: setAttachedReadings,
       setArchived: setArchived,
       setPinned: setPinned,
+      setSkillMode: setSkillMode,
+      setReadingQuestion: setReadingQuestion,
       setContextSummary: setContextSummary,
       setLastUsage: setLastUsage,
       editMessageAndTruncate: editMessageAndTruncate,
@@ -1053,7 +1164,9 @@
     BACKUP_FORMAT: BACKUP_FORMAT,
     BACKUP_VERSION: BACKUP_VERSION,
     MAX_BACKUP_BYTES: MAX_BACKUP_BYTES,
+    VALID_SKILL_MODES: VALID_SKILL_MODES.slice(),
     parseTimestampMs: parseTimestampMs,
+    normalizeSkillMode: normalizeSkillMode,
     normalizeMessage: normalizeMessage,
     normalizeReadingSnapshot: normalizeReadingSnapshot,
     normalizeConversation: normalizeConversation,

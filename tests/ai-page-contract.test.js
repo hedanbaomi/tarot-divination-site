@@ -11,6 +11,7 @@ const androidWwwDir = path.join(rootDir, "android-demo", "app", "src", "main", "
 const aiUi = require("../js/ai-ui.js");
 const chatStoreModule = require("../js/ai-chat-store.js");
 const contextModule = require("../js/ai-context.js");
+const skillsModule = require("../js/ai-skills.js");
 
 function sha256(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
@@ -372,6 +373,7 @@ function createMemoryStorage() {
 
 const REQUIRED_HTML_IDS = [
   "aiChatList", "aiMessages", "aiPromptInput", "aiSendBtn", "aiStopBtn",
+  "aiSkillsBar", "aiSkillModeGroup", "aiActiveSkillsList",
   "aiPickReadingsBtn", "aiPickerModal", "aiPickerDeckFilter", "aiRenameModal",
   "aiSettingsModal", "aiProfileFormat", "aiProfileApiKey", "aiVertexGroup",
   "aiLockedPromptNote", "aiPresetRow", "aiFieldContextWindow", "aiDetectContextBtn",
@@ -397,7 +399,12 @@ const REQUIRED_I18N_KEYS = [
   "ai.presetLabel", "ai.preset.deepseekFlash", "ai.preset.deepseekPro", "ai.presetApplied",
   "ai.clearConfig", "ai.clearConfigTitle", "ai.clearConfigMsg", "ai.clearConfigConfirm", "ai.configCleared",
   "ai.exportedTo", "ai.exportCancelled", "ai.exportFailed",
-  "ai.chatChangedTitle", "ai.saveFailedTitle"
+  "ai.chatChangedTitle", "ai.saveFailedTitle",
+  "ai.skillModeLabel", "ai.skillModeAria",
+  "ai.skillMode.auto", "ai.skillMode.direct", "ai.skillMode.deep", "ai.skillMode.action",
+  "ai.activeSkillsLabel", "ai.activeSkillsNone",
+  "ai.questionPrefix", "ai.questionAdd", "ai.questionEdit", "ai.questionPlaceholder",
+  "ai.starter.core", "ai.starter.action", "ai.starter.compare"
 ];
 
 function assertAiHtmlContract(label, html) {
@@ -415,6 +422,7 @@ function assertAiHtmlContract(label, html) {
   assert.ok(html.includes('data-i18n-aria-label="ai.contextBarAria"'), `${label} ai.html context bar missing data-i18n-aria-label`);
   assert.ok(html.includes('data-i18n="ai.deckTarot"'), `${label} ai.html tarot option missing data-i18n`);
   assert.ok(html.includes('src="js/custom-selects.js"'), `${label} ai.html must load js/custom-selects.js to replace native <select> UI`);
+  assert.ok(html.includes('src="js/ai-skills.js"'), `${label} ai.html must load js/ai-skills.js before js/ai-context.js`);
   assert.ok(/<label[^>]+for="aiPickerDeckFilter"/i.test(html), `${label} ai.html must bind an explicit <label for="aiPickerDeckFilter">`);
   assert.ok(/<label[^>]+for="aiProfileFormat"/i.test(html), `${label} ai.html must bind an explicit <label for="aiProfileFormat">`);
   assert.ok(html.includes('data-preset="deepseek-flash"'), `${label} ai.html missing the DeepSeek quick preset chip`);
@@ -518,6 +526,7 @@ test("android ai.html, i18n, and shared AI assets stay synchronized with web", (
   const shared = [
     "css/ai-chat.css",
     "js/ai-providers.js",
+    "js/ai-skills.js",
     "js/ai-context.js",
     "js/ai-chat-store.js",
     "js/ai-ui.js"
@@ -530,7 +539,7 @@ test("android ai.html, i18n, and shared AI assets stay synchronized with web", (
 });
 
 test("AI modules avoid unsafe DOM/eval APIs and markdown renderer neutralizes raw HTML, dangerous schemes, and deep quotes", () => {
-  const aiScripts = ["js/ai-providers.js", "js/ai-context.js", "js/ai-chat-store.js", "js/ai-ui.js"];
+  const aiScripts = ["js/ai-providers.js", "js/ai-skills.js", "js/ai-context.js", "js/ai-chat-store.js", "js/ai-ui.js"];
   for (const rel of aiScripts) {
     const src = fs.readFileSync(path.join(rootDir, rel), "utf8");
     assert.equal(/\.innerHTML\b|\.outerHTML\b|insertAdjacentHTML|document\.write|\beval\s*\(|new Function\s*\(/.test(src), false,
@@ -639,8 +648,10 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
     location: global.location,
     history: global.history,
     DivinationAiProviders: global.DivinationAiProviders,
+    DivinationAiSkills: global.DivinationAiSkills,
     DivinationAiContext: global.DivinationAiContext,
     DivinationAiChatStore: global.DivinationAiChatStore,
+    DivinationHistoryStore: global.DivinationHistoryStore,
     DivinationDialog: global.DivinationDialog,
     DivinationCustomSelects: global.DivinationCustomSelects,
     DivinationI18n: global.DivinationI18n,
@@ -654,8 +665,10 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
     global.location = savedGlobals.location;
     global.history = savedGlobals.history;
     global.DivinationAiProviders = savedGlobals.DivinationAiProviders;
+    global.DivinationAiSkills = savedGlobals.DivinationAiSkills;
     global.DivinationAiContext = savedGlobals.DivinationAiContext;
     global.DivinationAiChatStore = savedGlobals.DivinationAiChatStore;
+    global.DivinationHistoryStore = savedGlobals.DivinationHistoryStore;
     global.DivinationDialog = savedGlobals.DivinationDialog;
     global.DivinationCustomSelects = savedGlobals.DivinationCustomSelects;
     global.DivinationI18n = savedGlobals.DivinationI18n;
@@ -696,6 +709,7 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   el("button", "aiThemeBtn");
   el("div", "aiThemePopover");
   el("h1", "aiCurrentChatTitle");
+  const activeChatTitleEl = el("h2", "aiActiveChatTitle");
   el("span", "aiArchivedBadge");
   el("div", "aiSetupBanner");
   el("p", "aiSetupBannerText");
@@ -705,12 +719,27 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   el("div", "aiContextMeterFill");
   el("span", "aiContextMeterLabel");
   el("div", "aiAttachedReadings");
+  const attachedChipsEl = el("div", "aiAttachedChips");
   el("button", "aiPickReadingsBtn");
   el("button", "aiRenameChatBtn");
   el("button", "aiExportMdBtn");
   el("button", "aiArchiveChatBtn");
   el("button", "aiDeleteChatBtn");
   const messagesEl = el("div", "aiMessages");
+  const skillsBarEl = el("div", "aiSkillsBar");
+  const skillModeGroupEl = doc.createElement("div");
+  skillModeGroupEl.id = "aiSkillModeGroup";
+  skillsBarEl.appendChild(skillModeGroupEl);
+  const modePills = {};
+  for (const modeId of ["auto", "direct", "deep", "action"]) {
+    const pill = doc.createElement("button");
+    pill.setAttribute("data-skill-mode", modeId);
+    skillModeGroupEl.appendChild(pill);
+    modePills[modeId] = pill;
+  }
+  const activeSkillsListEl = doc.createElement("div");
+  activeSkillsListEl.id = "aiActiveSkillsList";
+  skillsBarEl.appendChild(activeSkillsListEl);
   const promptInput = el("textarea", "aiPromptInput");
   el("button", "aiSendBtn");
   el("button", "aiStopBtn");
@@ -830,7 +859,37 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
     }
   };
   const webI18n = require("../js/i18n.js");
+  const fakeHistoryRecord = {
+    schemaVersion: 2,
+    id: "hist-ui-1",
+    createdAt: "2026-06-15T14:30:00.000Z",
+    deckType: "tarot",
+    layoutMode: "preset",
+    spreadId: "three-card-horizontal",
+    spreadName: "三张横向牌阵",
+    positionCount: 3,
+    orientationMode: "upright",
+    cards: [
+      { slotIndex: 0, positionNumber: 1, positionName: "过去", cardId: "major-16", cardName: "塔", orientation: "upright" },
+      { slotIndex: 1, positionNumber: 2, positionName: "现在", cardId: "minor-cups-nine", cardName: "圣杯九", orientation: "upright" },
+      { slotIndex: 2, positionNumber: 3, positionName: "未来", cardId: "minor-wands-ace", cardName: "权杖王牌", orientation: "upright" }
+    ]
+  };
+  const fakeHistoryRecordWithQuestion = Object.assign({}, fakeHistoryRecord, {
+    id: "hist-ui-2",
+    question: "原始记录自带旧问题"
+  });
+  global.DivinationHistoryStore = {
+    createStore() {
+      return {
+        listRecords() {
+          return Promise.resolve([fakeHistoryRecord, fakeHistoryRecordWithQuestion]);
+        }
+      };
+    }
+  };
   global.DivinationAiProviders = fakeProviders;
+  global.DivinationAiSkills = skillsModule;
   global.DivinationAiContext = contextModule;
   global.DivinationAiChatStore = fakeChatStoreGlobal;
   global.DivinationI18n = webI18n;
@@ -1141,4 +1200,162 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   assert.equal(activeStreamOpts.signal.aborted, true, "pagehide must abort active stream");
   const afterPagehide = await memChatStore.getConversation(savedAfterAbort.id);
   assert.equal(afterPagehide.messages[afterPagehide.messages.length - 1].content, "Partial before unload");
+
+  // 7. Built-in Skills bar orchestration & inline reading question persistence into systemPrompt (without mutating history-records):
+  if (!settingsModal.hidden) {
+    doc.getElementById("aiSettingsCloseBtn").click();
+  }
+  streamHook = (_profile, opts) => Promise.resolve({
+    text: "老练叙事回答",
+    reasoning: "",
+    format: "openai-chat",
+    model: "gpt-4o-mini",
+    capturedSystemPrompt: opts.systemPrompt
+  });
+
+  doc.getElementById("aiNewChatBtn").click();
+  await flush();
+
+  // Default skill mode is "auto"
+  assert.equal(modePills.auto.getAttribute("aria-pressed"), "true");
+  modePills.direct.click();
+  await flush();
+  assert.equal(modePills.direct.getAttribute("aria-pressed"), "true");
+  assert.equal(modePills.auto.getAttribute("aria-pressed"), "false");
+
+  // Attach fakeHistoryRecord via picker modal
+  doc.getElementById("aiPickReadingsBtn").click();
+  await flush();
+  const pickerCheckbox = doc.getElementById("aiPickerList").querySelector("input");
+  assert.ok(pickerCheckbox, "Picker list must render selectable reading checkbox");
+  pickerCheckbox.checked = true;
+  pickerCheckbox.dispatchEvent({ type: "change" });
+  doc.getElementById("aiPickerApplyBtn").click();
+  await flush();
+
+  // Active skills badges should now appear in #aiActiveSkillsList, and auto-title starts as pure spread name
+  assert.ok(activeSkillsListEl.querySelectorAll(".ai-skill-badge").length >= 3, "Attaching a reading must display mounted Quareia skill badges");
+  assert.equal(activeChatTitleEl.textContent, "三张横向牌阵", "Initial auto-title for questionless spread must be spread name");
+
+  // Inline question editor: open -> handleBack() cancels -> open again -> save question
+  const addQBtn = attachedChipsEl.querySelector(".ai-reading-question-add-btn");
+  assert.ok(addQBtn, "Questionless attached reading chip must offer inline + Add question button");
+  addQBtn.click();
+  assert.ok(attachedChipsEl.querySelector(".ai-reading-question-input"), "Clicking + Add question opens inline input");
+  assert.equal(ctrl.handleBack(), true, "handleBack() cancels inline question editing before leaving page");
+  assert.equal(attachedChipsEl.querySelector(".ai-reading-question-input"), null);
+
+  const addQBtn2 = attachedChipsEl.querySelector(".ai-reading-question-add-btn");
+  addQBtn2.click();
+  const qInput = attachedChipsEl.querySelector(".ai-reading-question-input");
+  qInput.value = "未来三个月要不要换工作？";
+  qInput.dispatchEvent({ type: "keydown", key: "Enter", keyCode: 13 });
+  await flush();
+
+  assert.equal("question" in fakeHistoryRecord, false, "Must NEVER mutate strict history-records object");
+  assert.equal(activeChatTitleEl.textContent, "三张横向牌阵 · 未来三个月要不要换工作？", "Adding inline question must backfill #aiActiveChatTitle");
+  assert.ok(doc.getElementById("aiChatList").textContent.includes("三张横向牌阵 · 未来三个月要不要换工作？"), "Sidebar chat list must sync updated auto-title immediately");
+
+  // Edit question -> auto-title and snapshot must update in lockstep
+  const editQBtn = attachedChipsEl.querySelector(".ai-reading-question-edit-btn");
+  assert.ok(editQBtn, "Saved question row must expose Edit question button");
+  editQBtn.click();
+  const qInputEdit = attachedChipsEl.querySelector(".ai-reading-question-input");
+  qInputEdit.value = "半年内去留该怎么选？";
+  qInputEdit.dispatchEvent({ type: "keydown", key: "Enter", keyCode: 13 });
+  await flush();
+
+  assert.equal(activeChatTitleEl.textContent, "三张横向牌阵 · 半年内去留该怎么选？", "Editing inline question must update auto-title suffix");
+  assert.ok(doc.getElementById("aiChatList").textContent.includes("三张横向牌阵 · 半年内去留该怎么选？"));
+
+  const activeConvsAfterQ = await memChatStore.listConversations({ archived: false });
+  const convWithQ = activeConvsAfterQ.find((c) => c.readingIds.includes("hist-ui-1"));
+  assert.ok(convWithQ);
+  assert.equal(convWithQ.skillMode, "direct");
+  assert.equal(convWithQ.readingSnapshots[0].question, "半年内去留该怎么选？");
+
+  let sentSysPrompt = "";
+  streamHook = (_profile, opts) => {
+    sentSysPrompt = opts.systemPrompt;
+    return Promise.resolve({ text: "结论先行解读", reasoning: "", format: "openai-chat", model: "gpt-4o-mini" });
+  };
+  promptInput.value = "请直接给我结论";
+  doc.getElementById("aiSendBtn").click();
+  await flush();
+
+  assert.ok(sentSysPrompt.includes("半年内去留该怎么选？"), "Updated snapshot question must be injected into outgoing systemPrompt");
+  assert.equal(sentSysPrompt.includes("未来三个月要不要换工作？"), false, "Previous question must not linger in systemPrompt");
+  assert.ok(sentSysPrompt.includes("直断破局"), "Selected skillMode ('direct') must be injected into outgoing systemPrompt");
+  assert.ok(sentSysPrompt.includes("抉择意图路由"), "Skills router must detect decision intent from saved inline question");
+
+  // Clearing a question on a record that originally had rec.question must override rec.question with "" and revert auto-title to spread base
+  doc.getElementById("aiNewChatBtn").click();
+  await flush();
+  doc.getElementById("aiPickReadingsBtn").click();
+  await flush();
+  const allPickerCheckboxes = doc.getElementById("aiPickerList").querySelectorAll("input");
+  assert.equal(allPickerCheckboxes.length, 2);
+  allPickerCheckboxes[1].checked = true;
+  allPickerCheckboxes[1].dispatchEvent({ type: "change" });
+  doc.getElementById("aiPickerApplyBtn").click();
+  await flush();
+
+  assert.equal(activeChatTitleEl.textContent, "三张横向牌阵 · 原始记录自带旧问题");
+  const clearEditBtn = attachedChipsEl.querySelector(".ai-reading-question-edit-btn");
+  clearEditBtn.click();
+  const clearInput = attachedChipsEl.querySelector(".ai-reading-question-input");
+  clearInput.value = "   ";
+  clearInput.dispatchEvent({ type: "keydown", key: "Enter", keyCode: 13 });
+  await flush();
+
+  assert.equal(activeChatTitleEl.textContent, "三张横向牌阵", "Clearing inline question must revert auto-title back to pure spread name");
+  assert.ok(attachedChipsEl.querySelector(".ai-reading-question-add-btn"), "Cleared question must show + Add question button rather than resurrecting rec.question");
+  promptInput.value = "盲解看看";
+  doc.getElementById("aiSendBtn").click();
+  await flush();
+  assert.equal(sentSysPrompt.includes("原始记录自带旧问题"), false, "Cleared snapshot question ('') must override live rec.question in systemPrompt");
+  assert.ok(sentSysPrompt.includes("未记录具体问题"), "Cleared question must route as unrecorded blind reading");
+
+  // 8. Mid-chat newly attached 2nd reading & chat-first-then-attach reading must set hasUninterpretedReading=true (full reading, NOT follow-up):
+  // 8a. Current chat already has 1 assistant reply for hist-ui-2; now attach hist-ui-1 as a 2nd spread
+  doc.getElementById("aiPickReadingsBtn").click();
+  await flush();
+  const boxesMidChat = doc.getElementById("aiPickerList").querySelectorAll("input");
+  boxesMidChat[0].checked = true;
+  boxesMidChat[0].dispatchEvent({ type: "change" });
+  doc.getElementById("aiPickerApplyBtn").click();
+  await flush();
+
+  assert.equal(activeSkillsListEl.textContent.includes("追问开窗深挖"), false, "Attaching a 2nd reading after turn 1 must reset to full reading mode");
+  promptInput.value = "结合刚加上的第二副牌一起看";
+  doc.getElementById("aiSendBtn").click();
+  await flush();
+  assert.equal(sentSysPrompt.includes("严禁重背全盘"), false, "Newly attached 2nd spread must receive full synthesis rather than keyhole follow-up");
+
+  // Now that both spreads have been answered by assistant, the next turn enters follow-up mode
+  promptInput.value = "那第1位的高塔具体要注意什么？";
+  doc.getElementById("aiSendBtn").click();
+  await flush();
+  assert.ok(sentSysPrompt.includes("开窗深挖"), "Subsequent turn with no newly attached reading enters follow-up drilldown");
+
+  // 8b. Chat 1 turn with NO readings first, then attach Reading #1 -> must receive full first reading
+  doc.getElementById("aiNewChatBtn").click();
+  await flush();
+  promptInput.value = "你好，先打个招呼";
+  doc.getElementById("aiSendBtn").click();
+  await flush();
+
+  doc.getElementById("aiPickReadingsBtn").click();
+  await flush();
+  const boxesAfterCasual = doc.getElementById("aiPickerList").querySelectorAll("input");
+  boxesAfterCasual[0].checked = true;
+  boxesAfterCasual[0].dispatchEvent({ type: "change" });
+  doc.getElementById("aiPickerApplyBtn").click();
+  await flush();
+
+  assert.equal(activeSkillsListEl.textContent.includes("追问开窗深挖"), false, "Attaching first reading after casual chat must NOT show follow-up badge");
+  promptInput.value = "请帮我解读这副刚挂上的牌阵";
+  doc.getElementById("aiSendBtn").click();
+  await flush();
+  assert.equal(sentSysPrompt.includes("严禁重背全盘"), false, "First reading attached after prior chat must get full initial interpretation");
 });

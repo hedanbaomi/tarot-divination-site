@@ -98,6 +98,26 @@
     };
   }
 
+  function resolveSkillsEngine(options) {
+    if (options && options.skillsEngine && typeof options.skillsEngine === "object") {
+      return options.skillsEngine;
+    }
+    if (global && global.DivinationAiSkills && typeof global.DivinationAiSkills === "object") {
+      return global.DivinationAiSkills;
+    }
+    if (typeof require === "function") {
+      try {
+        var loaded = require("./ai-skills.js");
+        if (loaded && typeof loaded === "object") {
+          return loaded;
+        }
+      } catch (_err) {
+        // Optional fallback when running ai-context.js standalone without ai-skills.js
+      }
+    }
+    return null;
+  }
+
   function resolveLocale(options, record) {
     if (options && (options.locale === "en" || options.locale === "zh-CN")) {
       return options.locale;
@@ -388,6 +408,9 @@
       var uprightMeaningRef = (cardObj && isReversed)
         ? pickText(cardObj, "uprightMeaning", "uprightMeaningEn", isEnglish)
         : "";
+      var uprightKeywordsRef = (cardObj && isReversed)
+        ? pickList(cardObj, "uprightKeywords", "uprightKeywordsEn", isEnglish)
+        : [];
       var cardSource = cardObj ? pickText(cardObj, "source", "sourceEn", isEnglish) : "";
 
       var rawArcana = (cardObj && cardObj.arcana) || entry.arcana || "";
@@ -405,24 +428,42 @@
         ? (isReversed ? (isEnglish ? "Reversed" : "逆位") : (isEnglish ? "Upright" : "正位"))
         : (isEnglish ? "Upright" : "正位");
 
+      var posCol = pos && typeof pos.column === "number" && Number.isFinite(pos.column)
+        ? pos.column
+        : (typeof entry.column === "number" && Number.isFinite(entry.column) ? entry.column : null);
+      var posRow = pos && typeof pos.row === "number" && Number.isFinite(pos.row)
+        ? pos.row
+        : (typeof entry.row === "number" && Number.isFinite(entry.row) ? entry.row : null);
+
       return {
         index: index,
         slotIndex: parsedSlotIndex !== null ? parsedSlotIndex : Math.max(0, positionNumber - 1),
         cardId: entry.cardId,
         cardName: cardName,
+        cardNameZh: cardObj ? (cardObj.name || "") : (entry.cardName || entry.cardNameSnapshot || ""),
+        cardNameEn: cardObj ? (cardObj.nameEn || "") : "",
+        number: cardObj && typeof cardObj.number === "number" ? cardObj.number : null,
         arcana: rawArcana,
         suit: (cardObj && cardObj.suit) || entry.suit || "",
+        element: (cardObj && cardObj.element) || entry.element || "",
+        direction: (cardObj && cardObj.direction) || entry.direction || "",
         orientation: isReversed ? "reversed" : "upright",
         orientationLabel: orientationLabel,
         positionNumber: positionNumber,
         positionName: positionName,
+        positionNameZh: pos ? (pos.name || "") : (entry.positionName || entry.positionNameSnapshot || ""),
+        positionNameEn: pos ? (pos.nameEn || "") : "",
         positionMeaning: positionMeaning,
+        column: posCol,
+        row: posRow,
+        drawRule: pos && pos.drawRule ? pos.drawRule : null,
         stackOn: stackOn,
         layer: layer,
         layerLabel: layerLabel,
         keywords: keywords,
         meaning: meaning,
         uprightMeaningRef: uprightMeaningRef,
+        uprightKeywordsRef: uprightKeywordsRef,
         source: cardSource
       };
     });
@@ -444,8 +485,11 @@
       spreadId: record.spreadId,
       spreadFound: Boolean(spread),
       spreadName: spreadName,
+      spreadCategory: spread ? pickText(spread, "category", "categoryEn", isEnglish) : "",
       spreadDescription: spreadDescription,
       spreadSource: spreadSource,
+      spreadColumns: spread && Number(spread.columns) > 0 ? Number(spread.columns) : 0,
+      spreadRows: spread && Number(spread.rows) > 0 ? Number(spread.rows) : 0,
       question: typeof record.question === "string" ? record.question.trim() : "",
       cards: resolvedCards
     };
@@ -462,7 +506,7 @@
       var posNum = resolvedPosNum > 0 ? resolvedPosNum : (index + 1);
       var rawSlotIndex = parseOptionalSlotIndex(raw.slotIndex);
       var resolvedSlotIndex = parseOptionalSlotIndex(c.slotIndex);
-      return {
+      var snapCard = {
         slotIndex: rawSlotIndex !== null
           ? rawSlotIndex
           : (resolvedSlotIndex !== null ? resolvedSlotIndex : Math.max(0, posNum - 1)),
@@ -477,6 +521,19 @@
         suit: c.suit || raw.suit || "",
         layer: (c.layer === "major" || c.layer === "minor") ? c.layer : null
       };
+      var snapCol = typeof c.column === "number" && Number.isFinite(c.column)
+        ? c.column
+        : (typeof raw.column === "number" && Number.isFinite(raw.column) ? raw.column : null);
+      var snapRow = typeof c.row === "number" && Number.isFinite(c.row)
+        ? c.row
+        : (typeof raw.row === "number" && Number.isFinite(raw.row) ? raw.row : null);
+      if (snapCol !== null) {
+        snapCard.column = snapCol;
+      }
+      if (snapRow !== null) {
+        snapCard.row = snapRow;
+      }
+      return snapCard;
     });
 
     return {
@@ -579,28 +636,110 @@
     };
   }
 
-  function formatCardDetailLine(c, prefix, isEnglish) {
+  function fallbackSanitizeCueText(rawText, isEnglish) {
+    if (typeof rawText !== "string" || !rawText.trim()) {
+      return "";
+    }
+    var text = rawText
+      .replace(/\(cid:\d+\)[^，。；\n]*/g, "")
+      .replace(/[（(]译注[：:][^）)]*[）)]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (isEnglish) {
+      text = text
+        .replace(/\s*Read this as the active pattern shaping the situation\.?/gi, "")
+        .replace(/\s*Pause,\s*check the facts,\s*and correct the imbalance before proceeding\.?/gi, "")
+        .trim();
+    }
+    return text;
+  }
+
+  function normalizeWordsForDedupe(str) {
+    return String(str || "")
+      .toLowerCase()
+      .replace(/\b(?:and|the|a|an)\b/g, " ")
+      .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "");
+  }
+
+  function splitAndDedupeCue(cueText, kwList) {
+    var raw = typeof cueText === "string" ? cueText.trim() : "";
+    if (!raw) {
+      return { tagPrefix: "", uniqueCueBody: "" };
+    }
+    var tagPrefix = "";
+    var body = raw;
+    var tagMatch = /^(\[[^\]]+\])\s*([\s\S]*)$/.exec(raw);
+    if (tagMatch) {
+      tagPrefix = tagMatch[1].trim();
+      body = (tagMatch[2] || "").trim();
+    }
+    var kwJoined = Array.isArray(kwList) && kwList.length > 0 ? kwList.join(" ") : "";
+    if (body && kwJoined && !/[|｜]/.test(body)) {
+      var normBody = normalizeWordsForDedupe(body);
+      var normKw = normalizeWordsForDedupe(kwJoined);
+      if (normBody && normKw && normBody === normKw) {
+        body = "";
+      }
+    }
+    return {
+      tagPrefix: tagPrefix,
+      uniqueCueBody: body
+    };
+  }
+
+  function formatCardDetailLine(c, prefix, isEnglish, cue) {
     var parts = [];
     var sep = isEnglish ? ", " : "、";
     parts.push(prefix + "**" + c.cardName + "** (" + c.orientationLabel + ")");
-    if (c.keywords && c.keywords.length > 0) {
-      parts.push((isEnglish ? "Keywords: " : "关键词：") + c.keywords.join(sep));
+    var kwList = cue && Array.isArray(cue.keywordsClean) && cue.keywordsClean.length > 0
+      ? cue.keywordsClean
+      : (c.keywords || []);
+    var hasSourceMeaning = Boolean(c.meaning && c.meaning.trim());
+    var cueText = cue && cue.coreCue ? cue.coreCue : fallbackSanitizeCueText(c.meaning, isEnglish);
+    var deduped = hasSourceMeaning && c.orientation !== "reversed"
+      ? splitAndDedupeCue(cueText, kwList)
+      : null;
+
+    if (kwList.length > 0) {
+      var inlineTag = deduped && !deduped.uniqueCueBody && deduped.tagPrefix
+        ? (deduped.tagPrefix + " ")
+        : "";
+      parts.push((isEnglish ? "Key Anchors: " : "意象锚点：") + inlineTag + kwList.join(sep));
     }
-    if (c.meaning) {
-      parts.push((isEnglish ? "In-App Meaning: " : "应用内牌意：") + c.meaning);
-    } else {
+    if (!hasSourceMeaning) {
       parts.push(isEnglish
-        ? "In-App Meaning: (Snapshot name only)"
-        : "应用内牌意：（仅保留牌名快照）");
+        ? "Imagery Cue: (Snapshot name only)"
+        : "意象线索：（仅保留牌名快照）");
+    } else if (c.orientation === "reversed") {
+      var revVec = (cue && cue.reversalVector) || cueText;
+      if (revVec) {
+        parts.push((isEnglish ? "Reversal Vector: " : "逆位偏转向量：") + revVec);
+      }
+      var upAnchor = (cue && cue.uprightAnchor) || fallbackSanitizeCueText(c.uprightMeaningRef, isEnglish);
+      if (upAnchor) {
+        parts.push((isEnglish ? "Quareia Upright Core Reference: " : "Quareia 正位内核参考：") + upAnchor);
+      }
+    } else if (deduped && deduped.uniqueCueBody) {
+      parts.push((isEnglish ? "Imagery Cue: " : "意象线索：") + cueText);
+    } else if (kwList.length === 0 && cueText) {
+      parts.push((isEnglish ? "Imagery Cue: " : "意象线索：") + cueText);
     }
-    if (c.uprightMeaningRef) {
-      parts.push((isEnglish ? "Quareia Upright Core Reference: " : "Quareia 正位内核参考：") + c.uprightMeaningRef);
+    if (cue && cue.filterSlotHint) {
+      parts.push((isEnglish ? "Filter Rule: " : "筛查提示：") + cue.filterSlotHint);
     }
     return parts.join(" | ");
   }
 
-  function formatSingleReadingMarkdown(resolved, index, total) {
+  function formatSingleReadingMarkdown(resolved, index, total, formatContext) {
     var isEnglish = resolved.locale === "en";
+    var ctx = formatContext && typeof formatContext === "object" ? formatContext : {};
+    var skills = ctx.skills || null;
+    var register = ctx.register || "mundane";
+    var gestalt = skills && typeof skills.analyzeReadingGestalt === "function"
+      ? skills.analyzeReadingGestalt(resolved, resolved.locale)
+      : null;
+    var isFilterSpread = Boolean(gestalt && gestalt.isFilterSpread);
+
     var lines = [];
     var headerPrefix = total > 1
       ? (isEnglish ? ("### Reading " + (index + 1) + ": ") : ("### 占卜记录 " + (index + 1) + "："))
@@ -610,6 +749,10 @@
     lines.push("- " + (isEnglish ? "Time" : "占卜时间") + ": " + resolved.formattedTime);
     if (resolved.question) {
       lines.push("- " + (isEnglish ? "Question" : "占卜问题") + ": " + resolved.question);
+    } else {
+      lines.push("- " + (isEnglish
+        ? "Question: (Not recorded on this spread — read as an open tension snapshot and invite the user's real-life context; never roll-call positions)"
+        : "占卜问题：（未记录具体问题 — 请按无问题盲解快照提炼 1–2 组最突出的现实张力并在结尾轻问处境，切勿逐位念牌）"));
     }
     lines.push("- " + (isEnglish ? "Deck" : "牌组") + ": " + resolved.deckName);
     lines.push("- " + (isEnglish ? "Orientation Mode" : "正逆位模式") + ": " + resolved.orientationModeLabel);
@@ -617,8 +760,8 @@
 
     if (resolved.isSplitDeckStacked) {
       lines.push("- " + (isEnglish
-        ? "Draw Method: Split-Deck Major+Minor Stacking (叠牌法 — First shuffle the 22 Major Arcana on the question and lay them across all positions as BASE cards representing underlying CAUSE / fate forces; then shuffle the 56 Minor Arcana on the same question and lay them in matching order ON TOP as STACKED cards representing concrete MANIFESTATION / effect. Read each position's Base Major + Stacked Minor strictly as a unified Cause -> Manifestation pair.)"
-        : "抽牌方式：分牌叠放／叠牌法（Quareia Split-Deck Stacking — 先就同一问题洗 22 张大阿卡那依次铺作「底牌（因 / 深层动因与格局力量）」，再就同一问题洗 56 张小阿卡那按完全相同牌位顺序叠放其上作「叠牌（果 / 现实事件、人物与具体显化）」。每个牌位的底牌与叠牌必须作为「因→果」整体合参，不可拆成孤立单牌或普通补牌）"));
+        ? "Draw Method: Split-Deck Major+Minor Stacking (叠牌法 — 22 Majors laid first as BASE / root CAUSE; 56 Minors laid on top in matching order as STACKED / concrete MANIFESTATION. Synthesize every position's Base Major + Stacked Minor as one inseparable Cause -> Manifestation pair.)"
+        : "抽牌方式：分牌叠放／叠牌法（Quareia Split-Deck Stacking — 先铺 22 张大阿卡那作「底牌（因 / 深层动因与格局力量）」，再按同序叠放 56 张小阿卡那作「叠牌（果 / 日常事件、人物与具体显化）」。同牌位底牌与叠牌须作「因→果」一体合参，不可拆作孤立补牌）"));
     }
 
     if (resolved.spreadDescription) {
@@ -627,10 +770,10 @@
     if (resolved.spreadSource) {
       lines.push("- " + (isEnglish ? "Spread Source" : "牌阵出处") + ": " + resolved.spreadSource);
     }
-    if (resolved.spreadId === "overview") {
+    if (!gestalt && resolved.spreadId === "overview") {
       lines.push("- " + (isEnglish
-        ? "Overview Structural Polarity & Cross-Links: Upper row Pos 1-6 (Home, Relationships, Creativity, Fate Cycle, Health, Gifts) = constructive/supportive polarity; Lower row Pos 7-12 (Conflict, Hidden Enemies, Ordeal, Resources, Unraveller, Taker) = tension/challenge polarity; Pos 13 = Path Ahead. Key paired axes: 1↔7, 2↔8, 3↔10 (mundane/survival), 4↔9 (fate lessons), 6↔11 (gifts vs voluntary release), 5↔12 (health vs involuntary removal; acting consciously on 11 relieves pressure on 12 & 5)."
-        : "概览布局结构对照：上排 1–6 位（家庭、关系、创造力、当前命运循环、健康、礼物）属建设性／支撑极；下排 7–12 位（冲突、隐藏的敌人、磨难、资源、解开者、夺取者）属张力／考验极；13 位为前方的道路。核心交叉联动：1(家庭)↔7(冲突)、2(关系)↔8(隐藏的敌人)、3(创造力)↔10(资源，日常生存轴)、4(当前命运循环)↔9(磨难，命运功课轴)、6(礼物)↔11(解开者，须主动识别放下的执念/弱点)、5(健康)↔12(夺取者，命运被动剥离；主动修习11位可减轻12位剥离并护持5位健康)。"));
+        ? "Overview Structural Polarity & Cross-Links: Upper row Pos 1-6 = constructive/supportive polarity; Lower row Pos 7-12 = tension/challenge polarity; Pos 13 = Path Ahead. Key paired axes: 1↔7, 2↔8, 3↔10, 4↔9, 6↔11, 5↔12 (acting consciously on 11 relieves pressure on 12 & 5)."
+        : "概览布局结构对照：上排 1–6 位属建设性／支撑极；下排 7–12 位属张力／考验极；13 位为前方的道路。核心交叉联动：1↔7、2↔8、3↔10、4↔9、6↔11、5↔12（主动修习11位可减轻12位剥离并护持5位健康）。"));
     }
     if (!resolved.spreadFound) {
       lines.push("- " + (isEnglish
@@ -638,8 +781,50 @@
         : "注：当前会话未加载该自定义牌阵完整定义，以下使用历史记录保存的牌位名称快照。"));
     }
 
+    if (gestalt) {
+      lines.push("");
+      lines.push(isEnglish
+        ? "#### First-Impressions Gestalt & Spread Circuitry (Pre-Computed)"
+        : "#### 盘面首印气势与拓扑电路（预计算结构信号）");
+      if (Array.isArray(gestalt.summaryLines)) {
+        for (var gs = 0; gs < gestalt.summaryLines.length; gs += 1) {
+          if (gestalt.summaryLines[gs]) {
+            lines.push("- " + gestalt.summaryLines[gs]);
+          }
+        }
+      }
+      if (Array.isArray(gestalt.displacements) && gestalt.displacements.length > 0) {
+        var joinedSummary = Array.isArray(gestalt.summaryLines) ? gestalt.summaryLines.join("\n") : "";
+        for (var gd = 0; gd < gestalt.displacements.length; gd += 1) {
+          var disp = gestalt.displacements[gd];
+          var dispNote = disp && disp.note ? disp.note : "";
+          if (dispNote && joinedSummary.indexOf(dispNote) === -1) {
+            lines.push("- " + dispNote);
+          }
+        }
+      }
+      if (gestalt.readingCircuitHint && !ctx.omitCircuitHint) {
+        lines.push("- " + (isEnglish ? "Reading Circuitry: " : "本阵解牌动线：") + gestalt.readingCircuitHint);
+      }
+    }
+
     lines.push("");
-    lines.push(isEnglish ? "#### Drawn Cards & In-App Meanings" : "#### 抽牌结果与应用内牌意");
+    lines.push(isEnglish
+      ? "#### Positions & Internal Imagery Scratchpad (Use Core Concepts Naturally — Never Copy Whole Clauses or Roll-Call 1..N)"
+      : "#### 牌位与内部意象底稿（可自然化用核心概念词与事实落点，严禁整句照抄原话或按 1→N 挨个点名）");
+
+    function buildCueForCard(cardItem) {
+      if (skills && typeof skills.compileCardCue === "function") {
+        return skills.compileCardCue(cardItem, {
+          locale: resolved.locale,
+          deckType: resolved.deckType,
+          spreadId: resolved.spreadId,
+          register: register,
+          isFilterSpread: isFilterSpread
+        });
+      }
+      return null;
+    }
 
     if (resolved.isSplitDeckStacked) {
       var posGroups = [];
@@ -682,12 +867,13 @@
           : ("**第 " + grp.positionNumber + " 位 · " + grp.positionName + "**" + stackedCrossNote + "【叠牌组合：大牌为因 · 小牌为果】");
         lines.push(heading);
         if (grp.positionMeaning) {
-          lines.push("  - " + (isEnglish ? "Position Meaning" : "牌位含义") + ": " + grp.positionMeaning);
+          lines.push("  - " + (isEnglish ? "Position Role" : "牌位职能") + ": " + grp.positionMeaning);
         }
         for (var e = 0; e < grp.entries.length; e += 1) {
           var sub = grp.entries[e];
           var tag = sub.layerLabel ? ("[" + sub.layerLabel + "] ") : "";
-          lines.push("  - " + formatCardDetailLine(sub, tag, isEnglish));
+          var subCue = buildCueForCard(sub);
+          lines.push("  - " + formatCardDetailLine(sub, tag, isEnglish, subCue));
         }
       }
       return lines.join("\n");
@@ -695,6 +881,7 @@
 
     for (var k = 0; k < resolved.cards.length; k += 1) {
       var c = resolved.cards[k];
+      var cardCue = buildCueForCard(c);
       var crossNote = "";
       if (Number.isInteger(c.stackOn) && c.stackOn > 0) {
         crossNote = isEnglish
@@ -706,103 +893,264 @@
         : ("**第 " + c.positionNumber + " 位 · " + c.positionName + "**" + crossNote + " -> **" + c.cardName + "**（" + c.orientationLabel + "）");
       lines.push(posHeader);
       if (c.positionMeaning) {
-        lines.push("  - " + (isEnglish ? "Position Meaning" : "牌位含义") + ": " + c.positionMeaning);
+        lines.push("  - " + (isEnglish ? "Position Role" : "牌位职能") + ": " + c.positionMeaning);
       }
-      if (c.keywords && c.keywords.length > 0) {
+      var kwClean = cardCue && Array.isArray(cardCue.keywordsClean) && cardCue.keywordsClean.length > 0
+        ? cardCue.keywordsClean
+        : (c.keywords || []);
+      var hasRawMeaning = Boolean(c.meaning && c.meaning.trim());
+      var distilledCue = cardCue && cardCue.coreCue
+        ? cardCue.coreCue
+        : fallbackSanitizeCueText(c.meaning, isEnglish);
+      var dedupedSlotCue = hasRawMeaning && c.orientation !== "reversed"
+        ? splitAndDedupeCue(distilledCue, kwClean)
+        : null;
+
+      if (kwClean.length > 0) {
         var sep = isEnglish ? ", " : "、";
-        lines.push("  - " + (isEnglish ? "In-App Keywords" : "牌面关键词") + ": " + c.keywords.join(sep));
+        var slotTagPrefix = dedupedSlotCue && !dedupedSlotCue.uniqueCueBody && dedupedSlotCue.tagPrefix
+          ? (dedupedSlotCue.tagPrefix + " ")
+          : "";
+        lines.push("  - " + (isEnglish ? "Key Anchors" : "意象锚点") + ": " + slotTagPrefix + kwClean.join(sep));
       }
-      if (c.meaning) {
-        lines.push("  - " + (isEnglish ? "In-App Card Meaning" : "应用内牌意") + ": " + c.meaning);
-      } else {
-        lines.push("  - " + (isEnglish ? "In-App Card Meaning" : "应用内牌意") + ": " + (isEnglish ? "(Snapshot name only)" : "（未匹配到完整牌义，仅保留牌名快照）"));
+      if (!hasRawMeaning) {
+        lines.push("  - " + (isEnglish ? "Imagery Cue" : "意象线索") + ": " + (isEnglish ? "(Snapshot name only)" : "（未匹配到完整牌义，仅保留牌名快照）"));
+      } else if (c.orientation === "reversed") {
+        var revText = (cardCue && cardCue.reversalVector) || distilledCue;
+        if (revText) {
+          lines.push("  - " + (isEnglish ? "Reversal Vector" : "逆位偏转向量") + ": " + revText);
+        }
+        var upRef = (cardCue && cardCue.uprightAnchor) || fallbackSanitizeCueText(c.uprightMeaningRef, isEnglish);
+        if (upRef) {
+          lines.push("  - " + (isEnglish ? "Quareia Upright Core Reference" : "Quareia 正位内核参考") + ": " + upRef);
+        }
+      } else if (dedupedSlotCue && dedupedSlotCue.uniqueCueBody) {
+        lines.push("  - " + (isEnglish ? "Imagery Cue" : "意象线索") + ": " + distilledCue);
+      } else if (kwClean.length === 0 && distilledCue) {
+        lines.push("  - " + (isEnglish ? "Imagery Cue" : "意象线索") + ": " + distilledCue);
       }
-      if (c.uprightMeaningRef) {
-        lines.push("  - " + (isEnglish ? "Quareia Upright Core Reference" : "Quareia 正位内核参考") + ": " + c.uprightMeaningRef);
+      if (cardCue && cardCue.filterSlotHint) {
+        lines.push("  - " + (isEnglish ? "Filter Rule" : "筛查提示") + ": " + cardCue.filterSlotHint);
       }
     }
     return lines.join("\n");
   }
 
-  function formatReadingsForPrompt(records, options) {
+  function resolveOrderedReadings(records, options) {
     if (!Array.isArray(records) || records.length === 0) {
-      return "";
+      return [];
     }
-    var ordered = [];
+    var resolvedList = [];
     for (var i = 0; i < records.length; i += 1) {
       if (isSelectableReadingRecord(records[i])) {
-        ordered.push(records[i]);
+        var res = resolveReadingDetails(records[i], options);
+        if (res) {
+          resolvedList.push(res);
+        }
       }
     }
-    if (ordered.length === 0) {
+    return resolvedList;
+  }
+
+  function formatReadingsForPrompt(records, options) {
+    var opts = options && typeof options === "object" ? options : {};
+    var resolvedList = Array.isArray(opts.resolvedReadings) && opts.resolvedReadings.length > 0
+      ? opts.resolvedReadings
+      : resolveOrderedReadings(records, opts);
+    if (resolvedList.length === 0) {
       return "";
     }
+    var skills = resolveSkillsEngine(opts);
+    var locale = resolvedList[0].locale || resolveLocale(opts, null);
+    var register = typeof opts.register === "string" && opts.register
+      ? opts.register
+      : (skills && typeof skills.detectRegister === "function"
+          ? skills.detectRegister({
+              locale: locale,
+              resolvedReadings: resolvedList,
+              records: Array.isArray(opts.records) ? opts.records : (Array.isArray(records) ? records : []),
+              messages: Array.isArray(opts.messages) ? opts.messages : []
+            })
+          : "mundane");
     var sections = [];
-    for (var j = 0; j < ordered.length; j += 1) {
-      var resolved = resolveReadingDetails(ordered[j], options);
-      if (resolved) {
-        sections.push(formatSingleReadingMarkdown(resolved, j, ordered.length));
-      }
+    for (var j = 0; j < resolvedList.length; j += 1) {
+      sections.push(formatSingleReadingMarkdown(resolvedList[j], j, resolvedList.length, {
+        skills: skills,
+        register: register,
+        omitCircuitHint: Boolean(opts.omitCircuitHint)
+      }));
     }
     return sections.join("\n\n---\n\n");
   }
 
-  function buildSystemPrompt(locale, readingsMarkdown, contextSummaryText) {
+  function inferSyntheticReadingsFromMarkdown(readingsMarkdown, locale) {
+    var text = typeof readingsMarkdown === "string" ? readingsMarkdown.trim() : "";
+    if (!text) {
+      return [];
+    }
+    var deckType = "tarot";
+    if (/Mystagogus/i.test(text)) {
+      deckType = "mystagogus";
+    } else if (/LXXXI/i.test(text)) {
+      deckType = "lxxxi";
+    }
+    var spreadMatch = /\(`([a-z0-9-]+)`\)/i.exec(text);
+    var spreadId = spreadMatch ? spreadMatch[1] : "three-card-horizontal";
+    var questionMatch = /^(?:-\s*(?:Question|占卜问题):\s*)(.+)$/m.exec(text);
+    var rawQ = questionMatch ? questionMatch[1].trim() : "";
+    if (rawQ.indexOf("（未记录") === 0 || rawQ.indexOf("(Not recorded") === 0) {
+      rawQ = "";
+    }
+    return [{
+      id: "synthetic-md",
+      locale: locale === "en" ? "en" : "zh-CN",
+      deckType: deckType,
+      spreadId: spreadId,
+      isSplitDeckStacked: /Split-Deck|分牌叠放|叠牌法/.test(text),
+      question: rawQ,
+      cards: []
+    }];
+  }
+
+  function getSkillModes(locale, options) {
     var isEnglish = locale === "en";
+    var skills = resolveSkillsEngine(options);
+    if (skills && Array.isArray(skills.SKILL_MODES) && skills.SKILL_MODES.length > 0) {
+      return skills.SKILL_MODES.map(function (m) {
+        return {
+          id: m.id,
+          label: isEnglish ? (m.labelEn || m.id) : (m.labelZh || m.id),
+          description: isEnglish ? (m.descEn || "") : (m.descZh || ""),
+          labelZh: m.labelZh || m.id,
+          labelEn: m.labelEn || m.id,
+          descZh: m.descZh || "",
+          descEn: m.descEn || ""
+        };
+      });
+    }
+    var fallback = [
+      { id: "auto", labelZh: "智能编排", labelEn: "Auto", descZh: "按牌阵、牌组、意图与追问自动组合技法", descEn: "Automatically mounts skills by spread, deck, intent, and turn" },
+      { id: "direct", labelZh: "直断破局", labelEn: "Direct", descZh: "开门见山直给核心结论与关键转折", descEn: "Lead with the straight verdict and decisive turning point" },
+      { id: "deep", labelZh: "全局深剖", labelEn: "Deep", descZh: "深挖跨轴因果链、潜流共振与暗面动力", descEn: "Trace cross-axis causality, hidden currents, and structural tension" },
+      { id: "action", labelZh: "现实处方", labelEn: "Action", descZh: "聚焦可控抓手、止损边界与具体行动步骤", descEn: "Focus on controllable leverage, boundaries, and concrete next steps" }
+    ];
+    return fallback.map(function (m) {
+      return Object.assign({}, m, {
+        label: isEnglish ? m.labelEn : m.labelZh,
+        description: isEnglish ? m.descEn : m.descZh
+      });
+    });
+  }
+
+  function previewActiveSkills(options) {
+    var opts = options && typeof options === "object" ? options : {};
+    var effLocale = opts.locale === "en" ? "en" : "zh-CN";
+    var skills = resolveSkillsEngine(opts);
+    var resolvedReadings = Array.isArray(opts.resolvedReadings)
+      ? opts.resolvedReadings
+      : resolveOrderedReadings(opts.records, { locale: effLocale, customLibrary: opts.customLibrary });
+    var modeNorm = skills && typeof skills.normalizeSkillMode === "function"
+      ? skills.normalizeSkillMode(opts.skillMode)
+      : (typeof opts.skillMode === "string" && ["auto", "direct", "deep", "action"].indexOf(opts.skillMode) !== -1 ? opts.skillMode : "auto");
+
+    if (skills && typeof skills.routeSkills === "function") {
+      return skills.routeSkills({
+        locale: effLocale,
+        resolvedReadings: resolvedReadings,
+        records: Array.isArray(opts.records) ? opts.records : [],
+        messages: Array.isArray(opts.messages) ? opts.messages : [],
+        skillMode: modeNorm,
+        hasUninterpretedReading: Boolean(opts.hasUninterpretedReading)
+      });
+    }
+    return {
+      locale: effLocale,
+      skillMode: modeNorm,
+      register: "mundane",
+      intent: resolvedReadings.length > 0 ? "open-snapshot" : "general",
+      isFollowUp: false,
+      hasUninterpretedReading: Boolean(opts.hasUninterpretedReading),
+      validUserTurns: 0,
+      hasReadings: resolvedReadings.length > 0,
+      activeSkills: [],
+      promptBlock: ""
+    };
+  }
+
+  function buildSystemPrompt(locale, readingsMarkdown, contextSummaryText, options) {
+    var isEnglish = locale === "en";
+    var effLocale = isEnglish ? "en" : "zh-CN";
+    var opts = options && typeof options === "object" ? options : {};
+    var trimmedContext = typeof readingsMarkdown === "string" ? readingsMarkdown.trim() : "";
+    var skills = resolveSkillsEngine(opts);
+
+    var resolvedReadings = Array.isArray(opts.resolvedReadings)
+      ? opts.resolvedReadings
+      : resolveOrderedReadings(opts.records, { locale: effLocale, customLibrary: opts.customLibrary });
+    if (resolvedReadings.length === 0 && trimmedContext) {
+      resolvedReadings = inferSyntheticReadingsFromMarkdown(trimmedContext, effLocale);
+    }
+
+    var routed = skills && typeof skills.routeSkills === "function"
+      ? skills.routeSkills({
+          locale: effLocale,
+          resolvedReadings: resolvedReadings,
+          records: Array.isArray(opts.records) ? opts.records : [],
+          messages: Array.isArray(opts.messages) ? opts.messages : [],
+          skillMode: opts.skillMode,
+          hasUninterpretedReading: Boolean(opts.hasUninterpretedReading)
+        })
+      : null;
+
     var baseLines = isEnglish
       ? [
-          "You are the built-in Quareia Divination & Reading Assistant for this application.",
+          "You are a seasoned Quareia divination reader and thoughtful conversation partner built into this application.",
           "",
           "## Core Role & Non-Blocking Conversation Principle",
-          "- Your primary specialty is helping the user interpret divination readings attached to this conversation accurately, constructively, and faithfully to the in-app decks (Quareia Traditional Tarot, Mystagogus Oracle, and LXXXI Magical Deck).",
+          "- When interpreting attached readings across Quareia Traditional Tarot, Mystagogus Oracle, and the LXXXI Magical Deck, read like an experienced practitioner sitting across the table—penetrating, plain-spoken, structurally rigorous, and grounded in real life rather than reciting a guidebook.",
           "- **Non-blocking rule**: NEVER refuse, block, scold, or force-redirect benign non-divination topics (such as everyday conversation, emotional reflection, career/study planning, writing, technical questions, or general Q&A), whether or not a reading is attached. Respond naturally, clearly, and helpfully to whatever the user brings up.",
           "",
-          "## In-App Meanings, Upright-Only Negative Positions & Reversed Tarot Provenance",
-          "- Whenever analyzing cards from an attached reading, anchor your reading strictly in the injected in-app card keywords, card meanings, and spread position meanings. Never fabricate cards or positions that were not drawn.",
-          "- **Quareia Upright-Only Negative Positions**: In Josephine McCarthy's *Tarot Skills for the 21st Century*, Tarot is natively read upright-only; difficult, blocked, or destructive meanings emerge from **challenging spread positions** (e.g., Conflict, Hidden Enemies, Difficulties/Ordeal, Withheld/Taken Away, Unraveller, Taker) and surrounding pressure. Never read a benign upright card in a challenging position naively as good news—translate it into friction or loss within that sphere.",
-          "- **Reversed Tarot Meanings (`mixed` mode)**: Upright Tarot meanings in this app come from the Quareia Tarot reference book, whereas **reversed Tarot meanings are web-sourced supplementary meanings** provided when a user selects upright+reversed mode. When a Tarot card is reversed, integrate the injected reversed meaning smoothly with the card's Quareia core function and its spread position (indicating blocked, delayed, internalized, excessive, or inverted energy). Mystagogus and LXXXI are strictly upright-only.",
+          "## Scratchpad Internalization, Polarity & Anti-Parroting Law",
+          "- **Fidelity without parroting**: Never invent cards or positions that were not drawn. All injected position roles, anchors, and imagery cues are your **private reader's scratchpad** for cross-synthesis: you are encouraged to naturally use accurate position names, card names, and concrete domain/polarity concepts (e.g., contract, surgery, theft, pregnancy, threshold, ancestor) where relevant, while **NEVER copying whole scratchpad clauses verbatim, NEVER citing dictionary meta-labels (\"In-App Meaning\", \"Key Anchors\", \"Read this as the active pattern shaping the situation\", \"Pause, check the facts...\"), and NEVER marching mechanically from Position 1 to Position N like a roll-call checklist**.",
+          "- **Three-way translation**: Translate `[card visual/energetic action] × [position function & polarity] × [concrete question & timeframe]` directly into human language, weaving card names naturally as supporting evidence rather than paragraph headings.",
+          "- **Quareia Upright-Only Negative Positions & Reversals**: In Josephine McCarthy's system, decks are natively read upright-only; shadow, friction, or loss emerge from **challenging/deprivation positions** (Conflict, Hidden Enemies, Ordeal, Withheld/Taken Away, Unraveller, Taker, Binder, Danger) and surrounding pressure. Never read a pleasant card in a challenging slot naively as good news—read it as blocked advantage, excess, or something being stripped away. In Tarot `mixed` mode, integrate reversed vectors (blocked, delayed, internalized, excessive, or loosening energy) smoothly with the card's Quareia upright core and position; Mystagogus and LXXXI are strictly upright-only.",
           "",
           "## Authoritative Quareia Stacking Rules (`叠牌法` vs Crossing Overlay)",
-          "You must distinguish two completely different mechanisms:",
-          "1. **Split-Deck Major+Minor Stacking (`分牌叠放／叠牌法`, 26-card Overview or Major+Minor spreads)**:",
-          "   - The 22 Major Arcana and 56 Minor Arcana are separated into two piles. First, the 22 Major Arcana are shuffled on the question and laid across all positions (**Base / Lower Card = Major Arcana**). Second, the 56 Minor Arcana are shuffled on the **exact same question** and laid in the same order **on top of** each Major card (**Stacked / Upper Card = Minor Arcana**).",
-          "   - This is NOT random clarifier pulling. Every position's two cards MUST be read together as a single **Cause -> Manifestation causal pair**:",
-          "     - **Base Card (Major Arcana) = Root Cause (`因`)**: underlying archetypal force, fate pattern, or deep structural driver behind that position.",
-          "     - **Stacked Card (Minor Arcana) = Concrete Manifestation (`果`)**: how that deeper force plays out tangibly in day-to-day events, circumstances, people, or actions.",
-          "   - **Weighting**: Majors carry deeper structural authority than Minors. A constructive Major tempers and contains a harsh Minor above it; an ominous Major beneath an easy Minor signals deeper pressure beneath surface calm. Always weigh isolated difficult cards against the overall balance of the spread.",
-          "2. **Single-Card Crossing / Overlay (e.g., Yes/No Pos 6 over Pos 1, Fate Pattern Pos 10 over Pos 1, Landscape/Occult Map Pos 2 over Pos 1, Four Directions Pos 6 over Pos 1)**:",
-          "   - One card crosses/overlays a single anchor position to show the active intersecting influence, relationship, or verdict acting directly upon that core card (this is NOT Major+Minor split-deck stacking).",
+          "1. **Split-Deck Major+Minor Stacking (`分牌叠放／叠牌法`, 26-card Overview or Major+Minor custom spreads)**:",
+          "   - The 22 Major Arcana are laid first across all positions as **Base Cards (`底牌` = Root Cause / deep fate driver)**; the 56 Minor Arcana are shuffled on the **exact same question** and laid in matching order on top as **Stacked Cards (`叠牌` = Concrete Manifestation / everyday events & actions)**.",
+          "   - Read every position's two cards as one indivisible **Cause -> Manifestation pair**, never as random clarifiers. Majors carry deeper structural weight: a constructive Major contains a harsh Minor above it; a heavy Major beneath an easy Minor signals structural pressure beneath surface calm. Weigh isolated harsh cards against the whole spread instead of catastrophizing.",
+          "2. **Single-Card Crossing / Overlay (`stackOn`, e.g., Yes/No Pos 6 over 1, Fate Pattern Pos 10 over 1, Landscape/Occult Map Pos 2 over 1, Four Directions Pos 6 over 1)**:",
+          "   - One card crosses a single anchor card to show the active intersecting force, relationship, or verdict acting directly upon that core (not Major+Minor split-deck stacking).",
           "",
-          "## Style & Language",
-          "- Synthesize structural patterns and causal links before offering balanced, non-fatalistic reflection that respects human agency. Avoid medical, legal, or financial decrees.",
-          "- Reply in the language of the user's message unless asked otherwise."
+          "## Agency & Practical Boundaries",
+          "- Respect human agency without fatalistic fear-mongering, fortune-cookie clichés, or preachy therapy-speak. Never issue medical diagnoses, legal rulings, or financial decrees. Reply in the language of the user's message unless asked otherwise."
         ]
       : [
-          "你是本应用内置的 Quareia 占卜辅助解牌与对话助手。",
+          "你是本应用内置的资深 Quareia 占卜解牌师与对话伙伴。",
           "",
           "## 核心身份与非占卜话题不阻断原则",
-          "- 你的核心专长是结合应用内牌组（Quareia 传统塔罗、Mystagogus 神谕牌、LXXXI 奎瑞亚魔法牌）的内置牌意与牌阵结构，帮助用户客观、深入地解读所关联的占卜记录。",
-          "- **对话不阻断原则**：即使对话当前未关联占卜记录，或用户提问日常闲聊、情绪倾诉、工作规划、生活困惑、学习思考、技术或常识问题等**非占卜主题**，也**绝不拒绝、说教或强行拉回占卜**，请自然、友好、直接地回应用户的正常对话需求；当涉及牌阵或抽牌分析时，再严格运用下方占卜法则。",
+          "- 涉及关联排盘时，你要像一位坐在对面的成熟 Quareia 占卜师（精通 Quareia 传统塔罗、Mystagogus 神谕牌与 LXXXI 奎瑞亚魔法牌）——眼光毒辣、平实直白、重全局电路与现实因果，绝不做照念说明书的词典复读机。",
+          "- **对话不阻断原则**：即使对话当前未关联占卜记录，或用户提问日常闲聊、情绪倾诉、工作规划、生活困惑、学习思考、技术或常识问题等**非占卜主题**，也**绝不拒绝、说教或强行拉回占卜**，请自然、友好、直接地回应用户的正常对话需求；当涉及牌阵或抽牌分析时，再严格运用占卜法则。",
           "",
-          "## 应用内牌意依据、负向牌位与正逆位出处规则",
-          "- 解读关联记录时，必须严格以系统注入的「牌位含义、关键词、应用内牌意」为依据，严禁捏造未抽出的牌或擅自篡改牌位。",
-          "- **Quareia 原典正位与负向牌位法则**：在 Josephine McCarthy《21 世纪的塔罗技能》体系中，塔罗与 M 牌／LXXXI 原本皆以**全正位**解读，困难或受阻含义主要通过**挑战性／负向牌位**（如：冲突、隐藏的敌人、磨难／困难、被隐瞒／剥夺、解开者、夺取者、危险等）及周边牌组格局来体现。切勿把落在负向牌位上的“正位吉牌”简单误读为好事，而应读出该面向正在出现失衡、过度消耗或摩擦。",
-          "- **正逆位出处差异（正逆位混抽模式）**：本应用中**塔罗正位牌意出自《21 世纪的塔罗技能》参考体系**，而**塔罗逆位牌意为网络获取的补充牌意**（仅在塔罗正逆位混抽时生效；Mystagogus 与 LXXXI 始终为全正位）。遇到塔罗逆位牌时，请将注入的逆位补充牌意与该牌核心原型、所处牌位含义有机整合（通常指向能量的阻塞、延迟、内化、过度或反转显化）。",
+          "## 意象底稿内化铁律、负向牌位与反照本宣科硬锁",
+          "- **据实推演但严禁抄书**：严禁捏造未抽出的牌或篡改牌位；系统注入的「牌位职能、意象锚点、意象线索」是供你交叉推演的**内部底稿**——**鼓励在行文中自然、精准地使用牌位名、牌名及关键概念词／事实原子（如契约、失窃、手术、妊娠、先祖、门槛等），仅严禁整句照抄底稿套话，严禁出现“根据应用内牌意／关键词显示”等词典腔，严禁按“第 1 位……第 2 位……”从头到尾机械点名报菜名**！请将【牌面动作／能量质地 × 牌位现实职能 × 提问时间窗与处境】内化后，用自然连贯的洞察叙事讲清来龙去脉，把牌名自然嵌在句中或括号内作论据支撑。",
+          "- **Quareia 原典正位与负向牌位法则**：在《21 世纪的塔罗技能》体系中，三套牌组原本皆以**全正位**运作，受阻或破坏面主要通过**挑战／剥夺牌位**（如：冲突、隐藏的敌人、磨难／困难、被隐瞒／剥夺、解开者、夺取者、束缚者、危险等）及周边牌势显影。切勿把落在负向或剥夺牌位上的“好牌”误读为吉兆，而应读出该优势正被扣留、过度执着或面临剥离。塔罗正逆位混抽（`mixed`）模式下，正位源自原典而逆位属补充偏转向量，请结合其正位内核与牌位读出能量的阻滞、延迟、内耗、过度或松动；Mystagogus 与 LXXXI 始终为全正位。",
           "",
           "## Quareia「叠牌法」与「交叉叠牌」权威法则（务必精准区分）",
-          "1. **分牌叠放／叠牌法（Split-Deck Major+Minor Stacking，常见于 26 张概览布局与大小阿卡那叠放自定义阵）**：",
-          "   - 操作方式：将 22 张大阿卡那与 56 张小阿卡那**分开**；先就问题洗 22 张大阿卡那铺满所有牌位作为**底牌（大阿卡那）**，再就**完全同一问题**洗 56 张小阿卡那按相同牌位顺序一一叠放其上作为**叠牌（小阿卡那）**。",
-          "   - 实质意义：这**不是**普通塔罗里“再抽一张补牌解释”。同一牌位的两张牌必须合参为一个不可分割的**因果对偶**：",
-          "     - **底牌（大阿卡那）＝「因」**：决定该生活面向走向的深层动因、宿命／命运驱动力、原型与根源结构。",
-          "     - **叠牌（小阿卡那）＝「果」**：该深层动因在现实事件、人物互动、具体行为或日常事务中的具体显化方式。",
-          "   - **权重与制衡法则**：大阿卡那权重远高于小阿卡那。积极建设性的大阿卡那底牌会缓冲并收敛上方困难的小阿卡那（多属局部可控摩擦）；严厉或动荡的大阿卡那底牌下方即使表面小牌尚可，也提示更深层的结构压力。单处凶险组合理应结合周边整体格局权衡，避免孤立夸大灾祸。",
-          "2. **单张交叉叠牌（Crossing / `stackOn`，如是/否布局第 6 位叠第 1 位、命运模式第 10 位叠第 1 位、景观/神秘学地图第 2 位叠第 1 位、四方位第 6 位叠第 1 位）**：",
-          "   - 实质意义：仅在单个核心锚点牌位上方交叉压放一张牌，表示直接交织、裁断或作用于该核心的当前关键力量或关系（并非大小阿卡那分牌叠牌法）。",
+          "1. **分牌叠放／叠牌法（Split-Deck Major+Minor Stacking，26 张概览布局与大小阿卡那叠放自定义阵）**：",
+          "   - 先洗 22 张大阿卡那铺满所有牌位作**底牌（大阿卡那＝「因」：深层动因、命运格局与根源驱动力）**，再就**同一问题**洗 56 张小阿卡那按同序叠放其上作**叠牌（小阿卡那＝「果」：日常事件、人物互动与具体显化）**。",
+          "   - 同一牌位的底牌与叠牌必须作为不可分割的**因果对偶**合参（绝非普通补牌）。大阿卡那权重远高于小阿卡那：稳健大牌托底可缓冲上方凶小牌为局部摩擦；沉重大牌潜伏于平顺小牌之下则提示表象之下的深层结构压力。孤立凶牌须结合全盘冷暖权衡，切忌恐慌夸大。",
+          "2. **单张交叉叠牌（Crossing / `stackOn`，如是/否第 6 叠 1 位、命运模式第 10 叠 1 位、景观/神秘学地图第 2 叠 1 位、四方位第 6 叠 1 位）**：",
+          "   - 仅在核心锚点牌上方交叉压放一张牌，代表直接交织、切入或裁断该核心的现实力量或关键关系（非大小阿卡那分牌叠牌法）。",
           "",
-          "## 解读风格",
-          "- 表达清晰有条理，先抓整体格局与核心因果联动，再落到逐位解析与可行的现实反思；尊重当事人的自由意志，不做宿命式恐吓，也不下达医疗、法律或投资决策结论。",
-          "- 默认使用与用户当前消息相同的语言作答。"
+          "## 伦理边界与语言",
+          "- 尊重当事人的自由意志与现实选择权，不灌空洞鸡汤、不做宿命恐吓，也不下达医疗诊断、法律裁决或投资指令。默认使用与用户当前消息相同的语言作答。"
         ];
+
+    if (routed && typeof routed.promptBlock === "string" && routed.promptBlock.trim()) {
+      baseLines.push("");
+      baseLines.push(routed.promptBlock.trim());
+    }
 
     var trimmedSummary = typeof contextSummaryText === "string" ? contextSummaryText.trim() : "";
     if (trimmedSummary) {
@@ -813,13 +1161,21 @@
       baseLines.push(trimmedSummary);
     }
 
-    var trimmedContext = typeof readingsMarkdown === "string" ? readingsMarkdown.trim() : "";
     if (trimmedContext) {
+      var effectiveContext = trimmedContext;
+      var hasRoutedSpreadTopology = Boolean(
+        routed
+        && Array.isArray(routed.activeSkills)
+        && routed.activeSkills.some(function (s) { return s && s.id === "skill-spread-topology"; })
+      );
+      if (hasRoutedSpreadTopology) {
+        effectiveContext = effectiveContext.replace(/^\s*-\s*(?:Reading Circuitry|本阵解牌动线)\s*[：:][^\r\n]*(?:\r?\n)?/gm, "").trim();
+      }
       baseLines.push("");
       baseLines.push(isEnglish
-        ? "## Attached Non-Freeboard Reading Context (In-App Meanings)"
-        : "## 当前对话已关联的非自由画板占卜记录（含牌位与应用内牌意）");
-      baseLines.push(trimmedContext);
+        ? "## Attached Non-Freeboard Reading Context (Internal Reader Scratchpad — Use Core Concepts Naturally; Never Copy Whole Clauses)"
+        : "## 当前对话已关联的非自由画板占卜记录（内部意象底稿：可自然化用核心概念词，禁整句照搬或逐位点名）");
+      baseLines.push(effectiveContext);
     } else {
       baseLines.push("");
       baseLines.push(isEnglish
@@ -860,9 +1216,12 @@
     isSelectableReadingRecord: isSelectableReadingRecord,
     filterSelectableHistoryRecords: filterSelectableHistoryRecords,
     resolveReadingDetails: resolveReadingDetails,
+    resolveOrderedReadings: resolveOrderedReadings,
     buildReadingSnapshot: buildReadingSnapshot,
     buildReadingCardSummary: buildReadingCardSummary,
     formatReadingsForPrompt: formatReadingsForPrompt,
+    getSkillModes: getSkillModes,
+    previewActiveSkills: previewActiveSkills,
     buildSystemPrompt: buildSystemPrompt,
     estimateTokens: estimateTokens,
     estimateConversationTokens: estimateConversationTokens
