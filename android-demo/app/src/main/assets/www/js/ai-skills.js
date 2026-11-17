@@ -599,8 +599,8 @@
     "health": {
       family: "body-circuit",
       isFilter: false,
-      circuitZh: "【健康辅助映射·首段须自然声明仅供身心能量参考、不可替代临床就医】先检视 [1正在形成 → 2尚未显现]（若第2位有守护或拦截牌，说明隐患尚停留在内在阈值未落入实症，及时调养即可阻断！）；再按生理回路串联：[3头部 ↔ 5情绪 ↔ 11消化（脑肠情绪轴）]、[4固态摄入 → 6主要免疫 → 11消化]、[5情绪 ↔ 7深层免疫 / 12睡眠梦境]、[8核心器官与9/10激素]、[13结构神经炎症]，[14皮肤] 单响仅作表浅排毒信号，最终收于 [15近期未来]。",
-      circuitEn: "[Health Energy Map—Open with a clear non-medical disclaimer advising clinical care] Check threshold [1 Forming -> 2 Not Yet Manifest] first (a guarding card at Pos 2 blocks physical onset while still preventable!), then link body circuits: [3 Head ↔ 5 Emotion ↔ 11 Gut], [4 Intake -> 6 Primary Immune -> 11 Gut], [5 Emotion ↔ 7 Deep Immune / 12 Sleep], [8 Core Organs & 9/10 Hormones], [13 Structure/Nerves], treating isolated [14 Skin] as minor, closing at [15 Near Future]."
+      circuitZh: "【健康辅助映射·首段须自然声明仅供身心能量参考、不可替代临床就医】先检视 [1正在形成 → 2尚未显现]；再按牌位职能联系 [3头部、5情绪、11消化]、[4固态摄入、6主要免疫]、[7深层免疫、12睡眠梦境]、[8核心器官与9/10激素]、[13结构与运动] 和 [14皮肤]，最后看 [15近期未来]。不要由牌面断定疾病是否存在、能否预防或症状轻重。",
+      circuitEn: "[Health Energy Map—Open with a clear non-medical disclaimer advising clinical care] Consider [1 Forming -> 2 Not Yet Manifest], then connect the position roles of [3 Head, 5 Emotion, 11 Digestion], [4 Intake, 6 Primary Immune], [7 Deep Immune, 12 Sleep], [8 Core Organs and 9/10 Hormones], [13 Structure and Movement] and [14 Skin], before [15 Near Future]. Do not infer whether a disease exists or is preventable, or how serious symptoms are, from cards."
     },
     "fate-pattern": {
       family: "sacred-map",
@@ -768,7 +768,7 @@
     return {
       cardId: cardId,
       deckType: deckType,
-      arcana: arcana || (deckType === "tarot" ? "minor" : deckType),
+      arcana: arcana || (deckType === "tarot" ? "" : deckType),
       number: number,
       suitKey: suitKey,
       suitZh: suitMeta ? suitMeta.zh : "",
@@ -1327,10 +1327,10 @@
     }
     var crossTextZh = crossings.length > 0
       ? ("先锁定交叉焦点 [" + crossings.map(function (x) { return "第" + x.from + "位×第" + x.to + "位"; }).join("、") + "]，")
-      : "先以第1位核心锚点与末位结果出口定主轴，";
+      : "依据实际牌位名称与牌位职能确定主轴，";
     var crossTextEn = crossings.length > 0
       ? ("Lock onto crossing hub(s) [" + crossings.map(function (x) { return "Pos " + x.from + " × Pos " + x.to; }).join(", ") + "] first, ")
-      : "Frame the main axis from Pos 1 (anchor) to the final outcome slot first, ";
+      : "Choose the main axis using the actual position names and position roles, ";
 
     var stackTextZh = resolved && resolved.isSplitDeckStacked
       ? "每个牌位以底层大牌为深层成因、上层小牌为日常表象，"
@@ -1395,6 +1395,8 @@
     if (deckType === "tarot") {
       var majorCount = 0;
       var minorCount = 0;
+      var unknownArcanaCount = 0;
+      var unknownSuitCount = 0;
       var reversedCount = 0;
       var suitCounts = { wands: 0, cups: 0, swords: 0, pentacles: 0 };
       var rankCounts = {};
@@ -1408,10 +1410,12 @@
         }
         if (iden.arcana === "major") {
           majorCount += 1;
-        } else {
+        } else if (iden.arcana === "minor") {
           minorCount += 1;
           if (iden.suitKey && suitCounts[iden.suitKey] !== undefined) {
             suitCounts[iden.suitKey] += 1;
+          } else {
+            unknownSuitCount += 1;
           }
           if (iden.rankKey) {
             rankCounts[iden.rankKey] = (rankCounts[iden.rankKey] || 0) + 1;
@@ -1419,10 +1423,16 @@
           if (iden.isCourt) {
             courtCount += 1;
           }
+        } else {
+          unknownArcanaCount += 1;
         }
       }
 
-      if (data.isSplitDeckStacked) {
+      if (unknownArcanaCount > 0) {
+        summaryLines.push(isEnglish
+          ? ("Known arcana: " + majorCount + " Major + " + minorCount + " Minor; " + unknownArcanaCount + " unknown. Do not infer whole-spread arcana proportions from incomplete identities.")
+          : ("已知牌类：" + majorCount + " 张大阿卡那 + " + minorCount + " 张小阿卡那；" + unknownArcanaCount + " 张牌类未知，不应据此推断全盘大小牌比例。"));
+      } else if (data.isSplitDeckStacked) {
         summaryLines.push(isEnglish
           ? ("Split-Deck causality active (" + majorCount + " Base Majors as deep cause + " + minorCount + " Stacked Minors as daily manifestation).")
           : ("分牌叠牌法激活（" + majorCount + " 张底层大阿卡那定深层动因 + " + minorCount + " 张上层小阿卡那显日常落点）。"));
@@ -1450,7 +1460,7 @@
       }
 
       // Elemental tilt & missing elements
-      if (minorCount >= 3 && spreadId !== "four-seasons") {
+      if (minorCount >= 3 && unknownArcanaCount === 0 && unknownSuitCount === 0 && spreadId !== "four-seasons") {
         var suitOrder = ["wands", "cups", "swords", "pentacles"];
         var presentParts = [];
         var missingParts = [];

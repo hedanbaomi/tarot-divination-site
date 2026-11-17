@@ -378,7 +378,7 @@ const REQUIRED_HTML_IDS = [
   "aiSettingsModal", "aiProfileFormat", "aiProfileApiKey", "aiVertexGroup",
   "aiLockedPromptNote", "aiPresetRow", "aiFieldContextWindow", "aiDetectContextBtn",
   "aiContextWindowHint", "aiFieldAutoCompress", "aiContextMeter",
-  "aiClearConfigBtn",
+  "aiClearConfigBtn", "aiDisclaimer",
   "themeSwatches", "themeToast", "confirmDialog",
   "choiceDialog", "choiceDialogKicker", "choiceDialogTitle", "choiceOptions", "choiceCancelBtn",
   "languageToggle"
@@ -394,7 +394,7 @@ const THEME_IDS = [
 
 const REQUIRED_I18N_KEYS = [
   "ai.open", "ai.pageTitle", "ai.pageDescription", "ai.contextBarAria", "ai.deckTarot",
-  "ai.settingsTitle", "history.openInAi", "privacy.ai",
+  "ai.settingsTitle", "history.openInAi", "privacy.ai", "ai.disclaimer",
   "ai.lockedPromptNote", "ai.fieldContextWindow", "ai.fieldAutoCompress", "ai.contextMeter",
   "ai.presetLabel", "ai.preset.deepseekFlash", "ai.preset.deepseekPro", "ai.presetApplied",
   "ai.clearConfig", "ai.clearConfigTitle", "ai.clearConfigMsg", "ai.clearConfigConfirm", "ai.configCleared",
@@ -421,6 +421,7 @@ function assertAiHtmlContract(label, html) {
   assert.ok(html.includes('data-i18n-content="ai.pageDescription"'), `${label} ai.html meta description missing data-i18n-content`);
   assert.ok(html.includes('data-i18n-aria-label="ai.contextBarAria"'), `${label} ai.html context bar missing data-i18n-aria-label`);
   assert.ok(html.includes('data-i18n="ai.deckTarot"'), `${label} ai.html tarot option missing data-i18n`);
+  assert.ok(/<footer class="ai-composer">[\s\S]*id="aiPromptInput"[\s\S]*id="aiDisclaimer"[^>]*data-i18n="ai.disclaimer"[\s\S]*<\/footer>/.test(html), `${label} disclaimer must be visible below the composer and localized`);
   assert.ok(html.includes('src="js/custom-selects.js"'), `${label} ai.html must load js/custom-selects.js to replace native <select> UI`);
   assert.ok(html.includes('src="js/ai-skills.js"'), `${label} ai.html must load js/ai-skills.js before js/ai-context.js`);
   assert.ok(/<label[^>]+for="aiPickerDeckFilter"/i.test(html), `${label} ai.html must bind an explicit <label for="aiPickerDeckFilter">`);
@@ -1358,4 +1359,58 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   doc.getElementById("aiSendBtn").click();
   await flush();
   assert.equal(sentSysPrompt.includes("严禁重背全盘"), false, "First reading attached after prior chat must get full initial interpretation");
+
+  // 9. Two tabs editing different reading questions must merge at transaction time.
+  doc.getElementById("aiPickReadingsBtn").click();
+  await flush();
+  const concurrentBoxes = doc.getElementById("aiPickerList").querySelectorAll("input");
+  concurrentBoxes[1].checked = true;
+  concurrentBoxes[1].dispatchEvent({ type: "change" });
+  doc.getElementById("aiPickerApplyBtn").click();
+  await flush();
+  const concurrentChat = (await memChatStore.listConversations({ archived: false }))[0];
+  attachedChipsEl.querySelector(".ai-reading-question-add-btn").click();
+  const concurrentInput = attachedChipsEl.querySelector(".ai-reading-question-input");
+  concurrentInput.value = "第一标签页的问题";
+  await memChatStore.setReadingQuestion(concurrentChat.id, "hist-ui-2", "第二标签页刚保存的问题");
+  await memChatStore.updateConversation(concurrentChat.id, { title: "第二标签页手动命名" });
+  concurrentInput.dispatchEvent({ type: "keydown", key: "Enter", keyCode: 13 });
+  await flush();
+  const afterConcurrentQuestion = await memChatStore.getConversation(concurrentChat.id);
+  assert.equal(afterConcurrentQuestion.readingSnapshots.find(s => s.id === "hist-ui-2").question, "第二标签页刚保存的问题", "Saving one question must preserve the latest question on every other reading");
+  assert.equal(afterConcurrentQuestion.readingSnapshots.find(s => s.id === "hist-ui-1").question, "第一标签页的问题");
+  assert.equal(afterConcurrentQuestion.title, "第二标签页手动命名", "A concurrent manual title must not be replaced by a stale auto-title");
+
+  attachedChipsEl.querySelector(".ai-reading-question-edit-btn").click();
+  const removedInput = attachedChipsEl.querySelector(".ai-reading-question-input");
+  removedInput.value = "已被移除的牌阵不应复活";
+  await memChatStore.setAttachedReadings(concurrentChat.id, ["hist-ui-2"],
+    afterConcurrentQuestion.readingSnapshots.filter(s => s.id === "hist-ui-2"));
+  removedInput.dispatchEvent({ type: "keydown", key: "Enter", keyCode: 13 });
+  await flush();
+  const afterRemovedQuestion = await memChatStore.getConversation(concurrentChat.id);
+  assert.deepEqual(afterRemovedQuestion.readingSnapshots.map(s => s.id), ["hist-ui-2"], "A stale question save must not resurrect a removed reading");
+
+  // 10. A late answer to r2 cannot mark a concurrently attached r1 as already read.
+  let finishOldReading;
+  streamHook = () => new Promise(resolve => { finishOldReading = resolve; });
+  promptInput.value = "解读目前这副牌";
+  doc.getElementById("aiSendBtn").click();
+  await flush();
+  const pendingReadingChat = await memChatStore.getConversation(concurrentChat.id);
+  const addedWhileStreaming = contextModule.buildReadingSnapshot(fakeHistoryRecord, { locale: "zh-CN" });
+  await memChatStore.setAttachedReadings(concurrentChat.id, ["hist-ui-2", "hist-ui-1"],
+    pendingReadingChat.readingSnapshots.concat(addedWhileStreaming));
+  finishOldReading({ text: "这次请求只看到了第二副牌", format: "openai-chat", model: "gpt-4o-mini" });
+  await flush();
+  assert.equal(activeSkillsListEl.textContent.includes("追问开窗深挖"), false, "An unseen attachment stays in full-reading mode after an older request finishes");
+  streamHook = (_profile, opts) => {
+    sentSysPrompt = opts.systemPrompt;
+    return Promise.resolve({ text: "完整解读新牌阵", format: "openai-chat", model: "gpt-4o-mini" });
+  };
+  promptInput.value = "看看新增的那副牌";
+  doc.getElementById("aiSendBtn").click();
+  await flush();
+  assert.equal(sentSysPrompt.includes("严禁重背全盘"), false, "The first request including the new reading must receive full-reading instructions");
+  assert.ok(activeSkillsListEl.textContent.includes("追问开窗深挖"), "Follow-up mode resumes only after a response actually included the new reading");
 });

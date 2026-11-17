@@ -598,6 +598,19 @@
             ? patchOrUpdater(normalizeConversation(existing))
             : Object.assign({}, existing, patchOrUpdater && typeof patchOrUpdater === "object" ? patchOrUpdater : {});
           if (!nextObj || typeof nextObj !== "object") return existing;
+          // Bind new request placeholders to the readings present in this transaction.
+          // Regenerate/edit-and-resend also create new IDs through updateConversation.
+          if (Array.isArray(nextObj.messages)) {
+            var previousMessageIds = Object.create(null);
+            existing.messages.forEach(function (message) { previousMessageIds[message.id] = true; });
+            var requestBoundary = getMaxSnapshotAttachedAt(nextObj);
+            nextObj.messages = nextObj.messages.map(function (message) {
+              if (!message || message.role !== "assistant" || previousMessageIds[message.id]) return message;
+              return Object.assign({}, message, {
+                createdAt: Math.max(parseTimestampMs(message.createdAt) || Date.now(), requestBoundary)
+              });
+            });
+          }
           nextObj.id = existing.id;
           nextObj.updatedAt = optsUpdate.touchUpdatedAt !== false
             ? Date.now() : (nextObj.updatedAt || existing.updatedAt);
@@ -623,14 +636,7 @@
       var additions = messages.map(normalizeMessage);
       var meta = metadata || {};
       return updateConversation(id, function (conv) {
-        var maxAttach = getMaxSnapshotAttachedAt(conv);
-        var adjusted = additions.map(function (m) {
-          if (m.role === "assistant" && m.content && m.content.trim() && maxAttach > m.createdAt) {
-            return Object.assign({}, m, { createdAt: maxAttach });
-          }
-          return m;
-        });
-        conv.messages = conv.messages.concat(adjusted);
+        conv.messages = conv.messages.concat(additions);
         if (!conv.title && meta.title) conv.title = meta.title;
         if (meta.profileId) conv.profileId = meta.profileId;
         return conv;
@@ -644,10 +650,8 @@
         var index = conv.messages.findIndex(function (m) { return m.id === completed.id; });
         // Deletion/edit-and-resend in another tab wins over a late completion.
         if (index === -1) return null;
-        var maxAttach = getMaxSnapshotAttachedAt(conv);
-        if (completed.role === "assistant" && completed.content && completed.content.trim() && maxAttach > completed.createdAt) {
-          completed = Object.assign({}, completed, { createdAt: maxAttach });
-        }
+        // A late response cannot claim readings attached after its request began.
+        completed = Object.assign({}, completed, { createdAt: conv.messages[index].createdAt });
         conv.messages[index] = completed;
         if (meta.profileId) conv.profileId = meta.profileId;
         if (meta.lastUsage) conv.lastUsage = meta.lastUsage;
@@ -676,6 +680,7 @@
         var stampTs = Math.max(Date.now(), maxMsgTs > 0 ? (maxMsgTs + 1) : 0);
         var prevIdsSet = Object.create(null);
         var prevAttachedById = Object.create(null);
+        var previousSnapshotsById = Object.create(null);
         (conv.readingIds || []).forEach(function (rid) {
           var cleanRid = trimString(rid);
           if (cleanRid) prevIdsSet[cleanRid] = true;
@@ -683,6 +688,7 @@
         (conv.readingSnapshots || []).forEach(function (s) {
           if (s && s.id) {
             prevIdsSet[s.id] = true;
+            previousSnapshotsById[s.id] = s;
             if (Number(s.attachedAt) > 0) {
               prevAttachedById[s.id] = Number(s.attachedAt);
             }
@@ -692,6 +698,9 @@
           if (!s || typeof s !== "object") return s;
           var sid = trimString(s.id);
           if (!sid) return s;
+          if (previousSnapshotsById[sid]) {
+            s = Object.assign({}, s, { question: previousSnapshotsById[sid].question });
+          }
           if (prevAttachedById[sid]) {
             return Object.assign({}, s, { attachedAt: prevAttachedById[sid] });
           }
@@ -707,7 +716,8 @@
           readingIds: rawIds,
           readingSnapshots: nextSnaps
         });
-        if (typeof meta.title === "string") {
+        if (typeof meta.title === "string" &&
+            (meta.expectedTitle === undefined || conv.title === meta.expectedTitle)) {
           nextConv.title = meta.title;
         }
         return nextConv;

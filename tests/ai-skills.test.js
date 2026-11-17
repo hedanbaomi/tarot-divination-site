@@ -66,6 +66,60 @@ test("SKILL_MODES and normalizeSkillMode validate canonical orchestration modes"
   assert.equal(aiSkills.normalizeSkillMode({}), "auto");
 });
 
+test("health circuitry never asserts prevention or dismisses isolated skin findings", () => {
+  for (const locale of ["zh-CN", "en"]) {
+    const prompt = aiSkills.routeSkills({
+      locale,
+      resolvedReadings: [{ spreadId: "health", deckType: "tarot", cards: [{ cardId: "major-00", positionNumber: 2 }] }]
+    }).promptBlock;
+    assert.doesNotMatch(prompt, /及时调养即可阻断|blocks physical onset|仅作表浅排毒|treating isolated \[14 Skin\] as minor/i);
+    assert.match(prompt, locale === "en" ? /clinical care/i : /临床就医/);
+  }
+});
+
+test("custom spread circuitry does not invent anchor and outcome roles", () => {
+  const reading = {
+    spreadId: "custom-example", deckType: "tarot",
+    cards: [
+      { cardId: "major-01", positionNumber: 1, positionName: "Advice / 建议" },
+      { cardId: "major-02", positionNumber: 2, positionName: "Obstacles / 障碍" }
+    ]
+  };
+  for (const locale of ["zh-CN", "en"]) {
+    const result = aiSkills.routeSkills({ locale, resolvedReadings: [reading] });
+    assert.doesNotMatch(result.promptBlock, /第1位核心锚点|末位结果出口|Pos 1 \(anchor\)|final outcome slot/i);
+    assert.match(result.promptBlock, locale === "en" ? /position roles/i : /牌位职能/);
+  }
+});
+
+test("unknown tarot identities do not produce invented arcana or suit statistics", () => {
+  const unknown = Array.from({ length: 4 }, (_, i) => ({ cardId: `unknown-${i}`, positionNumber: i + 1 }));
+  for (const locale of ["zh-CN", "en"]) {
+    const inspect = cards => aiSkills.analyzeReadingGestalt({ spreadId: "custom-example", deckType: "tarot", cards }, locale).summaryLines.join("\n");
+    const missing = inspect(unknown);
+    assert.doesNotMatch(missing, /All Minor Arcana|全盘皆为小阿卡那|Elemental distribution|花色与四元素分布/i);
+    assert.match(missing, locale === "en" ? /4.*unknown/i : /4.*未知/);
+
+    const mixed = inspect([{ cardId: "major-01", positionNumber: 1 }, ...unknown.slice(0, 3)]);
+    assert.doesNotMatch(mixed, /High Major Arcana density|大阿卡那密度偏高|All Minor Arcana|全盘皆为小阿卡那/i);
+    assert.match(mixed, locale === "en" ? /1 Major.*0 Minor.*3.*unknown/i : /1 张大阿卡那.*0 张小阿卡那.*3.*未知/);
+
+    const partialSuit = inspect([
+      ...Array.from({ length: 4 }, (_, i) => ({ cardId: `minor-wands-${["ace", "two", "three", "four"][i]}` })),
+      { cardId: "unknown-minor", arcana: "minor" }
+    ]);
+    assert.doesNotMatch(partialSuit, /absent:|缺席元素|dominant climate|元素主导/i);
+
+    const known = inspect([
+      { cardId: "major-01" }, { cardId: "major-02" }, { cardId: "minor-wands-ace" }
+    ]);
+    assert.match(known, locale === "en" ? /High Major Arcana density \(2\/3\)/ : /大阿卡那密度偏高（2\/3）/);
+
+    const knownSuits = inspect(["ace", "two", "three", "four"].map(rank => ({ cardId: `minor-wands-${rank}` })));
+    assert.match(knownSuits, locale === "en" ? /Wands\(Fire\):4/ : /权杖\(火\)×4/);
+  }
+});
+
 test("compileCardCue strips PDF artifacts, translator notes, and repetitive EN boilerplate while preserving Quareia anchors", () => {
   // 1. LXXXI card with (cid:1) artifact in raw data (lxxxi-09)
   const lxxxiResolvedZh = aiContext.resolveReadingDetails({

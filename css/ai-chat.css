@@ -1044,6 +1044,16 @@ html.ui2 body.ai-chat-page .menu-toggle {
   line-height: 1.45;
 }
 
+.ai-disclaimer {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line, rgba(236, 230, 216, 0.14));
+  color: var(--text-secondary, #b8bbc4);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
 /* Modals */
 .ai-modal-backdrop {
   position: fixed;

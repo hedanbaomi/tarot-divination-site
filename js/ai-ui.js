@@ -1310,33 +1310,34 @@
       var conv = state.activeConversation;
       if (!conv || state.streaming) return Promise.resolve();
       var cleanQuestion = String(rawQuestion || "").trim().slice(0, 240);
-      var baseSnaps = buildReadingSnapshots(conv.readingIds || [], conv.readingSnapshots);
-      var found = false;
-      var nextSnaps = baseSnaps.map(function (s) {
-        if (s && s.id === readingId) {
-          found = true;
-          return Object.assign({}, s, { question: cleanQuestion });
-        }
-        return s;
-      });
       state.editingQuestionReadingId = "";
-      if (!found) {
-        renderContextHeader();
-        return Promise.resolve();
-      }
-      var prevInfo = deriveReadingBaseAndQuestion(conv.readingIds || [], conv.readingSnapshots);
-      var prevAutoTitle = deriveAutoTitle(conv.readingIds || [], "", conv.readingSnapshots);
-      var prevBaseTitle = prevInfo ? prevInfo.base : "";
-      var currentTitle = typeof conv.title === "string" ? conv.title.trim() : "";
-      var isAutoManagedTitle = !currentTitle
-        || currentTitle === prevAutoTitle
-        || (Boolean(prevBaseTitle) && currentTitle === prevBaseTitle);
-
-      var patch = { readingSnapshots: nextSnaps };
-      if (isAutoManagedTitle) {
-        patch.title = deriveAutoTitle(conv.readingIds || [], "", nextSnaps);
-      }
-      return chatStore.updateConversation(conv.id, patch, { touchUpdatedAt: false }).then(function (updated) {
+      return chatStore.updateConversation(conv.id, function (latest) {
+        // Only replace the target snapshot, using the latest record in the transaction.
+        // Another tab may have edited a different question, renamed, or detached it.
+        var ids = latest.readingIds || [];
+        if (ids.indexOf(readingId) === -1) return null;
+        var snapshots = latest.readingSnapshots || [];
+        var targetIndex = snapshots.findIndex(function (snapshot) { return snapshot.id === readingId; });
+        var target = snapshots[targetIndex];
+        if (!target) target = buildReadingSnapshots([readingId], snapshots)[0];
+        if (!target) return null;
+        var replacement = Object.assign({}, target, { question: cleanQuestion });
+        var nextSnaps = snapshots.map(function (snapshot) {
+          return snapshot.id === readingId ? replacement : snapshot;
+        });
+        if (targetIndex === -1) nextSnaps.push(replacement);
+        var previousInfo = deriveReadingBaseAndQuestion(ids, snapshots);
+        var previousAutoTitle = deriveAutoTitle(ids, "", snapshots);
+        var previousBaseTitle = previousInfo ? previousInfo.base : "";
+        var currentTitle = typeof latest.title === "string" ? latest.title.trim() : "";
+        var next = Object.assign({}, latest, { readingSnapshots: nextSnaps });
+        if (!currentTitle || currentTitle === previousAutoTitle ||
+            (previousBaseTitle && currentTitle === previousBaseTitle)) {
+          next.title = deriveAutoTitle(ids, "", nextSnaps);
+        }
+        return next;
+      }, { touchUpdatedAt: false }).then(function (updated) {
+        if (!state.activeConversation || state.activeConversation.id !== conv.id) return;
         if (updated) {
           state.activeConversation = updated;
         }
@@ -2393,7 +2394,7 @@
         ? deriveAutoTitle(nextIds, "", nextSnaps)
         : conv.title;
       var persistPromise = typeof chatStore.setAttachedReadings === "function"
-        ? chatStore.setAttachedReadings(conv.id, nextIds, nextSnaps, { title: nextTitle })
+        ? chatStore.setAttachedReadings(conv.id, nextIds, nextSnaps, { title: nextTitle, expectedTitle: conv.title })
         : chatStore.updateConversation(conv.id, {
             title: nextTitle,
             readingIds: nextIds,

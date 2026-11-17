@@ -485,6 +485,7 @@
       ,"ai.noActiveChats": "暂无对话，点击上方「新建对话」开始。"
       ,"ai.chatMetaSummary": "{readings} 条占卜 · {messages} 条消息"
       ,"ai.promptPlaceholder": "输入你的困惑或追问（Enter 发送，Shift+Enter 换行）"
+      ,"ai.disclaimer": "免责声明：AI 解读可能存在错误或偏差，仅供个人反思与参考，不代表事实或对未来的保证，不能替代医疗、心理、法律或财务等专业意见。涉及健康、安全及其他重要决定，请核实实际情况并咨询合格专业人士。"
       ,"ai.send": "发送"
       ,"ai.stop": "停止"
       ,"ai.pickerTitle": "选择占卜历史（仅非自由画板）"
@@ -1107,6 +1108,7 @@
       "ai.noActiveChats": "No conversations yet. Start a new chat above.",
       "ai.chatMetaSummary": "{readings} readings · {messages} msgs",
       "ai.promptPlaceholder": "Ask about your reading (Enter to send, Shift+Enter for newline)",
+      "ai.disclaimer": "Disclaimer: AI readings may be inaccurate and are for personal reflection and reference only. They do not establish facts or guarantee future outcomes, and do not replace qualified medical, mental health, legal, or financial advice. For health, safety, or other important decisions, verify real-world information and consult a qualified professional.",
       "ai.send": "Send",
       "ai.stop": "Stop",
       "ai.pickerTitle": "Attach Readings (Non-Freeboard Only)",

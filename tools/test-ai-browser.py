@@ -69,7 +69,10 @@ def main(argv=None):
             except (BrokenPipeError, ConnectionResetError):
                 pass
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(Handler, directory=str(root)))
+    class Server(ThreadingHTTPServer):
+        request_queue_size = 128
+
+    server = Server(("127.0.0.1", 0), partial(Handler, directory=str(root)))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = "http://127.0.0.1:%d" % server.server_port
     config = {"version": 1, "activeProfileId": "fixture", "profiles": [{
@@ -119,6 +122,8 @@ def main(argv=None):
                 seen.clear()
                 bodies.clear()
                 c = browser.new_context(viewport={"width": 1440, "height": 900}, locale="zh-CN")
+                c.route("**/*", lambda route: route.continue_()
+                        if route.request.url.startswith(base + "/") else route.abort())
                 c.add_init_script("localStorage.setItem('quareia-ai-config-v1',"
                                   + json.dumps(json.dumps(config)) + ");")
                 return c
@@ -262,6 +267,91 @@ def main(argv=None):
                     ]:
                         assert expected in system, expected
                 results["snapshot_context_with_and_without_original_record"] = "pass"
+
+            with context() as c:
+                a = page(c)
+                snapshots = a.evaluate("""async () => {
+                    const snapshots = ['review-r1', 'review-r2'].map(id =>
+                        DivinationAiContext.buildReadingSnapshot({
+                            id, layoutMode:'preset', deckType:'tarot', spreadId:'three-card-horizontal',
+                            createdAt:Date.now(), cards:[
+                                {cardId:'major-00', positionNumber:1, orientation:'upright'},
+                                {cardId:'major-01', positionNumber:2, orientation:'upright'},
+                                {cardId:'major-02', positionNumber:3, orientation:'upright'}
+                            ]}, {locale:'zh-CN'}));
+                    await DivinationAiChatStore.createStore().createConversation({
+                        id:'review-race', title:'Review fixture', readingIds:snapshots.map(s=>s.id),
+                        readingSnapshots:snapshots});
+                    return snapshots;
+                }""")
+                a.reload()
+                a.locator('[data-reading-id="review-r1"]').wait_for()
+                b = page(c)
+                a.locator('[data-reading-id="review-r1"] .ai-reading-question-add-btn').click()
+                first_input = a.locator('[data-reading-id="review-r1"] .ai-reading-question-input')
+                first_input.fill("First tab question")
+                b.locator('[data-reading-id="review-r2"] .ai-reading-question-add-btn').click()
+                b.locator('.ai-reading-question-input').fill("Second tab question")
+                b.locator('.ai-reading-question-input').press("Enter")
+                b.wait_for_function("""async () => (await DivinationAiChatStore.createStore()
+                    .getConversation('review-race')).readingSnapshots.find(s=>s.id==='review-r2').question === 'Second tab question'""")
+                first_input.press("Enter")
+                a.wait_for_function("""async () => (await DivinationAiChatStore.createStore()
+                    .getConversation('review-race')).readingSnapshots.find(s=>s.id==='review-r1').question === 'First tab question'""")
+                questions = a.evaluate("""async () => (await DivinationAiChatStore.createStore()
+                    .getConversation('review-race')).readingSnapshots.map(s=>s.question)""")
+                assert questions == ["First tab question", "Second tab question"], questions
+                results["two_tab_question_edits_preserve_each_other"] = "pass"
+
+                # The second tab attaches a reading after the first tab sent its request.
+                a.evaluate("""async () => {
+                    const store=DivinationAiChatStore.createStore();
+                    const conv=await store.getConversation('review-race');
+                    await store.setAttachedReadings(conv.id,['review-r1'],
+                        conv.readingSnapshots.filter(s=>s.id==='review-r1'));
+                }""")
+                a.reload()
+                send(a, "slow-review-r1")
+                b.evaluate("""async snapshot => {
+                    const store=DivinationAiChatStore.createStore();
+                    const conv=await store.getConversation('review-race');
+                    await store.setAttachedReadings(conv.id,['review-r1','review-r2'],
+                        conv.readingSnapshots.concat(snapshot));
+                }""", snapshots[1])
+                gate.set()
+                done(a)
+                assert "追问开窗深挖" not in a.locator("#aiActiveSkillsList").inner_text()
+                send(a, "review-new-reading")
+                done(a)
+                assert "严禁重背全盘" not in bodies[-1]["messages"][0]["content"]
+                assert "追问开窗深挖" in a.locator("#aiActiveSkillsList").inner_text()
+                results["late_response_keeps_new_attachment_unread"] = "pass"
+
+                for locale, expected in [("zh-CN", "免责声明"), ("en", "Disclaimer:")]:
+                    if a.evaluate("DivinationI18n.getLocale()") != locale:
+                        toggle_language(a)
+                    for width in [1280, 390]:
+                        a.set_viewport_size({"width": width, "height": 900 if width == 1280 else 844})
+                        if width == 390:
+                            if "is-open" in (a.locator("#aiSidebar").get_attribute("class") or "").split():
+                                a.locator("#aiSidebarClose").click()
+                            a.wait_for_function("document.querySelector('#aiSidebar').getBoundingClientRect().right <= 0")
+                        disclaimer = a.locator("#aiDisclaimer")
+                        disclaimer.scroll_into_view_if_needed()
+                        assert disclaimer.is_visible()
+                        assert expected in disclaimer.inner_text()
+                        assert a.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                        assert a.evaluate("""() => document.querySelector('#aiDisclaimer').getBoundingClientRect().top >=
+                            document.querySelector('#aiPromptInput').getBoundingClientRect().bottom""")
+                        assert disclaimer.evaluate("""el => {
+                            const r=el.getBoundingClientRect();
+                            const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+                            return hit===el || el.contains(hit);
+                        }"""), "Disclaimer must not be covered by the mobile sidebar"
+                        assert a.locator("#aiSendBtn").is_enabled()
+                        if args.output:
+                            a.screenshot(path=str(args.output / ("ai-disclaimer-" + locale + "-" + str(width) + ".png")))
+                results["disclaimer_visible_bilingual_desktop_mobile"] = "pass"
 
             with context() as c:
                 a = page(c)
