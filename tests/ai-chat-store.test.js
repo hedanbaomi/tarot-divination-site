@@ -475,6 +475,20 @@ test("a stale picker preserves concurrent question and title edits on retained r
   assert.equal(saved.title, "latest manual title");
 });
 
+test("request boundaries parse unnormalized ISO attachment timestamps before normalizing a patch", async () => {
+  const store = chatStore.createStore({ indexedDB: null, memoryFallback: true });
+  await store.createConversation({ id: "iso-boundary" });
+  const now = Date.now();
+  const attachedAt = new Date(now + 60000).toISOString();
+  const saved = await store.updateConversation("iso-boundary", {
+    readingIds: ["iso-reading"],
+    readingSnapshots: [{ id: "iso-reading", attachedAt, cards: [{ cardId: "major-00" }] }],
+    messages: [{ id: "iso-request", role: "assistant", content: "", createdAt: now }]
+  });
+  assert.equal(saved.readingSnapshots[0].attachedAt, Date.parse(attachedAt));
+  assert.equal(saved.messages[0].createdAt, Date.parse(attachedAt), "The request boundary must include ISO timestamps present in this same transaction");
+});
+
 test("late compression does not restore a summary invalidated by another edit", async () => {
   const store = chatStore.createStore({ indexedDB: createFakeIndexedDb() });
   const messages = [

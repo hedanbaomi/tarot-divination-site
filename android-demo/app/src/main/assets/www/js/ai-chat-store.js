@@ -626,7 +626,7 @@
       var maxTs = 0;
       var snaps = conv && Array.isArray(conv.readingSnapshots) ? conv.readingSnapshots : [];
       for (var i = 0; i < snaps.length; i += 1) {
-        var ts = snaps[i] ? (Number(snaps[i].attachedAt) || 0) : 0;
+        var ts = snaps[i] ? parseTimestampMs(snaps[i].attachedAt) : 0;
         if (ts > maxTs) maxTs = ts;
       }
       return maxTs;

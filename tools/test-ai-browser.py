@@ -327,6 +327,22 @@ def main(argv=None):
                 assert "追问开窗深挖" in a.locator("#aiActiveSkillsList").inner_text()
                 results["late_response_keeps_new_attachment_unread"] = "pass"
 
+                b.evaluate("""async snapshot => {
+                    const store=DivinationAiChatStore.createStore();
+                    const conv=await store.getConversation('review-race');
+                    await store.setAttachedReadings(conv.id,conv.readingIds.concat('review-r3'),
+                        conv.readingSnapshots.concat({...snapshot,id:'review-r3'}));
+                    await store.setReadingQuestion(conv.id,'review-r2','Latest question before remove');
+                }""", snapshots[0])
+                a.locator('[data-reading-id="review-r1"] .ai-chip-remove').click()
+                a.wait_for_function("document.querySelector('[data-reading-id=\"review-r3\"]') !== null")
+                after_remove = a.evaluate("""async () => {
+                    const conv=await DivinationAiChatStore.createStore().getConversation('review-race');
+                    return {ids:conv.readingIds, question:conv.readingSnapshots.find(s=>s.id==='review-r2').question};
+                }""")
+                assert after_remove == {"ids": ["review-r2", "review-r3"], "question": "Latest question before remove"}, after_remove
+                results["remove_preserves_other_tab_question_and_attachment"] = "pass"
+
                 for locale, expected in [("zh-CN", "免责声明"), ("en", "Disclaimer:")]:
                     if a.evaluate("DivinationI18n.getLocale()") != locale:
                         toggle_language(a)
@@ -337,7 +353,7 @@ def main(argv=None):
                                 a.locator("#aiSidebarClose").click()
                             a.wait_for_function("document.querySelector('#aiSidebar').getBoundingClientRect().right <= 0")
                         disclaimer = a.locator("#aiDisclaimer")
-                        disclaimer.scroll_into_view_if_needed()
+                        a.locator("#aiMedicalNotice summary").scroll_into_view_if_needed()
                         assert disclaimer.is_visible()
                         assert expected in disclaimer.inner_text()
                         assert a.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -349,9 +365,48 @@ def main(argv=None):
                             return hit===el || el.contains(hit);
                         }"""), "Disclaimer must not be covered by the mobile sidebar"
                         assert a.locator("#aiSendBtn").is_enabled()
+                        medical_notice = a.locator("#aiMedicalNotice")
+                        assert not medical_notice.evaluate("el => el.open")
+                        assert a.locator("#aiMessages #aiMedicalNotice").count() == 0
+                        summary_text = medical_notice.locator("summary").inner_text()
+                        assert ("非 AI 回复" if locale == "zh-CN" else "not an AI response") in summary_text
+                        if width == 390:
+                            style = disclaimer.evaluate("el => { const s=getComputedStyle(el); return {size:s.fontSize,line:s.lineHeight,padding:s.paddingTop}; }")
+                            assert style == {"size": "11px", "line": "15.62px", "padding": "6px"}, style
+                            results["mobile_composer_height_" + locale] = a.locator(".ai-composer").evaluate("el => Math.round(el.getBoundingClientRect().height)")
                         if args.output:
                             a.screenshot(path=str(args.output / ("ai-disclaimer-" + locale + "-" + str(width) + ".png")))
+                        medical_notice.locator("summary").click()
+                        assert medical_notice.locator("p").is_visible()
+                        assert ("不能确认疾病" if locale == "zh-CN" else "cannot confirm illness") in medical_notice.locator("p").inner_text()
+                        medical_notice.locator("p").scroll_into_view_if_needed()
+                        if args.output and width == 390:
+                            a.screenshot(path=str(args.output / ("ai-medical-notice-" + locale + "-mobile.png")))
+                        medical_notice.locator("summary").click()
                 results["disclaimer_visible_bilingual_desktop_mobile"] = "pass"
+
+                notice_text = a.locator("#aiMedicalNotice p").text_content().strip()
+                assert notice_text, "Read the complete notice even while its details panel is collapsed"
+                send(a, "medical-review: What about this illness and recovery?")
+                done(a)
+                request_text = json.dumps(bodies[-1], ensure_ascii=False)
+                assert notice_text not in request_text
+                assert "not an AI response" not in request_text
+                stored_messages = a.evaluate("""async () => (await DivinationAiChatStore.createStore()
+                    .getConversation('review-race')).messages.map(m=>m.content).join(' ')""")
+                assert notice_text not in stored_messages
+                assert "not an AI response" not in stored_messages
+                results["medical_notice_stays_outside_prompt_and_chat_history"] = "pass"
+
+                await_delete = b.evaluate("""async () => {
+                    await DivinationAiChatStore.createStore().deleteConversation('review-race');
+                    return true;
+                }""")
+                assert await_delete
+                a.locator('[data-reading-id="review-r2"] .ai-chip-remove').click()
+                a.wait_for_function("document.querySelector('[data-reading-id=\"review-r2\"]') === null")
+                assert a.evaluate("async () => await DivinationAiChatStore.createStore().getConversation('review-race')") is None
+                results["remove_from_deleted_chat_recovers_without_page_error"] = "pass"
 
             with context() as c:
                 a = page(c)

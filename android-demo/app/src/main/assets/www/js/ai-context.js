@@ -1123,7 +1123,7 @@
           "   - One card crosses a single anchor card to show the active intersecting force, relationship, or verdict acting directly upon that core (not Major+Minor split-deck stacking).",
           "",
           "## Agency & Practical Boundaries",
-          "- Respect human agency without fatalistic fear-mongering, fortune-cookie clichés, or preachy therapy-speak. Never issue medical diagnoses, legal rulings, or financial decrees. Reply in the language of the user's message unless asked otherwise."
+          "- Respect human agency without fatalistic fear-mongering, fortune-cookie clichés, or preachy therapy-speak. Never issue medical or mental health diagnoses, legal rulings, or financial decrees. Reply in the language of the user's message unless asked otherwise."
         ]
       : [
           "你是本应用内置的资深 Quareia 占卜解牌师与对话伙伴。",
@@ -1144,7 +1144,7 @@
           "   - 仅在核心锚点牌上方交叉压放一张牌，代表直接交织、切入或裁断该核心的现实力量或关键关系（非大小阿卡那分牌叠牌法）。",
           "",
           "## 伦理边界与语言",
-          "- 尊重当事人的自由意志与现实选择权，不灌空洞鸡汤、不做宿命恐吓，也不下达医疗诊断、法律裁决或投资指令。默认使用与用户当前消息相同的语言作答。"
+          "- 尊重当事人的自由意志与现实选择权，不灌空洞鸡汤、不做宿命恐吓，也不下达医疗或心理诊断、法律裁决或投资指令。默认使用与用户当前消息相同的语言作答。"
         ];
 
     if (routed && typeof routed.promptBlock === "string" && routed.promptBlock.trim()) {

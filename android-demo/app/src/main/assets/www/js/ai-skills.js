@@ -217,7 +217,7 @@
     35: { kw: ["退入过去", "旧事余波", "双向门槛", "忌恋旧退缩"], cue: "旧事正退入过去但双向门仍可回潮｜落凶位/阻碍位警示：当事人正死抓过去不放或往后退缩，破局关键在于彻底了结旧账往前走", eso: "过去之门呈双向开启，退场之物若未妥善了结仍可能回返" },
     36: { kw: ["家宅根基", "家庭责任", "日常烟火", "归属之地"], cue: "家庭、居所、亲族责任或最核心的归属圈是眼下整件事的重心所在（字面亦指房子与家人）", eso: "家与壁炉锚定世俗安身容器，守护日常生活的稳定温度" },
     37: { kw: ["前路扫清", "坦途开启", "直球推进", "前景明朗"], cue: "前方障碍已被扫清，一条清晰直接的行动通道正式打开，为挣扎者亮起隧道尽头之光", eso: "赫丘利试炼之路豁然贯通，历经磨砺后迎来明朗前程" },
-    38: { kw: ["迎难而上", "先苦后甜", "硬仗立威", "越挫越强"], cue: "眼前虽有一场硬仗或逆境考验，但只要扛住压力迎难而上，原典保证结局扎实且令人蜕变", eso: "神之挑战以逆境试金，扛过考验即可赢得真正实力与进阶" },
+    38: { kw: ["迎难而上", "先苦后甜", "硬仗立威", "越挫越强"], cue: "眼前可能有一场硬仗或逆境考验，应对过程有助于积累实力，结果仍需结合其他牌判断", eso: "神之挑战以逆境试金，应对考验可以磨炼实力与推动进阶" },
     39: { kw: ["向内退守", "安静独处", "私密空间", "休养定神"], cue: "外在喧嚣无益，宜暂时关起门来退回绝对安全的私密空间静心休整", eso: "退入内在圣所闭关沉淀，校准心神核心而不受外界侵扰" },
     40: { kw: ["资金粮草", "精力储备", "可用资源", "防透支枯竭"], cue: "顺位：资金、食物、精力等必要粮草在场可用｜落扣押/过去/冥界位反转：警示资源已近耗尽或远少于预期，切忌盲目透支", eso: "支撑工作运转的实质能源、生命力与物质补给水位显影" },
     41: { kw: ["暗中指点", "直觉预警", "贵人点拨", "梦中提醒"], cue: "有过来人建议、敏锐直觉或故人/地利在关键处点拨提醒，留心听取劝告", eso: "指导灵、故人或土地守护灵正借征兆与梦境传递护持建议" },
@@ -599,8 +599,8 @@
     "health": {
       family: "body-circuit",
       isFilter: false,
-      circuitZh: "【健康辅助映射·首段须自然声明仅供身心能量参考、不可替代临床就医】先检视 [1正在形成 → 2尚未显现]；再按牌位职能联系 [3头部、5情绪、11消化]、[4固态摄入、6主要免疫]、[7深层免疫、12睡眠梦境]、[8核心器官与9/10激素]、[13结构与运动] 和 [14皮肤]，最后看 [15近期未来]。不要由牌面断定疾病是否存在、能否预防或症状轻重。",
-      circuitEn: "[Health Energy Map—Open with a clear non-medical disclaimer advising clinical care] Consider [1 Forming -> 2 Not Yet Manifest], then connect the position roles of [3 Head, 5 Emotion, 11 Digestion], [4 Intake, 6 Primary Immune], [7 Deep Immune, 12 Sleep], [8 Core Organs and 9/10 Hormones], [13 Structure and Movement] and [14 Skin], before [15 Near Future]. Do not infer whether a disease exists or is preventable, or how serious symptoms are, from cards."
+      circuitZh: "先检视 [1正在形成 → 2尚未显现]；再按牌位职能联系 [3头部、5情绪、11消化]、[4固态摄入、6主要免疫]、[7深层免疫、12睡眠梦境]、[8核心器官与9/10激素]、[13结构与运动] 和 [14皮肤]，最后看 [15近期未来]。",
+      circuitEn: "Consider [1 Forming -> 2 Not Yet Manifest], then connect the position roles of [3 Head, 5 Emotion, 11 Digestion], [4 Intake, 6 Primary Immune], [7 Deep Immune, 12 Sleep], [8 Core Organs and 9/10 Hormones], [13 Structure and Movement] and [14 Skin], before [15 Near Future]."
     },
     "fate-pattern": {
       family: "sacred-map",
@@ -736,6 +736,12 @@
         suitKey = lowerSuit;
       } else if (ZH_SUIT_TO_KEY[suitRaw]) {
         suitKey = ZH_SUIT_TO_KEY[suitRaw];
+      }
+      if (deckType === "tarot" && !arcana) {
+        var layer = raw.layer === "major" || raw.layer === "minor" ? raw.layer : "";
+        if (!(layer === "major" && suitKey)) {
+          arcana = layer || (suitKey ? "minor" : "");
+        }
       }
     }
 
@@ -1521,16 +1527,23 @@
     } else if (deckType === "lxxxi") {
       var realmCounts = { divine: 0, inner: 0, physical: 0, underworld: 0 };
       var rootList = [];
+      var unknownRealmCount = 0;
       for (var lIdx = 0; lIdx < identities.length; lIdx += 1) {
         var li = identities[lIdx];
-        if (li.lxxxiRealm && realmCounts[li.lxxxiRealm] !== undefined) {
+        if (li.deckType === "lxxxi" && Number.isInteger(li.number) && li.lxxxiRealm && realmCounts[li.lxxxiRealm] !== undefined) {
           realmCounts[li.lxxxiRealm] += 1;
+        } else {
+          unknownRealmCount += 1;
         }
-        if (li.lxxxiRootRoman) {
+        if (li.deckType === "lxxxi" && Number.isInteger(li.number) && li.lxxxiRootRoman) {
           rootList.push(cards[lIdx].cardName + "(" + li.lxxxiRootRoman + ")");
         }
       }
-      summaryLines.push(isEnglish
+      if (unknownRealmCount) {
+        summaryLines.push(isEnglish
+          ? (unknownRealmCount + " LXXXI card identities unknown; the complete realm distribution cannot be determined.")
+          : (unknownRealmCount + " 张 LXXXI 牌的身份未知，无法确定全盘领域分布。"));
+      } else summaryLines.push(isEnglish
         ? ("LXXXI Four-Realm distribution: Divine(1-4):" + realmCounts.divine + ", Inner(5-26):" + realmCounts.inner + ", Physical(27-77):" + realmCounts.physical + ", Underworld(78-81):" + realmCounts.underworld + " — gauge whether patterns are unformed seeds, weaving inner currents, manifest reality, or ending cycles.")
         : ("LXXXI 四领域分布：神圣领域(1-4)×" + realmCounts.divine + "、内在领域(5-26)×" + realmCounts.inner + "、物质领域(27-77)×" + realmCounts.physical + "、冥界领域(78-81)×" + realmCounts.underworld + "（据此判定事态尚在潜流酝酿、已落地显化，还是步入终结清场）。"));
       if (rootList.length > 0) {
@@ -1540,9 +1553,12 @@
       }
     } else if (deckType === "mystagogus") {
       var signalHits = [];
+      var unknownSignalCount = 0;
       for (var mIdx = 0; mIdx < identities.length; mIdx += 1) {
         var mi = identities[mIdx];
-        if (mi.mystagogusSignal) {
+        if (mi.deckType !== "mystagogus" || !Number.isInteger(mi.number) || mi.number < 1 || mi.number > 78) {
+          unknownSignalCount += 1;
+        } else if (mi.mystagogusSignal) {
           var mc = cards[mIdx];
           signalHits.push(isEnglish
             ? ("Pos " + mc.positionNumber + " <" + mc.cardName + ">: " + mi.mystagogusSignal.en)
@@ -1551,10 +1567,15 @@
       }
       if (signalHits.length > 0) {
         summaryLines.push((isEnglish ? "Mystagogus active road-signs & gates: " : "M牌直断路标与门户信号：") + signalHits.join(isEnglish ? "; " : "；") + (isEnglish ? "." : "。"));
-      } else {
+      } else if (!unknownSignalCount) {
         summaryLines.push(isEnglish
           ? "Mystagogus pattern scan: no hard red-light/gate trump overrides; weigh active weave between supportive and restrictive positions."
           : "M牌全局扫描：未触发极端封堵红灯牌，重点权衡支持位与束缚/危险位的力量消长。");
+      }
+      if (unknownSignalCount) {
+        summaryLines.push(isEnglish
+          ? (unknownSignalCount + " Mystagogus card identities unknown; the complete signal scan is unavailable.")
+          : (unknownSignalCount + " 张 Mystagogus 牌的身份未知，无法完成全盘信号扫描。"));
       }
     }
 
@@ -1892,8 +1913,8 @@
 
     if (isFollowUp) {
       lines.push(isEnglish
-        ? "- **[Follow-Up Keyhole Drilldown—Local Zoom Under Global Constraint]** Do NOT re-narrate the entire spread already covered! Zoom straight into the 2–4 positions relevant to the user's new question or newly shared facts, while keeping your local conclusion strictly governed by the spread's overall outcome hub and Base Major / Root Power tide (never magnify an isolated harsh card to overturn a stable global picture!). If their new sub-question exceeds this spread's resolution, frame a crisp time-bounded question and recommend the exact next secondary spread (`Timing` for when, `Manifestation/Cause` for root cause, `Solution` for best route, `Resources` for energy check, `Simple Yes/No` for a focused test)—while gently discouraging anxious repeat-draws on the exact same question."
-        : "- **【多轮追问「开窗深挖」协议——局部微距服从全局制约！】** 切勿把上一轮讲过的全盘综述再复述一遍！直接锁定与本轮追问相关的 2～4 个局部牌位做微距联动剖析（若用户刚补充现实背景则立即回填对焦）；**但局部牌位推演必须服从全盘总出口（如结果/前方道路位）与底牌大势的制约——若用户追问单张局部凶牌，须点明全盘稳固底牌或总出口对它的缓冲收束边界，严禁微距放大局部凶牌推翻全局定调！**若追问超出当前牌阵分辨率（如在全景盘死抠具体哪天或突发事故成因），坦诚点明边界，帮其拟定带时间窗的聚焦问题，精准转诊本应用内的次要牌阵（测窗口用「时机布局」、查病因用「显化/成因」、找路径用「解决方案」、盘精力用「资源布局」、测单一抉择用「简单是/否」），同时温和劝阻反复重抽同一问题。");
+        ? "- **[Follow-Up Keyhole Drilldown—Local Zoom in Context]** Do NOT re-narrate the entire spread already covered! Zoom into the positions relevant to the user's question, keeping their actual roles and the broader pattern in view without inventing an outcome position. If the question exceeds this spread's resolution, suggest a focused time-bounded question and a suitable secondary spread (Timing, Manifestation/Cause, Solution, Resources, or Simple Yes/No)."
+        : "- **【多轮追问「开窗深挖」协议】** 切勿复述上一轮全盘综述；聚焦与追问相关的牌位，依据实际牌位职能并结合全盘关系解读，不要虚构结果位。若追问超出当前牌阵的分辨率，可建议带时间窗的聚焦问题与适合的次要牌阵（时机布局、显化/成因、解决方案、资源布局或简单是/否）。");
     }
 
     if (intent === "open-snapshot") {
@@ -1927,7 +1948,7 @@
         ? "1. **Direct Follow-Up Zoom (No Macro Recap)**: Answer the user's follow-up or newly shared context in Sentence 1 by weaving ONLY the 2–4 relevant positions naturally into prose (citing card names inside sentences or parentheses as evidence)—**do NOT repeat the macro weather forecast or re-summarize the whole spread**."
         : "1. **Weather First, Woven Story Second**: Open with the macro climate and direct answer/core tension, then weave positions together along causal axes. Cite card names naturally inside sentences or parentheses as supporting evidence (e.g., *'The real drag isn't outside opposition, but reluctance to let go of a comfortable routine (Nine of Cups in What Is Taken)'*) rather than using card/position labels as bullet headers.";
       var enRule2 = isFollowUp
-        ? "2. **Focused Micro-Depth Under Global Proportion**: Put primary depth on the local axis and concrete action levers tied to this follow-up while anchoring how the spread's overall outcome/Base Majors bound its severity; leave unrelated positions untouched."
+        ? "2. **Focused Micro-Depth in Context**: Explore the relevant local positions and practical actions in light of their actual roles and the wider spread; leave unrelated positions untouched."
         : "2. **Consolidate the Stable Baseline, Then Concentrate Weight**: In non-filter spreads, briefly group and acknowledge stable, healthy life domains or full resource pots in 1–2 reassuring clauses so true overall proportion is preserved (never report only problems or omit which pots/domains are solid!), then dedicate ~70% of depth to the central conflict axes and human-agency levers.";
 
       var enLines = [
@@ -1951,7 +1972,7 @@
       ? "1. **直奔追问靶心，免除全盘复盘**：首句直接回应用户本轮追问或刚补充的现实情况，只调取关联的 2～4 个局部牌位自然嵌在句中或括号内作联动论据，**严禁重背全盘、严禁重报全局气象或复述上一轮已讲过的全盘结论**。"
       : "1. **先报全局气象与定性结论，再织因果故事**：开篇两三句直指局面冷暖、严峻程度与核心卡点；行文中先讲现实逻辑与动态博弈，把牌位与牌名自然嵌在句中或括号内作支撑论据（如：*「真正拖住你的并非外部阻碍，而是迟迟舍不得放掉眼下那点安稳惯性（带走之物位的圣杯九）」*），绝不拿牌位编号当段落主语。";
     var zhRule2 = isFollowUp
-      ? "2. **微距深挖且服从全局制约**：将笔墨集中在本轮追问牵动的局部轴线、现实回填校准与具体应对上（无关牌位略过），但须确保局部判断服从全盘总出口与底牌大势，绝不孤立放大单张凶牌。"
+      ? "2. **结合全盘微距深挖**：聚焦追问涉及的局部牌位与具体应对，结合其实际职能和全盘关系判断，无关牌位略过。"
       : "2. **先归并稳固基本盘，再重锤敲核心枢纽**：非筛查型牌阵须先用 1～2 句归并点明盘面上稳固顺遂、充盈无虞的生活领域或能量罐（以此锚定全盘真实的吉凶比例，尤其《资源》盘须指明哪个盈余罐可反哺透支罐，严禁报忧不报喜或抹除平安领域），随后将七成笔墨集中在核心冲突轴与「人为可改变的位置」上，绝不 1→N 平均用力。";
 
     var zhLines = [
@@ -2031,7 +2052,6 @@
     var topologyFamilies = [];
     var seenFamilies = {};
     var hasFilterSpread = false;
-    var hasHealthSpread = false;
     var spreadCircuits = [];
 
     for (var i = 0; i < readings.length; i += 1) {
@@ -2042,9 +2062,6 @@
         hasMixedTarot = true;
       }
       var sid = String(r.spreadId || "").trim();
-      if (sid === "health") {
-        hasHealthSpread = true;
-      }
       var tMeta = getSpreadTopologyMeta(sid, r, isEnglish);
       if (tMeta.isFilterSpread) {
         hasFilterSpread = true;
@@ -2068,8 +2085,8 @@
       });
       if (isFollowUp) {
         sectionLines.push(isEnglish
-          ? ("- **[Macro Proportion & Global Outcome Constraint]** Keep First-Impression stats, final outcome hubs, and Major-cause vs. Minor-effect proportion as governing constraints—**skip macro weather re-caps on this follow-up turn**, but ensure your local answer stays anchored to the global outcome rather than magnifying an isolated harsh card." + (readings.length > 1 ? " Across multiple attached readings, cross-reference only the positions relevant to this follow-up." : ""))
-          : ("- **【全局比例与总出口制约（追问后台锚点）】** 盘面首印统计、总出口位与「大牌为因·小牌为果」比例作为全局硬约束——**本轮追问免去全局气象复盘**，但在拆解局部牌位时必须服从全盘定调，严禁孤立放大单张重牌推翻全局结论。" + (readings.length > 1 ? " 多份记录关联时亦只横向调取与本轮问题直接相关的牌位对照。" : "")));
+          ? ("- **[Spread Context for Follow-Up]** Skip macro recaps; interpret relevant positions in their actual roles and the wider spread without magnifying an isolated card." + (readings.length > 1 ? " Across multiple readings, cross-reference only relevant positions." : ""))
+          : ("- **【追问的全盘背景】** 免去全局复盘，依据实际牌位职能与全盘关系解读相关局部，不孤立放大单张牌。" + (readings.length > 1 ? " 多份记录关联时只对照与本轮问题相关的牌位。" : "")));
       } else {
         sectionLines.push(isEnglish
           ? ("- **[Macro Gestalt & Proportion]** Start from the pre-computed First-Impression signals before touching individual cards. Weigh Majors/Root Powers as underlying tide (cause) and Minors/check cards as surface ripples (effect); a single harsh card surrounded by stable cards is a contained local bump, never total collapse." + (readings.length > 1 ? " Multiple readings are attached: compare how patterns shift, reinforce, or resolve across them rather than reading each in isolation." : ""))
@@ -2117,11 +2134,6 @@
       for (var sc = 0; sc < spreadCircuits.length; sc += 1) {
         sectionLines.push("  " + spreadCircuits[sc]);
       }
-      if (hasHealthSpread) {
-        sectionLines.push(isEnglish
-          ? "  - *Medical Boundary*: Explicitly note in plain, calm language that this reading maps energetic stress patterns only and never replaces professional medical diagnosis or treatment."
-          : "  - *健康边界护栏*：须以温和自然的口吻明确说明占卜仅作身心能量状态参考，绝不替代正规医学检查与临床诊疗。");
-      }
     }
 
     // 4. Intent & Register Skill
@@ -2162,8 +2174,8 @@
         id: "skill-followup-drilldown",
         name: isEnglish ? "Follow-Up Keyhole Drilldown" : "追问开窗深挖",
         reason: isEnglish
-          ? "Zoom into local axes under global outcome constraint and advise next secondary spread if needed"
-          : "在全盘总出口制约下微距对焦局部轴线，按需转诊次要牌阵"
+          ? "Explore relevant positions in their wider context and suggest a secondary spread if needed"
+          : "结合全盘与实际牌位职能聚焦追问，按需建议次要牌阵"
       });
     }
 

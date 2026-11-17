@@ -1341,7 +1341,7 @@
         if (updated) {
           state.activeConversation = updated;
         }
-        return refreshConversationsList(updated ? updated.id : conv.id);
+        return refreshConversationsList(updated ? updated.id : conv.id, conv.id);
       });
     }
 
@@ -2026,13 +2026,18 @@
       return allActive[0] || null;
     }
 
-    function refreshConversationsList(preferredId) {
+    function refreshConversationsList(preferredId, expectedActiveId) {
+      function isCurrentSelection() {
+        return expectedActiveId === undefined ||
+          (state.activeConversation ? state.activeConversation.id : "") === expectedActiveId;
+      }
       return Promise.all([
         chatStore.listConversations({ archived: false, query: state.searchQuery }),
         chatStore.listConversations({ archived: true, query: state.searchQuery }),
         chatStore.listConversations({ archived: false }),
         chatStore.listConversations({ archived: true })
       ]).then(function (results) {
+        if (!isCurrentSelection()) return null;
         var activeFiltered = results[0];
         var archivedFiltered = results[1];
         var allActive = results[2];
@@ -2043,6 +2048,7 @@
         var shouldAutoCreate = state.activeTab === "active" && !state.searchQuery && allActive.length === 0;
 
         function finalizeSelection(candidate) {
+          if (!isCurrentSelection()) return null;
           state.activeConversation = candidate || resolveFallbackConversation(allActive, allArchived);
           if (!state.activeConversation && shouldAutoCreate) {
             return createFreshConversation();
@@ -2224,14 +2230,15 @@
       if (state.editingQuestionReadingId === readingId) {
         state.editingQuestionReadingId = "";
       }
-      var nextIds = (conv.readingIds || []).filter(function (id) { return id !== readingId; });
-      var nextSnaps = (conv.readingSnapshots || []).filter(function (s) { return s.id !== readingId; });
-      chatStore.updateConversation(conv.id, {
-        readingIds: nextIds,
-        readingSnapshots: nextSnaps
+      chatStore.updateConversation(conv.id, function (latest) {
+        return Object.assign({}, latest, {
+          readingIds: (latest.readingIds || []).filter(function (id) { return id !== readingId; }),
+          readingSnapshots: (latest.readingSnapshots || []).filter(function (snapshot) { return snapshot.id !== readingId; })
+        });
       }).then(function (updated) {
+        if (!state.activeConversation || state.activeConversation.id !== conv.id) return;
         state.activeConversation = updated;
-        return refreshConversationsList(updated.id);
+        return refreshConversationsList(updated ? updated.id : "", updated ? updated.id : "");
       });
     }
 
@@ -2401,8 +2408,9 @@
             readingSnapshots: nextSnaps
           });
       persistPromise.then(function (updated) {
+        if (!state.activeConversation || state.activeConversation.id !== conv.id) return;
         state.activeConversation = updated;
-        return refreshConversationsList(updated.id);
+        return refreshConversationsList(updated ? updated.id : "", updated ? updated.id : "");
       });
     }
 

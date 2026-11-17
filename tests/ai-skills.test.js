@@ -73,7 +73,56 @@ test("health circuitry never asserts prevention or dismisses isolated skin findi
       resolvedReadings: [{ spreadId: "health", deckType: "tarot", cards: [{ cardId: "major-00", positionNumber: 2 }] }]
     }).promptBlock;
     assert.doesNotMatch(prompt, /及时调养即可阻断|blocks physical onset|仅作表浅排毒|treating isolated \[14 Skin\] as minor/i);
-    assert.match(prompt, locale === "en" ? /clinical care/i : /临床就医/);
+    assert.doesNotMatch(prompt, /clinical care|medical disclaimer|medical boundary|诊疗|临床就医|健康边界护栏|不要由牌面断定|Do not infer whether a disease/i);
+    assert.match(prompt, locale === "en" ? /1 Forming.*2 Not Yet Manifest.*14 Skin.*15 Near Future/ : /1正在形成.*2尚未显现.*14皮肤.*15近期未来/);
+  }
+});
+
+test("incomplete oracle identities cannot claim complete realm or signal coverage", () => {
+  for (const locale of ["zh-CN", "en"]) {
+    const inspect = (deckType, cards) => aiSkills.analyzeReadingGestalt({ spreadId: "custom-example", deckType, cards }, locale).summaryLines.join("\n");
+    const unknown = [{ cardId: "unknown", positionNumber: 1 }];
+    const lMissing = inspect("lxxxi", unknown);
+    assert.doesNotMatch(lMissing, /Four-Realm distribution|四领域分布/);
+    assert.match(lMissing, locale === "en" ? /1.*unknown/i : /1.*未知/);
+    const lMixed = inspect("lxxxi", [{ cardId: "lxxxi-01", cardName: "Star Father" }, ...unknown]);
+    assert.match(lMixed, locale === "en" ? /1.*unknown/i : /1.*未知/);
+    assert.match(lMixed, /Star Father/);
+    const mMissing = inspect("mystagogus", unknown);
+    assert.doesNotMatch(mMissing, /no hard red-light|未触发极端封堵红灯/);
+    assert.match(mMissing, locale === "en" ? /1.*unknown/i : /1.*未知/);
+    const mMixed = inspect("mystagogus", [{ cardId: "m-22", cardName: "Dead End", positionNumber: 2 }, ...unknown]);
+    assert.match(mMixed, /Dead End/);
+    assert.match(mMixed, locale === "en" ? /1.*unknown/i : /1.*未知/);
+    const mKnown = inspect("mystagogus", [{ cardId: "m-01" }]);
+    assert.match(mKnown, locale === "en" ? /no hard red-light/i : /未触发极端封堵红灯/);
+  }
+});
+
+test("nonstandard tarot identities use reliable suit or layer metadata", () => {
+  assert.equal(aiSkills.parseCardIdentity({ cardId: "legacy-wands", suit: "权杖" }, "tarot").arcana, "minor");
+  assert.equal(aiSkills.parseCardIdentity({ cardId: "legacy-major", layer: "major" }, "tarot").arcana, "major");
+  assert.equal(aiSkills.parseCardIdentity({ cardId: "legacy-minor", layer: "minor" }, "tarot").arcana, "minor");
+  assert.equal(aiSkills.parseCardIdentity({ cardId: "conflict", layer: "major", suit: "wands" }, "tarot").arcana, "");
+});
+
+test("LXXXI 38 does not promise a guaranteed outcome", () => {
+  const cue = aiSkills.compileCardCue({ cardId: "lxxxi-38", meaning: "这张牌" }, { locale: "zh-CN", deckType: "lxxxi" }).coreCue;
+  assert.doesNotMatch(cue, /原典保证|保证结局/);
+  assert.match(cue, /考验|逆境/);
+});
+
+test("follow-ups do not invent an outcome slot for resource or custom spreads", () => {
+  for (const locale of ["zh-CN", "en"]) {
+    for (const spreadId of ["resources", "custom-example"]) {
+      const result = aiSkills.routeSkills({
+        locale,
+        resolvedReadings: [{ spreadId, deckType: "tarot", cards: [{ cardId: "major-01", positionNumber: 1 }] }],
+        messages: [{ role: "user", content: "请解读" }, { role: "assistant", content: "已解读" }, { role: "user", content: "怎么解决？" }]
+      });
+      assert.equal(result.isFollowUp, true);
+      assert.doesNotMatch(result.promptBlock, /总出口|overall outcome hub|final outcome hubs|anchored to the global outcome|spread's overall outcome/i);
+    }
   }
 });
 
@@ -482,7 +531,7 @@ test("detectRegister and routeSkills handle mundane/esoteric switching, all 5 in
   assert.ok(esoRoute.promptBlock.includes("神秘学实修语域激活"));
   assert.ok(esoRoute.promptBlock.includes("全局深剖"));
 
-  // 4. Relationship + Health boundary + Multi-turn Follow-up drilldown
+  // 4. Relationship + health layout + multi-turn follow-up drilldown
   const healthRelRec = aiContext.resolveReadingDetails({
     id: "health-rel-1",
     layoutMode: "preset",
@@ -505,7 +554,7 @@ test("detectRegister and routeSkills handle mundane/esoteric switching, all 5 in
   assert.equal(followUpRoute.intent, "relationship");
   assert.equal(followUpRoute.isFollowUp, true);
   assert.ok(followUpRoute.activeSkills.some((s) => s.id === "skill-followup-drilldown"));
-  assert.ok(followUpRoute.promptBlock.includes("健康边界护栏"));
+  assert.ok(followUpRoute.promptBlock.includes("14皮肤"));
   assert.ok(followUpRoute.promptBlock.includes("严禁重背全盘"));
   assert.ok(followUpRoute.promptBlock.includes("时机布局"));
 });

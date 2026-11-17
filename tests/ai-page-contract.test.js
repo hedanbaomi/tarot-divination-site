@@ -378,7 +378,7 @@ const REQUIRED_HTML_IDS = [
   "aiSettingsModal", "aiProfileFormat", "aiProfileApiKey", "aiVertexGroup",
   "aiLockedPromptNote", "aiPresetRow", "aiFieldContextWindow", "aiDetectContextBtn",
   "aiContextWindowHint", "aiFieldAutoCompress", "aiContextMeter",
-  "aiClearConfigBtn", "aiDisclaimer",
+  "aiClearConfigBtn", "aiDisclaimer", "aiMedicalNotice",
   "themeSwatches", "themeToast", "confirmDialog",
   "choiceDialog", "choiceDialogKicker", "choiceDialogTitle", "choiceOptions", "choiceCancelBtn",
   "languageToggle"
@@ -394,7 +394,7 @@ const THEME_IDS = [
 
 const REQUIRED_I18N_KEYS = [
   "ai.open", "ai.pageTitle", "ai.pageDescription", "ai.contextBarAria", "ai.deckTarot",
-  "ai.settingsTitle", "history.openInAi", "privacy.ai", "ai.disclaimer",
+  "ai.settingsTitle", "history.openInAi", "privacy.ai", "ai.disclaimer", "ai.medicalNoticeTitle", "ai.medicalNoticeBody",
   "ai.lockedPromptNote", "ai.fieldContextWindow", "ai.fieldAutoCompress", "ai.contextMeter",
   "ai.presetLabel", "ai.preset.deepseekFlash", "ai.preset.deepseekPro", "ai.presetApplied",
   "ai.clearConfig", "ai.clearConfigTitle", "ai.clearConfigMsg", "ai.clearConfigConfirm", "ai.configCleared",
@@ -422,6 +422,7 @@ function assertAiHtmlContract(label, html) {
   assert.ok(html.includes('data-i18n-aria-label="ai.contextBarAria"'), `${label} ai.html context bar missing data-i18n-aria-label`);
   assert.ok(html.includes('data-i18n="ai.deckTarot"'), `${label} ai.html tarot option missing data-i18n`);
   assert.ok(/<footer class="ai-composer">[\s\S]*id="aiPromptInput"[\s\S]*id="aiDisclaimer"[^>]*data-i18n="ai.disclaimer"[\s\S]*<\/footer>/.test(html), `${label} disclaimer must be visible below the composer and localized`);
+  assert.ok(/id="aiDisclaimer"[\s\S]*<details class="ai-medical-notice" id="aiMedicalNotice">[\s\S]*data-i18n="ai.medicalNoticeTitle"[\s\S]*data-i18n="ai.medicalNoticeBody"[\s\S]*<\/details>[\s\S]*<\/footer>/.test(html), `${label} medical notice must be an independently labeled, initially collapsed footer element`);
   assert.ok(html.includes('src="js/custom-selects.js"'), `${label} ai.html must load js/custom-selects.js to replace native <select> UI`);
   assert.ok(html.includes('src="js/ai-skills.js"'), `${label} ai.html must load js/ai-skills.js before js/ai-context.js`);
   assert.ok(/<label[^>]+for="aiPickerDeckFilter"/i.test(html), `${label} ai.html must bind an explicit <label for="aiPickerDeckFilter">`);
@@ -1413,4 +1414,90 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   await flush();
   assert.equal(sentSysPrompt.includes("严禁重背全盘"), false, "The first request including the new reading must receive full-reading instructions");
   assert.ok(activeSkillsListEl.textContent.includes("追问开窗深挖"), "Follow-up mode resumes only after a response actually included the new reading");
+
+  // 11. The card's remove button must remove only its target from the transaction's latest state.
+  const staleRemoveCard = attachedChipsEl.querySelectorAll(".ai-reading-card")
+    .find(card => card.dataset.readingId === "hist-ui-1");
+  const staleRemoveButton = staleRemoveCard.querySelector(".ai-chip-remove");
+  const beforeConcurrentRemove = await memChatStore.getConversation(concurrentChat.id);
+  const thirdReading = contextModule.buildReadingSnapshot({ ...fakeHistoryRecord, id: "hist-ui-3" }, { locale: "zh-CN" });
+  await memChatStore.setAttachedReadings(concurrentChat.id,
+    beforeConcurrentRemove.readingIds.concat("hist-ui-3"), beforeConcurrentRemove.readingSnapshots.concat(thirdReading));
+  await memChatStore.setReadingQuestion(concurrentChat.id, "hist-ui-2", "移除期间另一页更新的问题");
+  staleRemoveButton.click();
+  await flush();
+  const afterConcurrentRemove = await memChatStore.getConversation(concurrentChat.id);
+  assert.deepEqual(afterConcurrentRemove.readingIds, ["hist-ui-2", "hist-ui-3"], "Removing r1 must preserve a concurrently attached r3");
+  assert.equal(afterConcurrentRemove.readingSnapshots.find(s => s.id === "hist-ui-2").question, "移除期间另一页更新的问题");
+
+  // Both adjacent entry points tolerate deletion after their UI was rendered.
+  const deletedChatRemoveButton = attachedChipsEl.querySelector(".ai-chip-remove");
+  await memChatStore.deleteConversation(concurrentChat.id);
+  deletedChatRemoveButton.click();
+  await flush();
+  assert.equal(await memChatStore.getConversation(concurrentChat.id), null, "Removing from a deleted chat must not recreate it or reject with updated.id");
+
+  doc.getElementById("aiNewChatBtn").click();
+  await flush();
+  doc.getElementById("aiPickReadingsBtn").click();
+  await flush();
+  const nullPickerBox = doc.getElementById("aiPickerList").querySelector("input");
+  nullPickerBox.checked = true;
+  nullPickerBox.dispatchEvent({ type: "change" });
+  const originalSetAttachedReadings = memChatStore.setAttachedReadings;
+  let deletedPickerChatId = "";
+  memChatStore.setAttachedReadings = async (...args) => {
+    deletedPickerChatId = args[0];
+    await memChatStore.deleteConversation(args[0]);
+    return originalSetAttachedReadings(...args);
+  };
+  try {
+    doc.getElementById("aiPickerApplyBtn").click();
+    await flush();
+    assert.ok(deletedPickerChatId);
+    assert.equal(await memChatStore.getConversation(deletedPickerChatId), null, "Applying a picker to a deleted chat must not recreate it or reject with updated.id");
+  } finally {
+    memChatStore.setAttachedReadings = originalSetAttachedReadings;
+  }
+
+  // An in-flight remove/picker refresh must not reselect A after the user switches to B.
+  await memChatStore.createConversation({ id: "refresh-race-a", title: "Refresh race A",
+    readingIds: ["hist-ui-1", "hist-ui-2"], readingSnapshots: [
+      contextModule.buildReadingSnapshot(fakeHistoryRecord, { locale: "zh-CN" }),
+      contextModule.buildReadingSnapshot(fakeHistoryRecordWithQuestion, { locale: "zh-CN" })
+    ] });
+  await memChatStore.createConversation({ id: "refresh-race-b", title: "Refresh race B" });
+  doc.getElementById("aiTabActive").click();
+  await flush();
+  const selectRaceChat = title => doc.getElementById("aiChatList")
+    .querySelectorAll(".ai-chat-item-select").find(button => button.textContent.includes(title)).click();
+  for (const action of ["remove", "picker"]) {
+    selectRaceChat("Refresh race A");
+    await flush();
+    const originalList = memChatStore.listConversations;
+    const pendingLists = [];
+    let holdLists = true;
+    memChatStore.listConversations = (...args) => originalList(...args).then(rows => holdLists
+      ? new Promise(resolve => pendingLists.push(() => resolve(rows))) : rows);
+    try {
+      if (action === "remove") attachedChipsEl.querySelector(".ai-chip-remove").click();
+      else {
+        doc.getElementById("aiPickReadingsBtn").click();
+        doc.getElementById("aiPickerApplyBtn").click();
+      }
+      await flush();
+      assert.ok(pendingLists.length > 0);
+      selectRaceChat("Refresh race B");
+      await flush();
+      assert.equal(activeChatTitleEl.textContent, "Refresh race B");
+      holdLists = false;
+      pendingLists.forEach(resolve => resolve());
+      await flush();
+      assert.equal(activeChatTitleEl.textContent, "Refresh race B", `${action} refresh must not overwrite a newer chat selection`);
+    } finally {
+      holdLists = false;
+      pendingLists.forEach(resolve => resolve());
+      memChatStore.listConversations = originalList;
+    }
+  }
 });

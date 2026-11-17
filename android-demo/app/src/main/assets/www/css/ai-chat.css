@@ -1054,6 +1054,28 @@ html.ui2 body.ai-chat-page .menu-toggle {
   overflow-wrap: anywhere;
 }
 
+.ai-medical-notice {
+  color: var(--text-secondary, #b8bbc4);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.ai-medical-notice summary { cursor: pointer; }
+.ai-medical-notice p { margin: 6px 0 0; }
+
+@media (max-width: 600px) {
+  .ai-disclaimer {
+    font-size: 11px;
+    line-height: 1.42;
+    padding-top: 6px;
+  }
+  .ai-medical-notice {
+    font-size: 11px;
+    line-height: 1.42;
+  }
+}
+
 /* Modals */
 .ai-modal-backdrop {
   position: fixed;
