@@ -25,6 +25,7 @@ def main(argv=None):
     gate = threading.Event()
     seen = []
     bodies = []
+    compatibility_bodies = []
     errors = []
     results = {}
 
@@ -34,6 +35,28 @@ def main(argv=None):
 
         def do_POST(self):
             data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            model = data.get("model", "")
+            if model in ("gpt-6.1-sol", "opaque-modern", "gpt-6.1-legacy", "opaque-nonstream", "opaque-policy-rejection"):
+                compatibility_bodies.append(data)
+                error = None
+                if model in ("gpt-6.1-sol", "opaque-modern") and "max_tokens" in data:
+                    error = {"code": "unsupported_parameter", "param": "max_tokens", "message": "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."}
+                elif model == "opaque-modern" and "temperature" in data:
+                    error = {"code": "unsupported_value", "param": "temperature", "message": "Unsupported value: 'temperature' does not support 0.4 with this model. Only the default (1) value is supported."}
+                elif model == "gpt-6.1-legacy" and "max_completion_tokens" in data:
+                    error = {"code": "unsupported_parameter", "param": "max_completion_tokens", "message": "Unsupported parameter: max_completion_tokens"}
+                elif model == "opaque-nonstream" and "stream" in data:
+                    error = {"code": "unsupported_parameter", "param": "stream", "message": "Unsupported parameter: stream"}
+                elif model == "opaque-policy-rejection":
+                    error = {"code": "content_policy_violation", "message": "Rejected user input: Unsupported parameter: max_tokens"}
+                if error:
+                    body = json.dumps({"error": error}).encode()
+                    self.send_response(400)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
             # Pending empty assistant messages are omitted from API requests,
             # so consecutive user turns may be joined with two newlines. Route
             # this fake service by the newest fixture prompt, but retain the
@@ -41,6 +64,14 @@ def main(argv=None):
             question = data["messages"][-1]["content"].rsplit("\n\n", 1)[-1]
             seen.append(question)
             bodies.append(data)
+            if model == "opaque-nonstream":
+                body = json.dumps({"choices": [{"message": {"content": "answer " + question + " complete"}, "finish_reason": "stop"}]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             slow = question.startswith("slow") and seen.count(question) == 1
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -121,12 +152,44 @@ def main(argv=None):
                 gate.clear()
                 seen.clear()
                 bodies.clear()
+                compatibility_bodies.clear()
                 c = browser.new_context(viewport={"width": 1440, "height": 900}, locale="zh-CN")
                 c.route("**/*", lambda route: route.continue_()
                         if route.request.url.startswith(base + "/") else route.abort())
                 c.add_init_script("localStorage.setItem('quareia-ai-config-v1',"
                                   + json.dumps(json.dumps(config)) + ");")
                 return c
+
+            for model, expected_calls in [("gpt-6.1-sol", 1), ("opaque-modern", 3), ("gpt-6.1-legacy", 2), ("opaque-nonstream", 2), ("opaque-policy-rejection", 1)]:
+                with context() as c:
+                    a = page(c)
+                    a.locator("#aiSettingsBtn").click()
+                    a.locator("#aiProfileModel").fill(model)
+                    a.locator("#aiProfileMaxTokens").fill("1024")
+                    a.locator("#aiProfileTemperature").fill("0.4")
+                    if model != "opaque-policy-rejection":
+                        a.locator("#aiTestConnectionBtn").click()
+                        a.wait_for_function("document.querySelector('#aiSettingsStatus').textContent.includes('连接成功')")
+                        assert compatibility_bodies[-1].get("max_tokens", compatibility_bodies[-1].get("max_completion_tokens")) == 256
+                    compatibility_bodies.clear()
+                    a.locator("#aiSaveProfileBtn").click()
+                    a.locator("#aiPromptInput").fill("compatibility-fixture")
+                    a.locator("#aiSendBtn").click()
+                    done(a)
+                    assert len(compatibility_bodies) == expected_calls, (model, len(compatibility_bodies))
+                    assert all(body["model"] == model for body in compatibility_bodies)
+                    assert all(body.get("max_tokens", body.get("max_completion_tokens")) == 1024 for body in compatibility_bodies)
+                    assert all(body["messages"] == compatibility_bodies[0]["messages"] for body in compatibility_bodies)
+                    conversation = a.evaluate(read)
+                    answers = [message for message in conversation["messages"] if message["role"] == "assistant"]
+                    assert len(answers) == 1
+                    if model == "opaque-policy-rejection":
+                        assert "HTTP 400" in answers[0]["error"]
+                    else:
+                        assert answers[0]["content"] == "answer compatibility-fixture complete"
+                        assert not answers[0]["error"]
+                    assert a.evaluate("DivinationAiProviders.createConfigStore().getActiveProfile().maxTokens") == 1024
+                    results["provider_compatibility_" + model] = "pass"
 
             with context() as c:
                 a = page(c)
