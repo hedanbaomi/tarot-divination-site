@@ -441,6 +441,77 @@
     return document.getElementById(id);
   }
 
+  // A short "hello, I'm Olivia" reply is not a reading. Only assistant text that
+  // actually names cards or spread positions counts as having interpreted the
+  // attached reading; otherwise a greeting would silently flip the next turn into
+  // follow-up mode and leave the reading uninterpreted.
+  function assistantMessageShowsReading(content) {
+    var text = typeof content === "string" ? content : "";
+    if (!text.trim()) return false;
+
+    // Tier 1 — markers that are unambiguously about actual cards. Suit names and
+    // orientation / position markers never occur in ordinary conversation, so a
+    // single one is enough to call this a reading.
+    if (
+      /正位|逆位|牌阵|牌位|牌面|权杖|圣杯|宝剑|星币|大阿卡那|小阿卡那|第[一二三四五六七八九十百零\d]+张|这张牌|那张牌|抽牌|抽到/.test(text)
+    ) {
+      return true;
+    }
+    if (/\b(?:upright|reversed|wands?|cups?|swords?|pentacles?|major arcana|minor arcana)\b/i.test(text)) {
+      return true;
+    }
+
+    // Tier 2 — a major-arcana name only counts when it sits next to a card cue.
+    // Without the cue, common words such as 世界/太阳/月亮/星星/恋人/正义 or
+    // "world"/"sun"/"star" would make a greeting look like a finished reading.
+    var arcanaZh = /愚者|魔术师|女祭司|皇后|皇帝|教皇|恋人|战车|力量|隐士|命运之轮|正义|倒吊人|死神|节制|恶魔|高塔|星星|月亮|太阳|审判|世界/;
+    var cueZh = /牌|张|位|抽|阵|正位|逆位/;
+    if (arcanaZh.test(text) && cueZh.test(text)) return true;
+
+    var arcanaEn = /\b(?:fool|magician|high priestess|empress|emperor|hierophant|lovers|chariot|strength|hermit|wheel of fortune|justice|hanged man|death|temperance|devil|tower|star|moon|sun|judgement|world)\b/i;
+    var cueEn = /\b(?:card|position|slot|draw|spread|upright|reversed|arcana)\b/i;
+    return arcanaEn.test(text) && cueEn.test(text);
+  }
+
+  function computeHasUninterpretedReading(conv, uptoIndex) {
+    if (!conv || !Array.isArray(conv.readingIds) || conv.readingIds.length === 0) {
+      return false;
+    }
+    var msgs = Array.isArray(conv.messages) ? conv.messages : [];
+    var limit = typeof uptoIndex === "number" ? Math.min(msgs.length, Math.max(0, uptoIndex)) : msgs.length;
+    var lastAssistantAt = 0;
+    var hasAnyAssistant = false;
+    for (var i = 0; i < limit; i += 1) {
+      var m = msgs[i];
+      if (m && m.role === "assistant" && assistantMessageShowsReading(m.content)) {
+        hasAnyAssistant = true;
+        var ts = Number(m.createdAt) || 0;
+        if (ts > lastAssistantAt) {
+          lastAssistantAt = ts;
+        }
+      }
+    }
+    if (!hasAnyAssistant) {
+      return true;
+    }
+    var activeIdSet = Object.create(null);
+    for (var r = 0; r < conv.readingIds.length; r += 1) {
+      if (conv.readingIds[r]) {
+        activeIdSet[conv.readingIds[r]] = true;
+      }
+    }
+    var snaps = Array.isArray(conv.readingSnapshots) ? conv.readingSnapshots : [];
+    for (var s = 0; s < snaps.length; s += 1) {
+      var snap = snaps[s];
+      if (!snap || !activeIdSet[snap.id]) continue;
+      var attTs = Number(snap.attachedAt) || 0;
+      if (attTs > 0 && attTs > lastAssistantAt) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function initAiPage() {
     if (!byId("aiChatList") || !global.DivinationAiProviders || !global.DivinationAiContext || !global.DivinationAiChatStore) {
       return null;
@@ -1074,50 +1145,9 @@
     }
 
     function resolveConversationSkillMode(conv) {
-      var raw = conv && typeof conv.skillMode === "string" ? conv.skillMode : "auto";
-      if (typeof chatStoreApi.normalizeSkillMode === "function") {
-        return chatStoreApi.normalizeSkillMode(raw);
-      }
-      return ["auto", "direct", "deep", "action"].indexOf(raw) !== -1 ? raw : "auto";
-    }
-
-    function computeHasUninterpretedReading(conv, uptoIndex) {
-      if (!conv || !Array.isArray(conv.readingIds) || conv.readingIds.length === 0) {
-        return false;
-      }
-      var msgs = Array.isArray(conv.messages) ? conv.messages : [];
-      var limit = typeof uptoIndex === "number" ? Math.min(msgs.length, Math.max(0, uptoIndex)) : msgs.length;
-      var lastAssistantAt = 0;
-      var hasAnyAssistant = false;
-      for (var i = 0; i < limit; i += 1) {
-        var m = msgs[i];
-        if (m && m.role === "assistant" && typeof m.content === "string" && m.content.trim()) {
-          hasAnyAssistant = true;
-          var ts = Number(m.createdAt) || 0;
-          if (ts > lastAssistantAt) {
-            lastAssistantAt = ts;
-          }
-        }
-      }
-      if (!hasAnyAssistant) {
-        return true;
-      }
-      var activeIdSet = Object.create(null);
-      for (var r = 0; r < conv.readingIds.length; r += 1) {
-        if (conv.readingIds[r]) {
-          activeIdSet[conv.readingIds[r]] = true;
-        }
-      }
-      var snaps = Array.isArray(conv.readingSnapshots) ? conv.readingSnapshots : [];
-      for (var s = 0; s < snaps.length; s += 1) {
-        var snap = snaps[s];
-        if (!snap || !activeIdSet[snap.id]) continue;
-        var attTs = Number(snap.attachedAt) || 0;
-        if (attTs > 0 && attTs > lastAssistantAt) {
-          return true;
-        }
-      }
-      return false;
+      // direct / deep / action are kept in storage (legacy preferences survive
+      // backup + export) but the single persona runs every conversation.
+      return "auto";
     }
 
     function buildPromptPayloadForConversation(conv, uptoIndex) {
@@ -1198,31 +1228,13 @@
     }
 
     function skillModeFallbackLabel(modeId) {
-      if (modeId === "direct") return tr("ai.skillMode.direct", null, "直断破局", "Direct");
-      if (modeId === "deep") return tr("ai.skillMode.deep", null, "全局深剖", "Deep");
-      if (modeId === "action") return tr("ai.skillMode.action", null, "现实处方", "Action");
-      return tr("ai.skillMode.auto", null, "智能编排", "Auto");
+      return tr("ai.skillMode.auto", null, "奥莉薇娅", "Olivia");
     }
 
     function skillModeFallbackHint(modeId) {
-      if (modeId === "direct") {
-        return tr("ai.skillModeHint.direct", null,
-          "开门见山先拍板核心结论与最关键的破局抓手",
-          "Leads with a direct verdict and the single decisive turning point");
-      }
-      if (modeId === "deep") {
-        return tr("ai.skillModeHint.deep", null,
-          "沿牌阵轴线深挖深层因果、移位共振与潜在暗流",
-          "Traces cross-axis causality, displacement circuits, and hidden currents");
-      }
-      if (modeId === "action") {
-        return tr("ai.skillModeHint.action", null,
-          "聚焦当事人可控位置、止损边界与接地气的现实步骤",
-          "Focuses on controllable positions, boundaries, and concrete next steps");
-      }
       return tr("ai.skillModeHint.auto", null,
-        "按牌阵拓扑、牌组特性、问题意图与追问轮次自动组合内置技法",
-        "Automatically mounts built-in skills by spread topology, deck, intent, and turn");
+        "内置人格包：塔罗咨询师 · 非暴力沟通 · 牌面镜像",
+        "Built-in persona: tarot counselor with an NVC backbone");
     }
 
     function renderSkillsBar() {
@@ -3769,6 +3781,8 @@
     normalizeConversationMessagesForApi: normalizeConversationMessagesForApi,
     truncateMessagesToBudget: truncateMessagesToBudget,
     hasPrecedingUserTurn: hasPrecedingUserTurn,
+    assistantMessageShowsReading: assistantMessageShowsReading,
+    computeHasUninterpretedReading: computeHasUninterpretedReading,
     handleBack: function () {
       return controller ? controller.handleBack() : false;
     },

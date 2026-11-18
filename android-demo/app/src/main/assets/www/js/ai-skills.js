@@ -4,31 +4,10 @@
   var RAW_SKILL_MODES = [
     {
       id: "auto",
-      labelZh: "智能编排",
-      labelEn: "Auto Craft",
-      descZh: "按牌阵拓扑、牌组心法、问题意图与对话轮次自动组合解牌技艺",
-      descEn: "Automatically compose reading skills from spread topology, deck craft, intent, and turn"
-    },
-    {
-      id: "direct",
-      labelZh: "直断破局",
-      labelEn: "Direct Verdict",
-      descZh: "开门见山直给倾向判断、核心症结与破局抓手，省去铺垫",
-      descEn: "Lead with a clear verdict, central bottleneck, and decisive pivot without preamble"
-    },
-    {
-      id: "deep",
-      labelZh: "全局深剖",
-      labelEn: "Deep Synthesis",
-      descZh: "深入拆解跨位轴线、潜流暗线、因果传导与领域共振",
-      descEn: "Unpack cross-position circuitry, hidden undercurrents, causal chains, and realm resonance"
-    },
-    {
-      id: "action",
-      labelZh: "现实处方",
-      labelEn: "Practical Action",
-      descZh: "聚焦人为可控区间、止损舍离、资源调配与近期具体行动",
-      descEn: "Focus on human agency, damage control, resource balance, and concrete next steps"
+      labelZh: "奥莉薇娅",
+      labelEn: "Olivia",
+      descZh: "内置人格包：塔罗咨询师 · 非暴力沟通 · 盘面镜像",
+      descEn: "Built-in persona: tarot counselor with an NVC backbone"
     }
   ];
 
@@ -37,10 +16,7 @@
     : RAW_SKILL_MODES;
 
   var VALID_SKILL_MODES = {
-    auto: true,
-    direct: true,
-    deep: true,
-    action: true
+    auto: true
   };
 
   var TAROT_SUIT_META = {
@@ -1843,21 +1819,7 @@
   }
 
   function buildSkillModeDirective(skillMode, isEnglish) {
-    if (skillMode === "direct") {
-      return isEnglish
-        ? "- **[Active Mode: Direct Verdict]** Open immediately in Sentence 1 with the clear directional judgment and core bottleneck. Note what is stable on the board in one brief clause to keep true proportion, then spotlight the 2–3 decisive pivot cards and end with one sharp takeaway."
-        : "- **【当前技法模式：直断破局】** 首句开门见山直给倾向性判断与最核心卡点，省去寒暄铺垫；用半句点明稳固无虞的基本盘以防比例失真，随即聚焦决定成败的 2～3 张核心枢纽牌讲透因果，收尾给出一句干脆利落的决断抓手。";
-    }
-    if (skillMode === "deep") {
-      return isEnglish
-        ? "- **[Active Mode: Deep Synthesis]** Trace cross-pillar tensions, diagonal axes, hidden undercurrents (cause vs. surface manifestation, fading vs. closed past, inner vs. physical realms), and structural chain reactions in cohesive depth—still strictly woven as natural prose, never a numbered 1->N list."
-        : "- **【当前技法模式：全局深剖】** 深入拆解跨柱张力、对角线因果反转、表里反差（底层动因 vs 日常表象、暂退西门 vs 永逝北门、内在潜流 vs 物质落地）与位置移位回路，把来龙去脉讲深讲透——但依然必须以连贯叙事成文，严禁退化为按号报菜名。";
-    }
-    if (skillMode === "action") {
-      return isEnglish
-        ? "- **[Active Mode: Practical Action]** Dedicate 60%+ of weight to human-agency levers (changeable positions, voluntary release vs. forced loss, surplus-to-depleted resource shifts). Clearly separate what is fixed/closing from 2–3 concrete, grounded steps for the coming days."
-        : "- **【当前技法模式：现实处方】** 将六成以上篇幅押在「当事人亲手可改的枢纽位」（如生命之树7-8-9层、全景11位主动松手免遭12位强夺、资源盘停盈补亏）；明确划清「哪些已成定局须果断放手」与「接下来一两周可落地的具体现实动作」。";
-    }
+    // Only the built-in persona mode remains; the persona itself carries the reading stance.
     return "";
   }
 
@@ -1923,8 +1885,8 @@
         : "- **【无特定问题「盲解破局」协议】** 当前未附具体占卜问题，**严禁因此退化为挨个牌位泛泛念牌义！** 请先用一句话点明盘面上稳固无虞的基本盘领域，再勾勒出主轴中最突出的 1～2 组现实生活张力画像与近期走向，并在结尾用 1 句自然平实的核对提问，邀请对方补充这正对应手头哪桩具体事（职场、合作、关系或搬迁筹划），以便下一轮精准对焦。");
     } else if (intent === "decision") {
       lines.push(isEnglish
-        ? "- **[Decision Routing]** State the directional leaning and its key condition up front; weigh the real cost and payoff of each path without fence-sitting."
-        : "- **【抉择意图路由】** 开篇先给出清晰的倾向性结论与成立前提，客观摊开不同选择各自的代价与后劲，绝不模棱两可和稀泥。");
+        ? "- **[Decision Routing]** Say which way you lean and what would have to be true for that lean to hold; lay out the real cost and payoff of each path, but do not decide for them—hand the choice back."
+        : "- **【抉择意图路由】** 开篇说清你更偏向哪一边、这个偏向成立的前提是什么，摊开不同选择各自的代价与后劲，但不替对方拍板；最后把选择权交还给他。");
     } else if (intent === "relationship") {
       lines.push(isEnglish
         ? "- **[Relationship Routing]** Unpack mutual projections, give-and-take asymmetry, and actual relational trajectory without claiming omniscient mind-reading of the other party."
@@ -1946,13 +1908,13 @@
     if (isEnglish) {
       var enRule1 = isFollowUp
         ? "1. **Direct Follow-Up Zoom (No Macro Recap)**: Answer the user's follow-up or newly shared context in Sentence 1 by weaving ONLY the 2–4 relevant positions naturally into prose (citing card names inside sentences or parentheses as evidence)—**do NOT repeat the macro weather forecast or re-summarize the whole spread**."
-        : "1. **Weather First, Woven Story Second**: Open with the macro climate and direct answer/core tension, then weave positions together along causal axes. Cite card names naturally inside sentences or parentheses as supporting evidence (e.g., *'The real drag isn't outside opposition, but reluctance to let go of a comfortable routine (Nine of Cups in What Is Taken)'*) rather than using card/position labels as bullet headers.";
+        : "1. **One Line of Weather, Then Card by Card**: Open with a single plain sentence on the spread's overall temperature (cold / warm / tight / easy) - no verdict, no forecast of how it ends. Then start from the card carrying the most tension: say what the card is in RWS terms and what it means in that position, then land it on their situation - covering one or two cards before you stop and leave room for their reaction.";
       var enRule2 = isFollowUp
         ? "2. **Focused Micro-Depth in Context**: Explore the relevant local positions and practical actions in light of their actual roles and the wider spread; leave unrelated positions untouched."
-        : "2. **Consolidate the Stable Baseline, Then Concentrate Weight**: In non-filter spreads, briefly group and acknowledge stable, healthy life domains or full resource pots in 1–2 reassuring clauses so true overall proportion is preserved (never report only problems or omit which pots/domains are solid!), then dedicate ~70% of depth to the central conflict axes and human-agency levers.";
+        : "2. **Settle the Ground, Then Spend Depth on the Tightest Card or Two**: first say in one clause which domains look steady (never only report trouble), then put this turn's depth on the one or two cards that are actually tight; leave the rest for the next turn.";
 
       var enLines = [
-        "### Master Diviner Narrative & Anti-Parroting Rules (Strictly Enforced)",
+        "### Narrative & Anti-Parroting Rules (Strictly Enforced; Voice and Rhythm Follow the Persona)",
         enRule1,
         enRule2,
         "3. **Six Forbidden Novice Patterns**:",
@@ -1963,20 +1925,24 @@
           ? "   - **CRITICAL FILTER RULE**: A secondary filter spread (`manifestation-cause` / `solution` / `direction` / `timing`) is attached—match slots dynamically against Position 1's actual scale and slot domain (counting domain-specific legal/illness/retreat/cutting cards and literal object matches), and set aside genuinely unrelated filler slots in one brief clause instead of inventing forced stories for every position!"
           : "   - In secondary filter spreads, set aside genuinely unrelated slots cleanly rather than forcing stories onto every slot.",
         "   - NEVER pad with fortune-cookie or therapy clichés (`opportunities and challenges coexist`, `trust the universe`, `embrace your inner self`, `practice self-love`).",
-        "   - NEVER catastrophize or preach fatalism; keep tone direct, grounded, humane, and agency-preserving."
+        "   - NEVER catastrophize or preach fatalism; keep tone direct, grounded, humane, and agency-preserving.",
+        "4. **Plain-First & Anti-Preach Rules**:",
+        "   - **Say the card logic in plain words (meaning first, situation second)**: in every paragraph, first say what the card means in RWS terms and what that means in its position, in everyday language, then land it on what it means for their work/money/relationship/health right now. Never open a point with abstract or mystical vocabulary.",
+        "   - **No grand philosophy or life lecture**: never drift into universal maxims about fate, destiny, the universe's plan, self-cultivation, or \"human nature\"—unless the user explicitly asks. Keep every sentence tied to THIS person's concrete situation and decision.",
+        "   - **Keep it short and scannable**: keep the final answer to roughly 130–220 words (expand only if the user explicitly asks for the whole reading at once, and never past 400). One short sentence per idea; write plainly and avoid piling on clauses and modifiers. Prefer a handful of tight, concrete paragraphs over an exhaustive essay. One clear idea per paragraph; cut anything that restates what you already said. This cap applies to the final answer only—your internal reasoning may run as long as needed."
       ];
       return enLines.join("\n");
     }
 
     var zhRule1 = isFollowUp
       ? "1. **直奔追问靶心，免除全盘复盘**：首句直接回应用户本轮追问或刚补充的现实情况，只调取关联的 2～4 个局部牌位自然嵌在句中或括号内作联动论据，**严禁重背全盘、严禁重报全局气象或复述上一轮已讲过的全盘结论**。"
-      : "1. **先报全局气象与定性结论，再织因果故事**：开篇两三句直指局面冷暖、严峻程度与核心卡点；行文中先讲现实逻辑与动态博弈，把牌位与牌名自然嵌在句中或括号内作支撑论据（如：*「真正拖住你的并非外部阻碍，而是迟迟舍不得放掉眼下那点安稳惯性（带走之物位的圣杯九）」*），绝不拿牌位编号当段落主语。";
+      : "1. **开篇一句话点冷暖，然后逐张推进**：第一句只用一句平实的话交代盘面整体的温度（偏冷／偏暖／紧／松），不预先给定性结论、不预告结局；接着从最吃紧的那张牌开始，先按韦特牌意说清这张牌是什么、放进这个位置意味着什么，再落到他的处境上，讲完一两张就停，把反应的空间留给对方。";
     var zhRule2 = isFollowUp
       ? "2. **结合全盘微距深挖**：聚焦追问涉及的局部牌位与具体应对，结合其实际职能和全盘关系判断，无关牌位略过。"
-      : "2. **先归并稳固基本盘，再重锤敲核心枢纽**：非筛查型牌阵须先用 1～2 句归并点明盘面上稳固顺遂、充盈无虞的生活领域或能量罐（以此锚定全盘真实的吉凶比例，尤其《资源》盘须指明哪个盈余罐可反哺透支罐，严禁报忧不报喜或抹除平安领域），随后将七成笔墨集中在核心冲突轴与「人为可改变的位置」上，绝不 1→N 平均用力。";
+      : "2. **先安顿基本盘，再把力气放在最吃紧的一两张牌上**：先用一句话说明盘面上相对稳固的领域（别只报忧），然后把这一轮的笔墨集中在最吃紧的一两张牌上，其余留到下一轮。";
 
     var zhLines = [
-      "### 老练占卜师自然叙事与反抄书铁律（严格执行）",
+      "### 自然叙事与反抄书铁律（严格执行；语气与节奏仍以人格为准）",
       zhRule1,
       zhRule2,
       "3. **六大「新手念说明书」绝对禁令**：",
@@ -1987,7 +1953,11 @@
         ? "   - 【次要筛查牌阵强制降噪】当前包含筛查型牌阵（显化成因/解决方案/方位/时机）——须按第1位事件实际量级与槽位语义动态识别有效信号（含专向法律/伤病/休养切割牌及过剩致祸、字面物象匹配），真正平淡无关的槽位用一句话干净略过，**严禁1→N逐位硬编牵强故事！**"
         : "   - 【禁强行圆场】遇到次要筛查牌阵时，真正无关的平淡槽位干净略过，绝不逐位硬编理由。",
       "   - 【禁正确的废话与鸡汤说教】严禁「机遇与挑战并存」「倾听内心的声音」「宇宙提醒你爱自己、接纳不完美」等空洞套话。",
-      "   - 【禁恐吓报丧与宿命论】孤立凶牌须结合全盘降敏，不替提问者做道德说教，落脚于平实、具体的人间行动选择。"
+      "   - 【禁恐吓报丧与宿命论】孤立凶牌须结合全盘降敏，不替提问者做道德说教，落脚于平实、具体的人间行动选择。",
+      "4. **先讲人话、后牌理；禁大道理；控制篇幅**：",
+      "   - **平实地说牌理（先牌意、再处境）**：每一段先用日常的话把这张牌的韦特含义说清、说它在这个位置意味着什么，再落到「这对你当下的工作/钱/感情/身体具体意味着什么」；不堆抽象术语、不从玄学概念起头。",
+      "   - **禁泛人生哲理与说教**：不得扯「命运自有安排、人生无常、宇宙自有其用意、人要学会放下执念」这类放之四海皆准的大道理，除非用户主动要求；每一句都要扣着眼前这个人的具体处境和决定。",
+      "   - **短句、说人话、别长篇大论**：一句话只说一个意思，尽量口语、别堆砌修饰和连珠炮式的长串分句。最终答复正文约 200～350 字（用户明确要求「一次讲完」「直接给结论」时才展开，最多不超过 600 字）；宁可用几段紧凑、具体的短段落，也不要铺成一长篇；一段只讲一个意思，已经讲过的不要换种说法再复述一遍。推理与思考过程不受此篇幅限制，可以充分展开。"
     ];
     return zhLines.join("\n");
   }
@@ -2033,6 +2003,10 @@
     sectionLines.push(isEnglish
       ? "## Active Quareia Reading Craft Skills"
       : "## 当前激活的内置占卜解读 Skills 协议");
+
+    sectionLines.push(isEnglish
+      ? "0. **Clarify-First Gate (highest priority — overrides everything below)**: An attached spread does NOT mean you may immediately analyze it. If the user's question still lacks key real-world grounding — for a person: who they are to the user and what stage / how long the connection has been; for work or study: the exact field, role, and how long it has been going; and the concrete situation right now — you MUST ask 1–3 short, natural, specific questions first and wait for the answer, even when an intent (relationship / decision / trend…) has already been detected. You MAY weave in one brief, natural clause of the spread's overall weather (its dominant mood, the biggest tension, or where momentum leans) so your question feels informed by the cards — but keep it to a single sentence, then pivot straight to the clarifying question; do NOT turn this into an analysis. Only after the key facts are clear may you proceed to the reading; when you do, open with one short line such as \"Alright, let's begin the reading.\" before the interpretation. This gate overrides any 'open immediately / lead with a verdict' style and the intent routing below."
+      : "0. **澄清优先闸门（最高优先级，凌驾于下方所有规则）**：关联了牌阵 ≠ 可以立刻开讲。只要用户的问题还缺关键现实背景——涉及某人：这个人和你是什么关系、目前处于什么阶段／相处多久；涉及事业学业：具体是什么领域、岗位，已经进行多久；以及眼下具体处境——你就必须先追问 1～3 个简短、自然、具体的问题并等对方回答，即使已经识别出意图（关系／抉择／趋势……）也不例外。追问时可以**顺带用一句自然、平实的话点一下牌面的总览**（牌面大致冷暖、最突出的张力、或势头往哪边偏），让问题显得是从牌面里长出来的——但只限于一句，说完立刻转回追问，**不得顺势展开成解读**。关键事实坐实之后，正式开始解读：此时**先简短说一句开场语**（如「好，我们现在开始解读。」），再进入解读正文。本规则凌驾于「开门见山、立刻定论」这类话术与下方意图路由之上。");
 
     var modeLine = buildSkillModeDirective(skillMode, isEnglish);
     if (modeLine) {

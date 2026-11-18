@@ -401,7 +401,7 @@ const REQUIRED_I18N_KEYS = [
   "ai.exportedTo", "ai.exportCancelled", "ai.exportFailed",
   "ai.chatChangedTitle", "ai.saveFailedTitle",
   "ai.skillModeLabel", "ai.skillModeAria",
-  "ai.skillMode.auto", "ai.skillMode.direct", "ai.skillMode.deep", "ai.skillMode.action",
+  "ai.skillMode.auto",
   "ai.activeSkillsLabel", "ai.activeSkillsNone",
   "ai.questionPrefix", "ai.questionAdd", "ai.questionEdit", "ai.questionPlaceholder",
   "ai.starter.core", "ai.starter.action", "ai.starter.compare"
@@ -424,7 +424,8 @@ function assertAiHtmlContract(label, html) {
   assert.ok(/<footer class="ai-composer">[\s\S]*id="aiPromptInput"[\s\S]*id="aiDisclaimer"[^>]*data-i18n="ai.disclaimer"[\s\S]*<\/footer>/.test(html), `${label} disclaimer must be visible below the composer and localized`);
   assert.ok(/id="aiDisclaimer"[\s\S]*<details class="ai-medical-notice" id="aiMedicalNotice">[\s\S]*data-i18n="ai.medicalNoticeTitle"[\s\S]*data-i18n="ai.medicalNoticeBody"[\s\S]*<\/details>[\s\S]*<\/footer>/.test(html), `${label} medical notice must be an independently labeled, initially collapsed footer element`);
   assert.ok(html.includes('src="js/custom-selects.js"'), `${label} ai.html must load js/custom-selects.js to replace native <select> UI`);
-  assert.ok(html.includes('src="js/ai-skills.js"'), `${label} ai.html must load js/ai-skills.js before js/ai-context.js`);
+  assert.match(html, /src="js\/ai-skills\.js(\?[^"]*)?"/, `${label} ai.html must load js/ai-skills.js before js/ai-context.js`);
+  assert.match(html, /src="js\/ai-persona\.js(\?[^"]*)?"/, `${label} ai.html must load js/ai-persona.js (the built-in persona)`);
   assert.ok(/<label[^>]+for="aiPickerDeckFilter"/i.test(html), `${label} ai.html must bind an explicit <label for="aiPickerDeckFilter">`);
   assert.ok(/<label[^>]+for="aiProfileFormat"/i.test(html), `${label} ai.html must bind an explicit <label for="aiProfileFormat">`);
   assert.ok(html.includes('data-preset="deepseek-flash"'), `${label} ai.html missing the DeepSeek quick preset chip`);
@@ -1218,12 +1219,12 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   doc.getElementById("aiNewChatBtn").click();
   await flush();
 
-  // Default skill mode is "auto"
+  // Default persona mode is "auto"; a legacy pill click collapses onto the single persona
   assert.equal(modePills.auto.getAttribute("aria-pressed"), "true");
   modePills.direct.click();
   await flush();
-  assert.equal(modePills.direct.getAttribute("aria-pressed"), "true");
-  assert.equal(modePills.auto.getAttribute("aria-pressed"), "false");
+  assert.equal(modePills.auto.getAttribute("aria-pressed"), "true");
+  assert.equal(modePills.direct.getAttribute("aria-pressed"), "false");
 
   // Attach fakeHistoryRecord via picker modal
   doc.getElementById("aiPickReadingsBtn").click();
@@ -1273,13 +1274,13 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   const activeConvsAfterQ = await memChatStore.listConversations({ archived: false });
   const convWithQ = activeConvsAfterQ.find((c) => c.readingIds.includes("hist-ui-1"));
   assert.ok(convWithQ);
-  assert.equal(convWithQ.skillMode, "direct");
+  assert.equal(convWithQ.skillMode, "auto");
   assert.equal(convWithQ.readingSnapshots[0].question, "半年内去留该怎么选？");
 
   let sentSysPrompt = "";
   streamHook = (_profile, opts) => {
     sentSysPrompt = opts.systemPrompt;
-    return Promise.resolve({ text: "结论先行解读", reasoning: "", format: "openai-chat", model: "gpt-4o-mini" });
+    return Promise.resolve({ text: "正位权杖三立在结果位，逆位圣杯二在关系位，先讲这两张。", reasoning: "", format: "openai-chat", model: "gpt-4o-mini" });
   };
   promptInput.value = "请直接给我结论";
   doc.getElementById("aiSendBtn").click();
@@ -1287,7 +1288,8 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
 
   assert.ok(sentSysPrompt.includes("半年内去留该怎么选？"), "Updated snapshot question must be injected into outgoing systemPrompt");
   assert.equal(sentSysPrompt.includes("未来三个月要不要换工作？"), false, "Previous question must not linger in systemPrompt");
-  assert.ok(sentSysPrompt.includes("直断破局"), "Selected skillMode ('direct') must be injected into outgoing systemPrompt");
+  assert.ok(sentSysPrompt.includes("奥莉薇娅"), "The built-in persona must be injected into outgoing systemPrompt");
+  assert.equal(sentSysPrompt.includes("直断破局"), false, "Legacy skill-mode directives must no longer reach the model");
   assert.ok(sentSysPrompt.includes("抉择意图路由"), "Skills router must detect decision intent from saved inline question");
 
   // Clearing a question on a record that originally had rec.question must override rec.question with "" and revert auto-title to spread base

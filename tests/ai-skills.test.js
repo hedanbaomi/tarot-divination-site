@@ -47,20 +47,20 @@ const env = loadDivinationEnvironment();
 const aiSkills = env.DivinationAiSkills;
 const aiContext = env.DivinationAiContext;
 
-test("SKILL_MODES and normalizeSkillMode validate canonical orchestration modes", () => {
+test("SKILL_MODES exposes the single built-in persona; legacy modes normalize to auto", () => {
   assert.equal(Array.isArray(aiSkills.SKILL_MODES), true);
   assert.deepEqual(
     aiSkills.SKILL_MODES.map((m) => m.id),
-    ["auto", "direct", "deep", "action"]
+    ["auto"]
   );
   for (const mode of aiSkills.SKILL_MODES) {
     assert.ok(mode.labelZh && mode.labelEn && mode.descZh && mode.descEn);
   }
 
   assert.equal(aiSkills.normalizeSkillMode("auto"), "auto");
-  assert.equal(aiSkills.normalizeSkillMode(" DIRECT "), "direct");
-  assert.equal(aiSkills.normalizeSkillMode("Deep"), "deep");
-  assert.equal(aiSkills.normalizeSkillMode("action"), "action");
+  assert.equal(aiSkills.normalizeSkillMode(" DIRECT "), "auto");
+  assert.equal(aiSkills.normalizeSkillMode("Deep"), "auto");
+  assert.equal(aiSkills.normalizeSkillMode("action"), "auto");
   assert.equal(aiSkills.normalizeSkillMode("invalid-mode"), "auto");
   assert.equal(aiSkills.normalizeSkillMode(null), "auto");
   assert.equal(aiSkills.normalizeSkillMode({}), "auto");
@@ -460,8 +460,7 @@ test("detectRegister and routeSkills handle mundane/esoteric switching, all 5 in
     messages: [{ role: "user", content: "Give me the straight verdict: what is the most central tension and momentum here?" }]
   });
   assert.equal(blindRouteEn.intent, "open-snapshot");
-  assert.equal(blindRouteEn.skillMode, "direct");
-  assert.ok(blindRouteEn.activeSkills.some((s) => s.id === "skill-mode-direct"));
+  assert.equal(blindRouteEn.skillMode, "auto", "legacy direct collapses onto the single persona mode");
   assert.ok(blindRouteEn.promptBlock.includes("Blind Reading / No-Question Protocol"));
 
   // Starters 2 (both updated & legacy wording) & 3 on questionless spreads must also trigger open-snapshot
@@ -522,14 +521,12 @@ test("detectRegister and routeSkills handle mundane/esoteric switching, all 5 in
 
   const esoRoute = aiSkills.routeSkills({
     locale: "zh-CN",
-    skillMode: "deep",
     resolvedReadings: [innerWorkRec],
     messages: [{ role: "user", content: "请深入分析内在接触状态" }]
   });
   assert.equal(esoRoute.register, "esoteric");
   assert.equal(esoRoute.intent, "predicament");
   assert.ok(esoRoute.promptBlock.includes("神秘学实修语域激活"));
-  assert.ok(esoRoute.promptBlock.includes("全局深剖"));
 
   // 4. Relationship + health layout + multi-turn follow-up drilldown
   const healthRelRec = aiContext.resolveReadingDetails({

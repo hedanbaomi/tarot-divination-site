@@ -7,7 +7,10 @@
   var BACKUP_FORMAT = "quareia-ai-chats-backup";
   var BACKUP_VERSION = 1;
   var MAX_BACKUP_BYTES = 8 * 1024 * 1024;
-  var VALID_SKILL_MODES = ["auto", "direct", "deep", "action"];
+  // auto is the only live mode; direct/deep/action stay valid so old conversations,
+  // backups and exports keep the user's original preference instead of losing it.
+  var LEGACY_SKILL_MODES = ["direct", "deep", "action"];
+  var VALID_SKILL_MODES = ["auto"].concat(LEGACY_SKILL_MODES);
 
   function trimString(value) {
     return typeof value === "string" ? value.trim() : "";

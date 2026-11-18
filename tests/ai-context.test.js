@@ -472,7 +472,8 @@ test("formatReadingsForPrompt and buildSystemPrompt compile distilled cues, stri
   assert.equal(/rule out|unrecommended|直接排除/i.test(enMd), false, "Must not stamp static exclusion Filter Rule onto non-zero cards");
 
   const modes = aiContext.getSkillModes();
-  assert.deepEqual(modes.map((m) => m.id), ["auto", "direct", "deep", "action"]);
+  assert.deepEqual(modes.map((m) => m.id), ["auto"]);
+  assert.equal(modes[0].labelZh, "奥莉薇娅");
 
   const previewFollowUp = aiContext.previewActiveSkills({
     locale: "zh-CN",
@@ -485,9 +486,9 @@ test("formatReadingsForPrompt and buildSystemPrompt compile distilled cues, stri
       { role: "user", content: "那接下来一周我具体该怎么补救？" }
     ]
   });
-  assert.equal(previewFollowUp.skillMode, "action");
+  assert.equal(previewFollowUp.skillMode, "auto");
   assert.equal(previewFollowUp.isFollowUp, true);
-  assert.ok(previewFollowUp.activeSkills.some((s) => s.id === "skill-mode-action"));
+  assert.equal(previewFollowUp.activeSkills.some((s) => s.id === "skill-mode-action"), false);
   assert.ok(previewFollowUp.activeSkills.some((s) => s.id === "skill-followup-drilldown"));
 
   // When hasUninterpretedReading is true (e.g., reading attached after prior casual turn, or 2nd spread newly attached), isFollowUp must stay false
@@ -514,7 +515,8 @@ test("formatReadingsForPrompt and buildSystemPrompt compile distilled cues, stri
       { role: "user", content: "那接下来一周我具体该怎么补救？" }
     ]
   });
-  assert.ok(sysActionPrompt.includes("现实处方"));
+  assert.ok(sysActionPrompt.includes("奥莉薇娅"));
+  assert.equal(sysActionPrompt.includes("现实处方"), false, "Legacy action mode must not leak into the prompt");
   assert.ok(sysActionPrompt.includes("开窗深挖"));
   assert.ok(sysActionPrompt.includes("自然、精准地使用牌位名、牌名及关键概念词"));
   assert.equal(sysActionPrompt.includes("- 本阵解牌动线："), false, "buildSystemPrompt must deduplicate per-reading circuit hint when skill-spread-topology is active");

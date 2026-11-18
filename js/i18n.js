@@ -614,16 +614,10 @@
       ,"ai.chatChangedMsg": "其他标签页已修改此对话，已载入最新内容。请确认后重试。"
       ,"ai.saveFailedTitle": "保存失败"
       ,"ai.saveFailedMsg": "无法保存对话，请检查存储空间后重试。"
-      ,"ai.skillModeLabel": "解牌风格"
-      ,"ai.skillModeAria": "选择 AI 解牌技法编排风格"
-      ,"ai.skillMode.auto": "智能编排"
-      ,"ai.skillMode.direct": "直断破局"
-      ,"ai.skillMode.deep": "全局深剖"
-      ,"ai.skillMode.action": "现实处方"
-      ,"ai.skillModeHint.auto": "按牌阵拓扑、牌组特性、问题意图与追问轮次自动组合内置技法"
-      ,"ai.skillModeHint.direct": "开门见山先拍板核心结论与最关键的破局抓手"
-      ,"ai.skillModeHint.deep": "沿牌阵轴线深挖深层因果、移位共振与潜在暗流"
-      ,"ai.skillModeHint.action": "聚焦当事人可控位置、止损边界与接地气的现实步骤"
+      ,"ai.skillModeLabel": "解牌人格"
+      ,"ai.skillModeAria": "选择 AI 解读人格"
+      ,"ai.skillMode.auto": "奥莉薇娅"
+      ,"ai.skillModeHint.auto": "内置人格包：塔罗咨询师 · 非暴力沟通 · 牌面镜像"
       ,"ai.activeSkillsLabel": "已挂载技法"
       ,"ai.activeSkillsNone": "自由对话（附加排盘后自动挂载专属占卜技法）"
       ,"ai.questionPrefix": "所问："
@@ -1239,16 +1233,10 @@
       "ai.chatChangedMsg": "Another tab changed this conversation. The latest messages have been loaded; review them and retry.",
       "ai.saveFailedTitle": "Save Failed",
       "ai.saveFailedMsg": "Could not save the conversation. Check available storage and retry.",
-      "ai.skillModeLabel": "Style",
-      "ai.skillModeAria": "Choose AI reading skill orchestration mode",
-      "ai.skillMode.auto": "Auto",
-      "ai.skillMode.direct": "Direct",
-      "ai.skillMode.deep": "Deep",
-      "ai.skillMode.action": "Action",
-      "ai.skillModeHint.auto": "Automatically mounts built-in skills by spread topology, deck, intent, and turn",
-      "ai.skillModeHint.direct": "Leads with a direct verdict and the single decisive turning point",
-      "ai.skillModeHint.deep": "Traces cross-axis causality, displacement circuits, and hidden currents",
-      "ai.skillModeHint.action": "Focuses on controllable positions, boundaries, and concrete next steps",
+      "ai.skillModeLabel": "Reader",
+      "ai.skillModeAria": "Choose the AI reading persona",
+      "ai.skillMode.auto": "Olivia",
+      "ai.skillModeHint.auto": "Built-in persona: tarot counselor with an NVC backbone",
       "ai.activeSkillsLabel": "Active Skills",
       "ai.activeSkillsNone": "Free chat (attach a reading to auto-mount Quareia skills)",
       "ai.questionPrefix": "Question: ",

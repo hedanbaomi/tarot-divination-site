@@ -13,32 +13,40 @@
       "page.description": "Quareia 占卜：支持塔罗、Mystagogus（M 牌）与 LXXXI 魔法牌，轻点牌堆抽牌，翻牌解读，预设牌阵与正逆位模式。",
       "site.title": "Quareia 占卜",
       "site.subtitle": "QUAREIA DIVINATION · 塔罗 / Mystagogus / LXXXI",
+    "nav.settings": "设置",
+    "deck.kicker": "抽牌",
+    "spread.kicker": "牌阵",
+    "results.kicker": "解读",
+    "footer.aboutTitle": "关于本站",
+    "footer.licenseTitle": "授权与署名",
+    "footer.privacyTitle": "隐私与统计",
       "language.switch": "EN",
       "language.switchLabel": "Switch to English",
-      "menu.openLabel": "打开菜单",
-      "menu.closeLabel": "关闭菜单",
-      "menu.kicker": "应用菜单",
-      "menu.title": "菜单",
-      "menu.actionsLabel": "应用菜单",
-      "menu.language": "语言",
-      "menu.about": "关于 / 版权",
       "history.open": "占卜历史",
-      "home.quoteKicker": "作者附言",
-      "home.quote": "while digital tools for readings can be useful in an emergency, the interaction between the physical hands of the reader touching and shuffling the deck is safer, a lot more accurate and far more powerful",
-      "home.quoteCite": "— Josephine McCarthy",
-      "home.quoteTranslation": "中文参考译文：「虽然数字占卜工具在紧急情况下可能会有用，但占卜师用双手亲自接触和洗牌的互动更安全，准确度也更高，且力量强大得多。」原文以英文为准。",
-      "telemetry.kicker": "隐私说明",
-      "telemetry.title": "匿名使用统计",
-      "telemetry.firstLaunchNotice": "本应用默认启用匿名使用统计，用于了解活跃设备数量和功能使用情况。统计内容包括应用版本、语言、牌组和抽牌数量，以及 AI 模型 ID、Token 用量和对话轮数；不收集问题、具体抽牌结果或本地历史。服务端会临时读取连接IP，用于限流和防止滥用。对于网络地址和地理位置数据，统计数据库仅保存由 Cloudflare 根据连接IP推断的国家代码、一级行政区代码和名称，不保存原始IP、IP摘要、城市或更精确的位置。这些位置字段可能缺失或存在偏差，不代表用户的真实居住地。可在“关于 / 版权”页面随时关闭。",
-      "telemetry.manage": "打开隐私设置",
-      "telemetry.acknowledge": "知道了",
-      "settings.title": "抽牌设置",
+      "announcement.open": "公告",
+      "announcement.kicker": "PUBLIC ANNOUNCEMENTS",
+      "announcement.title": "公告",
+      "announcement.closeLabel": "关闭公告",
+      "announcement.listAria": "公告列表",
+      "announcement.empty": "暂无公告。",
+      "announcement.cached": "当前显示最近成功缓存的公告。",
+      "announcement.severity.info": "提示",
+      "announcement.severity.important": "重要",
+      "announcement.severity.update": "更新",
+      "announcement.openAction": "了解详情",
+      "announcement.updateAction": "查看更新",
+      "settings.title": "高级设置",
       "settings.theme": "界面主题",
       "settings.themeAria": "选择界面主题",
       "theme.celestial": "星夜秘境",
       "theme.parchment": "羊皮纸晨光",
       "theme.ember": "余烬圣堂",
       "theme.grove": "密林祭坛",
+      "theme.groveLight": "密林祭坛（明亮版）",
+    "theme.jade": "青玉纸",
+    "theme.dusk": "暮紫",
+    "theme.ash": "素灰",
+    "theme.toggle": "轻点月亮切换界面主题", "egg.wake": "它睁开了眼睛", "egg.sleep": "它闭上了眼睛",
       "settings.deck": "牌组",
       "deck.tarotOption": "塔罗牌（Rider–Waite）",
       "deck.mystagogusOption": "M 牌（Mystagogus）",
@@ -47,6 +55,9 @@
       "mode.upright": "全正位",
       "mode.mixed": "正逆位混合",
       "settings.layoutMode": "布局方式",
+      "settings.pageVersion": "页面版本",
+      "settings.useClassic": "切回旧版",
+      "settings.useModern": "切回新版",
       "layout.preset": "预设牌阵",
       "layout.freeform": "自由画板",
       "settings.arcana": "牌组筛选",
@@ -173,8 +184,14 @@
       "customSpread.downloadFailed": "当前环境无法保存分享码文件，请复制分享码。",
       "customSpread.downloaded": "分享码文件已开始保存。",
       "deck.heading": "牌堆",
+    "table.title": "牌桌",
+    "table.dragHint": "左右拖动翻看牌堆 · 轻点任意一张牌",
+    "spread.settings": "牌阵设置",
+    "spread.settingsClose": "关闭牌阵设置",
       "deck.initialRemaining": "剩 78 张",
       "deck.shuffle": "洗牌",
+    "deck.prev": "往前翻一张牌",
+    "deck.next": "往后翻一张牌",
       "deck.initialCta": "轻点环绕四周的任意一张牌，把它抽进中央牌阵",
       "deck.initialAria": "环形牌堆，轻点任意一张抽牌",
       "deck.switch": "切换牌组",
@@ -186,10 +203,10 @@
       "spread.guide": "牌位说明",
       "spread.gridAria": "抽取的牌按所选牌阵自动排列",
       "results.title": "解读结果",
-      "history.kicker": "APP HISTORY",
+      "history.kicker": "LOCAL HISTORY",
       "history.title": "占卜历史",
       "history.closeLabel": "关闭占卜历史",
-      "history.privacy": "占卜记录仅保存在本应用的本地存储中。卸载应用、清除应用数据或更换设备可能导致记录丢失；可导出 JSON 自行备份。本应用不会上传、追踪或收集你的占卜历史；匿名使用统计也不包含历史内容。",
+      "history.privacy": "数据仅保存在当前浏览器。清除网站数据、使用无痕模式、换设备或换浏览器都可能导致记录丢失；可导出 JSON 自行备份。本站不会上传历史，也不做遥测或追踪。",
       "history.filterLabel": "按牌组筛选",
       "history.filterAll": "全部牌组",
       "history.filterTarot": "塔罗牌",
@@ -205,6 +222,13 @@
       "history.detailTitle": "占卜记录详情",
       "history.delete": "删除这条记录",
       "footer.note": "塔罗牌意参考《21世纪的塔罗技能》与 Quareia 语境；M 牌关键词译自 Josephine McCarthy《Mystagogus》；LXXXI 牌意参考其英文说明书 · 仅供娱乐，请理性看待占卜结果",
+      "footer.srcTarotTag": "塔罗",
+      "footer.srcTarot": "牌意参考《21 世纪的塔罗技能》与 Quareia 语境",
+      "footer.srcMTag": "M 牌",
+      "footer.srcM": "关键词译自 Josephine McCarthy《Mystagogus》",
+      "footer.srcLxxxiTag": "LXXXI",
+      "footer.srcLxxxi": "牌意参考其英文说明书",
+      "footer.funNote": "仅供娱乐，请理性看待占卜结果。",
       "attribution.status": "本站为非官方工具，不暗示 Quareia 或作者为项目背书。书面许可覆盖网站与 Android，并于 2026-08-05 扩展至微信小程序；非商业限制只针对 Mystagogus/LXXXI 牌面、牌意、翻译、牌阵及相关授权材料。这些材料不得出售、设置付费墙或付费解锁、单独商业分发、转授权或纳入软件许可；商业利用须另行授权。该限制不是对用户原创软件、基础设施或无关服务的一般性商业禁令，也不代表任何具体商业模式已获批准。",
       "attribution.mystagogusLabel": "Mystagogus 牌面与相关文本",
       "attribution.mystagogusRights": "© Josephine McCarthy",
@@ -213,7 +237,9 @@
       "attribution.quareiaLink": "Quareia 官网",
       "attribution.quoteCite": "— Josephine McCarthy",
       "attribution.quoteZh": "（中文参考译文：「虽然数字占卜工具在紧急情况下可能会有用，但占卜师用双手亲自接触和洗牌的互动更安全，准确度也更高，且力量强大得多。」原文以英文为准。）",
-      "privacy.analytics": "本站使用 Cloudflare Web Analytics 统计匿名访问量与页面性能，不收集邮箱、占卜内容、抽牌结果或本地历史记录。",
+      "privacy.analytics": "本站使用匿名浏览器标识，将访问量、活跃浏览器、完成解牌次数、AI 模型 ID / Token 用量 / 对话轮数及国家/省州级地区分布汇总至与手机端共用的统计后台，可随时关闭；另使用 Cloudflare Web Analytics 统计访问量与页面性能。不收集邮箱、占卜内容、抽牌结果或本地历史记录。",
+      "privacy.telemetryDisable": "关闭统一使用统计",
+      "privacy.telemetryEnable": "开启统一使用统计",
       "source.tarot": "参考《21世纪的塔罗技能》与 Quareia 训练语境整理",
       "source.mystagogus": "参考 Josephine McCarthy《Mystagogus》关键词索引与 Quareia 体系整理",
       "source.lxxxi": "参考《LXXXI 奎瑞亚魔法牌·牌意说明书》整理翻译",
@@ -263,6 +289,7 @@
       "app.revealedAria": "位置 {number} · {position}{layer} · {card} · {orientation}。轻点查看牌意",
       "app.meaningAria": "位置 {number} · {position}{layer} · {card}的牌意。轻点返回牌面",
       "app.meaningTitle": "牌意",
+  "app.meaningClose": "关闭",
       "app.meaningHint": "轻点任意已开牌可翻到牌意面，再次轻点返回牌面。",
       "app.removeCardAria": "移除位置 {number}的这张牌",
       "app.removeLayerAria": "移除位置 {number}的{layer}",
@@ -300,6 +327,7 @@
       "confirm.kicker": "牌阵变更",
       "confirm.title": "当前牌阵尚未清空",
       "confirm.cancel": "保留牌阵",
+      "confirm.keep": "保留",
       "confirm.proceed": "清空并洗牌",
       "choice.kicker": "纸牌选择",
       "choice.title": "请选择",
@@ -320,359 +348,325 @@
       "history.hideActualLayout": "收起实际摆放",
       "history.actualLayoutAria": "完整牌位实际摆放",
       "history.actualLayoutHint": "已按记录中的牌位重新摆放；轻点任意牌面可翻转查看牌意，再次轻点返回牌面。",
-      "history.unavailableSave": "本机无法保存历史；占卜仍可正常使用。",
-      "history.unavailable": "本机无法访问本地存储，历史不可用；占卜功能不受影响。",
+      "history.unavailableSave": "当前浏览器无法保存历史；占卜仍可正常使用。",
+      "history.unavailable": "当前浏览器无法访问 IndexedDB，历史不可用；占卜功能不受影响。",
       "history.saveSnapshotError": "自动保存失败；占卜结果仍保留在当前页面。",
       "history.saving": "正在自动保存占卜历史…",
-      "history.saveUnavailable": "自动保存失败；本机无法使用本地历史。",
+      "history.saveUnavailable": "自动保存失败；当前浏览器无法使用本地历史。",
       "history.duplicate": "这次完整占卜刚刚已经自动保存，无需重复保存。",
-      "history.saved": "开牌完成，已自动保存到本机占卜历史。",
+      "history.saved": "开牌完成，已自动保存到当前浏览器的占卜历史。",
       "history.deleted": "已删除这条历史记录。",
       "history.deleteFailed": "删除失败，请稍后再试。",
       "history.deleteConfirm": "确定删除这条占卜历史吗？此操作无法撤销。",
-      "history.clearConfirm": "确定清空本机中的全部占卜历史吗？此操作无法撤销。",
+      "history.clearConfirm": "确定清空当前浏览器中的全部占卜历史吗？此操作无法撤销。",
       "history.confirmKicker": "本地历史",
       "history.confirmTitle": "删除占卜记录？",
       "history.confirmCancel": "保留记录",
       "history.confirmProceed": "确认删除",
       "history.cleared": "全部历史记录已清空。",
       "history.clearFailed": "清空失败，请稍后再试。",
-      "history.exported": "已导出 JSON 备份：{fileName}。",
+      "history.exported": "已下载 JSON 备份：{fileName}。请在浏览器下载列表或“下载”文件夹中查看。",
       "history.exportChoosing": "正在打开保存位置，请在系统窗口中选择文件夹：{fileName}",
       "history.exportedTo": "已保存 JSON 备份：{fileName}，位置为你刚刚选择的文件夹。",
       "history.exportCancelled": "已取消导出，历史记录没有改变。",
       "history.exportFailed": "导出失败，请稍后再试。",
       "history.imported": "已导入 {count} 条历史记录。",
       "history.remapped": " {count} 条重复 ID 已安全重编号。",
-      "history.importFailed": "导入失败：文件格式不正确或内容已损坏。",
-      "freeBoard.settingsSummary": "自由画板：可从当前牌组与筛选结果中任意抽牌，不设固定牌位或目标张数。",
-      "freeBoard.title": "自由画板",
-      "freeBoard.toolbarAria": "自由画板控制",
-      "freeBoard.undo": "撤销",
-      "freeBoard.undoAria": "撤销上一次自由画板操作",
-      "freeBoard.redo": "重做",
-      "freeBoard.redoAria": "重做上一次自由画板操作",
-      "freeBoard.revealAll": "全部开牌",
-      "freeBoard.revealAllAria": "翻开自由画板上的所有卡牌",
-      "freeBoard.resetView": "重置视图",
-      "freeBoard.resetViewAria": "将自由画板平移和缩放重置为默认",
-      "freeBoard.shuffle": "洗牌",
-      "freeBoard.shuffleAria": "清空自由画板并重新洗牌",
-      "freeBoard.clearAndDiscard": "清空画板并放弃草稿",
-      "freeBoard.clearAndDiscardAria": "清空自由画板并删除已保存草稿",
-      "freeBoard.boardAria": "自由画板，可拖动画板与卡牌，双指或滚轮缩放",
-      "freeBoard.worldAria": "自由画板上的卡牌",
-      "freeBoard.selectedControlsAria": "所选卡牌控制",
-      "freeBoard.pileTitle": "待抽牌堆",
-      "freeBoard.pileAria": "自由画板待抽牌堆，可任意选择一张",
-      "freeBoard.drawAria": "待抽牌堆第 {index} 张，共 {count} 张，轻点抽到自由画板",
-      "freeBoard.faceDown": "牌背",
-      "freeBoard.meaning": "牌意",
-      "freeBoard.revealed": "已开牌",
-      "freeBoard.unrevealed": "未开牌",
-      "freeBoard.cardAria": "{card}，{state}{orientation}。拖动改变位置，轻点选中",
-      "freeBoard.selectedControls": "当前选择：{card}",
-      "freeBoard.drawOrder": "牌位{order}",
-      "freeBoard.cardsDrawn": "已放置 {count} 张",
-      "freeBoard.remaining": "待抽 {count} 张",
-      "freeBoard.status": "已放置 {cards} 张 · 待抽 {remaining} 张",
-      "freeBoard.hint": "在扇形的牌堆里双击一张牌，它就落到画板上；拖动卡牌改变位置，长按卡牌可以转动它的角度。需要开牌时用“全部开牌”。",
-      "freeBoard.rotateMinus15": "−15°",
-      "freeBoard.rotateMinus15Aria": "逆时针旋转当前卡牌 15 度",
-      "freeBoard.rotatePlus15": "＋15°",
-      "freeBoard.rotatePlus15Aria": "顺时针旋转当前卡牌 15 度",
-      "freeBoard.rotateMinus90": "−90°",
-      "freeBoard.rotateMinus90Aria": "逆时针旋转当前卡牌 90 度",
-      "freeBoard.rotatePlus90": "＋90°",
-      "freeBoard.rotatePlus90Aria": "顺时针旋转当前卡牌 90 度",
-      "freeBoard.bringFront": "置于顶层",
-      "freeBoard.bringFrontAria": "将当前卡牌置于最上层",
-      "freeBoard.showMeaning": "显示牌意",
-      "freeBoard.showMeaningAria": "查看当前已开牌的牌意",
-      "freeBoard.hideMeaning": "显示牌面",
-      "freeBoard.hideMeaningAria": "返回查看当前卡牌牌面",
-      "freeBoard.remove": "移除／回牌堆",
-      "freeBoard.removeAria": "移除当前卡牌并放回待抽牌堆",
-      "freeBoard.draftInvalid": "保存的自由画板草稿无效，已安全忽略。",
-      "freeBoard.draftSaveFailed": "自由画板草稿保存失败；当前画板仍可继续使用。",
-      "freeBoard.draftDiscarded": "自由画板草稿已丢弃。",
-      "freeBoard.saving": "正在自动保存自由画板历史…",
-      "freeBoard.saved": "自由画板已自动保存到占卜历史。",
-      "freeBoard.duplicate": "这份自由画板刚刚已经保存，无需重复保存。",
-      "freeBoard.saveFailed": "自由画板历史保存失败；画板仍保留在当前页面。",
-      "freeBoard.saveUnavailable": "本机无法保存历史；自由画板仍可正常使用。",
-      "history.freeBoard": "自由画板",
-      "history.freeBoardDetail": "自由画板记录",
-      "history.freeBoardPreview": "自由画板空间重建（只读）",
-      "history.freeBoardHidden": "牌背（未开牌）",
-      "history.freeBoardRevealed": "已开牌 · {orientation}",
-      "history.freeBoardCardState": "{card} · {state}",
-      "history.savingFreeBoard": "正在保存自由画板历史…",
-      "history.savedFreeBoard": "自由画板已保存到本机占卜历史。",
-      "history.duplicateFreeBoard": "这份自由画板刚刚已经保存，无需重复保存。",
-      "nav.settings": "设置",
-      "deck.kicker": "抽牌",
-      "spread.kicker": "牌阵",
-      "results.kicker": "解读",
-      "footer.aboutTitle": "关于本站",
-      "footer.licenseTitle": "授权与署名",
-      "footer.privacyTitle": "隐私与统计",
-      "theme.groveLight": "密林祭坛（明亮版）",
-      "theme.jade": "青玉纸",
-      "theme.dusk": "暮紫",
-      "theme.ash": "素灰",
-      "theme.toggle": "轻点月亮切换界面主题",
-      "egg.wake": "它睁开了眼睛",
-      "egg.sleep": "它闭上了眼睛",
-      "settings.pageVersion": "页面版本",
-      "settings.useClassic": "切回旧版",
-      "settings.useModern": "切回新版",
-      "table.title": "牌桌",
-      "table.dragHint": "左右拖动翻看牌堆 · 轻点任意一张牌",
-      "spread.settings": "牌阵设置",
-      "spread.settingsClose": "关闭牌阵设置",
-      "deck.prev": "往前翻一张牌",
-      "deck.next": "往后翻一张牌",
-      "footer.srcTarotTag": "塔罗",
-      "footer.srcTarot": "牌意参考《21 世纪的塔罗技能》与 Quareia 语境",
-      "footer.srcMTag": "M 牌",
-      "footer.srcM": "关键词译自 Josephine McCarthy《Mystagogus》",
-      "footer.srcLxxxiTag": "LXXXI",
-      "footer.srcLxxxi": "牌意参考其英文说明书",
-      "footer.funNote": "仅供娱乐，请理性看待占卜结果。",
-      "app.meaningClose": "关闭",
-      "confirm.keep": "保留",
-      "freeBoard.open": "自由画板",
-      "freeBoard.backToPreset": "返回预设牌阵",
-      "freeBoard.openHint": "牌堆以扇形摊在桌上，不套用任何牌阵，想抽哪张抽哪张。",
-      "freeBoard.cardHiddenAria": "第 {index} 张牌，未翻开",
-      "freeBoard.slotName": "自由牌位",
-      "freeBoard.angleTitle": "角度",
-      "freeBoard.drawnAria": "已抽出的牌",
-      "history.openInAi": "去 AI 解牌",
-      "privacy.ai": "AI 密钥与聊天记录只保存在本机，请求直连你配置的模型接口。开启匿名使用统计时，会发送模型 ID、接口回传的 Token 用量和对话轮数；后台不接收密钥、接口地址、问题或回答内容。",
-      "ai.open": "AI 解牌",
-      "ai.pageTitle": "AI 辅助解牌 · Quareia 占卜",
-      "ai.title": "AI 辅助解牌",
-      "ai.subtitle": "基于应用内牌意 · 仅限非自由画板历史",
-      "ai.chatsMenu": "对话",
-      "ai.sidebarToggleAria": "打开对话列表",
-      "ai.sidebarAria": "AI 对话历史",
-      "ai.backToReading": "返回占卜",
-      "ai.settingsOpen": "API 设置",
-      "ai.newChat": "+ 新建对话",
-      "ai.searchPlaceholder": "搜索对话标题、问题或聊天内容",
-      "ai.untitledChat": "新解牌对话",
-      "ai.archivedBadge": "已归档",
-      "ai.pickReadings": "+ 选择占卜历史",
-      "ai.rename": "重命名",
-      "ai.exportMd": "导出 Markdown",
-      "ai.archive": "归档",
-      "ai.unarchive": "取消归档",
-      "ai.delete": "删除",
-      "ai.pin": "置顶",
-      "ai.unpin": "取消置顶",
-      "ai.pinned": "已置顶",
-      "ai.exportBackup": "导出备份",
-      "ai.err.incomplete": "连接在回答完成前结束，已保留收到的内容。请重试或继续追问。",
-      "ai.archiveTooLargeTitle": "备份超过导入上限",
-      "ai.archiveTooLargeMsg": "全部对话的 JSON 备份超过 8 MiB，无法通过本页面恢复。可改为导出全部对话的 Markdown 存档，保留聊天正文、回答提示与占卜摘要供阅读。Markdown 存档不能导入聊天列表。",
-      "ai.exportArchive": "导出 Markdown 存档",
-      "ai.storageMemoryWarning": "无法访问聊天存储，本次聊天仅保存在内存中。刷新或离开页面会丢失本次聊天，请先导出备份。",
-      "ai.importTooLarge": "AI 对话备份不能超过 8 MiB。请选择较小的备份文件。",
-      "ai.err.truncated": "已达到模型输出上限，回答可能不完整。可以继续追问，或在 API 设置中提高最大输出 Token。",
-      "ai.err.blocked": "模型的内容策略拦截了本次回答，已保留收到的内容。请调整问题后重试。",
-      "ai.err.invalidResponse": "接口返回了无法识别的响应，请检查接口地址或中转服务：{detail}",
-      "ai.importBackup": "导入备份",
-      "ai.clearArchived": "清空已归档",
-      "ai.clearActive": "清空进行中",
-      "ai.tabActiveCount": "进行中 ({count})",
-      "ai.tabArchivedCount": "已归档 ({count})",
-      "ai.noMatchingChats": "没有匹配的对话记录。",
-      "ai.noArchivedChats": "暂无已归档对话。",
-      "ai.noActiveChats": "暂无对话，点击上方「新建对话」开始。",
-      "ai.chatMetaSummary": "{readings} 条占卜 · {messages} 条消息",
-      "ai.promptPlaceholder": "输入你的困惑或追问（Enter 发送，Shift+Enter 换行）",
-      "ai.medicalNoticeTitle": "医疗相关提示（应用说明，非 AI 回复）",
-      "ai.medicalNoticeBody": "牌义与 AI 解读不能确认疾病、判断病情轻重或预测自愈，也不能替代诊断、检查与治疗。请勿据此延误就医或自行停药、改变治疗方案；如有健康疑虑，请咨询医疗专业人士。",
-      "ai.disclaimer": "免责声明：AI 解读可能存在错误或偏差，仅供个人反思与参考，不代表事实或对未来的保证，不能替代医疗、心理、法律或财务等专业意见。涉及健康、安全及其他重要决定，请核实实际情况并咨询合格专业人士。",
-      "ai.send": "发送",
-      "ai.stop": "停止",
-      "ai.pickerTitle": "选择占卜历史（仅非自由画板）",
-      "ai.pickerHint": "支持多选。已自动过滤自由画板记录；卡片仅展示摘要信息，后台将准确注入牌阵牌位、叠牌因果关系与对应应用内牌意。",
-      "ai.pickerSearchPlaceholder": "按问题、牌阵名或牌名筛选",
-      "ai.deckAll": "全部牌组",
-      "ai.pickerClear": "清空已选",
-      "ai.pickerApplyCount": "确定附加 ({count})",
-      "ai.pickerEmpty": "没有找到可选的非自由画板占卜记录。请先在首页使用固定牌阵或自定义牌阵完成一次占卜并保存历史。",
-      "ai.renameTitle": "重命名对话",
-      "ai.renameLabel": "对话标题",
-      "ai.save": "保存",
-      "ai.cancel": "取消",
-      "ai.close": "关闭",
-      "ai.ok": "确定",
-      "ai.settingsTitle": "模型接口与 API Key 设置",
-      "ai.newProfile": "+ 新增配置",
-      "ai.deleteProfile": "删除配置",
-      "ai.newProfileDefaultName": "新模型配置",
-      "ai.lockedPromptNote": "系统提示词与内置 Quareia 解牌技法引擎已锁定（自动按牌组、牌阵电路与追问轮次挂载，依据应用内牌意推演且严禁照搬说明书），不可手动篡改，且不限制日常非占卜正常对话。",
-      "ai.presetLabel": "快速填入",
-      "ai.preset.deepseekFlash": "DeepSeek Flash",
-      "ai.preset.deepseekPro": "DeepSeek V4 Pro",
-      "ai.presetApplied": "已填入 {preset}；请确认此接口的 API Key 后保存。",
-      "ai.fieldName": "配置名称",
-      "ai.fieldFormat": "接口格式",
-      "ai.fieldBaseUrl": "Base URL（接口地址 / 代理地址）",
-      "ai.fieldApiKey": "静态 API Key（仅存本机，持续有效）",
-      "ai.fieldModel": "模型名称（Model ID）",
-      "ai.fieldVertexProject": "Vertex Project ID（Express Mode 可留空）",
-      "ai.fieldVertexLocation": "Vertex Location（如 global 或 us-central1）",
-      "ai.fieldTemperature": "Temperature（可选，0–2）",
-      "ai.fieldMaxTokens": "Max Tokens（可选）",
-      "ai.fieldContextWindow": "模型上下文窗口（Tokens，留空自动识别）",
-      "ai.contextWindowPlaceholder": "自动识别模型上下文大小",
-      "ai.contextWindowAutoPlaceholder": "自动识别（当前约 {count} tokens）",
-      "ai.detectContextWindow": "自动获取",
-      "ai.detectingContext": "正在获取模型上下文窗口大小…",
-      "ai.detectContextDone": "已从接口获取上下文窗口：{count} tokens",
-      "ai.detectContextCatalog": "接口未返回上下文长度，已使用模型目录：{count} tokens。代理限制可能不同，可手动覆盖。",
-      "ai.detectContextUnknown": "未能识别此模型的上下文窗口。当前使用 {count} tokens（{source}）；请按服务商说明手动填写。",
-      "ai.detectContextChanged": "配置已更改，请重新获取上下文窗口。",
-      "ai.contextWindowStatus": "当前生效上限：{count} tokens（来源：{source}）",
-      "ai.contextSource.manual": "手动指定",
-      "ai.contextSource.api": "接口实时获取",
-      "ai.contextSource.catalog": "模型目录识别",
-      "ai.contextSource.default": "默认保守估计",
-      "ai.fieldAutoCompress": "自动压缩早期上下文",
-      "ai.autoCompressHint": "接近模型上下文上限时自动摘要早期对话，并保留当前关联的占卜牌意与近期对话。",
-      "ai.contextMeter": "上下文约 {used} / {limit} tokens（{source}）",
-      "ai.contextMeterCompressed": " · 已压缩早期 {count} 条",
-      "ai.compressingStatus": "正在压缩早期对话上下文以保持完整牌意…",
-      "ai.testConnection": "测试连接",
-      "ai.saveActivate": "保存并启用",
-      "ai.profileUnconfigured": "未配置 API Key",
-      "ai.banner.needBoth": "请先配置大模型 API Key；如需辅助解牌，可从非自由画板占卜历史中选择一条或多条记录作为上下文，也可直接自由对话。",
-      "ai.banner.needKey": "尚未配置可用的模型 API Key。点击「API 设置」填写密钥并测试连接后即可开始对话。",
-      "ai.banner.needReading": "当前对话尚未附加占卜记录：可直接进行常规 AI 对话，或点击「选择占卜历史」传入固定/自定义牌阵与应用内牌意。",
-      "ai.noAttachedReadings": "未附加占卜记录（已自动过滤自由画板记录）",
-      "ai.readingSnapshotSaved": "已使用对话内保存的牌阵快照",
-      "ai.readingDeleted": "原记录已不在本地历史中",
-      "ai.removeReading": "移除此占卜记录",
-      "ai.emptyHeading": "AI 辅助解牌助手",
-      "ai.emptyDesc": "选择一条或多条非自由画板占卜记录后，系统会自动挂载对应的牌阵拓扑与牌组解牌技法（提纯意象底稿、告别照念说明书）。建议在上方卡片补充当时所问之事，或点击下方提问直接开始：",
-      "ai.roleUser": "你",
-      "ai.reasoningSummary": "思考过程 / 推理摘要",
-      "ai.saveAndResend": "保存并重新发送",
-      "ai.retry": "重试",
-      "ai.copy": "复制",
-      "ai.copied": "已复制",
-      "ai.editResend": "编辑并重发",
-      "ai.regenerate": "重新生成",
-      "ai.showKey": "显示",
-      "ai.hideKey": "隐藏",
-      "ai.format.openaiChat": "OpenAI Chat Completions (/v1/chat/completions)",
-      "ai.format.openaiResponses": "OpenAI Responses API (/v1/responses)",
-      "ai.format.anthropic": "Anthropic Messages (/v1/messages)",
-      "ai.format.geminiStudio": "Google Gemini AI Studio",
-      "ai.format.geminiVertex": "Google Gemini Vertex AI（仅静态 API Key）",
-      "ai.hint.openaiChat": "兼容 OpenAI、DeepSeek、OpenRouter、SiliconFlow 及符合 /v1/chat/completions 规范的代理地址；默认发送 Authorization: Bearer 请求头。",
-      "ai.hint.openaiResponses": "适用于 OpenAI 新版 Responses 接口 (/v1/responses)，请求体使用 instructions 与 input 字段。",
-      "ai.hint.anthropic": "适用于 Claude (/v1/messages)，自动附带 x-api-key、anthropic-version 与浏览器直连所需请求头。",
-      "ai.hint.geminiStudio": "使用 Google AI Studio API Key，自动请求 generativelanguage.googleapis.com 的 streamGenerateContent?alt=sse 接口。",
-      "ai.hint.geminiVertex": "仅使用静态 API Key (x-goog-api-key)，不提供 OAuth 登录。留空 Project ID 可直接用于 Vertex Express Mode；填写 Project ID 与 Location 则构造区域项目静态密钥接口。",
-      "ai.err.missingKey": "请填写 API Key",
-      "ai.err.missingModel": "请填写模型名称",
-      "ai.err.insecureUrl": "除本机 localhost 外 Base URL 必须使用 https://",
-      "ai.err.invalidUrl": "Base URL 格式无效",
-      "ai.settingsSaved": "配置已持久保存并设为当前启用方案。",
-      "ai.testingConnection": "正在测试接口连接…",
-      "ai.testSuccess": "连接成功（{model}），可保存使用。",
-      "ai.err.unknown": "请求失败",
-      "ai.err.auth": "鉴权失败，请检查 API Key、模型权限或 Vertex 接口设置：{detail}",
-      "ai.err.rateLimit": "触发频率或配额限制，请稍后重试：{detail}",
-      "ai.err.network": "网络或跨域请求失败，请检查网络、Base URL（HTTPS）或中转站 CORS 配置：{detail}",
-      "ai.stoppedEmpty": "已停止生成。",
-      "ai.confirmKicker": "AI 对话",
-      "ai.deleteChatTitle": "确认删除该对话？",
-      "ai.deleteChatMsg": "将永久移除「{title}」中的所有提问与解牌记录，无法恢复。",
-      "ai.clearArchivedTitle": "清空所有已归档对话？",
-      "ai.clearAllTitle": "清空当前进行中的对话？",
-      "ai.clearArchivedMsg": "此操作将删除所有已归档的 AI 对话，进行中的对话会保留。",
-      "ai.clearAllMsg": "此操作将清空所有进行中（非归档）对话，或建议先导出备份。",
-      "ai.clearConfirm": "确认清空",
-      "ai.deleteMsgTitle": "删除这条消息？",
-      "ai.deleteMsgDesc": "确认将该条发言从本地聊天记录中移除吗？",
-      "ai.backupKicker": "AI 备份",
-      "ai.importDoneTitle": "导入完成",
-      "ai.importDoneMsg": "已成功合并导入 {imported} 段对话（当前共 {total} 段）。",
-      "ai.importErrTitle": "导入失败",
-      "ai.importErrMsg": "文件格式不匹配，请选择本站导出的 AI 对话 JSON 备份文件。",
-      "ai.pageDescription": "结合 Quareia 应用内牌意与非自由画板占卜历史的 AI 辅助解牌对话工作台",
-      "ai.contextBarAria": "当前对话与占卜上下文",
-      "ai.deckTarot": "Quareia 塔罗",
-      "ai.clearConfig": "清除已存密钥",
-      "ai.clearConfigTitle": "清除所有已保存的 API Key？",
-      "ai.clearConfigMsg": "此操作将从当前设备移除所有已保存的模型配置与 API Key，但不会删除你的 AI 对话记录。",
-      "ai.clearConfigConfirm": "确认清除",
-      "ai.configCleared": "已清除本地保存的所有 API Key 与模型配置。",
-      "ai.exportedTo": "已导出：{fileName}",
-      "ai.exportCancelled": "已取消导出。",
-      "ai.exportFailed": "导出失败，请稍后重试。",
-      "ai.chatChangedTitle": "对话已更新",
-      "ai.chatChangedMsg": "其他标签页已修改此对话，已载入最新内容。请确认后重试。",
-      "ai.saveFailedTitle": "保存失败",
-      "ai.saveFailedMsg": "无法保存对话，请检查存储空间后重试。",
-      "ai.skillModeLabel": "解牌风格",
-      "ai.skillModeAria": "选择 AI 解牌技法编排风格",
-      "ai.skillMode.auto": "智能编排",
-      "ai.skillMode.direct": "直断破局",
-      "ai.skillMode.deep": "全局深剖",
-      "ai.skillMode.action": "现实处方",
-      "ai.skillModeHint.auto": "按牌阵拓扑、牌组特性、问题意图与追问轮次自动组合内置技法",
-      "ai.skillModeHint.direct": "开门见山先拍板核心结论与最关键的破局抓手",
-      "ai.skillModeHint.deep": "沿牌阵轴线深挖深层因果、移位共振与潜在暗流",
-      "ai.skillModeHint.action": "聚焦当事人可控位置、止损边界与接地气的现实步骤",
-      "ai.activeSkillsLabel": "已挂载技法",
-      "ai.activeSkillsNone": "自由对话（附加排盘后自动挂载专属占卜技法）",
-      "ai.questionPrefix": "所问：",
-      "ai.questionAdd": "+ 补充当时所问之事",
-      "ai.questionEdit": "修改问题",
-      "ai.questionPlaceholder": "补充当时抽牌的具体问题与时间范围（如：未来三个月跳槽是否合适）",
-      "ai.starter.core": "直说核心结论：这副牌眼下最核心的矛盾卡在哪？牌势正往哪边推？",
-      "ai.starter.action": "先一句话交代稳固的基本盘，再重点深挖我没意识到的盲点与破局抓手。",
-      "ai.starter.compare": "若关联了多条记录，请对比局势在时间线上的真实演变，看看哪些隐患正在缓解或加剧。"
+      "history.importFailed": "导入失败：文件格式不正确或内容已损坏。"
+      ,"freeBoard.settingsSummary": "自由画板：可从当前牌组与筛选结果中任意抽牌，不设固定牌位或目标张数。"
+      ,"freeBoard.title": "自由画板"
+      ,"freeBoard.open": "自由画板"
+      ,"freeBoard.backToPreset": "返回预设牌阵"
+      ,"freeBoard.openHint": "牌堆以扇形摊在桌上，不套用任何牌阵，想抽哪张抽哪张。", "freeBoard.cardHiddenAria": "第 {index} 张牌，未翻开", "freeBoard.cardAria": "第 {index} 张牌，{name}，{orientation}", "freeBoard.slotName": "自由牌位",
+  "freeBoard.angleTitle": "角度", "freeBoard.drawnAria": "已抽出的牌"
+      ,"freeBoard.toolbarAria": "自由画板控制"
+      ,"freeBoard.undo": "撤销"
+      ,"freeBoard.undoAria": "撤销上一次自由画板操作"
+      ,"freeBoard.redo": "重做"
+      ,"freeBoard.redoAria": "重做上一次自由画板操作"
+      ,"freeBoard.revealAll": "全部开牌"
+      ,"freeBoard.revealAllAria": "翻开自由画板上的所有卡牌"
+      ,"freeBoard.resetView": "重置视图"
+      ,"freeBoard.resetViewAria": "将自由画板平移和缩放重置为默认"
+      ,"freeBoard.shuffle": "洗牌"
+      ,"freeBoard.shuffleAria": "清空自由画板并重新洗牌"
+      ,"freeBoard.clearAndDiscard": "清空画板并放弃草稿"
+      ,"freeBoard.clearAndDiscardAria": "清空自由画板并删除已保存草稿"
+      ,"freeBoard.boardAria": "自由画板，可拖动画板与卡牌，双指或滚轮缩放"
+      ,"freeBoard.worldAria": "自由画板上的卡牌"
+      ,"freeBoard.selectedControlsAria": "所选卡牌控制"
+      ,"freeBoard.pileTitle": "待抽牌堆"
+      ,"freeBoard.pileAria": "自由画板待抽牌堆，可任意选择一张"
+      ,"freeBoard.drawAria": "待抽牌堆第 {index} 张，共 {count} 张，轻点抽到自由画板"
+      ,"freeBoard.faceDown": "牌背"
+      ,"freeBoard.meaning": "牌意"
+      ,"freeBoard.revealed": "已开牌"
+      ,"freeBoard.unrevealed": "未开牌"
+      ,"freeBoard.selectedControls": "当前选择：{card}"
+      ,"freeBoard.drawOrder": "牌位{order}"
+      ,"freeBoard.cardsDrawn": "已放置 {count} 张"
+      ,"freeBoard.remaining": "待抽 {count} 张"
+      ,"freeBoard.status": "已放置 {cards} 张 · 待抽 {remaining} 张"
+      ,"freeBoard.hint": "在扇形的牌堆里双击一张牌，它就落到画板上；拖动卡牌改变位置，长按卡牌可以转动它的角度。需要开牌时用“全部开牌”。"
+      ,"freeBoard.rotateMinus15": "−15°"
+      ,"freeBoard.rotateMinus15Aria": "逆时针旋转当前卡牌 15 度"
+      ,"freeBoard.rotatePlus15": "＋15°"
+      ,"freeBoard.rotatePlus15Aria": "顺时针旋转当前卡牌 15 度"
+      ,"freeBoard.rotateMinus90": "−90°"
+      ,"freeBoard.rotateMinus90Aria": "逆时针旋转当前卡牌 90 度"
+      ,"freeBoard.rotatePlus90": "＋90°"
+      ,"freeBoard.rotatePlus90Aria": "顺时针旋转当前卡牌 90 度"
+      ,"freeBoard.bringFront": "置于顶层"
+      ,"freeBoard.bringFrontAria": "将当前卡牌置于最上层"
+      ,"freeBoard.showMeaning": "显示牌意"
+      ,"freeBoard.showMeaningAria": "查看当前已开牌的牌意"
+      ,"freeBoard.hideMeaning": "显示牌面"
+      ,"freeBoard.hideMeaningAria": "返回查看当前卡牌牌面"
+      ,"freeBoard.remove": "移除／回牌堆"
+      ,"freeBoard.removeAria": "移除当前卡牌并放回待抽牌堆"
+      ,"freeBoard.draftInvalid": "保存的自由画板草稿无效，已安全忽略。"
+      ,"freeBoard.draftSaveFailed": "自由画板草稿保存失败；当前画板仍可继续使用。"
+      ,"freeBoard.draftDiscarded": "自由画板草稿已丢弃。"
+      ,"freeBoard.saving": "正在自动保存自由画板历史…"
+      ,"freeBoard.saved": "自由画板已自动保存到占卜历史。"
+      ,"freeBoard.duplicate": "这份自由画板刚刚已经保存，无需重复保存。"
+      ,"freeBoard.saveFailed": "自由画板历史保存失败；画板仍保留在当前页面。"
+      ,"freeBoard.saveUnavailable": "当前浏览器无法保存历史；自由画板仍可正常使用。"
+      ,"history.freeBoard": "自由画板"
+      ,"history.freeBoardDetail": "自由画板记录"
+      ,"history.freeBoardPreview": "自由画板空间重建（只读）"
+      ,"history.freeBoardHidden": "牌背（未开牌）"
+      ,"history.freeBoardRevealed": "已开牌 · {orientation}"
+      ,"history.freeBoardCardState": "{card} · {state}"
+      ,"history.savingFreeBoard": "正在保存自由画板历史…"
+      ,"history.savedFreeBoard": "自由画板已保存到当前浏览器的占卜历史。"
+      ,"history.duplicateFreeBoard": "这份自由画板刚刚已经保存，无需重复保存。"
+      ,"history.openInAi": "去 AI 解牌"
+      ,"privacy.ai": "AI 密钥与聊天记录只保存在本机，请求直连你配置的模型接口。开启匿名使用统计时，会发送模型 ID、接口回传的 Token 用量和对话轮数；后台不接收密钥、接口地址、问题或回答内容。"
+      ,"ai.open": "AI 解牌"
+      ,"ai.pageTitle": "AI 辅助解牌 · Quareia 占卜"
+      ,"ai.title": "AI 辅助解牌"
+      ,"ai.subtitle": "基于应用内牌意 · 仅限非自由画板历史"
+      ,"ai.chatsMenu": "对话"
+      ,"ai.sidebarToggleAria": "打开对话列表"
+      ,"ai.sidebarAria": "AI 对话历史"
+      ,"ai.backToReading": "返回占卜"
+      ,"ai.settingsOpen": "API 设置"
+      ,"ai.newChat": "+ 新建对话"
+      ,"ai.searchPlaceholder": "搜索对话标题、问题或聊天内容"
+      ,"ai.untitledChat": "新解牌对话"
+      ,"ai.archivedBadge": "已归档"
+      ,"ai.pickReadings": "+ 选择占卜历史"
+      ,"ai.rename": "重命名"
+      ,"ai.exportMd": "导出 Markdown"
+      ,"ai.archive": "归档"
+      ,"ai.unarchive": "取消归档"
+      ,"ai.delete": "删除"
+      ,"ai.pin": "置顶"
+      ,"ai.unpin": "取消置顶"
+      ,"ai.pinned": "已置顶"
+      ,"ai.exportBackup": "导出备份"
+      ,"ai.err.incomplete": "连接在回答完成前结束，已保留收到的内容。请重试或继续追问。"
+      ,"ai.archiveTooLargeTitle": "备份超过导入上限"
+      ,"ai.archiveTooLargeMsg": "全部对话的 JSON 备份超过 8 MiB，无法通过本页面恢复。可改为导出全部对话的 Markdown 存档，保留聊天正文、回答提示与占卜摘要供阅读。Markdown 存档不能导入聊天列表。"
+      ,"ai.exportArchive": "导出 Markdown 存档"
+      ,"ai.storageMemoryWarning": "无法访问聊天存储，本次聊天仅保存在内存中。刷新或离开页面会丢失本次聊天，请先导出备份。"
+      ,"ai.importTooLarge": "AI 对话备份不能超过 8 MiB。请选择较小的备份文件。"
+      ,"ai.err.truncated": "已达到模型输出上限，回答可能不完整。可以继续追问，或在 API 设置中提高最大输出 Token。"
+      ,"ai.err.blocked": "模型的内容策略拦截了本次回答，已保留收到的内容。请调整问题后重试。"
+      ,"ai.err.invalidResponse": "接口返回了无法识别的响应，请检查接口地址或中转服务：{detail}"
+      ,"ai.importBackup": "导入备份"
+      ,"ai.clearArchived": "清空已归档"
+      ,"ai.clearActive": "清空进行中"
+      ,"ai.tabActiveCount": "进行中 ({count})"
+      ,"ai.tabArchivedCount": "已归档 ({count})"
+      ,"ai.noMatchingChats": "没有匹配的对话记录。"
+      ,"ai.noArchivedChats": "暂无已归档对话。"
+      ,"ai.noActiveChats": "暂无对话，点击上方「新建对话」开始。"
+      ,"ai.chatMetaSummary": "{readings} 条占卜 · {messages} 条消息"
+      ,"ai.promptPlaceholder": "输入你的困惑或追问（Enter 发送，Shift+Enter 换行）"
+      ,"ai.medicalNoticeTitle": "医疗相关提示（应用说明，非 AI 回复）"
+      ,"ai.medicalNoticeBody": "牌义与 AI 解读不能确认疾病、判断病情轻重或预测自愈，也不能替代诊断、检查与治疗。请勿据此延误就医或自行停药、改变治疗方案；如有健康疑虑，请咨询医疗专业人士。"
+      ,"ai.disclaimer": "免责声明：AI 解读可能存在错误或偏差，仅供个人反思与参考，不代表事实或对未来的保证，不能替代医疗、心理、法律或财务等专业意见。涉及健康、安全及其他重要决定，请核实实际情况并咨询合格专业人士。"
+      ,"ai.send": "发送"
+      ,"ai.stop": "停止"
+      ,"ai.pickerTitle": "选择占卜历史（仅非自由画板）"
+      ,"ai.pickerHint": "支持多选。已自动过滤自由画板记录；卡片仅展示摘要信息，后台将准确注入牌阵牌位、叠牌因果关系与对应应用内牌意。"
+      ,"ai.pickerSearchPlaceholder": "按问题、牌阵名或牌名筛选"
+      ,"ai.deckAll": "全部牌组"
+      ,"ai.pickerClear": "清空已选"
+      ,"ai.pickerApplyCount": "确定附加 ({count})"
+      ,"ai.pickerEmpty": "没有找到可选的非自由画板占卜记录。请先在首页使用固定牌阵或自定义牌阵完成一次占卜并保存历史。"
+      ,"ai.renameTitle": "重命名对话"
+      ,"ai.renameLabel": "对话标题"
+      ,"ai.save": "保存"
+      ,"ai.cancel": "取消"
+      ,"ai.close": "关闭"
+      ,"ai.ok": "确定"
+      ,"ai.settingsTitle": "模型接口与 API Key 设置"
+      ,"ai.newProfile": "+ 新增配置"
+      ,"ai.deleteProfile": "删除配置"
+      ,"ai.newProfileDefaultName": "新模型配置"
+      ,"ai.lockedPromptNote": "系统提示词与内置 Quareia 解牌技法引擎已锁定（自动按牌组、牌阵电路与追问轮次挂载，依据应用内牌意推演且严禁照搬说明书），不可手动篡改，且不限制日常非占卜正常对话。"
+      ,"ai.presetLabel": "快速填入"
+      ,"ai.preset.deepseekFlash": "DeepSeek Flash"
+      ,"ai.preset.deepseekPro": "DeepSeek V4 Pro"
+      ,"ai.presetApplied": "已填入 {preset}；请确认此接口的 API Key 后保存。"
+      ,"ai.fieldName": "配置名称"
+      ,"ai.fieldFormat": "接口格式"
+      ,"ai.fieldBaseUrl": "Base URL（接口地址 / 代理地址）"
+      ,"ai.fieldApiKey": "静态 API Key（仅存本机，持续有效）"
+      ,"ai.fieldModel": "模型名称（Model ID）"
+      ,"ai.fieldVertexProject": "Vertex Project ID（Express Mode 可留空）"
+      ,"ai.fieldVertexLocation": "Vertex Location（如 global 或 us-central1）"
+      ,"ai.fieldTemperature": "Temperature（可选，0–2）"
+      ,"ai.fieldMaxTokens": "Max Tokens（可选）"
+      ,"ai.fieldContextWindow": "模型上下文窗口（Tokens，留空自动识别）"
+      ,"ai.contextWindowPlaceholder": "自动识别模型上下文大小"
+      ,"ai.contextWindowAutoPlaceholder": "自动识别（当前约 {count} tokens）"
+      ,"ai.detectContextWindow": "自动获取"
+      ,"ai.detectingContext": "正在获取模型上下文窗口大小…"
+      ,"ai.detectContextDone": "已从接口获取上下文窗口：{count} tokens"
+      ,"ai.detectContextCatalog": "接口未返回上下文长度，已使用模型目录：{count} tokens。代理限制可能不同，可手动覆盖。"
+      ,"ai.detectContextUnknown": "未能识别此模型的上下文窗口。当前使用 {count} tokens（{source}）；请按服务商说明手动填写。"
+      ,"ai.detectContextChanged": "配置已更改，请重新获取上下文窗口。"
+      ,"ai.contextWindowStatus": "当前生效上限：{count} tokens（来源：{source}）"
+      ,"ai.contextSource.manual": "手动指定"
+      ,"ai.contextSource.api": "接口实时获取"
+      ,"ai.contextSource.catalog": "模型目录识别"
+      ,"ai.contextSource.default": "默认保守估计"
+      ,"ai.fieldAutoCompress": "自动压缩早期上下文"
+      ,"ai.autoCompressHint": "接近模型上下文上限时自动摘要早期对话，并保留当前关联的占卜牌意与近期对话。"
+      ,"ai.contextMeter": "上下文约 {used} / {limit} tokens（{source}）"
+      ,"ai.contextMeterCompressed": " · 已压缩早期 {count} 条"
+      ,"ai.compressingStatus": "正在压缩早期对话上下文以保持完整牌意…"
+      ,"ai.testConnection": "测试连接"
+      ,"ai.saveActivate": "保存并启用"
+      ,"ai.profileUnconfigured": "未配置 API Key"
+      ,"ai.banner.needBoth": "请先配置大模型 API Key；如需辅助解牌，可从非自由画板占卜历史中选择一条或多条记录作为上下文，也可直接自由对话。"
+      ,"ai.banner.needKey": "尚未配置可用的模型 API Key。点击「API 设置」填写密钥并测试连接后即可开始对话。"
+      ,"ai.banner.needReading": "当前对话尚未附加占卜记录：可直接进行常规 AI 对话，或点击「选择占卜历史」传入固定/自定义牌阵与应用内牌意。"
+      ,"ai.noAttachedReadings": "未附加占卜记录（已自动过滤自由画板记录）"
+      ,"ai.readingSnapshotSaved": "已使用对话内保存的牌阵快照"
+      ,"ai.readingDeleted": "原记录已不在本地历史中"
+      ,"ai.removeReading": "移除此占卜记录"
+      ,"ai.emptyHeading": "AI 辅助解牌助手"
+      ,"ai.emptyDesc": "选择一条或多条非自由画板占卜记录后，系统会自动挂载对应的牌阵拓扑与牌组解牌技法（提纯意象底稿、告别照念说明书）。建议在上方卡片补充当时所问之事，或点击下方提问直接开始："
+      ,"ai.roleUser": "你"
+      ,"ai.reasoningSummary": "思考过程 / 推理摘要"
+      ,"ai.saveAndResend": "保存并重新发送"
+      ,"ai.retry": "重试"
+      ,"ai.copy": "复制"
+      ,"ai.copied": "已复制"
+      ,"ai.editResend": "编辑并重发"
+      ,"ai.regenerate": "重新生成"
+      ,"ai.showKey": "显示"
+      ,"ai.hideKey": "隐藏"
+      ,"ai.format.openaiChat": "OpenAI Chat Completions (/v1/chat/completions)"
+      ,"ai.format.openaiResponses": "OpenAI Responses API (/v1/responses)"
+      ,"ai.format.anthropic": "Anthropic Messages (/v1/messages)"
+      ,"ai.format.geminiStudio": "Google Gemini AI Studio"
+      ,"ai.format.geminiVertex": "Google Gemini Vertex AI（仅静态 API Key）"
+      ,"ai.hint.openaiChat": "兼容 OpenAI、DeepSeek、OpenRouter、SiliconFlow 及符合 /v1/chat/completions 规范的代理地址；默认发送 Authorization: Bearer 请求头。"
+      ,"ai.hint.openaiResponses": "适用于 OpenAI 新版 Responses 接口 (/v1/responses)，请求体使用 instructions 与 input 字段。"
+      ,"ai.hint.anthropic": "适用于 Claude (/v1/messages)，自动附带 x-api-key、anthropic-version 与浏览器直连所需请求头。"
+      ,"ai.hint.geminiStudio": "使用 Google AI Studio API Key，自动请求 generativelanguage.googleapis.com 的 streamGenerateContent?alt=sse 接口。"
+      ,"ai.hint.geminiVertex": "仅使用静态 API Key (x-goog-api-key)，不提供 OAuth 登录。留空 Project ID 可直接用于 Vertex Express Mode；填写 Project ID 与 Location 则构造区域项目静态密钥接口。"
+      ,"ai.err.missingKey": "请填写 API Key"
+      ,"ai.err.missingModel": "请填写模型名称"
+      ,"ai.err.insecureUrl": "除本机 localhost 外 Base URL 必须使用 https://"
+      ,"ai.err.invalidUrl": "Base URL 格式无效"
+      ,"ai.settingsSaved": "配置已持久保存并设为当前启用方案。"
+      ,"ai.testingConnection": "正在测试接口连接…"
+      ,"ai.testSuccess": "连接成功（{model}），可保存使用。"
+      ,"ai.err.unknown": "请求失败"
+      ,"ai.err.auth": "鉴权失败，请检查 API Key、模型权限或 Vertex 接口设置：{detail}"
+      ,"ai.err.rateLimit": "触发频率或配额限制，请稍后重试：{detail}"
+      ,"ai.err.network": "网络或跨域请求失败，请检查网络、Base URL（HTTPS）或中转站 CORS 配置：{detail}"
+      ,"ai.stoppedEmpty": "已停止生成。"
+      ,"ai.confirmKicker": "AI 对话"
+      ,"ai.deleteChatTitle": "确认删除该对话？"
+      ,"ai.deleteChatMsg": "将永久移除「{title}」中的所有提问与解牌记录，无法恢复。"
+      ,"ai.clearArchivedTitle": "清空所有已归档对话？"
+      ,"ai.clearAllTitle": "清空当前进行中的对话？"
+      ,"ai.clearArchivedMsg": "此操作将删除所有已归档的 AI 对话，进行中的对话会保留。"
+      ,"ai.clearAllMsg": "此操作将清空所有进行中（非归档）对话，或建议先导出备份。"
+      ,"ai.clearConfirm": "确认清空"
+      ,"ai.deleteMsgTitle": "删除这条消息？"
+      ,"ai.deleteMsgDesc": "确认将该条发言从本地聊天记录中移除吗？"
+      ,"ai.backupKicker": "AI 备份"
+      ,"ai.importDoneTitle": "导入完成"
+      ,"ai.importDoneMsg": "已成功合并导入 {imported} 段对话（当前共 {total} 段）。"
+      ,"ai.importErrTitle": "导入失败"
+      ,"ai.importErrMsg": "文件格式不匹配，请选择本站导出的 AI 对话 JSON 备份文件。"
+      ,"ai.pageDescription": "结合 Quareia 应用内牌意与非自由画板占卜历史的 AI 辅助解牌对话工作台"
+      ,"ai.contextBarAria": "当前对话与占卜上下文"
+      ,"ai.deckTarot": "Quareia 塔罗"
+      ,"ai.clearConfig": "清除已存密钥"
+      ,"ai.clearConfigTitle": "清除所有已保存的 API Key？"
+      ,"ai.clearConfigMsg": "此操作将从当前设备移除所有已保存的模型配置与 API Key，但不会删除你的 AI 对话记录。"
+      ,"ai.clearConfigConfirm": "确认清除"
+      ,"ai.configCleared": "已清除本地保存的所有 API Key 与模型配置。"
+      ,"ai.exportedTo": "已导出：{fileName}"
+      ,"ai.exportCancelled": "已取消导出。"
+      ,"ai.exportFailed": "导出失败，请稍后重试。"
+      ,"ai.chatChangedTitle": "对话已更新"
+      ,"ai.chatChangedMsg": "其他标签页已修改此对话，已载入最新内容。请确认后重试。"
+      ,"ai.saveFailedTitle": "保存失败"
+      ,"ai.saveFailedMsg": "无法保存对话，请检查存储空间后重试。"
+      ,"ai.skillModeLabel": "解牌人格"
+      ,"ai.skillModeAria": "选择 AI 解读人格"
+      ,"ai.skillMode.auto": "奥莉薇娅"
+      ,"ai.skillModeHint.auto": "内置人格包：塔罗咨询师 · 非暴力沟通 · 牌面镜像"
+      ,"ai.activeSkillsLabel": "已挂载技法"
+      ,"ai.activeSkillsNone": "自由对话（附加排盘后自动挂载专属占卜技法）"
+      ,"ai.questionPrefix": "所问："
+      ,"ai.questionAdd": "+ 补充当时所问之事"
+      ,"ai.questionEdit": "修改问题"
+      ,"ai.questionPlaceholder": "补充当时抽牌的具体问题与时间范围（如：未来三个月跳槽是否合适）"
+      ,"ai.starter.core": "直说核心结论：这副牌眼下最核心的矛盾卡在哪？牌势正往哪边推？"
+      ,"ai.starter.action": "先一句话交代稳固的基本盘，再重点深挖我没意识到的盲点与破局抓手。"
+      ,"ai.starter.compare": "若关联了多条记录，请对比局势在时间线上的真实演变，看看哪些隐患正在缓解或加剧。"
     },
     "en": {
       "page.title": "Quareia Divination",
       "page.description": "Quareia-inspired divination with Rider-Waite Tarot, Mystagogus, and LXXXI decks, hand-picked card drawing, guided spreads, and upright or reversed Tarot readings.",
       "site.title": "Quareia Divination",
       "site.subtitle": "TAROT · MYSTAGOGUS · LXXXI",
+    "nav.settings": "Settings",
+    "deck.kicker": "Draw",
+    "spread.kicker": "Spread",
+    "results.kicker": "Reading",
+    "footer.aboutTitle": "About",
+    "footer.licenseTitle": "Licence & credits",
+    "footer.privacyTitle": "Privacy & analytics",
       "language.switch": "中文",
       "language.switchLabel": "切换至简体中文",
-      "menu.openLabel": "Open menu",
-      "menu.closeLabel": "Close menu",
-      "menu.kicker": "APP MENU",
-      "menu.title": "Menu",
-      "menu.actionsLabel": "App menu",
-      "menu.language": "Language",
-      "menu.about": "About / Copyright",
       "history.open": "Reading History",
-      "home.quoteKicker": "A note from the author",
-      "home.quote": "while digital tools for readings can be useful in an emergency, the interaction between the physical hands of the reader touching and shuffling the deck is safer, a lot more accurate and far more powerful",
-      "home.quoteCite": "— Josephine McCarthy",
-      "home.quoteTranslation": "A Chinese reference translation appears below the English original; the English text is authoritative.",
-      "telemetry.kicker": "PRIVACY NOTE",
-      "telemetry.title": "Anonymous usage statistics",
-      "telemetry.firstLaunchNotice": "This app enables anonymous usage statistics by default to understand active device counts and feature usage. We collect app version, language, deck, the number of cards drawn, and AI model IDs, token usage, and conversation rounds; we do not collect questions, specific draw results, or local history. The server temporarily reads the connection IP for rate limiting and abuse prevention. Of network-address and location data, the statistics database stores only the country code and first-level subdivision code and name inferred by Cloudflare from the connection IP; it does not store the raw IP address, an IP digest, a city, or more precise location data. These location fields may be missing or inaccurate and do not represent the user's actual residence. You can turn it off at any time in About / Copyright.",
-      "telemetry.manage": "Open privacy settings",
-      "telemetry.acknowledge": "Got it",
-      "settings.title": "Reading setup",
+      "announcement.open": "Announcements",
+      "announcement.kicker": "PUBLIC ANNOUNCEMENTS",
+      "announcement.title": "Announcements",
+      "announcement.closeLabel": "Close announcements",
+      "announcement.listAria": "Announcement list",
+      "announcement.empty": "No announcements.",
+      "announcement.cached": "Showing the most recently cached announcements.",
+      "announcement.severity.info": "Info",
+      "announcement.severity.important": "Important",
+      "announcement.severity.update": "Update",
+      "announcement.openAction": "Learn more",
+      "announcement.updateAction": "View update",
+      "settings.title": "Advanced setup",
       "settings.theme": "Theme",
       "settings.themeAria": "Choose an interface theme",
       "theme.celestial": "Celestial Night",
       "theme.parchment": "Parchment Dawn",
       "theme.ember": "Ember Sanctum",
       "theme.grove": "Verdant Grove",
+      "theme.groveLight": "Verdant Grove (Bright)",
+    "theme.jade": "Jade Paper",
+    "theme.dusk": "Dusk Violet",
+    "theme.ash": "Ash",
+    "theme.toggle": "Tap the moon to change theme", "egg.wake": "It opens its eyes", "egg.sleep": "It closes its eyes",
       "settings.deck": "Deck",
       "deck.tarotOption": "Tarot (Rider-Waite)",
       "deck.mystagogusOption": "Mystagogus",
@@ -681,6 +675,9 @@
       "mode.upright": "Upright only",
       "mode.mixed": "Upright and reversed",
       "settings.layoutMode": "Layout",
+      "settings.pageVersion": "Site version",
+      "settings.useClassic": "Switch to classic",
+      "settings.useModern": "Switch to the new version",
       "layout.preset": "Preset spread",
       "layout.freeform": "Free Board",
       "settings.arcana": "Card pool",
@@ -807,8 +804,14 @@
       "customSpread.downloadFailed": "This environment cannot save the code file. Copy the share code instead.",
       "customSpread.downloaded": "The share-code file is being saved.",
       "deck.heading": "Deck",
+    "table.title": "Table",
+    "table.dragHint": "Drag to browse the deck · tap a card",
+    "spread.settings": "Spread settings",
+    "spread.settingsClose": "Close spread settings",
       "deck.initialRemaining": "78 remaining",
       "deck.shuffle": "Shuffle",
+    "deck.prev": "Previous card",
+    "deck.next": "Next card",
       "deck.initialCta": "Tap any card in the ring to draw it into the spread",
       "deck.initialAria": "Circular card deck. Tap a card to draw.",
       "deck.switch": "Switch card pool",
@@ -820,10 +823,10 @@
       "spread.guide": "Position guide",
       "spread.gridAria": "Drawn cards arranged in the selected spread",
       "results.title": "Reading",
-      "history.kicker": "APP HISTORY",
+      "history.kicker": "LOCAL HISTORY",
       "history.title": "Reading History",
       "history.closeLabel": "Close reading history",
-      "history.privacy": "Readings are stored locally by this app on this device. Uninstalling the app, clearing its data, or changing devices may remove them. Export a JSON backup if needed. This app does not upload, track, or collect your reading history. Anonymous usage statistics do not include reading history content.",
+      "history.privacy": "Your readings stay in this browser. Clearing site data, using private browsing, changing devices, or changing browsers may remove them. Export a JSON backup if needed. This site does not upload, track, or collect your reading history.",
       "history.filterLabel": "Filter by deck",
       "history.filterAll": "All decks",
       "history.filterTarot": "Tarot",
@@ -839,6 +842,13 @@
       "history.detailTitle": "Reading Details",
       "history.delete": "Delete This Reading",
       "footer.note": "Tarot meanings are based on Tarot Skills for the 21st Century and the Quareia context; Mystagogus keywords and LXXXI meanings follow their English guidebooks · For entertainment only - approach divination thoughtfully",
+      "footer.srcTarotTag": "Tarot",
+      "footer.srcTarot": "Meanings follow Tarot Skills for the 21st Century and the Quareia context",
+      "footer.srcMTag": "M deck",
+      "footer.srcM": "Keywords translated from Mystagogus by Josephine McCarthy",
+      "footer.srcLxxxiTag": "LXXXI",
+      "footer.srcLxxxi": "Meanings follow its English companion text",
+      "footer.funNote": "For entertainment only — read the cards with a level head.",
       "attribution.status": "This is an unofficial tool and does not imply endorsement by Quareia or the authors. Written permission covers the website and Android application, with a 2026-08-05 extension for the WeChat Mini Program. The non-commercial restriction applies only to Mystagogus/LXXXI artwork, meanings, translations, layouts, and related authorised material. Those materials may not be sold, placed behind a paywall or paid unlock, separately commercially distributed, sublicensed, or placed under a software licence; commercial use requires separate permission. This is not a general commercial-use ban on project-authored software, infrastructure, or unrelated services, and it does not claim approval of any particular commercial model.",
       "attribution.mystagogusLabel": "Mystagogus artwork and related text",
       "attribution.mystagogusRights": "© Josephine McCarthy",
@@ -847,7 +857,9 @@
       "attribution.quareiaLink": "Official Quareia website",
       "attribution.quoteCite": "— Josephine McCarthy",
       "attribution.quoteZh": "(Chinese reference translation is shown on the Chinese interface; the English original is authoritative.)",
-      "privacy.analytics": "This site uses Cloudflare Web Analytics for anonymous traffic and performance statistics. It does not collect email addresses, reading questions, card results, or locally stored history.",
+      "privacy.analytics": "This site uses an anonymous browser identifier to combine visits, active browsers, completed readings, AI model IDs / token usage / conversation rounds, and coarse country/region statistics with mobile statistics; you can turn this off at any time. Cloudflare Web Analytics separately measures traffic and performance. It does not collect email addresses, reading questions, card results, or locally stored history.",
+      "privacy.telemetryDisable": "Turn off unified usage statistics",
+      "privacy.telemetryEnable": "Turn on unified usage statistics",
       "source.tarot": "Based on Tarot Skills for the 21st Century and the Quareia training context",
       "source.mystagogus": "Based on Josephine McCarthy's Mystagogus keyword index and the Quareia system",
       "source.lxxxi": "Based on LXXXI - The Magician's Deck: A Guide to the Card Meanings",
@@ -897,6 +909,7 @@
       "app.revealedAria": "Position {number} · {position}{layer} · {card} · {orientation}. Tap to view its meaning.",
       "app.meaningAria": "Meaning of {card} in position {number}, {position}{layer}. Tap to return to the card face.",
       "app.meaningTitle": "Card meaning",
+  "app.meaningClose": "Close",
       "app.meaningHint": "Tap any revealed card to flip to its meaning. Tap again to return to the card face.",
       "app.removeCardAria": "Remove the card in position {number}",
       "app.removeLayerAria": "Remove the {layer} in position {number}",
@@ -934,7 +947,7 @@
       "confirm.kicker": "SPREAD CHANGE",
       "confirm.title": "Your current spread is still here",
       "confirm.cancel": "Keep Spread",
-      "confirm.proceed": "Clear & shuffle",
+      "confirm.keep": "Keep", "confirm.proceed": "Clear & shuffle",
       "choice.kicker": "CARD PICKER",
       "choice.title": "Choose an option",
       "choice.cancel": "Cancel",
@@ -954,24 +967,24 @@
       "history.hideActualLayout": "Hide Actual Layout",
       "history.actualLayoutAria": "Actual spread layout",
       "history.actualLayoutHint": "Reconstructed from the recorded positions. Tap any card to flip to its meaning, and tap again to return.",
-      "history.unavailableSave": "This device cannot save history. Divination remains available.",
-      "history.unavailable": "Local storage is unavailable on this device, so history is unavailable. Divination is unaffected.",
+      "history.unavailableSave": "This browser cannot save history. Divination remains available.",
+      "history.unavailable": "This browser cannot access IndexedDB, so history is unavailable. Divination is unaffected.",
       "history.saveSnapshotError": "Automatic save failed. Your reading is still available on this page.",
       "history.saving": "Saving this reading automatically…",
-      "history.saveUnavailable": "Automatic save failed because local history is unavailable on this device.",
+      "history.saveUnavailable": "Automatic save failed because local history is unavailable in this browser.",
       "history.duplicate": "This complete reading was just saved, so no duplicate was created.",
-      "history.saved": "Reading revealed and saved automatically on this device.",
+      "history.saved": "Reading revealed and saved automatically in this browser.",
       "history.deleted": "Reading deleted.",
       "history.deleteFailed": "Could not delete the reading. Please try again.",
       "history.deleteConfirm": "Delete this saved reading? This cannot be undone.",
-      "history.clearConfirm": "Clear all reading history on this device? This cannot be undone.",
+      "history.clearConfirm": "Clear all reading history in this browser? This cannot be undone.",
       "history.confirmKicker": "LOCAL HISTORY",
       "history.confirmTitle": "Delete reading history?",
       "history.confirmCancel": "Keep Records",
       "history.confirmProceed": "Delete",
       "history.cleared": "All reading history has been cleared.",
       "history.clearFailed": "Could not clear history. Please try again.",
-      "history.exported": "JSON backup exported: {fileName}.",
+      "history.exported": "JSON backup downloaded: {fileName}. Check the browser downloads list or Downloads folder.",
       "history.exportChoosing": "Opening the save location. Choose a folder in the system dialog for {fileName}.",
       "history.exportedTo": "JSON backup saved as {fileName} in the folder you selected.",
       "history.exportCancelled": "Export cancelled. Your history was not changed.",
@@ -981,6 +994,10 @@
       "history.importFailed": "Import failed: the file format is invalid or its contents are damaged.",
       "freeBoard.settingsSummary": "Free Board: draw any card from the current deck and filter; there are no fixed positions or target count.",
       "freeBoard.title": "Free Board",
+      "freeBoard.open": "Free board",
+      "freeBoard.backToPreset": "Return to preset spread",
+      "freeBoard.openHint": "The deck fans out on the table with no spread applied.", "freeBoard.cardHiddenAria": "Card {index}, face down", "freeBoard.cardAria": "Card {index}, {name}, {orientation}", "freeBoard.slotName": "Free slot",
+  "freeBoard.angleTitle": "Angle", "freeBoard.drawnAria": "Drawn cards",
       "freeBoard.toolbarAria": "Free Board controls",
       "freeBoard.undo": "Undo",
       "freeBoard.undoAria": "Undo the last Free Board action",
@@ -1004,7 +1021,6 @@
       "freeBoard.meaning": "Meaning",
       "freeBoard.revealed": "Revealed",
       "freeBoard.unrevealed": "Not revealed",
-      "freeBoard.cardAria": "{card}, {state}{orientation}. Drag to move; tap to select.",
       "freeBoard.selectedControls": "Selected: {card}",
       "freeBoard.drawOrder": "Position {order}",
       "freeBoard.cardsDrawn": "{count} placed",
@@ -1034,7 +1050,7 @@
       "freeBoard.saved": "Free Board saved to divination history automatically.",
       "freeBoard.duplicate": "This Free Board was just saved; no duplicate was created.",
       "freeBoard.saveFailed": "Could not save Free Board history; the board remains on this page.",
-      "freeBoard.saveUnavailable": "This device cannot save history; the Free Board remains available.",
+      "freeBoard.saveUnavailable": "This browser cannot save history; the Free Board remains available.",
       "history.freeBoard": "Free Board",
       "history.freeBoardDetail": "Free Board record",
       "history.freeBoardPreview": "Read-only Free Board spatial reconstruction",
@@ -1042,47 +1058,8 @@
       "history.freeBoardRevealed": "Revealed · {orientation}",
       "history.freeBoardCardState": "{card} · {state}",
       "history.savingFreeBoard": "Saving Free Board history…",
-      "history.savedFreeBoard": "Free Board saved to this device's divination history.",
+      "history.savedFreeBoard": "Free Board saved to this browser's divination history.",
       "history.duplicateFreeBoard": "This Free Board was just saved; no duplicate was created.",
-      "nav.settings": "Settings",
-      "deck.kicker": "Draw",
-      "spread.kicker": "Spread",
-      "results.kicker": "Reading",
-      "footer.aboutTitle": "About",
-      "footer.licenseTitle": "Licence & credits",
-      "footer.privacyTitle": "Privacy & analytics",
-      "theme.groveLight": "Verdant Grove (Bright)",
-      "theme.jade": "Jade Paper",
-      "theme.dusk": "Dusk Violet",
-      "theme.ash": "Ash",
-      "theme.toggle": "Tap the moon to change theme",
-      "egg.wake": "It opens its eyes",
-      "egg.sleep": "It closes its eyes",
-      "settings.pageVersion": "Site version",
-      "settings.useClassic": "Switch to classic",
-      "settings.useModern": "Switch to the new version",
-      "table.title": "Table",
-      "table.dragHint": "Drag to browse the deck · tap a card",
-      "spread.settings": "Spread settings",
-      "spread.settingsClose": "Close spread settings",
-      "deck.prev": "Previous card",
-      "deck.next": "Next card",
-      "footer.srcTarotTag": "Tarot",
-      "footer.srcTarot": "Meanings follow Tarot Skills for the 21st Century and the Quareia context",
-      "footer.srcMTag": "M deck",
-      "footer.srcM": "Keywords translated from Mystagogus by Josephine McCarthy",
-      "footer.srcLxxxiTag": "LXXXI",
-      "footer.srcLxxxi": "Meanings follow its English companion text",
-      "footer.funNote": "For entertainment only — read the cards with a level head.",
-      "app.meaningClose": "Close",
-      "confirm.keep": "Keep",
-      "freeBoard.open": "Free board",
-      "freeBoard.backToPreset": "Return to preset spread",
-      "freeBoard.openHint": "The deck fans out on the table with no spread applied.",
-      "freeBoard.cardHiddenAria": "Card {index}, face down",
-      "freeBoard.slotName": "Free slot",
-      "freeBoard.angleTitle": "Angle",
-      "freeBoard.drawnAria": "Drawn cards",
       "history.openInAi": "Open in AI",
       "privacy.ai": "API keys and chats stay on this device; requests go directly to your configured model endpoint. When anonymous usage statistics are enabled, we report model IDs, provider-reported token usage, and conversation rounds. The backend never receives keys, endpoint URLs, questions, or answers.",
       "ai.open": "AI Reading",
@@ -1256,16 +1233,10 @@
       "ai.chatChangedMsg": "Another tab changed this conversation. The latest messages have been loaded; review them and retry.",
       "ai.saveFailedTitle": "Save Failed",
       "ai.saveFailedMsg": "Could not save the conversation. Check available storage and retry.",
-      "ai.skillModeLabel": "Style",
-      "ai.skillModeAria": "Choose AI reading skill orchestration mode",
-      "ai.skillMode.auto": "Auto",
-      "ai.skillMode.direct": "Direct",
-      "ai.skillMode.deep": "Deep",
-      "ai.skillMode.action": "Action",
-      "ai.skillModeHint.auto": "Automatically mounts built-in skills by spread topology, deck, intent, and turn",
-      "ai.skillModeHint.direct": "Leads with a direct verdict and the single decisive turning point",
-      "ai.skillModeHint.deep": "Traces cross-axis causality, displacement circuits, and hidden currents",
-      "ai.skillModeHint.action": "Focuses on controllable positions, boundaries, and concrete next steps",
+      "ai.skillModeLabel": "Reader",
+      "ai.skillModeAria": "Choose the AI reading persona",
+      "ai.skillMode.auto": "Olivia",
+      "ai.skillModeHint.auto": "Built-in persona: tarot counselor with an NVC backbone",
       "ai.activeSkillsLabel": "Active Skills",
       "ai.activeSkillsNone": "Free chat (attach a reading to auto-mount Quareia skills)",
       "ai.questionPrefix": "Question: ",
@@ -1284,17 +1255,12 @@
     });
   }
 
-  function detectSystemLocale() {
-    var language = (global.navigator && (global.navigator.language || global.navigator.userLanguage)) || "zh-CN";
-    return String(language).toLowerCase().indexOf("zh") === 0 ? "zh-CN" : "en";
-  }
-
   function readStoredLocale() {
     try {
       var value = global.localStorage && global.localStorage.getItem(STORAGE_KEY);
-      return supported.indexOf(value) !== -1 ? value : detectSystemLocale();
+      return supported.indexOf(value) !== -1 ? value : DEFAULT_LOCALE;
     } catch (_error) {
-      return detectSystemLocale();
+      return DEFAULT_LOCALE;
     }
   }
 
@@ -1308,33 +1274,6 @@
     var catalogue = messages[locale] || messages[DEFAULT_LOCALE];
     var fallback = messages[DEFAULT_LOCALE][key];
     return interpolate(Object.prototype.hasOwnProperty.call(catalogue, key) ? catalogue[key] : (fallback || key), values);
-  }
-
-  function tForLocale(requestedLocale, key, values) {
-    var normalized = String(requestedLocale || "").toLowerCase().indexOf("zh") === 0
-      ? "zh-CN"
-      : "en";
-    var previous = locale;
-    locale = normalized;
-    var result = t(key, values);
-    locale = previous;
-    return result;
-  }
-
-  function hasStoredLocale() {
-    try {
-      var value = global.localStorage && global.localStorage.getItem(STORAGE_KEY);
-      return supported.indexOf(value) !== -1;
-    } catch (_error) {
-      return false;
-    }
-  }
-
-  function syncNativeLocale() {
-    if (!hasStoredLocale()) return;
-    if (global.androidAbout && typeof global.androidAbout.setLocale === "function") {
-      global.androidAbout.setLocale(locale);
-    }
   }
 
   function field(value, key) {
@@ -1360,14 +1299,12 @@
     Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-aria-label]"), function (element) {
       element.setAttribute("aria-label", t(element.getAttribute("data-i18n-aria-label")));
     });
-    var toggleValue = document.getElementById("languageToggleValue");
-    if (toggleValue) toggleValue.textContent = t("language.switch");
     var toggle = document.getElementById("languageToggle");
     if (toggle) {
+      toggle.textContent = t("language.switch");
       toggle.setAttribute("aria-label", t("language.switchLabel"));
       toggle.setAttribute("lang", locale === "en" ? "zh-CN" : "en");
     }
-    syncNativeLocale();
   }
 
   function setLocale(nextLocale) {
@@ -1402,7 +1339,6 @@
     getLocale: function () { return locale; },
     isEnglish: function () { return locale === "en"; },
     t: t,
-    tForLocale: tForLocale,
     field: field,
     applyDocument: applyDocument,
     setLocale: setLocale,
