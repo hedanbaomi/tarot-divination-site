@@ -445,25 +445,70 @@
   // actually names cards or spread positions counts as having interpreted the
   // attached reading; otherwise a greeting would silently flip the next turn into
   // follow-up mode and leave the reading uninterpreted.
-  function assistantMessageShowsReading(content) {
-    var text = typeof content === "string" ? content : "";
-    if (!text.trim()) return false;
+  function normalizeCardToken(raw) {
+    return String(raw == null ? "" : raw)
+      .replace(/[*_`「」『』《》〈〉()（）\[\]【】]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
 
-    // Tier 1 — markers that are unambiguously about actual cards. Suit names and
-    // orientation / position markers never occur in ordinary conversation, so a
-    // single one is enough to call this a reading.
-    if (
-      /正位|逆位|牌阵|牌位|牌面|权杖|圣杯|宝剑|星币|大阿卡那|小阿卡那|第[一二三四五六七八九十百零\d]+张|这张牌|那张牌|抽牌|抽到/.test(text)
-    ) {
+  // The record itself is the source of truth for "which cards are on the table".
+  // Names are localized when the snapshot is built, and some decks (Mystagogus,
+  // LXXXI) do not use Rider-Waite names, so matching the actual card names of the
+  // record is more reliable than a hard-coded Major Arcana list.
+  function collectRecordCardTokens(snapshot) {
+    var tokens = [];
+    var cards = snapshot && Array.isArray(snapshot.cards) ? snapshot.cards : [];
+    for (var i = 0; i < cards.length; i += 1) {
+      var card = cards[i];
+      if (!card) continue;
+      var raw = card.cardName == null ? "" : String(card.cardName);
+      if (!raw) continue;
+      var parts = raw.split(/[\/|｜]/);
+      for (var p = 0; p < parts.length; p += 1) {
+        var token = normalizeCardToken(parts[p]);
+        if (token && tokens.indexOf(token) === -1) {
+          tokens.push(token);
+        }
+      }
+    }
+    return tokens;
+  }
+
+  function textMentionsCardToken(text, token) {
+    if (!text || !token) return false;
+    if (/[A-Za-z]/.test(token)) {
+      var escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      try {
+        return new RegExp("(^|[^A-Za-z0-9])" + escaped + "([^A-Za-z0-9]|$)", "i").test(text);
+      } catch (err) {
+        return text.toLowerCase().indexOf(token.toLowerCase()) !== -1;
+      }
+    }
+    return text.indexOf(token) !== -1;
+  }
+
+  // Short, everyday names ("太阳", "世界", "Sun") are also ordinary vocabulary, so
+  // they only count next to another card cue. Long or multi-word names
+  // ("Dead End", "命运之轮") are distinctive enough on their own.
+  function cardTokenIsDistinctive(token) {
+    if (/[A-Za-z]/.test(token)) {
+      return / /.test(token) || token.length >= 6;
+    }
+    return token.length >= 4;
+  }
+
+  // Markers that only occur when someone is actually reading cards. Deliberately
+  // excludes bare 牌面: a clarification such as "在看牌面之前，你想先聊哪件事？"
+  // talks about looking at the cards without having interpreted them.
+  function hasStrongReadingMarker(text) {
+    if (/正位|逆位|权杖|圣杯|宝剑|星币|大阿卡那|小阿卡那|第[一二三四五六七八九十百零\d]+张|这张牌|那张牌|牌阵|牌位|抽牌|抽到/.test(text)) {
       return true;
     }
-    if (/\b(?:upright|reversed|wands?|cups?|swords?|pentacles?|major arcana|minor arcana)\b/i.test(text)) {
-      return true;
-    }
+    return /\b(?:upright|reversed|wands?|cups?|swords?|pentacles?|major arcana|minor arcana)\b/i.test(text);
+  }
 
-    // Tier 2 — a major-arcana name only counts when it sits next to a card cue.
-    // Without the cue, common words such as 世界/太阳/月亮/星星/恋人/正义 or
-    // "world"/"sun"/"star" would make a greeting look like a finished reading.
+  function showsNamedArcanaWithCue(text) {
     var arcanaZh = /愚者|魔术师|女祭司|皇后|皇帝|教皇|恋人|战车|力量|隐士|命运之轮|正义|倒吊人|死神|节制|恶魔|高塔|星星|月亮|太阳|审判|世界/;
     var cueZh = /牌|张|位|抽|阵|正位|逆位/;
     if (arcanaZh.test(text) && cueZh.test(text)) return true;
@@ -473,39 +518,84 @@
     return arcanaEn.test(text) && cueEn.test(text);
   }
 
+  function assistantMessageReadsRecord(content, snapshot) {
+    var text = typeof content === "string" ? content : "";
+    if (!text.trim()) return false;
+
+    var tokens = collectRecordCardTokens(snapshot);
+    if (tokens.length > 0) {
+      var hasCue = /牌|张|位|阵|正位|逆位|抽/.test(text)
+        || /\b(?:cards?|positions?|slots?|spread|draw|drawn|upright|reversed|arcana)\b/i.test(text);
+      for (var t = 0; t < tokens.length; t += 1) {
+        if (!textMentionsCardToken(text, tokens[t])) continue;
+        if (hasCue || cardTokenIsDistinctive(tokens[t])) return true;
+      }
+      return hasStrongReadingMarker(text);
+    }
+
+    // Snapshots without card metadata (older records, hand-built tests) fall back
+    // to the generic markers plus the arcana list.
+    return hasStrongReadingMarker(text) || showsNamedArcanaWithCue(text);
+  }
+
+  function assistantMessageShowsReading(content, snapshot) {
+    return assistantMessageReadsRecord(content, snapshot);
+  }
+
   function computeHasUninterpretedReading(conv, uptoIndex) {
     if (!conv || !Array.isArray(conv.readingIds) || conv.readingIds.length === 0) {
       return false;
     }
     var msgs = Array.isArray(conv.messages) ? conv.messages : [];
     var limit = typeof uptoIndex === "number" ? Math.min(msgs.length, Math.max(0, uptoIndex)) : msgs.length;
-    var lastAssistantAt = 0;
-    var hasAnyAssistant = false;
+
+    var activeIdSet = Object.create(null);
+    var activeIds = [];
+    for (var r = 0; r < conv.readingIds.length; r += 1) {
+      var id = conv.readingIds[r];
+      if (id && !activeIdSet[id]) {
+        activeIdSet[id] = true;
+        activeIds.push(id);
+      }
+    }
+
+    var assistants = [];
     for (var i = 0; i < limit; i += 1) {
       var m = msgs[i];
-      if (m && m.role === "assistant" && assistantMessageShowsReading(m.content)) {
-        hasAnyAssistant = true;
-        var ts = Number(m.createdAt) || 0;
-        if (ts > lastAssistantAt) {
-          lastAssistantAt = ts;
-        }
-      }
+      if (!m || m.role !== "assistant" || typeof m.content !== "string" || !m.content.trim()) continue;
+      assistants.push({ content: m.content, ts: Number(m.createdAt) || 0 });
     }
-    if (!hasAnyAssistant) {
+    if (assistants.length === 0) {
       return true;
     }
-    var activeIdSet = Object.create(null);
-    for (var r = 0; r < conv.readingIds.length; r += 1) {
-      if (conv.readingIds[r]) {
-        activeIdSet[conv.readingIds[r]] = true;
+
+    var snaps = Array.isArray(conv.readingSnapshots) ? conv.readingSnapshots : [];
+    var activeSnaps = [];
+    for (var s = 0; s < snaps.length; s += 1) {
+      if (snaps[s] && activeIdSet[snaps[s].id]) {
+        activeSnaps.push(snaps[s]);
       }
     }
-    var snaps = Array.isArray(conv.readingSnapshots) ? conv.readingSnapshots : [];
-    for (var s = 0; s < snaps.length; s += 1) {
-      var snap = snaps[s];
-      if (!snap || !activeIdSet[snap.id]) continue;
+    if (activeSnaps.length === 0) {
+      return true;
+    }
+
+    // Per-record progress: a record counts as interpreted only when a reply that
+    // was written for a request started after it was attached carries evidence
+    // about that record's own cards. A greeting, a clarifying question, or a
+    // reply that predates the attachment never marks it read.
+    for (var k = 0; k < activeSnaps.length; k += 1) {
+      var snap = activeSnaps[k];
       var attTs = Number(snap.attachedAt) || 0;
-      if (attTs > 0 && attTs > lastAssistantAt) {
+      var read = false;
+      for (var a = 0; a < assistants.length; a += 1) {
+        if (attTs > 0 && assistants[a].ts <= attTs) continue;
+        if (assistantMessageReadsRecord(assistants[a].content, snap)) {
+          read = true;
+          break;
+        }
+      }
+      if (!read) {
         return true;
       }
     }
@@ -1150,7 +1240,8 @@
       return "auto";
     }
 
-    function buildPromptPayloadForConversation(conv, uptoIndex) {
+    function buildPromptPayloadForConversation(conv, uptoIndex, options) {
+      var personaLevel = options && options.personaLevel ? options.personaLevel : "full";
       var targetConv = conv || state.activeConversation;
       var locale = currentLocale();
       var skillMode = resolveConversationSkillMode(targetConv);
@@ -1206,7 +1297,8 @@
         resolvedReadings: resolvedReadings,
         messages: apiMessages,
         skillMode: skillMode,
-        hasUninterpretedReading: hasUninterpretedReading
+        hasUninterpretedReading: hasUninterpretedReading,
+        personaLevel: personaLevel
       });
       var estimatedTokens = contextApi.estimateConversationTokens({
         systemPrompt: systemPrompt,
@@ -1225,6 +1317,23 @@
         systemPrompt: systemPrompt,
         estimatedTokens: estimatedTokens
       };
+    }
+
+    // The persona prompt is heavy: with a 4K window it alone can exceed the
+    // input budget, and truncation would then start dropping recent turns.
+    // Fit the persona to the budget first (full -> compact -> none) so short
+    // conversations keep their history.
+    var PROMPT_PERSONA_LEVELS = ["full", "compact", "none"];
+
+    function fitPayloadToBudget(conv, uptoIndex, payload, hardCap) {
+      var current = payload;
+      for (var i = 0; i < PROMPT_PERSONA_LEVELS.length; i += 1) {
+        if (!current || current.estimatedTokens < hardCap) return current;
+        var nextLevel = PROMPT_PERSONA_LEVELS[i + 1];
+        if (!nextLevel) break;
+        current = buildPromptPayloadForConversation(conv, uptoIndex, { personaLevel: nextLevel });
+      }
+      return current;
     }
 
     function skillModeFallbackLabel(modeId) {
@@ -2825,6 +2934,11 @@
       if (err.code === "response_incomplete") {
         return tr("ai.err.incomplete", null, "连接在回答完成前结束，已保留收到的内容。请重试或继续追问。", "The connection ended before the response finished. Any received text has been kept. Retry or ask it to continue.");
       }
+      if (err.code === "context_too_small") {
+        return tr("ai.err.contextTooSmall", null,
+          "这段对话放不进当前上下文窗口了，连最简提示词加这个问题都超了。可以把问题改短一点，或在 API 设置里调大上下文窗口 / 换一个窗口更大的模型。",
+          "This conversation no longer fits the context window, even with the shortest prompt and just your question. Shorten the question, raise the context window in API settings, or switch to a model with a larger window.");
+      }
       if (err.code === "content_blocked") {
         return tr("ai.err.blocked", null, "模型的内容策略拦截了本次回答，已保留收到的内容。请调整问题后重试。", "The provider blocked this response under its content policy. Any received text has been kept. Revise your question and retry.");
       }
@@ -2960,14 +3074,26 @@
 
       return prepPromise.then(function (readyPayload) {
         var hardCap = Math.floor(inputBudget * 0.94);
+        var fitted = fitPayloadToBudget(conv, assistantMsgIndex, readyPayload, hardCap);
         var finalMessages = truncateMessagesToBudget(
-          readyPayload.apiMessages,
-          readyPayload.systemPrompt,
+          fitted.apiMessages,
+          fitted.systemPrompt,
           hardCap,
           contextApi.estimateConversationTokens
         );
+        if (
+          finalMessages.length > 0
+          && contextApi.estimateConversationTokens({
+            systemPrompt: fitted.systemPrompt,
+            messages: finalMessages
+          }) >= hardCap
+        ) {
+          var tooSmall = new Error("prompt_too_large");
+          tooSmall.code = "context_too_small";
+          throw tooSmall;
+        }
         return providers.streamChat(profile, Object.assign(aiUsageObserver(profile.model, "conversation"), {
-          systemPrompt: readyPayload.systemPrompt,
+          systemPrompt: fitted.systemPrompt,
           messages: finalMessages,
           signal: state.abortController ? state.abortController.signal : undefined,
           onDelta: function (_delta, fullText) {

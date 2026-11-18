@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-function loadBrowserContext() {
+function loadBrowserContext(extraFiles) {
   const rootDir = path.resolve(__dirname, "..");
   const context = {
     console,
@@ -35,6 +35,9 @@ function loadBrowserContext() {
     "js/ai-skills.js",
     "js/ai-context.js"
   ];
+  if (Array.isArray(extraFiles)) {
+    files.push.apply(files, extraFiles);
+  }
   for (const rel of files) {
     const code = fs.readFileSync(path.join(rootDir, rel), "utf8");
     vm.runInContext(code, context, { filename: rel });
@@ -555,4 +558,43 @@ test("formatReadingsForPrompt and buildSystemPrompt compile distilled cues, stri
     messages: [{ role: "user", content: "Interpret this spread." }]
   });
   assert.ok(myst18Sys.includes("naturally use accurate position names, card names, and concrete domain/polarity concepts"));
+});
+
+test("personaLevel shrinks the persona so a small context window keeps recent turns", () => {
+  const personaEnv = loadBrowserContext(["js/ai-persona.js"]);
+  const personaContext = personaEnv.DivinationAiContext;
+  assert.ok(personaEnv.DivinationPersona, "test env must load the persona pack");
+  const zhMd = personaContext.formatReadingsForPrompt([], { locale: "zh-CN" });
+  const fullZh = personaContext.buildSystemPrompt("zh-CN", zhMd, "", { locale: "zh-CN" });
+  const compactZh = personaContext.buildSystemPrompt("zh-CN", zhMd, "", { locale: "zh-CN", personaLevel: "compact" });
+  const noneZh = personaContext.buildSystemPrompt("zh-CN", zhMd, "", { locale: "zh-CN", personaLevel: "none" });
+
+  assert.ok(fullZh.includes("奥莉薇娅"), "full zh prompt keeps the persona");
+  assert.ok(fullZh.includes("Mystagogus"), "full zh prompt lets the deck decide meanings");
+  assert.equal(fullZh.includes("合规的抽牌方式"), false, "persona no longer teaches client-reported numbers as a draw method");
+  assert.equal(fullZh.includes("数字奇偶"), false, "persona no longer derives reversals from parity");
+
+  assert.ok(compactZh.length * 2 < fullZh.length, "compact persona is much shorter than the full pack");
+  assert.ok(compactZh.includes("奥莉薇娅"), "compact persona still carries identity");
+  assert.ok(compactZh.includes("牌组"), "compact persona still says the deck decides meanings");
+  assert.equal(compactZh.includes("合规的抽牌方式"), false, "compact persona drops the client-reports-numbers draw path");
+  assert.equal(compactZh.includes("## 抽牌"), false, "compact persona is not the full pack");
+
+  assert.ok(noneZh.length < compactZh.length, "no persona is the smallest level");
+  assert.equal(noneZh.includes("## 三层模型"), false, "none level drops the persona entirely");
+  assert.equal(noneZh.includes("最上方人格设定为准"), false, "none level drops the dangling persona pointer");
+
+  const fullEn = personaContext.buildSystemPrompt("en", "", "", { locale: "en" });
+  const compactEn = personaContext.buildSystemPrompt("en", "", "", { locale: "en", personaLevel: "compact" });
+  const noneEn = personaContext.buildSystemPrompt("en", "", "", { locale: "en", personaLevel: "none" });
+  assert.ok(compactEn.length * 2 < fullEn.length, "compact en persona is much shorter than the full pack");
+  assert.ok(compactEn.includes("Olivia"));
+  assert.ok(fullEn.includes("Mystagogus") || fullEn.includes("LXXXI"), "full en prompt lets the deck decide meanings");
+  assert.equal(compactEn.includes("## The app deals the cards"), false, "compact en persona drops the full pack's draw section");
+  assert.equal(noneEn.includes("## Three layers"), false, "none en level drops the persona entirely");
+  assert.ok(
+    aiContext.estimateConversationTokens({ systemPrompt: compactEn, messages: [] })
+      < aiContext.estimateConversationTokens({ systemPrompt: fullEn, messages: [] }),
+    "compact prompt estimates fewer tokens"
+  );
 });

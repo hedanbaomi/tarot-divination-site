@@ -81,6 +81,19 @@ def main(argv=None):
                 chunks = ["answer " + question]
                 if question != "interrupted-fixture":
                     chunks.append(" complete")
+                # Fixture turns that represent a real interpretation name a card of
+                # the attached record; the reading-state machine only counts a
+                # reply as having read a record when it shows such evidence.
+                reading_answers = {
+                    "review-new-reading": "\n\n第一张是正位的愚者，落在现状位，说的是还没出发。",
+                    "reading-fixture": "\n\n第一张是正位的愚者，落在现状位，说的是还没出发。",
+                }
+                clarification_answers = {
+                    "clarify-fixture": "\n\n在看牌面之前，你想先聊哪件事？",
+                }
+                extra = reading_answers.get(question) or clarification_answers.get(question)
+                if extra:
+                    chunks.append(extra)
                 for i, chunk in enumerate(chunks):
                     # Multiline CRLF SSE is valid even when split between CR and LF.
                     payload = json.dumps({"choices": [{"delta": {"content": chunk}}]})
@@ -148,7 +161,7 @@ def main(argv=None):
                 browser_options["channel"] = "chrome"
             browser = pw.chromium.launch(**browser_options)
 
-            def context():
+            def context(cfg=None):
                 gate.clear()
                 seen.clear()
                 bodies.clear()
@@ -157,7 +170,7 @@ def main(argv=None):
                 c.route("**/*", lambda route: route.continue_()
                         if route.request.url.startswith(base + "/") else route.abort())
                 c.add_init_script("localStorage.setItem('quareia-ai-config-v1',"
-                                  + json.dumps(json.dumps(config)) + ");")
+                                  + json.dumps(json.dumps(cfg or config)) + ");")
                 return c
 
             for model, expected_calls in [("gpt-6.1-sol", 1), ("opaque-modern", 3), ("gpt-6.1-legacy", 2), ("opaque-nonstream", 2), ("opaque-policy-rejection", 1)]:
@@ -406,6 +419,7 @@ def main(argv=None):
                 assert after_remove == {"ids": ["review-r2", "review-r3"], "question": "Latest question before remove"}, after_remove
                 results["remove_preserves_other_tab_question_and_attachment"] = "pass"
 
+
                 for locale, expected in [("zh-CN", "免责声明"), ("en", "Disclaimer:")]:
                     if a.evaluate("DivinationI18n.getLocale()") != locale:
                         toggle_language(a)
@@ -435,7 +449,7 @@ def main(argv=None):
                         assert ("非 AI 回复" if locale == "zh-CN" else "not an AI response") in summary_text
                         if width == 390:
                             style = disclaimer.evaluate("el => { const s=getComputedStyle(el); return {size:s.fontSize,line:s.lineHeight,padding:s.paddingTop}; }")
-                            assert style == {"size": "11px", "line": "15.62px", "padding": "6px"}, style
+                            assert style == {"size": "12px", "line": "17.04px", "padding": "6px"}, style
                             results["mobile_composer_height_" + locale] = a.locator(".ai-composer").evaluate("el => Math.round(el.getBoundingClientRect().height)")
                         if args.output:
                             a.screenshot(path=str(args.output / ("ai-disclaimer-" + locale + "-" + str(width) + ".png")))
@@ -470,6 +484,64 @@ def main(argv=None):
                 a.wait_for_function("document.querySelector('[data-reading-id=\"review-r2\"]') === null")
                 assert a.evaluate("async () => await DivinationAiChatStore.createStore().getConversation('review-race')") is None
                 results["remove_from_deleted_chat_recovers_without_page_error"] = "pass"
+
+            with context() as c:
+                a = page(c)
+                a.evaluate("""async () => {
+                    const store = DivinationAiChatStore.createStore();
+                    const snapshot = DivinationAiContext.buildReadingSnapshot({
+                        id:'clarify-r1', layoutMode:'preset', deckType:'tarot', spreadId:'three-card-horizontal',
+                        createdAt:Date.now(), cards:[
+                            {cardId:'major-00', positionNumber:1, orientation:'upright'},
+                            {cardId:'major-01', positionNumber:2, orientation:'upright'},
+                            {cardId:'major-02', positionNumber:3, orientation:'upright'}
+                        ]}, {locale:'zh-CN'});
+                    const conv = await store.createConversation({id:'clarify-state', title:'Clarify fixture'});
+                    await store.setAttachedReadings(conv.id, [snapshot.id], [snapshot]);
+                }""")
+                a.reload()
+                a.locator('[data-reading-id="clarify-r1"]').wait_for()
+                # (a) The reader only asks what to talk about first; mentioning
+                # 牌面 is not an interpretation of the attached spread.
+                send(a, "clarify-fixture")
+                done(a)
+                # Still nothing has been read out of the record, so the next
+                # turn must not be treated as a follow-up.
+                assert "追问开窗深挖" not in a.locator("#aiActiveSkillsList").inner_text()
+                send(a, "reading-fixture")
+                done(a)
+                # The turn that reads the spread itself is not a follow-up.
+                assert "严禁重背全盘" not in bodies[-1]["messages"][0]["content"]
+                # (b) A short reply that names a card of the record does count, so
+                # the following turn opens follow-up mode.
+                send(a, "after-reading-fixture")
+                done(a)
+                assert "严禁重背全盘" in bodies[-1]["messages"][0]["content"]
+                assert "追问开窗深挖" in a.locator("#aiActiveSkillsList").inner_text()
+                results["clarification_does_not_start_follow_up"] = "pass"
+
+            # A manual 4096-token window with the full persona prompt used to
+            # trim the earlier turns away. The assembly now drops the persona
+            # down to its compact form first, so all three short turns survive.
+            small_config = json.loads(json.dumps(config))
+            small_config["profiles"][0]["contextWindow"] = 4096
+            with context(small_config) as c:
+                a = page(c)
+                send(a, "small-name")
+                done(a)
+                send(a, "small-ack")
+                done(a)
+                send(a, "small-ask")
+                done(a)
+                last = bodies[-1]
+                system_prompt = last["messages"][0]["content"]
+                joined = "\n".join(message["content"] for message in last["messages"])
+                for expected in ["small-name", "small-ack", "small-ask"]:
+                    assert expected in joined, (expected, [m["content"] for m in last["messages"]])
+                assert "应用内运行规范（简版）" in system_prompt
+                assert "## 三层模型" not in system_prompt
+                assert "奥莉薇娅" in system_prompt
+                results["small_context_keeps_recent_turns"] = "pass"
 
             with context() as c:
                 a = page(c)

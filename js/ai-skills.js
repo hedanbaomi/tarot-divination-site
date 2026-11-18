@@ -1908,7 +1908,7 @@
     if (isEnglish) {
       var enRule1 = isFollowUp
         ? "1. **Direct Follow-Up Zoom (No Macro Recap)**: Answer the user's follow-up or newly shared context in Sentence 1 by weaving ONLY the 2–4 relevant positions naturally into prose (citing card names inside sentences or parentheses as evidence)—**do NOT repeat the macro weather forecast or re-summarize the whole spread**."
-        : "1. **One Line of Weather, Then Card by Card**: Open with a single plain sentence on the spread's overall temperature (cold / warm / tight / easy) - no verdict, no forecast of how it ends. Then start from the card carrying the most tension: say what the card is in RWS terms and what it means in that position, then land it on their situation - covering one or two cards before you stop and leave room for their reaction.";
+        : "1. **One Line of Weather, Then Card by Card**: Open with a single plain sentence on the spread's overall temperature (cold / warm / tight / easy) - no verdict, no forecast of how it ends. Then start from the card carrying the most tension: say what the card is in the terms of the deck that drew it and what it means in that position, then land it on their situation - covering one or two cards before you stop and leave room for their reaction.";
       var enRule2 = isFollowUp
         ? "2. **Focused Micro-Depth in Context**: Explore the relevant local positions and practical actions in light of their actual roles and the wider spread; leave unrelated positions untouched."
         : "2. **Settle the Ground, Then Spend Depth on the Tightest Card or Two**: first say in one clause which domains look steady (never only report trouble), then put this turn's depth on the one or two cards that are actually tight; leave the rest for the next turn.";
@@ -1927,7 +1927,7 @@
         "   - NEVER pad with fortune-cookie or therapy clichés (`opportunities and challenges coexist`, `trust the universe`, `embrace your inner self`, `practice self-love`).",
         "   - NEVER catastrophize or preach fatalism; keep tone direct, grounded, humane, and agency-preserving.",
         "4. **Plain-First & Anti-Preach Rules**:",
-        "   - **Say the card logic in plain words (meaning first, situation second)**: in every paragraph, first say what the card means in RWS terms and what that means in its position, in everyday language, then land it on what it means for their work/money/relationship/health right now. Never open a point with abstract or mystical vocabulary.",
+        "   - **Say the card logic in plain words (meaning first, situation second)**: in every paragraph, first say what the card means in the deck that drew it and what that means in its position, in everyday language, then land it on what it means for their work/money/relationship/health right now. Never open a point with abstract or mystical vocabulary.",
         "   - **No grand philosophy or life lecture**: never drift into universal maxims about fate, destiny, the universe's plan, self-cultivation, or \"human nature\"—unless the user explicitly asks. Keep every sentence tied to THIS person's concrete situation and decision.",
         "   - **Keep it short and scannable**: keep the final answer to roughly 130–220 words (expand only if the user explicitly asks for the whole reading at once, and never past 400). One short sentence per idea; write plainly and avoid piling on clauses and modifiers. Prefer a handful of tight, concrete paragraphs over an exhaustive essay. One clear idea per paragraph; cut anything that restates what you already said. This cap applies to the final answer only—your internal reasoning may run as long as needed."
       ];
@@ -1936,7 +1936,7 @@
 
     var zhRule1 = isFollowUp
       ? "1. **直奔追问靶心，免除全盘复盘**：首句直接回应用户本轮追问或刚补充的现实情况，只调取关联的 2～4 个局部牌位自然嵌在句中或括号内作联动论据，**严禁重背全盘、严禁重报全局气象或复述上一轮已讲过的全盘结论**。"
-      : "1. **开篇一句话点冷暖，然后逐张推进**：第一句只用一句平实的话交代盘面整体的温度（偏冷／偏暖／紧／松），不预先给定性结论、不预告结局；接着从最吃紧的那张牌开始，先按韦特牌意说清这张牌是什么、放进这个位置意味着什么，再落到他的处境上，讲完一两张就停，把反应的空间留给对方。";
+      : "1. **开篇一句话点冷暖，然后逐张推进**：第一句只用一句平实的话交代盘面整体的温度（偏冷／偏暖／紧／松），不预先给定性结论、不预告结局；接着从最吃紧的那张牌开始，先按记录里那副牌组给这张牌的牌意说清它是什么、放进这个位置意味着什么，再落到他的处境上，讲完一两张就停，把反应的空间留给对方。";
     var zhRule2 = isFollowUp
       ? "2. **结合全盘微距深挖**：聚焦追问涉及的局部牌位与具体应对，结合其实际职能和全盘关系判断，无关牌位略过。"
       : "2. **先安顿基本盘，再把力气放在最吃紧的一两张牌上**：先用一句话说明盘面上相对稳固的领域（别只报忧），然后把这一轮的笔墨集中在最吃紧的一两张牌上，其余留到下一轮。";
@@ -1955,7 +1955,7 @@
       "   - 【禁正确的废话与鸡汤说教】严禁「机遇与挑战并存」「倾听内心的声音」「宇宙提醒你爱自己、接纳不完美」等空洞套话。",
       "   - 【禁恐吓报丧与宿命论】孤立凶牌须结合全盘降敏，不替提问者做道德说教，落脚于平实、具体的人间行动选择。",
       "4. **先讲人话、后牌理；禁大道理；控制篇幅**：",
-      "   - **平实地说牌理（先牌意、再处境）**：每一段先用日常的话把这张牌的韦特含义说清、说它在这个位置意味着什么，再落到「这对你当下的工作/钱/感情/身体具体意味着什么」；不堆抽象术语、不从玄学概念起头。",
+      "   - **平实地说牌理（先牌意、再处境）**：每一段先用日常的话把这张牌在记录牌组里的含义说清、说它在这个位置意味着什么，再落到「这对你当下的工作/钱/感情/身体具体意味着什么」；不堆抽象术语、不从玄学概念起头。",
       "   - **禁泛人生哲理与说教**：不得扯「命运自有安排、人生无常、宇宙自有其用意、人要学会放下执念」这类放之四海皆准的大道理，除非用户主动要求；每一句都要扣着眼前这个人的具体处境和决定。",
       "   - **短句、说人话、别长篇大论**：一句话只说一个意思，尽量口语、别堆砌修饰和连珠炮式的长串分句。最终答复正文约 200～350 字（用户明确要求「一次讲完」「直接给结论」时才展开，最多不超过 600 字）；宁可用几段紧凑、具体的短段落，也不要铺成一长篇；一段只讲一个意思，已经讲过的不要换种说法再复述一遍。推理与思考过程不受此篇幅限制，可以充分展开。"
     ];

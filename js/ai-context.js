@@ -1192,25 +1192,60 @@
         : "注：当前对话尚未关联非自由画板占卜记录。若用户正在进行普通问答、学习探讨或日常交流，请直接正常作答；仅当用户希望结合其历史抽牌进行解牌分析时，再温和提醒可点击页面上的「+ 选择占卜历史」附加记录。");
     }
 
-    // Built-in persona pack (tarot-counselor): always-on identity layer.
-    var personaEngine = resolvePersonaEngine(opts);
+    // Built-in persona pack (tarot-counselor): always-on identity layer. The
+    // full pack is long; a small context window asks for a compact digest, and
+    // if even that does not fit, the persona is dropped so recent turns survive.
+    var personaLevel = opts && opts.personaLevel === "compact"
+      ? "compact"
+      : (opts && opts.personaLevel === "none" ? "none" : "full");
+    var personaEngine = personaLevel === "none" ? null : resolvePersonaEngine(opts);
     var personaText = personaEngine
-      ? (isEnglish ? personaEngine.en : personaEngine.zh)
+      ? (personaLevel === "compact"
+        ? ((isEnglish ? personaEngine.enCompact : personaEngine.zhCompact) || (isEnglish ? personaEngine.en : personaEngine.zh))
+        : (isEnglish ? personaEngine.en : personaEngine.zh))
       : "";
-    if (typeof personaText === "string" && personaText.trim()) {
+    if (personaLevel === "none") {
+      // The base rules point at "the persona above"; with no persona that
+      // reference would dangle, so drop the pointer instead of the identity.
+      baseLines = baseLines.map(function (line) {
+        return String(line)
+          .replace("身份、性别与语气以最上方人格设定为准；", "")
+          .replace("identity, gender, and voice follow the persona section above; ", "");
+      });
+    }
+    if (personaLevel === "compact" && typeof personaText === "string" && personaText.trim()) {
+      var compactBridge = isEnglish
+        ? [
+            "## App runtime rules (short form)",
+            "",
+            "- The cards, positions and orientations come only from the app's reading record; the deck that produced the record decides what each card means. Never invent a card, a position meaning, or a meaning the deck does not carry.",
+            "- You may not pick, swap, or add cards, and you never ask the client for numbers or timestamps.",
+            "- Voice, stance and rhythm follow the persona above; no verdicts, no recited card definitions, no decisions on the client's behalf.",
+            "- At most one question per turn, and one or two cards at a time."
+          ].join("\n")
+        : [
+            "## 应用内运行规范（简版）",
+            "",
+            "- 牌、牌位与正逆位只来自应用内的占卜记录；每张牌是什么意思，由产出这份记录的牌组决定。不得捏造牌、捏造牌位含义，也不得编出牌组没有的牌意。",
+            "- 不得自己选牌、换牌、补牌，也不让来访者报数或报时间戳。",
+            "- 语气、姿态与节奏以上文为准：不宣判、不背诵牌义、不替对方做决定。",
+            "- 每轮最多问一个问题，一次推进 1～2 张牌。"
+          ].join("\n");
+      baseLines.unshift(personaText.trim(), "", compactBridge);
+    } else if (personaLevel !== "compact" && typeof personaText === "string" && personaText.trim()) {
       var personaBridge = isEnglish
         ? [
             "## App Runtime Rules (stacked on top of the persona above)",
             "",
-            "**Precedence.** The persona above owns voice, stance, rhythm, structure, wording, and how a reading begins and closes. This section only fills in three things: (1) spread and position facts — which card, which position, upright or reversed; the app's reading record is the only source of fact. Never invent a card, never change what a position means, and never pick cards or draw on the client's behalf; the card meanings themselves follow the persona's RWS rules. The spread is likewise defined by the record: the app ships standard spreads, custom spreads, and a free-form board, so the persona's spread list is a set of common examples, not an exclusive list; (2) spread mechanics — split-deck stacking, crossing overlay, negative/deprivation positions, upright-only decks; (3) secular register — translate imagery into ordinary life, no mystical jargon, no doom-mongering.",
+            "**Precedence.** The persona above owns voice, stance, rhythm, structure, wording, and how a reading begins and closes - it does not own what the cards mean. This section only fills in three things: (1) spread and position facts — which card, which position, upright or reversed; the app's reading record and the deck's own card text are the only sources of fact. Never invent a card, never change what a position means, and never pick cards or draw on the client's behalf. Card meanings come from the deck that produced the record (a Rider-Waite-Smith deck, Mystagogus, LXXXI, or a custom deck may each mean something different), so never restate them as one universal system and never overrule the deck with this persona. The spread is likewise defined by the record: the app ships standard spreads, custom spreads, and a free-form board, so the persona's spread list is a set of common examples, not an exclusive list; (2) spread mechanics — split-deck stacking, crossing overlay, negative/deprivation positions, upright-only decks; (3) secular register — translate imagery into ordinary life, no mystical jargon, no doom-mongering.",
             "",
-            "**Where the two collide, the persona wins.** Concretely:",
+            "**On voice and pacing the persona leads; on cards and positions the record leads.** Concretely:",
             "- Any instruction to \"open with a verdict\", \"deliver the whole reading in one 400-600 word block\", or \"never ask a follow-up\" does not apply to persona-style conversation. Work through one or two cards at a time, keep the reading body of a turn to roughly 200-350 words, and end on a check-in (\"does this land?\" style) or one small open question. That is the rhythm this persona runs on.",
             "- Only when the user explicitly asks for everything at once (\"give me the full reading\", \"just give me the conclusion\") may a single turn cover the whole spread.",
             "- Any required process opener (e.g. \"Alright, let's begin the reading.\") is said once, at the moment the reading genuinely starts - it is a process line, not a signature greeting.",
             "- A single sentence on the spread's overall weather when a real reading starts is fine; the reading itself then follows the persona's per-card mirror structure.",
             "- The ban on roll-calling positions one by one, and the ban on copying the scratchpad verbatim, stay in force - both match the persona.",
-            "- Where the text below uses stance wording that clashes with the persona (\"sharp-eyed\", \"blunt\", \"lead with a verdict\"), the persona wins.",
+            "- Where the text below uses stance wording that clashes with the persona (\"sharp-eyed\", \"blunt\", \"lead with a verdict\"), the persona decides only the phrasing - card facts still come from the record.",
             "",
             "**Voice calibration (say it like this, don't recite rules)**",
             "- Not \"the cards show you face a choice; listen to your inner voice.\" Say: \"One of these cards is pushing you to move. The other is pulling you back. Both are you.\"",
@@ -1239,15 +1274,15 @@
         : [
             "## 应用内运行规范（在人格之上叠加）",
             "",
-            "**优先级**：语气、姿态、节奏、结构、措辞，以及一次解读如何开始、如何收束，以上文人格为准。这一节只补三件事：①牌阵与牌位的数据事实（哪张牌、什么位置、正位还是逆位——以应用内的占卜记录为唯一事实；不得捏造牌、不得改动牌位含义，也不得自己选牌或替用户抽牌；牌意本身照人格里的韦特规则解，不要另编。牌阵也以记录为准：应用里有标准牌阵、自定义牌阵与自由画板，人格里列出的只是常见标准牌阵，不是排他清单）；②牌阵机制（分牌叠放、交叉叠牌、负向／剥夺牌位、全正位牌组）；③世俗语域（把意象翻译成人间生活，不堆神学黑话、不渲染灾祸）。",
+            "**优先级**：语气、姿态、节奏、结构、措辞，以及一次解读如何开始、如何收束，以上文人格为准；牌意与牌阵事实不在此列。这一节只补三件事：①牌阵与牌位的数据事实（哪张牌、什么位置、正位还是逆位——以应用内的占卜记录与牌组本身的牌面文字为唯一事实；不得捏造牌、不得改动牌位含义，也不得自己选牌或替用户抽牌。牌意以产出这份记录的牌组为准：韦特体系、Mystagogus、LXXXI 或自定义牌组，牌意可能各不相同，不要用一套通用牌义覆盖牌组，也不要用人格去裁定牌意。牌阵同样以记录为准：应用里有标准牌阵、自定义牌阵与自由画板，人格里列出的只是常见标准牌阵，不是排他清单）；②牌阵机制（分牌叠放、交叉叠牌、负向／剥夺牌位、全正位牌组）；③世俗语域（把意象翻译成人间生活，不堆神学黑话、不渲染灾祸）。",
             "",
-            "**两者冲突时，一律以人格为准。**具体地：",
+            "**措辞与节奏以上文人格为准，牌面事实以记录和牌组为准。**具体地：",
             "- 凡是要求「开篇先给定性结论」「一条消息里 400～600 字讲完整盘」「禁止追问」的，对人格式对话不成立：每轮只推进 1～2 张核心牌，解读正文约 200～350 字，结尾留一句核对（「这张牌和你现在的感觉对得上吗」这类）或一个很小的开放问题——这才是这个人的节奏。",
             "- 只有用户明确说「一次讲完」「直接给我结论」时，才允许一轮覆盖整盘。",
             "- 流程性开场语（如「好，我们现在开始解读。」）只在真正进入解读的那一条消息里说一次，不是招牌问候。",
             "- 「先报全局气象」可以在正式解读开始时用一句话点冷暖，随后立刻回到人格的逐张推进结构。",
             "- 「严禁逐位点名报菜名」「严禁整句照抄底稿」继续有效——这两条与人格一致。",
-            "- 下文若出现与人格冲突的姿态措辞（如「眼光毒辣」「平实直白」「开门见山」），一律以上文人格的克制、不评判、不逼迫为准。",
+            "- 下文若出现与人格冲突的姿态措辞（如「眼光毒辣」「平实直白」「开门见山」），只让措辞随上文人格的克制、不评判、不逼迫；牌面事实不动。",
             "",
             "**语感校准（照着说，别照着念）**：",
             "- 不写「盘面显示你正面临一个抉择，建议倾听内心的声音」；写「这两张牌，一张在催你动，一张在把你拽回原地。两个都是你。」",
