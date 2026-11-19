@@ -35,6 +35,7 @@ Build and release instructions live in [`android-demo/README.en.md`](android-dem
 - **Three decks**: 78-card Tarot, 78-card Mystagogus, and 81-card LXXXI, selectable in the reading settings.
 - **Bilingual interface**: switch between `zh-CN` and `en` from the main screen. The preference is saved in the current browser, and the interface, card names, keywords, meanings, spread descriptions, history, and accessibility text change together.
 - All three decks can use compatible layouts from the other deck families. The Four Seasons Spread is Tarot-only because each position restricts the eligible suit or Major Arcana pool.
+- The website remembers the last opened spread and deck in this browser across refreshes, closing and reopening, and switching between page versions. The last used custom spread is also retained. Clearing site data restores the defaults.
 - Tarot filters: all cards, Major Arcana only, Minor Arcana only, Major then Minor, or Minor then Major.
 - Tarot supports upright-only and mixed upright/reversed readings. Mystagogus and LXXXI are upright-only, and the mixed-orientation option is disabled automatically for them.
 - The deck is displayed as a horizontally scrollable row. Tap any card you want instead of being limited to the top card.
