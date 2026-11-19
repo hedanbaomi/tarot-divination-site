@@ -25,6 +25,7 @@ def main(argv=None):
     gate = threading.Event()
     seen = []
     bodies = []
+    compatibility_bodies = []
     errors = []
     results = {}
 
@@ -34,6 +35,28 @@ def main(argv=None):
 
         def do_POST(self):
             data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            model = data.get("model", "")
+            if model in ("gpt-6.1-sol", "opaque-modern", "gpt-6.1-legacy", "opaque-nonstream", "opaque-policy-rejection"):
+                compatibility_bodies.append(data)
+                error = None
+                if model in ("gpt-6.1-sol", "opaque-modern") and "max_tokens" in data:
+                    error = {"code": "unsupported_parameter", "param": "max_tokens", "message": "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."}
+                elif model == "opaque-modern" and "temperature" in data:
+                    error = {"code": "unsupported_value", "param": "temperature", "message": "Unsupported value: 'temperature' does not support 0.4 with this model. Only the default (1) value is supported."}
+                elif model == "gpt-6.1-legacy" and "max_completion_tokens" in data:
+                    error = {"code": "unsupported_parameter", "param": "max_completion_tokens", "message": "Unsupported parameter: max_completion_tokens"}
+                elif model == "opaque-nonstream" and "stream" in data:
+                    error = {"code": "unsupported_parameter", "param": "stream", "message": "Unsupported parameter: stream"}
+                elif model == "opaque-policy-rejection":
+                    error = {"code": "content_policy_violation", "message": "Rejected user input: Unsupported parameter: max_tokens"}
+                if error:
+                    body = json.dumps({"error": error}).encode()
+                    self.send_response(400)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
             # Pending empty assistant messages are omitted from API requests,
             # so consecutive user turns may be joined with two newlines. Route
             # this fake service by the newest fixture prompt, but retain the
@@ -41,6 +64,14 @@ def main(argv=None):
             question = data["messages"][-1]["content"].rsplit("\n\n", 1)[-1]
             seen.append(question)
             bodies.append(data)
+            if model == "opaque-nonstream":
+                body = json.dumps({"choices": [{"message": {"content": "answer " + question + " complete"}, "finish_reason": "stop"}]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             slow = question.startswith("slow") and seen.count(question) == 1
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -50,6 +81,20 @@ def main(argv=None):
                 chunks = ["answer " + question]
                 if question != "interrupted-fixture":
                     chunks.append(" complete")
+                # Fixture turns that represent a real interpretation name a card of
+                # the attached record; the reading-state machine only counts a
+                # reply as having read a record when it shows such evidence.
+                reading_answers = {
+                    "slow-review-r1": "\n\n第一张是正位的愚者，落在现状位。",
+                    "review-new-reading": "\n\n第一张是正位的塔，落在现状位，说的是还没出发。",
+                    "reading-fixture": "\n\n第一张是正位的愚者，落在现状位，说的是还没出发。",
+                }
+                clarification_answers = {
+                    "clarify-fixture": "\n\n在看牌面之前，你想先聊哪件事？",
+                }
+                extra = reading_answers.get(question) or clarification_answers.get(question)
+                if extra:
+                    chunks.append(extra)
                 for i, chunk in enumerate(chunks):
                     # Multiline CRLF SSE is valid even when split between CR and LF.
                     payload = json.dumps({"choices": [{"delta": {"content": chunk}}]})
@@ -69,7 +114,10 @@ def main(argv=None):
             except (BrokenPipeError, ConnectionResetError):
                 pass
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(Handler, directory=str(root)))
+    class Server(ThreadingHTTPServer):
+        request_queue_size = 128
+
+    server = Server(("127.0.0.1", 0), partial(Handler, directory=str(root)))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = "http://127.0.0.1:%d" % server.server_port
     config = {"version": 1, "activeProfileId": "fixture", "profiles": [{
@@ -114,14 +162,48 @@ def main(argv=None):
                 browser_options["channel"] = "chrome"
             browser = pw.chromium.launch(**browser_options)
 
-            def context():
+            def context(cfg=None):
                 gate.clear()
                 seen.clear()
                 bodies.clear()
+                compatibility_bodies.clear()
                 c = browser.new_context(viewport={"width": 1440, "height": 900}, locale="zh-CN")
+                c.route("**/*", lambda route: route.continue_()
+                        if route.request.url.startswith(base + "/") else route.abort())
                 c.add_init_script("localStorage.setItem('quareia-ai-config-v1',"
-                                  + json.dumps(json.dumps(config)) + ");")
+                                  + json.dumps(json.dumps(cfg or config)) + ");")
                 return c
+
+            for model, expected_calls in [("gpt-6.1-sol", 1), ("opaque-modern", 3), ("gpt-6.1-legacy", 2), ("opaque-nonstream", 2), ("opaque-policy-rejection", 1)]:
+                with context() as c:
+                    a = page(c)
+                    a.locator("#aiSettingsBtn").click()
+                    a.locator("#aiProfileModel").fill(model)
+                    a.locator("#aiProfileMaxTokens").fill("1024")
+                    a.locator("#aiProfileTemperature").fill("0.4")
+                    if model != "opaque-policy-rejection":
+                        a.locator("#aiTestConnectionBtn").click()
+                        a.wait_for_function("document.querySelector('#aiSettingsStatus').textContent.includes('连接成功')")
+                        assert compatibility_bodies[-1].get("max_tokens", compatibility_bodies[-1].get("max_completion_tokens")) == 256
+                    compatibility_bodies.clear()
+                    a.locator("#aiSaveProfileBtn").click()
+                    a.locator("#aiPromptInput").fill("compatibility-fixture")
+                    a.locator("#aiSendBtn").click()
+                    done(a)
+                    assert len(compatibility_bodies) == expected_calls, (model, len(compatibility_bodies))
+                    assert all(body["model"] == model for body in compatibility_bodies)
+                    assert all(body.get("max_tokens", body.get("max_completion_tokens")) == 1024 for body in compatibility_bodies)
+                    assert all(body["messages"] == compatibility_bodies[0]["messages"] for body in compatibility_bodies)
+                    conversation = a.evaluate(read)
+                    answers = [message for message in conversation["messages"] if message["role"] == "assistant"]
+                    assert len(answers) == 1
+                    if model == "opaque-policy-rejection":
+                        assert "HTTP 400" in answers[0]["error"]
+                    else:
+                        assert answers[0]["content"] == "answer compatibility-fixture complete"
+                        assert not answers[0]["error"]
+                    assert a.evaluate("DivinationAiProviders.createConfigStore().getActiveProfile().maxTokens") == 1024
+                    results["provider_compatibility_" + model] = "pass"
 
             with context() as c:
                 a = page(c)
@@ -257,11 +339,219 @@ def main(argv=None):
                         "snapshot-description",
                         "snapshot-source",
                         "交叉叠放于第 1 位之上",
-                        "尚未意识到自身处境的空白状态",
+                        "零点空白、天真无防备",
                         "魔法师代表有工具",
                     ]:
                         assert expected in system, expected
                 results["snapshot_context_with_and_without_original_record"] = "pass"
+
+            with context() as c:
+                a = page(c)
+                snapshots = a.evaluate("""async () => {
+                    const snapshots = ['review-r1', 'review-r2'].map(id =>
+                        DivinationAiContext.buildReadingSnapshot({
+                            id, layoutMode:'preset', deckType:'tarot', spreadId:'three-card-horizontal',
+                            createdAt:Date.now(), cards:[
+                                {cardId:id==='review-r1'?'major-00':'major-16', positionNumber:1, orientation:'upright'},
+                                {cardId:'major-01', positionNumber:2, orientation:'upright'},
+                                {cardId:'major-02', positionNumber:3, orientation:'upright'}
+                            ]}, {locale:'zh-CN'}));
+                    await DivinationAiChatStore.createStore().createConversation({
+                        id:'review-race', title:'Review fixture', readingIds:snapshots.map(s=>s.id),
+                        readingSnapshots:snapshots});
+                    return snapshots;
+                }""")
+                a.reload()
+                a.locator('[data-reading-id="review-r1"]').wait_for()
+                b = page(c)
+                a.locator('[data-reading-id="review-r1"] .ai-reading-question-add-btn').click()
+                first_input = a.locator('[data-reading-id="review-r1"] .ai-reading-question-input')
+                first_input.fill("First tab question")
+                b.locator('[data-reading-id="review-r2"] .ai-reading-question-add-btn').click()
+                b.locator('.ai-reading-question-input').fill("Second tab question")
+                b.locator('.ai-reading-question-input').press("Enter")
+                b.wait_for_function("""async () => (await DivinationAiChatStore.createStore()
+                    .getConversation('review-race')).readingSnapshots.find(s=>s.id==='review-r2').question === 'Second tab question'""")
+                first_input.press("Enter")
+                a.wait_for_function("""async () => (await DivinationAiChatStore.createStore()
+                    .getConversation('review-race')).readingSnapshots.find(s=>s.id==='review-r1').question === 'First tab question'""")
+                questions = a.evaluate("""async () => (await DivinationAiChatStore.createStore()
+                    .getConversation('review-race')).readingSnapshots.map(s=>s.question)""")
+                assert questions == ["First tab question", "Second tab question"], questions
+                results["two_tab_question_edits_preserve_each_other"] = "pass"
+
+                # The second tab attaches a reading after the first tab sent its request.
+                a.evaluate("""async () => {
+                    const store=DivinationAiChatStore.createStore();
+                    const conv=await store.getConversation('review-race');
+                    await store.setAttachedReadings(conv.id,['review-r1'],
+                        conv.readingSnapshots.filter(s=>s.id==='review-r1'));
+                }""")
+                a.reload()
+                send(a, "slow-review-r1")
+                b.evaluate("""async snapshot => {
+                    const store=DivinationAiChatStore.createStore();
+                    const conv=await store.getConversation('review-race');
+                    await store.setAttachedReadings(conv.id,['review-r1','review-r2'],
+                        conv.readingSnapshots.concat(snapshot));
+                }""", snapshots[1])
+                gate.set()
+                done(a)
+                assert "追问开窗深挖" not in a.locator("#aiActiveSkillsList").inner_text()
+                send(a, "review-new-reading")
+                done(a)
+                assert "严禁重背全盘" not in bodies[-1]["messages"][0]["content"]
+                assert "追问开窗深挖" in a.locator("#aiActiveSkillsList").inner_text()
+                results["late_response_keeps_new_attachment_unread"] = "pass"
+
+                b.evaluate("""async snapshot => {
+                    const store=DivinationAiChatStore.createStore();
+                    const conv=await store.getConversation('review-race');
+                    await store.setAttachedReadings(conv.id,conv.readingIds.concat('review-r3'),
+                        conv.readingSnapshots.concat({...snapshot,id:'review-r3'}));
+                    await store.setReadingQuestion(conv.id,'review-r2','Latest question before remove');
+                }""", snapshots[0])
+                a.locator('[data-reading-id="review-r1"] .ai-chip-remove').click()
+                a.wait_for_function("document.querySelector('[data-reading-id=\"review-r3\"]') !== null")
+                after_remove = a.evaluate("""async () => {
+                    const conv=await DivinationAiChatStore.createStore().getConversation('review-race');
+                    return {ids:conv.readingIds, question:conv.readingSnapshots.find(s=>s.id==='review-r2').question};
+                }""")
+                assert after_remove == {"ids": ["review-r2", "review-r3"], "question": "Latest question before remove"}, after_remove
+                results["remove_preserves_other_tab_question_and_attachment"] = "pass"
+
+
+                for locale, expected in [("zh-CN", "免责声明"), ("en", "Disclaimer:")]:
+                    if a.evaluate("DivinationI18n.getLocale()") != locale:
+                        toggle_language(a)
+                    for width in [1280, 390]:
+                        a.set_viewport_size({"width": width, "height": 900 if width == 1280 else 844})
+                        if width == 390:
+                            if "is-open" in (a.locator("#aiSidebar").get_attribute("class") or "").split():
+                                a.locator("#aiSidebarClose").click()
+                            a.wait_for_function("document.querySelector('#aiSidebar').getBoundingClientRect().right <= 0")
+                        disclaimer = a.locator("#aiDisclaimer")
+                        a.locator("#aiMedicalNotice summary").scroll_into_view_if_needed()
+                        assert disclaimer.is_visible()
+                        assert expected in disclaimer.inner_text()
+                        assert a.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                        assert a.evaluate("""() => document.querySelector('#aiDisclaimer').getBoundingClientRect().top >=
+                            document.querySelector('#aiPromptInput').getBoundingClientRect().bottom""")
+                        assert disclaimer.evaluate("""el => {
+                            const r=el.getBoundingClientRect();
+                            const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+                            return hit===el || el.contains(hit);
+                        }"""), "Disclaimer must not be covered by the mobile sidebar"
+                        assert a.locator("#aiSendBtn").is_enabled()
+                        medical_notice = a.locator("#aiMedicalNotice")
+                        assert not medical_notice.evaluate("el => el.open")
+                        assert a.locator("#aiMessages #aiMedicalNotice").count() == 0
+                        summary_text = medical_notice.locator("summary").inner_text()
+                        assert ("非 AI 回复" if locale == "zh-CN" else "not an AI response") in summary_text
+                        if width == 390:
+                            style = disclaimer.evaluate("el => { const s=getComputedStyle(el); return {size:s.fontSize,line:s.lineHeight,padding:s.paddingTop}; }")
+                            assert style == {"size": "12px", "line": "17.04px", "padding": "6px"}, style
+                            results["mobile_composer_height_" + locale] = a.locator(".ai-composer").evaluate("el => Math.round(el.getBoundingClientRect().height)")
+                        if args.output:
+                            a.screenshot(path=str(args.output / ("ai-disclaimer-" + locale + "-" + str(width) + ".png")))
+                        medical_notice.locator("summary").click()
+                        assert medical_notice.locator("p").is_visible()
+                        assert ("不能确认疾病" if locale == "zh-CN" else "cannot confirm illness") in medical_notice.locator("p").inner_text()
+                        medical_notice.locator("p").scroll_into_view_if_needed()
+                        if args.output and width == 390:
+                            a.screenshot(path=str(args.output / ("ai-medical-notice-" + locale + "-mobile.png")))
+                        medical_notice.locator("summary").click()
+                results["disclaimer_visible_bilingual_desktop_mobile"] = "pass"
+
+                notice_text = a.locator("#aiMedicalNotice p").text_content().strip()
+                assert notice_text, "Read the complete notice even while its details panel is collapsed"
+                send(a, "medical-review: What about this illness and recovery?")
+                done(a)
+                request_text = json.dumps(bodies[-1], ensure_ascii=False)
+                assert notice_text not in request_text
+                assert "not an AI response" not in request_text
+                stored_messages = a.evaluate("""async () => (await DivinationAiChatStore.createStore()
+                    .getConversation('review-race')).messages.map(m=>m.content).join(' ')""")
+                assert notice_text not in stored_messages
+                assert "not an AI response" not in stored_messages
+                results["medical_notice_stays_outside_prompt_and_chat_history"] = "pass"
+
+                await_delete = b.evaluate("""async () => {
+                    await DivinationAiChatStore.createStore().deleteConversation('review-race');
+                    return true;
+                }""")
+                assert await_delete
+                a.locator('[data-reading-id="review-r2"] .ai-chip-remove').click()
+                a.wait_for_function("document.querySelector('[data-reading-id=\"review-r2\"]') === null")
+                assert a.evaluate("async () => await DivinationAiChatStore.createStore().getConversation('review-race')") is None
+                results["remove_from_deleted_chat_recovers_without_page_error"] = "pass"
+
+            with context() as c:
+                a = page(c)
+                a.evaluate("""async () => {
+                    const store = DivinationAiChatStore.createStore();
+                    const snapshot = DivinationAiContext.buildReadingSnapshot({
+                        id:'clarify-r1', layoutMode:'preset', deckType:'tarot', spreadId:'three-card-horizontal',
+                        createdAt:Date.now(), cards:[
+                            {cardId:'major-00', positionNumber:1, orientation:'upright'},
+                            {cardId:'major-01', positionNumber:2, orientation:'upright'},
+                            {cardId:'major-02', positionNumber:3, orientation:'upright'}
+                        ]}, {locale:'zh-CN'});
+                    const conv = await store.createConversation({id:'clarify-state', title:'Clarify fixture'});
+                    await store.setAttachedReadings(conv.id, [snapshot.id], [snapshot]);
+                }""")
+                a.reload()
+                a.locator('[data-reading-id="clarify-r1"]').wait_for()
+                # (a) The reader only asks what to talk about first; mentioning
+                # 牌面 is not an interpretation of the attached spread.
+                send(a, "clarify-fixture")
+                done(a)
+                # Still nothing has been read out of the record, so the next
+                # turn must not be treated as a follow-up.
+                assert "追问开窗深挖" not in a.locator("#aiActiveSkillsList").inner_text()
+                send(a, "reading-fixture")
+                done(a)
+                # The turn that reads the spread itself is not a follow-up.
+                assert "严禁重背全盘" not in bodies[-1]["messages"][0]["content"]
+                # (b) A short reply that names a card of the record does count, so
+                # the following turn opens follow-up mode.
+                send(a, "after-reading-fixture")
+                done(a)
+                assert "严禁重背全盘" in bodies[-1]["messages"][0]["content"]
+                assert "追问开窗深挖" in a.locator("#aiActiveSkillsList").inner_text()
+                results["clarification_does_not_start_follow_up"] = "pass"
+
+            # A manual 4096-token window with the full persona prompt used to
+            # trim the earlier turns away. The assembly now drops the persona
+            # down to its compact form first, so all three short turns survive.
+            small_config = json.loads(json.dumps(config))
+            small_config["profiles"][0]["contextWindow"] = 4096
+            for locale in ["zh-CN", "en"]:
+                with context(small_config) as c:
+                    a = page(c)
+                    if a.evaluate("DivinationI18n.getLocale()") != locale:
+                        toggle_language(a)
+                    meter = a.locator("#aiContextMeter").inner_text()
+                    for question in ["small-name", "small-ack", "small-ask"]:
+                        send(a, question)
+                        done(a)
+                    assert len(bodies) == 3, "Three short questions must not trigger a fourth, summarization call"
+                    sent = bodies[-1]["messages"]
+                    assert [m["content"] for m in sent if m["role"]=="user"] == ["small-name","small-ack","small-ask"]
+                    system_prompt = bodies[0]["messages"][0]["content"]
+                    est = a.evaluate("s => DivinationAiContext.estimateConversationTokens({systemPrompt:s,messages:[]})", system_prompt)
+                    assert str(est) in meter.replace(",", ""), (est, meter)
+                    results["small_context_keeps_recent_turns_"+locale] = "pass"
+
+            tiny_config = json.loads(json.dumps(config))
+            tiny_config["profiles"][0]["contextWindow"] = 1024
+            with context(tiny_config) as c:
+                a = page(c)
+                a.locator("#aiPromptInput").fill("你好")
+                a.locator("#aiSendBtn").click()
+                a.get_by_text("这段对话放不进当前上下文窗口了", exact=False).wait_for()
+                assert not bodies and not seen
+                results["tiny_context_rejected_before_provider"] = "pass"
 
             with context() as c:
                 a = page(c)

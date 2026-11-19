@@ -17,9 +17,9 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/redesign.css">
-  <link rel="stylesheet" href="css/ai-chat.css">
+  <link rel="stylesheet" href="css/styles.css?v=20261118e">
+  <link rel="stylesheet" href="css/redesign.css?v=20261118e">
+  <link rel="stylesheet" href="css/ai-chat.css?v=20261118e">
 </head>
 <body class="ai-chat-page">
   <header class="ai-topbar">
@@ -151,6 +151,14 @@
       <section class="ai-messages" id="aiMessages" aria-live="polite"></section>
 
       <footer class="ai-composer">
+        <div class="ai-skills-bar" id="aiSkillsBar">
+          <div class="ai-skill-modes" id="aiSkillModeGroup" role="group"
+            aria-label="选择 AI 解牌技法编排风格" data-i18n-aria-label="ai.skillModeAria">
+            <span class="ai-skill-mode-label" id="aiSkillModeLabel" data-i18n="ai.skillModeLabel">解牌人格</span>
+            <button class="ai-skill-mode-pill is-active" type="button" data-skill-mode="auto" aria-pressed="true" data-i18n="ai.skillMode.auto">奥莉薇娅</button>
+          </div>
+          <div class="ai-active-skills" id="aiActiveSkillsList" aria-live="polite"></div>
+        </div>
         <div class="ai-composer-box">
           <textarea class="ai-prompt-input" id="aiPromptInput" rows="2"
             placeholder="输入你的困惑或追问（Enter 发送，Shift+Enter 换行）"
@@ -166,6 +174,11 @@
         <p class="ai-privacy-footnote" data-i18n="privacy.ai">
           AI 密钥与聊天记录只保存在本机，请求直连你配置的模型接口。开启匿名使用统计时，会发送模型 ID、接口回传的 Token 用量和对话轮数；后台不接收密钥、接口地址、问题或回答内容。
         </p>
+        <p class="ai-disclaimer" id="aiDisclaimer" data-i18n="ai.disclaimer">免责声明：AI 解读可能存在错误或偏差，仅供个人反思与参考，不代表事实或对未来的保证，不能替代医疗、心理、法律或财务等专业意见。涉及健康、安全及其他重要决定，请核实实际情况并咨询合格专业人士。</p>
+        <details class="ai-medical-notice" id="aiMedicalNotice">
+          <summary data-i18n="ai.medicalNoticeTitle">医疗相关提示（应用说明，非 AI 回复）</summary>
+          <p data-i18n="ai.medicalNoticeBody">牌义与 AI 解读不能确认疾病、判断病情轻重或预测自愈，也不能替代诊断、检查与治疗。请勿据此延误就医或自行停药、改变治疗方案；如有健康疑虑，请咨询医疗专业人士。</p>
+        </details>
       </footer>
     </main>
   </div>
@@ -236,7 +249,7 @@
         </div>
 
         <p class="ai-locked-prompt-note" id="aiLockedPromptNote" data-i18n="ai.lockedPromptNote">
-          系统提示词已锁定为 Quareia 占卜辅助助手（依据应用内牌意与叠牌法法则），不可修改，且不限制日常非占卜主题正常对话。
+          系统提示词与内置 Quareia 解牌技法引擎已锁定（自动按牌组、牌阵电路与追问轮次挂载，依据应用内牌意推演且严禁照搬说明书），不可手动篡改，且不限制日常非占卜正常对话。
         </p>
 
         <div class="ai-preset-row" id="aiPresetRow" role="group" aria-labelledby="aiPresetLabel">
@@ -352,19 +365,21 @@
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js"></script>
   <script src="js/custom-spreads.js"></script>
-  <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js"></script>
+  <script src="js/i18n-data-en.js?v=20261118e"></script>
+  <script src="js/i18n.js?v=20261118e"></script>
   <script src="js/theme.js"></script>
   <script src="js/dialogs.js"></script>
   <script src="js/custom-selects.js"></script>
   <script src="js/history-records.js"></script>
   <script src="js/history-store.js"></script>
-  <script src="js/ai-providers.js"></script>
-  <script src="js/ai-context.js"></script>
-  <script src="js/ai-chat-store.js"></script>
+  <script src="js/ai-providers.js?v=20261120"></script>
+  <script src="js/ai-skills.js?v=20261118f"></script>
+  <script src="js/ai-persona.js?v=20261118f"></script>
+  <script src="js/ai-context.js?v=20261118f"></script>
+  <script src="js/ai-chat-store.js?v=20261120"></script>
   <script src="js/web-telemetry.js"></script>
   <script src="js/ai-telemetry.js"></script>
-  <script src="js/ai-ui.js"></script>
+  <script src="js/ai-ui.js?v=20261120"></script>
   <script src="js/web-analytics.js"></script>
 </body>
 </html>

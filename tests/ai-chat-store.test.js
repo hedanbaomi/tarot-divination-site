@@ -425,6 +425,70 @@ test("message appends and late completions preserve concurrent changes and delet
   assert.equal(await store.getConversation("shared"), null);
 });
 
+for (const storageKind of ["memory", "indexedDB"]) {
+  test(`late completion keeps its request timestamp when another tab attaches a reading (${storageKind})`, async () => {
+    const store = chatStore.createStore(storageKind === "memory"
+      ? { indexedDB: null, memoryFallback: true }
+      : { indexedDB: createFakeIndexedDb() });
+    const now = Date.now();
+    const first = { id: "r1", attachedAt: now, cards: [{ cardId: "major-00" }] };
+    const second = { id: "r2", attachedAt: now + 200, cards: [{ cardId: "major-01" }] };
+    await store.createConversation({ id: "reading-race", readingIds: ["r1"], readingSnapshots: [first] });
+    const pending = { id: "answer-r1", role: "assistant", content: "", createdAt: now + 100 };
+    await store.appendMessages("reading-race", [pending]);
+    await store.setAttachedReadings("reading-race", ["r1", "r2"], [first, second]);
+    const completed = await store.completeMessage("reading-race", { ...pending, content: "Only r1 was sent." });
+    assert.equal(completed.messages[0].createdAt, pending.createdAt, "Late answers must not borrow a newer reading's attachment timestamp");
+    assert.ok(completed.readingSnapshots[1].attachedAt > completed.messages[0].createdAt, "r2 must remain unread after the old request completes");
+  });
+}
+
+test("new and regenerated assistant placeholders use the current attachment boundary before generation", async () => {
+  const store = chatStore.createStore({ indexedDB: null, memoryFallback: true });
+  const future = Date.now() + 60000;
+  const snapshot = { id: "future-r", attachedAt: future, cards: [{ cardId: "major-00" }] };
+  await store.createConversation({ id: "clock-boundary", readingIds: [snapshot.id], readingSnapshots: [snapshot] });
+  const pending = { id: "new-answer", role: "assistant", content: "", createdAt: future - 100 };
+  const appended = await store.appendMessages("clock-boundary", [pending]);
+  assert.ok(appended.messages[0].createdAt >= future, "A newly created request includes the already attached reading even after clock skew/import");
+  const completed = await store.completeMessage("clock-boundary", { ...pending, content: "Read the attached spread." });
+  assert.equal(completed.messages[0].createdAt, appended.messages[0].createdAt, "Completion preserves the stored request boundary");
+  const replacement = await store.updateConversation("clock-boundary", {
+    messages: [{ id: "regenerated-answer", role: "assistant", content: "", createdAt: future - 200 }]
+  }, { expectedMessages: completed.messages });
+  assert.ok(replacement.messages[0].createdAt >= future, "Regenerate/edit-and-resend replacements also bind their request boundary before generation");
+});
+
+test("a stale picker preserves concurrent question and title edits on retained readings", async () => {
+  const store = chatStore.createStore({ indexedDB: null, memoryFallback: true });
+  const first = { id: "r1", question: "old question", cards: [{ cardId: "major-00" }] };
+  const second = { id: "r2", question: "new reading", cards: [{ cardId: "major-01" }] };
+  await store.createConversation({ id: "picker-race", title: "old title", readingIds: ["r1"], readingSnapshots: [first] });
+  const stale = await store.getConversation("picker-race");
+  await store.setReadingQuestion("picker-race", "r1", "latest question");
+  await store.updateConversation("picker-race", { title: "latest manual title" });
+  const saved = await store.setAttachedReadings("picker-race", ["r1", "r2"], stale.readingSnapshots.concat(second), {
+    title: "stale automatic title", expectedTitle: stale.title
+  });
+  assert.equal(saved.readingSnapshots.find(s => s.id === "r1").question, "latest question");
+  assert.equal(saved.readingSnapshots.find(s => s.id === "r2").question, "new reading");
+  assert.equal(saved.title, "latest manual title");
+});
+
+test("request boundaries parse unnormalized ISO attachment timestamps before normalizing a patch", async () => {
+  const store = chatStore.createStore({ indexedDB: null, memoryFallback: true });
+  await store.createConversation({ id: "iso-boundary" });
+  const now = Date.now();
+  const attachedAt = new Date(now + 60000).toISOString();
+  const saved = await store.updateConversation("iso-boundary", {
+    readingIds: ["iso-reading"],
+    readingSnapshots: [{ id: "iso-reading", attachedAt, cards: [{ cardId: "major-00" }] }],
+    messages: [{ id: "iso-request", role: "assistant", content: "", createdAt: now }]
+  });
+  assert.equal(saved.readingSnapshots[0].attachedAt, Date.parse(attachedAt));
+  assert.equal(saved.messages[0].createdAt, Date.parse(attachedAt), "The request boundary must include ISO timestamps present in this same transaction");
+});
+
 test("late compression does not restore a summary invalidated by another edit", async () => {
   const store = chatStore.createStore({ indexedDB: createFakeIndexedDb() });
   const messages = [

@@ -51,7 +51,8 @@
 
   var ANTHROPIC_DEFAULT_MAX_TOKENS = 4096;
   var DEFAULT_TEST_TIMEOUT_MS = 15000;
-  var OPENAI_REASONING_MODEL_RE = /^(?:.*\/)?(o[134](?:[-_]|$)|gpt-5)/i;
+  var OPENAI_REASONING_MODEL_RE = /^(?:.*[\/:])?(?:o[1-9]\d*(?=[._-]|$)|gpt-(?:[5-9]|[1-9]\d+)(?=[._-]|$))/i;
+  var MAX_COMPATIBILITY_RETRIES = 3;
 
   function isOpenAiReasoningModel(model) {
     return OPENAI_REASONING_MODEL_RE.test(trimString(model));
@@ -977,6 +978,85 @@
     });
   }
 
+  function normalizeCompatibilityParameter(value) {
+    var parameter = trimString(value).replace(/^body\./, "");
+    if (parameter === "generation_config.temperature" || parameter === "generationConfig.temperature") return "temperature";
+    if (parameter === "stream_options.include_usage") return "stream_options";
+    return ["max_tokens", "max_completion_tokens", "temperature", "stream_options", "stream"].indexOf(parameter) !== -1
+      ? parameter : "";
+  }
+
+  function rejectedCompatibilityParameter(status, bodyText) {
+    if ((status !== 400 && status !== 422) || typeof bodyText !== "string" || bodyText.length > 65536) return "";
+    var parsed = null;
+    try { parsed = JSON.parse(bodyText); } catch (_ignored) { /* Some gateways return plain text. */ }
+    var error = parsed && typeof parsed.error === "object" ? parsed.error : parsed;
+    var message = extractErrorMessageFromJson(parsed) || (!parsed ? trimString(bodyText) : "");
+    if (message.charAt(0) === "<") return "";
+    var code = error ? (trimString(error.code) || trimString(error.type) || trimString(error.status)).toLowerCase() : "";
+    if (code && ["unsupported_parameter", "unknown_parameter", "unrecognized_request_argument",
+      "unsupported_value", "invalid_request_error", "invalid_argument", "bad_request"].indexOf(code) === -1) return "";
+    var explicitParameter = error && (error.param || error.parameter || error.field);
+    var parameter = normalizeCompatibilityParameter(explicitParameter);
+    // A named unrelated validation error must never be reinterpreted from quoted input.
+    if (explicitParameter && !parameter) return "";
+    if (parameter && /^(?:unsupported_parameter|unknown_parameter|unrecognized_request_argument)$/.test(code)) return parameter;
+    if (parameter === "temperature" && code === "unsupported_value" &&
+        /only (?:the )?default.*(?:value )?is supported/i.test(message)) return parameter;
+
+    if (status === 422 && parsed && Array.isArray(parsed.detail) && parsed.detail.length) {
+      var fields = parsed.detail.map(function (item) {
+        return item && item.type === "extra_forbidden" && Array.isArray(item.loc) && item.loc[0] === "body"
+          ? normalizeCompatibilityParameter(item.loc.slice(1).join(".")) : "";
+      });
+      return fields.every(function (field) { return Boolean(field); }) ? fields[0] : "";
+    }
+
+    var fieldPattern = "(max_completion_tokens|max_tokens|(?:generationConfig\\.|generation_config\\.)?temperature|stream_options(?:\\.include_usage)?|stream)";
+    var quotedField = "['\"`]?" + fieldPattern + "['\"`]?(?![A-Za-z0-9_])";
+    // Only standalone parameter diagnostics qualify, not a phrase echoed from a prompt.
+    var unsupportedTail = "\\s+(?:is\\s+)?(?:not supported|unsupported|not allowed)(?:\\s+(?:with|for|by)\\s+(?:this|the)\\s+model)?";
+    var replacementTail = "(?:\\.\\s*Use\\s+['\"`]?(?:max_tokens|max_completion_tokens)['\"`]?\\s+instead)?[.!]?\\s*$";
+    var prefix = new RegExp("^(?:error:\\s*)?(?:unsupported|unknown|unrecognized|unexpected)(?: request)? (?:parameter|argument|field|name)(?: supplied)?\\s*[:=]?\\s*" + quotedField + "(?:" + unsupportedTail + ")?" + replacementTail, "i");
+    var suffix = new RegExp("^(?:error:\\s*)?" + quotedField + unsupportedTail + replacementTail, "i");
+    var match = message.match(prefix) || message.match(suffix);
+    var matchedParameter = match ? normalizeCompatibilityParameter(match[1]) : "";
+    return matchedParameter && (!explicitParameter || matchedParameter === parameter) ? matchedParameter : "";
+  }
+
+  function compatibilityRequest(reqSpec, status, bodyText, changed) {
+    var parameter = rejectedCompatibilityParameter(status, bodyText);
+    if (!parameter) return null;
+    var body = Object.assign({}, reqSpec.body);
+    var group = parameter;
+    var owns = function (value, key) { return Object.prototype.hasOwnProperty.call(value, key); };
+    if (parameter === "max_tokens" || parameter === "max_completion_tokens") {
+      group = "token-limit";
+      if (reqSpec.format !== "openai-chat" || changed[group] || !owns(body, parameter)) return null;
+      var alternate = parameter === "max_tokens" ? "max_completion_tokens" : "max_tokens";
+      if (owns(body, alternate)) return null;
+      body[alternate] = body[parameter];
+      delete body[parameter];
+    } else if (parameter === "temperature") {
+      if (changed[group]) return null;
+      if (owns(body, "temperature")) delete body.temperature;
+      else if (body.generationConfig && owns(body.generationConfig, "temperature")) {
+        body.generationConfig = Object.assign({}, body.generationConfig);
+        delete body.generationConfig.temperature;
+      } else return null;
+    } else if (parameter === "stream_options") {
+      if (changed[group] || !owns(body, "stream_options")) return null;
+      delete body.stream_options;
+    } else if (parameter === "stream") {
+      if (changed[group] || !owns(body, "stream")) return null;
+      delete body.stream;
+      delete body.stream_options;
+    } else return null;
+    changed[group] = true;
+    // URL, protocol, headers, model, prompts and numeric token limits stay unchanged.
+    return Object.assign({}, reqSpec, { body: body, bodyJson: JSON.stringify(body) });
+  }
+
   function extractContentString(content) {
     if (typeof content === "string") {
       return content;
@@ -1604,30 +1684,37 @@
     function notifyObserver(name, value) {
       try { if (typeof opts[name] === "function") opts[name](value); } catch (_ignored) { /* Optional statistics never affect requests. */ }
     }
-    return Promise.resolve().then(function () {
-      if (signal && signal.aborted) throw AiProviderError("aborted", "Request aborted", { format: profile.format });
-      notifyObserver("onRequestStart");
-      return fetchImpl(reqSpec.url, {
-      method: reqSpec.method,
-      headers: reqSpec.headers,
-      body: reqSpec.bodyJson,
-      signal: signal
-      });
-    }).then(function (response) {
-      if (!response) {
-        throw AiProviderError("network_error", "Empty response from network request", {
-          format: profile.format
+    var compatibilityChanges = Object.create(null);
+    function requestWithCompatibility(retries) {
+      return Promise.resolve().then(function () {
+        if (signal && signal.aborted) throw AiProviderError("aborted", "Request aborted", { format: profile.format });
+        return fetchImpl(reqSpec.url, {
+          method: reqSpec.method,
+          headers: reqSpec.headers,
+          body: reqSpec.bodyJson,
+          signal: signal
         });
-      }
-
-      if (!response.ok) {
+      }).then(function (response) {
+        if (!response) throw AiProviderError("network_error", "Empty response from network request", { format: profile.format });
+        if (response.ok) return response;
         return response.text().then(function (errText) {
+          var next = retries < MAX_COMPATIBILITY_RETRIES
+            ? compatibilityRequest(reqSpec, response.status, errText, compatibilityChanges) : null;
+          if (next) {
+            reqSpec = next;
+            return requestWithCompatibility(retries + 1);
+          }
           throw buildHttpError(response.status, errText, profile.format, profile.apiKey);
         }, function () {
           throw buildHttpError(response.status, "", profile.format, profile.apiKey);
         });
-      }
-
+      });
+    }
+    return Promise.resolve().then(function () {
+      if (signal && signal.aborted) throw AiProviderError("aborted", "Request aborted", { format: profile.format });
+      notifyObserver("onRequestStart");
+      return requestWithCompatibility(0);
+    }).then(function (response) {
       var contentType = response.headers && typeof response.headers.get === "function"
         ? (response.headers.get("content-type") || "").toLowerCase()
         : "";
@@ -2193,6 +2280,15 @@
     return out;
   }
 
+  // Keep the explicit wire limit intact and allow headroom for the local estimate.
+  function inputTokenBudget(profile, windowSize) {
+    var explicit = Number(profile && profile.maxTokens);
+    var reserve = explicit > 0 ? explicit
+      : profile && profile.format === "anthropic-messages" ? ANTHROPIC_DEFAULT_MAX_TOKENS
+      : Math.min(4096, Math.floor(windowSize * 0.2));
+    return Math.max(0, Math.floor((windowSize - reserve) * 0.94));
+  }
+
   function compressMessages(profileInput, options) {
     var profile = normalizeProfile(profileInput);
     var opts = options && typeof options === "object" ? options : {};
@@ -2228,12 +2324,14 @@
       maxTokens: 2048
     });
 
+    var messages = [{ role: "user", content: transcriptLines.join("\n\n") }];
+    if (opts.estimateTokens && opts.estimateTokens({ systemPrompt: systemInstruction, messages: messages })
+        >= inputTokenBudget(compressionProfile, resolveContextWindow(profile).contextWindow)) {
+      return Promise.reject(AiProviderError("context_too_small", "Compression request exceeds the context window"));
+    }
     return streamChat(compressionProfile, {
       systemPrompt: systemInstruction,
-      messages: [{
-        role: "user",
-        content: transcriptLines.join("\n\n")
-      }],
+      messages: messages,
       stream: opts.stream !== undefined ? opts.stream : true,
       signal: opts.signal,
       fetchImpl: opts.fetchImpl,
@@ -2353,6 +2451,7 @@
     inferModelContextWindow: inferModelContextWindow,
     resolveContextWindow: resolveContextWindow,
     fetchModelContextWindow: fetchModelContextWindow,
+    inputTokenBudget: inputTokenBudget,
     compressMessages: compressMessages,
     buildRequest: buildRequest,
     streamChat: streamChat,

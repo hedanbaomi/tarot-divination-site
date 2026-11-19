@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-function loadBrowserContext() {
+function loadBrowserContext(extraFiles) {
   const rootDir = path.resolve(__dirname, "..");
   const context = {
     console,
@@ -32,8 +32,12 @@ function loadBrowserContext() {
     "js/spreads.js",
     "js/i18n-data-en.js",
     "js/custom-spreads.js",
+    "js/ai-skills.js",
     "js/ai-context.js"
   ];
+  if (Array.isArray(extraFiles)) {
+    files.push.apply(files, extraFiles);
+  }
   for (const rel of files) {
     const code = fs.readFileSync(path.join(rootDir, rel), "utf8");
     vm.runInContext(code, context, { filename: rel });
@@ -222,8 +226,10 @@ test("resolveReadingDetails handles 26-card stacked Overview and deleted custom 
   assert.ok(deletedCustom.cards[0].meaning.length > 10);
 
   const fullSysPrompt = aiContext.buildSystemPrompt("zh-CN", promptText, "此前用户已询问第1张愚者的含义。");
-  assert.ok(fullSysPrompt.includes("## 当前对话已关联的非自由画板占卜记录（含牌位与应用内牌意）"));
+  assert.ok(fullSysPrompt.includes("## 当前对话已关联的非自由画板占卜记录"));
+  assert.ok(fullSysPrompt.includes("## 当前激活的内置占卜解读 Skills 协议"));
   assert.ok(fullSysPrompt.includes("## 早期对话压缩摘要（已自动浓缩保留关键脉络）"));
+  assert.equal(fullSysPrompt.includes("再落到逐位解析"), false);
   assert.ok(fullSysPrompt.includes("底牌"));
   assert.ok(fullSysPrompt.includes("叠牌"));
   assert.ok(fullSysPrompt.includes("绝不拒绝、说教或强行拉回占卜"));
@@ -231,6 +237,7 @@ test("resolveReadingDetails handles 26-card stacked Overview and deleted custom 
   const emptySysPrompt = aiContext.buildSystemPrompt("en", "");
   assert.ok(emptySysPrompt.includes("No non-freeboard reading is attached to this chat right now"));
   assert.ok(emptySysPrompt.includes("NEVER refuse, block, scold, or force-redirect benign non-divination topics"));
+  assert.equal(emptySysPrompt.includes("## Active Quareia Reading Craft Skills"), false);
 });
 
 test("ISO timestamps, real history-records schema, snapshots, summary cards, crossings, and token estimation", () => {
@@ -425,4 +432,169 @@ test("null/empty slotIndex values never coerce to 0, and unknown card IDs degrad
 
   const snap = aiContext.buildReadingSnapshot(nullSlotRecord, { locale: "zh-CN" });
   assert.deepEqual(snap.cards.map((c) => c.slotIndex), [0, 1, 2]);
+});
+
+test("formatReadingsForPrompt and buildSystemPrompt compile distilled cues, strip artifacts, and route skills", () => {
+  const lxxxiNoQuestion = {
+    id: "lxxxi-clean-1",
+    createdAt: 1730000020000,
+    layoutMode: "preset",
+    deckType: "lxxxi",
+    spreadId: "lxxxi-occult-map",
+    orientationMode: "upright",
+    cards: [
+      { cardId: "lxxxi-09", positionNumber: 1, orientation: "upright" },
+      { cardId: "lxxxi-34", positionNumber: 5, orientation: "upright" }
+    ]
+  };
+
+  const zhMd = aiContext.formatReadingsForPrompt([lxxxiNoQuestion], { locale: "zh-CN" });
+  assert.equal(zhMd.includes("(cid:1)"), false, "Must strip LXXXI PDF (cid:1) artifact");
+  assert.ok(zhMd.includes("未记录具体问题"), "Must flag missing question explicitly");
+  assert.ok(zhMd.includes("盘面首印气势与拓扑电路"), "Must inject pre-computed gestalt summary");
+  assert.ok(zhMd.includes("本阵解牌动线"), "Must inject spread topology reading circuit");
+  assert.ok(zhMd.includes("内部意象底稿"), "Must frame cues as internal scratchpad rather than script to recite");
+
+  const enTarot = {
+    id: "tarot-en-clean",
+    createdAt: 1730000021000,
+    layoutMode: "preset",
+    deckType: "tarot",
+    spreadId: "manifestation-cause",
+    question: "Why did our server deployment fail?",
+    orientationMode: "mixed",
+    cards: [
+      { cardId: "minor-swords-five", positionNumber: 1, orientation: "reversed" },
+      { cardId: "minor-cups-three", positionNumber: 2, orientation: "upright" }
+    ]
+  };
+  const enMd = aiContext.formatReadingsForPrompt([enTarot], { locale: "en" });
+  assert.equal(enMd.includes("Read this as the active pattern shaping the situation"), false, "Must strip repetitive English upright boilerplate");
+  assert.equal(enMd.includes("Pause, check the facts, and reopen blocked communication"), false, "Must strip repetitive English reversed boilerplate");
+  assert.ok(enMd.includes("Reversal Vector"), "Must compile concise reversal vector cue");
+  assert.equal(/rule out|unrecommended|直接排除/i.test(enMd), false, "Must not stamp static exclusion Filter Rule onto non-zero cards");
+
+  const modes = aiContext.getSkillModes();
+  assert.deepEqual(modes.map((m) => m.id), ["auto"]);
+  assert.equal(modes[0].labelZh, "奥莉薇娅");
+
+  const previewFollowUp = aiContext.previewActiveSkills({
+    locale: "zh-CN",
+    records: [enTarot],
+    skillMode: "action",
+    hasUninterpretedReading: false,
+    messages: [
+      { role: "user", content: "先看整体原因" },
+      { role: "assistant", content: "核心卡在沟通断层。" },
+      { role: "user", content: "那接下来一周我具体该怎么补救？" }
+    ]
+  });
+  assert.equal(previewFollowUp.skillMode, "auto");
+  assert.equal(previewFollowUp.isFollowUp, true);
+  assert.equal(previewFollowUp.activeSkills.some((s) => s.id === "skill-mode-action"), false);
+  assert.ok(previewFollowUp.activeSkills.some((s) => s.id === "skill-followup-drilldown"));
+
+  // When hasUninterpretedReading is true (e.g., reading attached after prior casual turn, or 2nd spread newly attached), isFollowUp must stay false
+  const previewNewSpreadAfterChat = aiContext.previewActiveSkills({
+    locale: "zh-CN",
+    records: [enTarot],
+    skillMode: "auto",
+    hasUninterpretedReading: true,
+    messages: [
+      { role: "user", content: "你好" },
+      { role: "assistant", content: "你好！可以随时发问题或挂盘。" },
+      { role: "user", content: "帮我看看刚挂上来的这副牌" }
+    ]
+  });
+  assert.equal(previewNewSpreadAfterChat.isFollowUp, false, "hasUninterpretedReading=true must suppress premature follow-up mode");
+  assert.equal(previewNewSpreadAfterChat.activeSkills.some((s) => s.id === "skill-followup-drilldown"), false);
+
+  const sysActionPrompt = aiContext.buildSystemPrompt("zh-CN", zhMd, "", {
+    records: [enTarot],
+    skillMode: "action",
+    messages: [
+      { role: "user", content: "先看整体原因" },
+      { role: "assistant", content: "核心卡在沟通断层。" },
+      { role: "user", content: "那接下来一周我具体该怎么补救？" }
+    ]
+  });
+  assert.ok(sysActionPrompt.includes("奥莉薇娅"));
+  assert.equal(sysActionPrompt.includes("现实处方"), false, "Legacy action mode must not leak into the prompt");
+  assert.ok(sysActionPrompt.includes("开窗深挖"));
+  assert.ok(sysActionPrompt.includes("自然、精准地使用牌位名、牌名及关键概念词"));
+  assert.equal(sysActionPrompt.includes("- 本阵解牌动线："), false, "buildSystemPrompt must deduplicate per-reading circuit hint when skill-spread-topology is active");
+
+  const sysThreeArgLxxxi = aiContext.buildSystemPrompt("zh-CN", zhMd, "");
+  assert.equal(sysThreeArgLxxxi.includes("- 本阵解牌动线："), false, "3-arg buildSystemPrompt must also strip duplicate circuit hint");
+  assert.ok(sysThreeArgLxxxi.includes("【本阵解牌拓扑动线】"), "Spread topology circuitry remains present once in active skills block");
+
+  // 18-card English Mystagogus reading must deduplicate identical keyword-only echoes while preserving enriched fact atoms (e.g., surgery / not yet)
+  const myst18Cards = [];
+  for (let pos = 1; pos <= 18; pos += 1) {
+    const pad = String(pos).padStart(2, "0");
+    myst18Cards.push({ cardId: "m-" + pad, positionNumber: pos, orientation: "upright" });
+  }
+  myst18Cards[2] = { cardId: "m-59", positionNumber: 3, orientation: "upright" }; // Choppers (surgery)
+  myst18Cards[5] = { cardId: "m-35", positionNumber: 6, orientation: "upright" }; // West Gate (probably not)
+  myst18Cards[9] = { cardId: "m-41", positionNumber: 10, orientation: "upright" }; // Sanctuary (not yet)
+
+  const myst18Rec = {
+    id: "myst-18-en",
+    createdAt: 1730000022000,
+    layoutMode: "preset",
+    deckType: "mystagogus",
+    spreadId: "mystagogus-layout",
+    question: "What pattern is unfolding in my studio this year?",
+    orientationMode: "upright",
+    cards: myst18Cards
+  };
+  const myst18Md = aiContext.formatReadingsForPrompt([myst18Rec], { locale: "en", omitCircuitHint: true });
+  assert.equal(myst18Md.includes("Reading Circuitry:"), false);
+  assert.match(myst18Md, /surgery/i, "Enriched English Mystagogus fact atom 'surgery' on m-59 must never be dropped by splitAndDedupeCue");
+  assert.match(myst18Md, /not yet/i, "Enriched English Mystagogus timing atom 'not yet' on m-41 must never be dropped by splitAndDedupeCue");
+  const myst18Sys = aiContext.buildSystemPrompt("en", myst18Md, "", {
+    locale: "en",
+    records: [myst18Rec],
+    messages: [{ role: "user", content: "Interpret this spread." }]
+  });
+  assert.ok(myst18Sys.includes("naturally use accurate position names, card names, and concrete domain/polarity concepts"));
+});
+
+test("personaLevel shrinks the persona so a small context window keeps recent turns", () => {
+  const personaEnv = loadBrowserContext(["js/ai-persona.js"]);
+  const personaContext = personaEnv.DivinationAiContext;
+  assert.ok(personaEnv.DivinationPersona, "test env must load the persona pack");
+  const zhMd = personaContext.formatReadingsForPrompt([], { locale: "zh-CN" });
+  const fullZh = personaContext.buildSystemPrompt("zh-CN", zhMd, "", { locale: "zh-CN" });
+  const compactZh = personaContext.buildSystemPrompt("zh-CN", zhMd, "", { locale: "zh-CN", personaLevel: "compact" });
+  const noneZh = personaContext.buildSystemPrompt("zh-CN", zhMd, "", { locale: "zh-CN", personaLevel: "none" });
+
+  assert.ok(fullZh.includes("奥莉薇娅"), "full zh prompt keeps the persona");
+  assert.ok(fullZh.includes("Mystagogus"), "full zh prompt lets the deck decide meanings");
+  assert.equal(fullZh.includes("合规的抽牌方式"), false, "persona no longer teaches client-reported numbers as a draw method");
+  assert.equal(fullZh.includes("数字奇偶"), false, "persona no longer derives reversals from parity");
+
+  assert.ok(compactZh.length * 2 < fullZh.length, "compact persona is much shorter than the full pack");
+  assert.ok(compactZh.includes("奥莉薇娅"), "compact persona still carries identity");
+  assert.ok(compactZh.includes("牌组"), "compact persona still says the deck decides meanings");
+  assert.equal(compactZh.includes("合规的抽牌方式"), false, "compact persona drops the client-reports-numbers draw path");
+  assert.equal(compactZh.includes("## 抽牌"), false, "compact persona is not the full pack");
+
+  assert.ok(noneZh.length < compactZh.length, "no persona is the smallest level");
+  assert.equal(noneZh.includes("## 三层模型"), false, "none level drops the persona entirely");
+  assert.equal(noneZh.includes("最上方人格设定为准"), false, "none level drops the dangling persona pointer");
+
+  const fullEn = personaContext.buildSystemPrompt("en", "", "", { locale: "en" });
+  const compactEn = personaContext.buildSystemPrompt("en", "", "", { locale: "en", personaLevel: "compact" });
+  const noneEn = personaContext.buildSystemPrompt("en", "", "", { locale: "en", personaLevel: "none" });
+  assert.ok(compactEn.length * 2 < fullEn.length, "compact en persona is much shorter than the full pack");
+  assert.ok(compactEn.includes("Olivia"));
+  assert.ok(fullEn.includes("Mystagogus") || fullEn.includes("LXXXI"), "full en prompt lets the deck decide meanings");
+  assert.equal(compactEn.includes("## The app deals the cards"), false, "compact en persona drops the full pack's draw section");
+  assert.equal(noneEn.includes("## Three layers"), false, "none en level drops the persona entirely");
+  assert.ok(
+    aiContext.estimateConversationTokens({ systemPrompt: compactEn, messages: [] })
+      < aiContext.estimateConversationTokens({ systemPrompt: fullEn, messages: [] }),
+    "compact prompt estimates fewer tokens"
+  );
 });

@@ -441,6 +441,155 @@
     return document.getElementById(id);
   }
 
+  // A short "hello, I'm Olivia" reply is not a reading. Only assistant text that
+  // actually names cards or spread positions counts as having interpreted the
+  // attached reading; otherwise a greeting would silently flip the next turn into
+  // follow-up mode and leave the reading uninterpreted.
+  function normalizeCardToken(raw) {
+    return String(raw == null ? "" : raw)
+      .replace(/[*_`「」『』《》〈〉()（）\[\]【】]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // The record itself is the source of truth for "which cards are on the table".
+  // Names are localized when the snapshot is built, and some decks (Mystagogus,
+  // LXXXI) do not use Rider-Waite names, so matching the actual card names of the
+  // record is more reliable than a hard-coded Major Arcana list.
+  function collectRecordCardTokens(snapshot, resolved) {
+    var tokens = new Set();
+    function addNames(card) {
+      [card.cardName, card.cardNameZh, card.cardNameEn].forEach(function (name) {
+        if (!name) return;
+        String(name).split(/[\/|｜]/).forEach(function (part) {
+          var token = normalizeCardToken(part).toLowerCase();
+          if (token) tokens.add(token);
+        });
+      });
+    }
+    if (snapshot && snapshot.cards) snapshot.cards.forEach(addNames);
+    if (resolved && resolved.cards) resolved.cards.forEach(addNames);
+    return Array.from(tokens);
+  }
+
+  function textMentionsCardToken(text, token) {
+    if (!text || !token) return false;
+    if (/[A-Za-z]/.test(token)) {
+      var escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      try {
+        return new RegExp("(^|[^A-Za-z0-9])" + escaped + "([^A-Za-z0-9]|$)", "i").test(text);
+      } catch (err) {
+        return text.toLowerCase().indexOf(token.toLowerCase()) !== -1;
+      }
+    }
+    return text.indexOf(token) !== -1;
+  }
+
+  // Short, everyday names ("太阳", "世界", "Sun") are also ordinary vocabulary, so
+  // they only count next to another card cue. Long or multi-word names
+  // ("Dead End", "命运之轮") are distinctive enough on their own.
+  function cardTokenIsDistinctive(token) {
+    if (/[A-Za-z]/.test(token)) {
+      return / /.test(token) || token.length >= 6;
+    }
+    return token.length >= 4;
+  }
+
+  // Markers that only occur when someone is actually reading cards. Deliberately
+  // excludes bare 牌面: a clarification such as "在看牌面之前，你想先聊哪件事？"
+  // talks about looking at the cards without having interpreted them.
+  function hasStrongReadingMarker(text) {
+    if (/正位|逆位|权杖|圣杯|宝剑|星币|大阿卡那|小阿卡那|第[一二三四五六七八九十百零\d]+张|这张牌|那张牌|牌阵|牌位|抽牌|抽到/.test(text)) {
+      return true;
+    }
+    return /\b(?:upright|reversed|wands?|cups?|swords?|pentacles?|major arcana|minor arcana)\b/i.test(text);
+  }
+
+  function showsNamedArcanaWithCue(text) {
+    var arcanaZh = /愚者|魔术师|女祭司|皇后|皇帝|教皇|恋人|战车|力量|隐士|命运之轮|正义|倒吊人|死神|节制|恶魔|高塔|星星|月亮|太阳|审判|世界/;
+    var cueZh = /牌|张|位|抽|阵|正位|逆位/;
+    if (arcanaZh.test(text) && cueZh.test(text)) return true;
+
+    var arcanaEn = /\b(?:fool|magician|high priestess|empress|emperor|hierophant|lovers|chariot|strength|hermit|wheel of fortune|justice|hanged man|death|temperance|devil|tower|star|moon|sun|judgement|world)\b/i;
+    var cueEn = /\b(?:card|position|slot|draw|spread|upright|reversed|arcana)\b/i;
+    return arcanaEn.test(text) && cueEn.test(text);
+  }
+
+  function mentionsReadingCard(text, token) {
+    if (!textMentionsCardToken(text, token)) return false;
+    if (cardTokenIsDistinctive(token)) return true;
+    var escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Bind cues to this occurrence. A card in one sentence must not turn a
+    // casual reference to the sun/world elsewhere into a second interpretation.
+    var name = /[a-z]/i.test(token) ? "\\b" + escaped + "\\b" : escaped;
+    var before = "(?:(?:正位|逆位|第[一二三四五六七八九十百零\\d]+张|这张牌)(?:的|是|为|：|:)?\\s*|\\b(?:upright|reversed|card)\\s+(?:the\\s+)?)";
+    var after = "(?:在[^。！？；，,\\n]{0,6}位|(?:这张)?牌|正位|逆位|提醒|意味着|象征|代表|提示|指向|暗示|说明|\\s+(?:card|upright|reversed|suggests?|means?|signals?|points? to)\\b)";
+    return new RegExp(before + name + "|" + name + after, "i").test(normalizeCardToken(text));
+  }
+
+  function assistantMessageShowsReading(content, snapshot) {
+    if (typeof content !== "string" || !content.trim()) return false;
+    var tokens = collectRecordCardTokens(snapshot);
+    if (tokens.length) return tokens.some(function (name) { return mentionsReadingCard(content, name); });
+    return hasStrongReadingMarker(content) || showsNamedArcanaWithCue(content);
+  }
+
+  // When the same card is in two spreads, scope explicitly numbered passages to
+  // the order in the actual request. Unlabelled mentions must identify one record.
+  function interpretedRecordIds(text, records, useRequestOrder) {
+    var ids = new Set();
+    function matchPassage(passage, scope) {
+      scope.forEach(function (record) {
+        if (record.names.some(function (name) {
+          return mentionsReadingCard(passage, name) && !scope.some(function (other) {
+            return other !== record && other.names.indexOf(name) !== -1;
+          });
+        })) ids.add(record.id);
+      });
+    }
+    var labels = /(?:\breading\s*#?\s*(\d+)\b|(?:占卜)?记录\s*(\d+)|第\s*(\d+|[一二三四五六七八九十])\s*(?:条记录|份记录|副牌阵|副牌|个牌阵))/gi;
+    var scope = records;
+    var start = 0;
+    var label;
+    while (useRequestOrder && (label = labels.exec(text))) {
+      matchPassage(text.slice(start, label.index), scope);
+      var raw = label[1] || label[2] || label[3];
+      var ordinal = Number(raw) || ("一二三四五六七八九十".indexOf(raw) + 1);
+      scope = records[ordinal - 1] ? [records[ordinal - 1]] : [];
+      start = labels.lastIndex;
+    }
+    matchPassage(text.slice(start), scope);
+    return Array.from(ids);
+  }
+
+  function computeHasUninterpretedReading(conv, uptoIndex, resolvedReadings) {
+    if (!conv || !Array.isArray(conv.readingIds) || !conv.readingIds.length) return false;
+    var snapshots = new Map((conv.readingSnapshots || []).map(function (snap) { return [snap.id, snap]; }));
+    var details = new Map((resolvedReadings || []).map(function (rec) { return [rec.id, rec]; }));
+    var records = conv.readingIds.map(function (id) {
+      var snap = snapshots.get(id);
+      return { id: id, attachedAt: Number(snap && snap.attachedAt) || 0, names: collectRecordCardTokens(snap, details.get(id)) };
+    });
+    var readIds = new Set();
+    (conv.messages || []).slice(0, uptoIndex).forEach(function (msg) {
+      if (msg.role !== "assistant" || msg.error || !msg.content) return;
+      var eligible = records.filter(function (record) {
+        return !record.attachedAt || record.attachedAt <= Number(msg.createdAt);
+      });
+      // New replies retain the attribution made at completion, even after a tab
+      // removes or reorders attachments. Old backups can only use unambiguous names.
+      var matched = msg.interpretedReadingIds;
+      if (!Array.isArray(matched)) {
+        matched = interpretedRecordIds(msg.content, eligible, false);
+        if (records.length === 1 && eligible.length && !eligible[0].names.length && assistantMessageShowsReading(msg.content)) {
+          matched.push(eligible[0].id);
+        }
+      }
+      eligible.forEach(function (record) { if (matched.indexOf(record.id) !== -1) readIds.add(record.id); });
+    });
+    return records.some(function (record) { return !readIds.has(record.id); });
+  }
+
   function initAiPage() {
     if (!byId("aiChatList") || !global.DivinationAiProviders || !global.DivinationAiContext || !global.DivinationAiChatStore) {
       return null;
@@ -491,6 +640,7 @@
       abortController: null,
       activeStreamContext: null,
       editingMessageId: "",
+      editingQuestionReadingId: "",
       settingsDraft: null,
       keyVisible: false,
       lastFocusedBeforeModal: null,
@@ -535,6 +685,9 @@
       bannerSettingsBtn: byId("aiBannerSettingsBtn"),
       bannerPickBtn: byId("aiBannerPickBtn"),
       messages: byId("aiMessages"),
+      skillsBar: byId("aiSkillsBar"),
+      skillModeGroup: byId("aiSkillModeGroup"),
+      activeSkillsList: byId("aiActiveSkillsList"),
       promptInput: byId("aiPromptInput"),
       sendBtn: byId("aiSendBtn"),
       stopBtn: byId("aiStopBtn"),
@@ -750,7 +903,12 @@
         var rec = state.readingsById[rid];
         var snap = snapById[rid];
         if (rec && (!snap || contextApi.resolveReadingDetails(rec, { customLibrary: customLibrary }).spreadFound)) {
-          records.push(rec);
+          var hasSnapQuestion = Boolean(snap && typeof snap.question === "string");
+          if (hasSnapQuestion) {
+            records.push(Object.assign({}, rec, { question: snap.question }));
+          } else {
+            records.push(rec);
+          }
           continue;
         }
         if (snap && Array.isArray(snap.cards) && snap.cards.length > 0) {
@@ -780,6 +938,14 @@
             customLibrary: customLibrary
           });
           if (built) {
+            if (prevById[rid]) {
+              if (typeof prevById[rid].question === "string") {
+                built.question = prevById[rid].question;
+              }
+              if (Number(prevById[rid].attachedAt) > 0) {
+                built.attachedAt = Number(prevById[rid].attachedAt);
+              }
+            }
             snaps.push(built);
           }
         } else if (prevById[rid]) {
@@ -789,29 +955,48 @@
       return snaps;
     }
 
-    function deriveAutoTitle(readingIds, firstUserMessage) {
-      if (Array.isArray(readingIds) && readingIds.length > 0) {
-        var targetId = readingIds[0];
-        var firstRec = state.readingsById[targetId] || null;
-        if (!firstRec && state.activeConversation && Array.isArray(state.activeConversation.readingSnapshots)) {
-          for (var s = 0; s < state.activeConversation.readingSnapshots.length; s += 1) {
-            if (state.activeConversation.readingSnapshots[s].id === targetId) {
-              firstRec = state.activeConversation.readingSnapshots[s];
-              break;
-            }
+    function deriveReadingBaseAndQuestion(readingIds, snapshotsOverride) {
+      if (!Array.isArray(readingIds) || readingIds.length === 0) {
+        return null;
+      }
+      var targetId = readingIds[0];
+      var firstRec = state.readingsById[targetId] || null;
+      var snapList = Array.isArray(snapshotsOverride)
+        ? snapshotsOverride
+        : ((state.activeConversation && state.activeConversation.readingSnapshots) || []);
+      var targetSnap = null;
+      for (var s = 0; s < snapList.length; s += 1) {
+        if (snapList[s] && snapList[s].id === targetId) {
+          targetSnap = snapList[s];
+          if (!firstRec) {
+            firstRec = snapList[s];
           }
+          break;
         }
-        if (firstRec) {
-          var resolved = contextApi.resolveReadingDetails(firstRec, {
-            locale: currentLocale(),
-            customLibrary: customLibrary
-          });
-          var base = resolved ? resolved.spreadName : (firstRec.spreadName || firstRec.spreadNameSnapshot || "");
-          if (firstRec.question) {
-            return (base ? base + " · " : "") + firstRec.question.slice(0, 24);
-          }
-          if (base) return base;
+      }
+      if (!firstRec) {
+        return null;
+      }
+      var resolved = contextApi.resolveReadingDetails(firstRec, {
+        locale: currentLocale(),
+        customLibrary: customLibrary
+      });
+      var base = resolved ? resolved.spreadName : (firstRec.spreadName || firstRec.spreadNameSnapshot || "");
+      var hasSnapQ = Boolean(targetSnap && typeof targetSnap.question === "string");
+      var effectiveQ = hasSnapQ ? targetSnap.question : (firstRec.question || "");
+      return {
+        base: base || "",
+        question: String(effectiveQ || "").trim()
+      };
+    }
+
+    function deriveAutoTitle(readingIds, firstUserMessage, snapshotsOverride) {
+      var info = deriveReadingBaseAndQuestion(readingIds, snapshotsOverride);
+      if (info) {
+        if (info.question) {
+          return (info.base ? info.base + " · " : "") + info.question.slice(0, 24);
         }
+        if (info.base) return info.base;
       }
       if (firstUserMessage && firstUserMessage.trim()) {
         return firstUserMessage.trim().replace(/\s+/g, " ").slice(0, 28);
@@ -1037,13 +1222,18 @@
       return tr("ai.contextSource.default", null, "默认保守估计", "Default estimate");
     }
 
-    function buildPromptPayloadForConversation(conv, uptoIndex) {
+    function resolveConversationSkillMode(conv) {
+      // direct / deep / action are kept in storage (legacy preferences survive
+      // backup + export) but the single persona runs every conversation.
+      return "auto";
+    }
+
+    function buildPromptPayloadForConversation(conv, uptoIndex, options) {
+      var personaLevel = options && options.personaLevel ? options.personaLevel : "full";
       var targetConv = conv || state.activeConversation;
+      var locale = currentLocale();
+      var skillMode = resolveConversationSkillMode(targetConv);
       var records = getAttachedRecordsForConversation(targetConv);
-      var readingsMd = contextApi.formatReadingsForPrompt(records, {
-        locale: currentLocale(),
-        customLibrary: customLibrary
-      });
       var messages = targetConv && Array.isArray(targetConv.messages) ? targetConv.messages : [];
       var limitIdx = typeof uptoIndex === "number" ? Math.min(messages.length, Math.max(0, uptoIndex)) : messages.length;
       var summaryObj = targetConv && targetConv.contextSummary && targetConv.contextSummary.text
@@ -1072,10 +1262,31 @@
       }
 
       var validMessages = normalizeConversationMessagesForApi(messages, startIndex, limitIdx);
-
-      var systemPrompt = contextApi.buildSystemPrompt(currentLocale(), readingsMd, summaryText);
       var apiMessages = validMessages.map(function (item) {
         return { role: item.role, content: item.content };
+      });
+      var resolvedReadings = typeof contextApi.resolveOrderedReadings === "function"
+        ? contextApi.resolveOrderedReadings(records, { locale: locale, customLibrary: customLibrary })
+        : null;
+      var hasUninterpretedReading = computeHasUninterpretedReading(targetConv, limitIdx, resolvedReadings);
+      var readingsMd = contextApi.formatReadingsForPrompt(records, {
+        locale: locale,
+        customLibrary: customLibrary,
+        resolvedReadings: resolvedReadings,
+        messages: apiMessages,
+        skillMode: skillMode,
+        hasUninterpretedReading: hasUninterpretedReading,
+        omitCircuitHint: true
+      });
+      var systemPrompt = contextApi.buildSystemPrompt(locale, readingsMd, summaryText, {
+        locale: locale,
+        customLibrary: customLibrary,
+        records: records,
+        resolvedReadings: resolvedReadings,
+        messages: apiMessages,
+        skillMode: skillMode,
+        hasUninterpretedReading: hasUninterpretedReading,
+        personaLevel: personaLevel
       });
       var estimatedTokens = contextApi.estimateConversationTokens({
         systemPrompt: systemPrompt,
@@ -1083,6 +1294,9 @@
       });
 
       return {
+        skillMode: skillMode,
+        hasUninterpretedReading: hasUninterpretedReading,
+        resolvedReadings: resolvedReadings,
         readingsMd: readingsMd,
         summaryText: summaryText,
         compressedCount: compressedCount,
@@ -1091,6 +1305,153 @@
         systemPrompt: systemPrompt,
         estimatedTokens: estimatedTokens
       };
+    }
+
+    // The persona prompt is heavy: with a 4K window it alone can exceed the
+    // input budget, and truncation would then start dropping recent turns.
+    // Fit the persona to the budget first (full -> compact -> none) so short
+    // conversations keep their history.
+    var PROMPT_PERSONA_LEVELS = ["full", "compact", "none"];
+
+    function buildFittedPayload(conv, uptoIndex, hardCap) {
+      var payload;
+      for (var i = 0; i < PROMPT_PERSONA_LEVELS.length; i += 1) {
+        payload = buildPromptPayloadForConversation(conv, uptoIndex, { personaLevel: PROMPT_PERSONA_LEVELS[i] });
+        if (payload.estimatedTokens < hardCap) break;
+      }
+      return payload;
+    }
+
+    function skillModeFallbackLabel(modeId) {
+      return tr("ai.skillMode.auto", null, "奥莉薇娅", "Olivia");
+    }
+
+    function skillModeFallbackHint(modeId) {
+      return tr("ai.skillModeHint.auto", null,
+        "内置人格包：塔罗咨询师 · 非暴力沟通 · 牌面镜像",
+        "Built-in persona: tarot counselor with an NVC backbone");
+    }
+
+    function renderSkillsBar() {
+      var conv = state.activeConversation;
+      var activeMode = resolveConversationSkillMode(conv);
+      if (els.skillModeGroup && typeof els.skillModeGroup.querySelectorAll === "function") {
+        var pills = els.skillModeGroup.querySelectorAll("[data-skill-mode]");
+        Array.prototype.forEach.call(pills, function (pill) {
+          var mId = pill.getAttribute("data-skill-mode") || "auto";
+          var isOn = mId === activeMode;
+          pill.classList.toggle("is-active", isOn);
+          pill.setAttribute("aria-pressed", isOn ? "true" : "false");
+          pill.dataset.streamLock = "true";
+          pill.disabled = state.streaming || !conv;
+          pill.textContent = skillModeFallbackLabel(mId);
+          pill.title = skillModeFallbackHint(mId);
+        });
+      }
+
+      if (!els.activeSkillsList) return;
+      var records = getAttachedRecordsForConversation(conv);
+      var rawMsgs = conv && Array.isArray(conv.messages) ? conv.messages : [];
+      var previewMsgs = normalizeConversationMessagesForApi(rawMsgs, 0, rawMsgs.length).map(function (m) {
+        return { role: m.role, content: m.content };
+      });
+      var draftPrompt = els.promptInput && typeof els.promptInput.value === "string"
+        ? els.promptInput.value.trim()
+        : "";
+      if (draftPrompt) {
+        previewMsgs.push({ role: "user", content: draftPrompt });
+      }
+      var resolvedReadings = contextApi.resolveOrderedReadings(records, { locale: currentLocale(), customLibrary: customLibrary });
+      var hasUninterpretedReading = computeHasUninterpretedReading(conv, rawMsgs.length, resolvedReadings);
+      var preview = typeof contextApi.previewActiveSkills === "function"
+        ? contextApi.previewActiveSkills({
+            locale: currentLocale(),
+            records: records,
+            resolvedReadings: resolvedReadings,
+            messages: previewMsgs,
+            skillMode: activeMode,
+            hasUninterpretedReading: hasUninterpretedReading,
+            customLibrary: customLibrary
+          })
+        : null;
+
+      var activeSkills = preview && Array.isArray(preview.activeSkills) ? preview.activeSkills : [];
+      if (activeSkills.length === 0) {
+        var idleSpan = document.createElement("span");
+        idleSpan.className = "ai-skill-badge-idle";
+        idleSpan.textContent = tr("ai.activeSkillsNone", null,
+          "自由对话（附加排盘后自动挂载专属占卜技法）",
+          "Free chat (attach a reading to auto-mount Quareia skills)");
+        els.activeSkillsList.replaceChildren(idleSpan);
+        return;
+      }
+
+      var frag = document.createDocumentFragment();
+      activeSkills.forEach(function (skill) {
+        if (!skill || !skill.name) return;
+        var badge = document.createElement("span");
+        badge.className = "ai-skill-badge";
+        badge.textContent = "✦ " + skill.name;
+        badge.title = skill.reason ? (skill.name + " — " + skill.reason) : skill.name;
+        frag.appendChild(badge);
+      });
+      els.activeSkillsList.replaceChildren(frag);
+    }
+
+    function selectSkillMode(modeId) {
+      var conv = state.activeConversation;
+      if (!conv || state.streaming) return Promise.resolve();
+      var nextMode = resolveConversationSkillMode({ skillMode: modeId });
+      if (resolveConversationSkillMode(conv) === nextMode) return Promise.resolve();
+      var persistPromise = typeof chatStore.setSkillMode === "function"
+        ? chatStore.setSkillMode(conv.id, nextMode)
+        : chatStore.updateConversation(conv.id, { skillMode: nextMode }, { touchUpdatedAt: false });
+      return persistPromise.then(function (updated) {
+        if (updated) {
+          state.activeConversation = updated;
+        }
+        renderSkillsBar();
+        renderContextMeter();
+      });
+    }
+
+    function saveAttachedReadingQuestion(readingId, rawQuestion) {
+      var conv = state.activeConversation;
+      if (!conv || state.streaming) return Promise.resolve();
+      var cleanQuestion = String(rawQuestion || "").trim().slice(0, 240);
+      state.editingQuestionReadingId = "";
+      return chatStore.updateConversation(conv.id, function (latest) {
+        // Only replace the target snapshot, using the latest record in the transaction.
+        // Another tab may have edited a different question, renamed, or detached it.
+        var ids = latest.readingIds || [];
+        if (ids.indexOf(readingId) === -1) return null;
+        var snapshots = latest.readingSnapshots || [];
+        var targetIndex = snapshots.findIndex(function (snapshot) { return snapshot.id === readingId; });
+        var target = snapshots[targetIndex];
+        if (!target) target = buildReadingSnapshots([readingId], snapshots)[0];
+        if (!target) return null;
+        var replacement = Object.assign({}, target, { question: cleanQuestion });
+        var nextSnaps = snapshots.map(function (snapshot) {
+          return snapshot.id === readingId ? replacement : snapshot;
+        });
+        if (targetIndex === -1) nextSnaps.push(replacement);
+        var previousInfo = deriveReadingBaseAndQuestion(ids, snapshots);
+        var previousAutoTitle = deriveAutoTitle(ids, "", snapshots);
+        var previousBaseTitle = previousInfo ? previousInfo.base : "";
+        var currentTitle = typeof latest.title === "string" ? latest.title.trim() : "";
+        var next = Object.assign({}, latest, { readingSnapshots: nextSnaps });
+        if (!currentTitle || currentTitle === previousAutoTitle ||
+            (previousBaseTitle && currentTitle === previousBaseTitle)) {
+          next.title = deriveAutoTitle(ids, "", nextSnaps);
+        }
+        return next;
+      }, { touchUpdatedAt: false }).then(function (updated) {
+        if (!state.activeConversation || state.activeConversation.id !== conv.id) return;
+        if (updated) {
+          state.activeConversation = updated;
+        }
+        return refreshConversationsList(updated ? updated.id : conv.id, conv.id);
+      });
     }
 
     function renderContextMeter() {
@@ -1107,7 +1468,7 @@
       var profile = configStore.getActiveProfile();
       var ctxResolved = providers.resolveContextWindow(profile || {});
       var conv = state.activeConversation;
-      var payload = buildPromptPayloadForConversation(conv, conv && Array.isArray(conv.messages) ? conv.messages.length : 0);
+      var payload = buildFittedPayload(conv, undefined, providers.inputTokenBudget(profile, ctxResolved.contextWindow));
       var compressedCount = payload.compressedCount || 0;
       els.contextMeter.classList.toggle("is-compressed", compressedCount > 0);
 
@@ -1149,6 +1510,7 @@
         }
         updateStreamingUi();
         updateProfileIndicator();
+        renderSkillsBar();
         renderContextMeter();
         return;
       }
@@ -1182,7 +1544,11 @@
           ids.forEach(function (rid) {
             var live = state.readingsById[rid];
             var snap = snapById[rid];
-            var sourceRec = live || snap || null;
+            var hasSnapQuestion = Boolean(snap && typeof snap.question === "string");
+            var effectiveQuestion = hasSnapQuestion ? snap.question : ((live && live.question) || "");
+            var sourceRec = live
+              ? Object.assign({}, live, { question: effectiveQuestion })
+              : (snap || null);
             var summary = sourceRec
               ? contextApi.buildReadingCardSummary(sourceRec, {
                   locale: currentLocale(),
@@ -1192,6 +1558,7 @@
 
             var card = document.createElement("article");
             card.className = "ai-reading-card";
+            card.dataset.readingId = rid;
 
             var top = document.createElement("div");
             top.className = "ai-reading-card-top";
@@ -1228,7 +1595,6 @@
             var metaParts = [];
             if (summary && summary.modeBadge) metaParts.push(summary.modeBadge);
             if (summary && summary.createdText) metaParts.push(summary.createdText);
-            if (summary && summary.question) metaParts.push(summary.question);
             if (!live && snap && Array.isArray(snap.cards) && snap.cards.length > 0) {
               metaParts.push(tr("ai.readingSnapshotSaved", null, "已使用对话内保存的牌阵快照", "Saved snapshot"));
             }
@@ -1248,6 +1614,99 @@
               card.appendChild(previewEl);
             }
 
+            var canEditQuestion = Boolean(live || (snap && Array.isArray(snap.cards) && snap.cards.length > 0));
+            if (canEditQuestion && state.editingQuestionReadingId === rid) {
+              var qEditor = document.createElement("div");
+              qEditor.className = "ai-reading-question-editor";
+
+              var qInput = document.createElement("input");
+              qInput.type = "text";
+              qInput.className = "ai-input ai-reading-question-input";
+              qInput.maxLength = 240;
+              qInput.value = effectiveQuestion;
+              qInput.placeholder = tr("ai.questionPlaceholder", null,
+                "补充当时抽牌的具体问题与时间范围（如：未来三个月跳槽是否合适）",
+                "Add what you asked and the timeframe (e.g. Changing jobs in the next 3 months)");
+
+              var qActions = document.createElement("div");
+              qActions.className = "ai-reading-question-actions";
+
+              var qSaveBtn = document.createElement("button");
+              qSaveBtn.type = "button";
+              qSaveBtn.className = "ai-mini-action";
+              qSaveBtn.textContent = tr("ai.save", null, "保存", "Save");
+              qSaveBtn.addEventListener("click", function () {
+                saveAttachedReadingQuestion(rid, qInput.value);
+              });
+
+              var qCancelBtn = document.createElement("button");
+              qCancelBtn.type = "button";
+              qCancelBtn.className = "ai-mini-action";
+              qCancelBtn.textContent = tr("ai.cancel", null, "取消", "Cancel");
+              qCancelBtn.addEventListener("click", function () {
+                state.editingQuestionReadingId = "";
+                renderContextHeader();
+              });
+
+              qInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) {
+                  e.preventDefault();
+                  saveAttachedReadingQuestion(rid, qInput.value);
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  state.editingQuestionReadingId = "";
+                  renderContextHeader();
+                }
+              });
+
+              qActions.appendChild(qSaveBtn);
+              qActions.appendChild(qCancelBtn);
+              qEditor.appendChild(qInput);
+              qEditor.appendChild(qActions);
+              card.appendChild(qEditor);
+              setTimeout(function () {
+                if (typeof qInput.focus === "function") qInput.focus();
+              }, 0);
+            } else if (canEditQuestion) {
+              var qRow = document.createElement("div");
+              qRow.className = "ai-reading-card-question-row";
+              if (effectiveQuestion) {
+                var qText = document.createElement("span");
+                qText.className = "ai-reading-card-question-text";
+                qText.textContent = tr("ai.questionPrefix", null, "所问：", "Question: ") + effectiveQuestion;
+                qText.title = qText.textContent;
+                qRow.appendChild(qText);
+
+                var qEditBtn = document.createElement("button");
+                qEditBtn.type = "button";
+                qEditBtn.className = "ai-mini-action ai-reading-question-edit-btn";
+                qEditBtn.dataset.streamLock = "true";
+                qEditBtn.disabled = state.streaming;
+                qEditBtn.textContent = tr("ai.questionEdit", null, "修改问题", "Edit question");
+                qEditBtn.addEventListener("click", function () {
+                  if (state.streaming) return;
+                  state.editingQuestionReadingId = rid;
+                  renderContextHeader();
+                });
+                qRow.appendChild(qEditBtn);
+              } else {
+                var qAddBtn = document.createElement("button");
+                qAddBtn.type = "button";
+                qAddBtn.className = "ai-reading-question-add-btn";
+                qAddBtn.dataset.streamLock = "true";
+                qAddBtn.disabled = state.streaming;
+                qAddBtn.textContent = tr("ai.questionAdd", null, "+ 补充当时所问之事", "+ Add question context");
+                qAddBtn.addEventListener("click", function () {
+                  if (state.streaming) return;
+                  state.editingQuestionReadingId = rid;
+                  renderContextHeader();
+                });
+                qRow.appendChild(qAddBtn);
+              }
+              card.appendChild(qRow);
+            }
+
             chipFrag.appendChild(card);
           });
           els.attachedChips.replaceChildren(chipFrag);
@@ -1255,6 +1714,7 @@
       }
 
       updateProfileIndicator();
+      renderSkillsBar();
       renderContextMeter();
     }
 
@@ -1268,21 +1728,21 @@
 
       var p = document.createElement("p");
       p.textContent = tr("ai.emptyDesc", null,
-        "选择一条或多条非自由画板占卜记录后，系统会将对应牌阵的牌位定义、应用内关键词与完整牌意整理发送给大模型。你可以输入自己的背景疑问，点击下方示例快速开始：",
-        "Attach one or more non-freeboard readings to provide spread positions, keywords, and in-app card meanings to your chosen LLM, then ask a question or pick a starter prompt:");
+        "选择一条或多条非自由画板占卜记录后，系统会自动挂载对应的牌阵拓扑与牌组解牌技法（提纯意象底稿、告别照念说明书）。建议在上方卡片补充当时所问之事，或点击下方提问直接开始：",
+        "Attach one or more non-freeboard readings to auto-mount Quareia spread topology and deck skills (synthesizing dynamic patterns rather than reciting a manual). Optionally add your question on the card chip above, or pick a starter:");
       box.appendChild(p);
 
-      var starters = isEnglishLocale()
-        ? [
-            "Synthesize the overall pattern across all positions for my question.",
-            "Focus on tensions, warnings, and practical next steps shown in this reading.",
-            "Compare how the attached readings relate to one another over time."
-          ]
-        : [
-            "请结合所附牌阵的牌位含义与应用内牌意，为我整体梳理和解读这次占卜。",
-            "请重点分析当前牌面中的阻力、警示以及可行的现实应对方向。",
-            "如果附加了多条占卜记录，请对比它们之间的关联与演变趋势。"
-          ];
+      var starters = [
+        tr("ai.starter.core", null,
+          "直说核心结论：这副牌眼下最核心的矛盾卡在哪？牌势正往哪边推？",
+          "Give me the straight verdict: what is the most central tension and momentum here?"),
+        tr("ai.starter.action", null,
+          "先一句话交代稳固的基本盘，再重点深挖我没意识到的盲点与破局抓手。",
+          "Briefly anchor what is stable on the board, then dig into the blind spots and key levers I haven't noticed."),
+        tr("ai.starter.compare", null,
+          "若关联了多条记录，请对比局势在时间线上的真实演变，看看哪些隐患正在缓解或加剧。",
+          "Across the attached readings, trace how the underlying pattern has shifted and which pressures are easing or intensifying.")
+      ];
 
       var list = document.createElement("div");
       list.className = "ai-starter-list";
@@ -1633,6 +2093,7 @@
 
     function startStreamingUi() {
       state.streaming = true;
+      state.editingQuestionReadingId = "";
       state.abortController = typeof AbortController === "function" ? new AbortController() : null;
       updateStreamingUi();
     }
@@ -1674,13 +2135,18 @@
       return allActive[0] || null;
     }
 
-    function refreshConversationsList(preferredId) {
+    function refreshConversationsList(preferredId, expectedActiveId) {
+      function isCurrentSelection() {
+        return expectedActiveId === undefined ||
+          (state.activeConversation ? state.activeConversation.id : "") === expectedActiveId;
+      }
       return Promise.all([
         chatStore.listConversations({ archived: false, query: state.searchQuery }),
         chatStore.listConversations({ archived: true, query: state.searchQuery }),
         chatStore.listConversations({ archived: false }),
         chatStore.listConversations({ archived: true })
       ]).then(function (results) {
+        if (!isCurrentSelection()) return null;
         var activeFiltered = results[0];
         var archivedFiltered = results[1];
         var allActive = results[2];
@@ -1691,6 +2157,7 @@
         var shouldAutoCreate = state.activeTab === "active" && !state.searchQuery && allActive.length === 0;
 
         function finalizeSelection(candidate) {
+          if (!isCurrentSelection()) return null;
           state.activeConversation = candidate || resolveFallbackConversation(allActive, allArchived);
           if (!state.activeConversation && shouldAutoCreate) {
             return createFreshConversation();
@@ -1720,8 +2187,11 @@
 
     function createFreshConversation(initialReadings) {
       var ids = Array.isArray(initialReadings) ? initialReadings : [];
-      var snaps = buildReadingSnapshots(ids);
-      var title = deriveAutoTitle(ids, "");
+      var nowTs = Date.now();
+      var snaps = buildReadingSnapshots(ids).map(function (s) {
+        return s ? Object.assign({}, s, { attachedAt: nowTs }) : s;
+      });
+      var title = deriveAutoTitle(ids, "", snaps);
       return chatStore.createConversation({
         title: title,
         archived: false,
@@ -1738,6 +2208,7 @@
     function selectConversation(chatId) {
       if (state.streaming) return Promise.resolve();
       state.editingMessageId = "";
+      state.editingQuestionReadingId = "";
       return chatStore.getConversation(chatId).then(function (conv) {
         if (!conv) return;
         state.activeConversation = conv;
@@ -1865,14 +2336,18 @@
     function removeAttachedReading(readingId) {
       var conv = state.activeConversation;
       if (!conv || state.streaming) return;
-      var nextIds = (conv.readingIds || []).filter(function (id) { return id !== readingId; });
-      var nextSnaps = (conv.readingSnapshots || []).filter(function (s) { return s.id !== readingId; });
-      chatStore.updateConversation(conv.id, {
-        readingIds: nextIds,
-        readingSnapshots: nextSnaps
+      if (state.editingQuestionReadingId === readingId) {
+        state.editingQuestionReadingId = "";
+      }
+      chatStore.updateConversation(conv.id, function (latest) {
+        return Object.assign({}, latest, {
+          readingIds: (latest.readingIds || []).filter(function (id) { return id !== readingId; }),
+          readingSnapshots: (latest.readingSnapshots || []).filter(function (snapshot) { return snapshot.id !== readingId; })
+        });
       }).then(function (updated) {
+        if (!state.activeConversation || state.activeConversation.id !== conv.id) return;
         state.activeConversation = updated;
-        return refreshConversationsList(updated.id);
+        return refreshConversationsList(updated ? updated.id : "", updated ? updated.id : "");
       });
     }
 
@@ -2029,14 +2504,22 @@
       if (!conv) return;
       var nextIds = state.pickerDraftIds.slice();
       var nextSnaps = buildReadingSnapshots(nextIds, conv.readingSnapshots);
-      var nextTitle = conv.title || deriveAutoTitle(nextIds, "");
-      chatStore.updateConversation(conv.id, {
-        title: nextTitle,
-        readingIds: nextIds,
-        readingSnapshots: nextSnaps
-      }).then(function (updated) {
+      var prevAuto = deriveAutoTitle(conv.readingIds || [], "", conv.readingSnapshots);
+      var curTitle = typeof conv.title === "string" ? conv.title.trim() : "";
+      var nextTitle = (!curTitle || curTitle === prevAuto)
+        ? deriveAutoTitle(nextIds, "", nextSnaps)
+        : conv.title;
+      var persistPromise = typeof chatStore.setAttachedReadings === "function"
+        ? chatStore.setAttachedReadings(conv.id, nextIds, nextSnaps, { title: nextTitle, expectedTitle: conv.title })
+        : chatStore.updateConversation(conv.id, {
+            title: nextTitle,
+            readingIds: nextIds,
+            readingSnapshots: nextSnaps
+          });
+      persistPromise.then(function (updated) {
+        if (!state.activeConversation || state.activeConversation.id !== conv.id) return;
         state.activeConversation = updated;
-        return refreshConversationsList(updated.id);
+        return refreshConversationsList(updated ? updated.id : "", updated ? updated.id : "");
       });
     }
 
@@ -2439,6 +2922,11 @@
       if (err.code === "response_incomplete") {
         return tr("ai.err.incomplete", null, "连接在回答完成前结束，已保留收到的内容。请重试或继续追问。", "The connection ended before the response finished. Any received text has been kept. Retry or ask it to continue.");
       }
+      if (err.code === "context_too_small") {
+        return tr("ai.err.contextTooSmall", null,
+          "这段对话放不进当前上下文窗口了，连最简提示词加这个问题都超了。可以把问题改短一点，或在 API 设置里调大上下文窗口 / 换一个窗口更大的模型。",
+          "This conversation no longer fits the context window, even with the shortest prompt and just your question. Shorten the question, raise the context window in API settings, or switch to a model with a larger window.");
+      }
       if (err.code === "content_blocked") {
         return tr("ai.err.blocked", null, "模型的内容策略拦截了本次回答，已保留收到的内容。请调整问题后重试。", "The provider blocked this response under its content policy. Any received text has been kept. Revise your question and retry.");
       }
@@ -2481,12 +2969,8 @@
       }
 
       var conv = conversationSnapshot;
-      var payload = buildPromptPayloadForConversation(conv, assistantMsgIndex);
-      var ctxResolved = providers.resolveContextWindow(profile);
-      var reserveOut = Number(profile.maxTokens) > 0
-        ? Math.min(Number(profile.maxTokens), Math.floor(ctxResolved.contextWindow * 0.5))
-        : Math.min(4096, Math.floor(ctxResolved.contextWindow * 0.2));
-      var inputBudget = Math.max(2048, ctxResolved.contextWindow - reserveOut);
+      var hardCap = providers.inputTokenBudget(profile, providers.resolveContextWindow(profile).contextWindow);
+      var payload = buildFittedPayload(conv, assistantMsgIndex, hardCap);
 
       state.streaming = true;
       state.compressing = false;
@@ -2500,10 +2984,14 @@
       };
       updateStreamingUi();
 
+      var requestRecords = (payload.resolvedReadings || []).map(function (reading) {
+        return { id: reading.id, names: collectRecordCardTokens(null, reading) };
+      });
       var prepPromise = Promise.resolve(payload);
       if (
         profile.autoCompress !== false
-        && payload.estimatedTokens >= Math.floor(inputBudget * 0.75)
+        && payload.estimatedTokens >= hardCap
+        && contextApi.estimateConversationTokens({ systemPrompt: payload.systemPrompt, messages: payload.apiMessages.slice(-1) }) < hardCap
         && payload.validMessages.length > 4
       ) {
         var keepCount = Math.min(4, Math.max(2, payload.validMessages.length - 2));
@@ -2526,6 +3014,7 @@
           prepPromise = providers.compressMessages(profile, Object.assign(aiUsageObserver(profile.model, "compression"), {
             previousSummary: payload.summaryText,
             messages: toCompress,
+            estimateTokens: contextApi.estimateConversationTokens,
             locale: currentLocale(),
             signal: state.abortController ? state.abortController.signal : undefined
           })).catch(function (compErr) {
@@ -2553,7 +3042,7 @@
                 compressedCount: coveredCountBefore + addedRawCount,
                 updatedAt: Date.now()
               };
-              return buildPromptPayloadForConversation(conv, assistantMsgIndex);
+              return buildFittedPayload(conv, assistantMsgIndex, hardCap);
             }
             return payload;
           }).finally(function () {
@@ -2572,16 +3061,26 @@
         }, 60);
       }
 
-      return prepPromise.then(function (readyPayload) {
-        var hardCap = Math.floor(inputBudget * 0.94);
+      return prepPromise.then(function (fitted) {
         var finalMessages = truncateMessagesToBudget(
-          readyPayload.apiMessages,
-          readyPayload.systemPrompt,
+          fitted.apiMessages,
+          fitted.systemPrompt,
           hardCap,
           contextApi.estimateConversationTokens
         );
+        if (
+          finalMessages.length > 0
+          && contextApi.estimateConversationTokens({
+            systemPrompt: fitted.systemPrompt,
+            messages: finalMessages
+          }) >= hardCap
+        ) {
+          var tooSmall = new Error("prompt_too_large");
+          tooSmall.code = "context_too_small";
+          throw tooSmall;
+        }
         return providers.streamChat(profile, Object.assign(aiUsageObserver(profile.model, "conversation"), {
-          systemPrompt: readyPayload.systemPrompt,
+          systemPrompt: fitted.systemPrompt,
           messages: finalMessages,
           signal: state.abortController ? state.abortController.signal : undefined,
           onDelta: function (_delta, fullText) {
@@ -2607,6 +3106,7 @@
         var targetMsg = conv.messages[assistantMsgIndex];
         if (targetMsg) {
           targetMsg.content = result.text || "";
+          targetMsg.interpretedReadingIds = interpretedRecordIds(targetMsg.content, requestRecords, true);
           targetMsg.reasoning = result.reasoning || "";
           targetMsg.error = result.completionStatus === "truncated"
             ? formatProviderError({ code: result.finishReason === "stream_closed" ? "response_incomplete" : "output_truncated" })
@@ -2629,6 +3129,7 @@
         }
         var targetMsg = conv.messages[assistantMsgIndex];
         if (targetMsg) {
+          targetMsg.interpretedReadingIds = [];
           if (err && err.code === "aborted") {
             if (!targetMsg.content) {
               targetMsg.error = tr("ai.stoppedEmpty", null, "已停止生成。", "Generation stopped.");
@@ -3039,6 +3540,15 @@
       });
     }
 
+    if (els.skillModeGroup && typeof els.skillModeGroup.querySelectorAll === "function") {
+      Array.prototype.forEach.call(els.skillModeGroup.querySelectorAll("[data-skill-mode]"), function (pill) {
+        pill.addEventListener("click", function () {
+          var targetMode = pill.getAttribute("data-skill-mode");
+          if (targetMode) selectSkillMode(targetMode);
+        });
+      });
+    }
+
     if (els.sendBtn) els.sendBtn.addEventListener("click", sendUserPrompt);
     if (els.stopBtn) {
       els.stopBtn.addEventListener("click", function () {
@@ -3046,6 +3556,9 @@
       });
     }
     if (els.promptInput) {
+      els.promptInput.addEventListener("input", function () {
+        renderSkillsBar();
+      });
       els.promptInput.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
           e.preventDefault();
@@ -3211,6 +3724,9 @@
         setSidebarOpen(false);
       } else if (state.themePopoverOpen) {
         setThemePopoverOpen(false);
+      } else if (state.editingQuestionReadingId) {
+        state.editingQuestionReadingId = "";
+        renderContextHeader();
       } else if (state.editingMessageId) {
         state.editingMessageId = "";
         renderMessages();
@@ -3345,6 +3861,11 @@
           }
           return true;
         }
+        if (state.editingQuestionReadingId) {
+          state.editingQuestionReadingId = "";
+          renderContextHeader();
+          return true;
+        }
         if (state.editingMessageId) {
           state.editingMessageId = "";
           renderMessages();
@@ -3375,6 +3896,9 @@
     normalizeConversationMessagesForApi: normalizeConversationMessagesForApi,
     truncateMessagesToBudget: truncateMessagesToBudget,
     hasPrecedingUserTurn: hasPrecedingUserTurn,
+    assistantMessageShowsReading: assistantMessageShowsReading,
+    interpretedRecordIds: interpretedRecordIds,
+    computeHasUninterpretedReading: computeHasUninterpretedReading,
     handleBack: function () {
       return controller ? controller.handleBack() : false;
     },
