@@ -5,6 +5,18 @@ const assert = require("node:assert/strict");
 const providers = require("../js/ai-providers.js");
 const profile = { format: "openai-chat", baseUrl: "https://gateway.invalid/v1", apiKey: "fixture-only", model: "opaque-alias", maxTokens: 1234, temperature: 0.4 };
 const messages = [{ role: "user", content: "Local compatibility fixture" }];
+
+test("context budgeting reserves the actual configured output and checks summary requests before dispatch", async () => {
+  assert.ok(providers.inputTokenBudget({ format: "openai-chat" }, 1024) < 1024);
+  assert.equal(providers.inputTokenBudget({ maxTokens: 4096 }, 4096), 0);
+  assert.equal(providers.inputTokenBudget({ format: "anthropic-messages" }, 4096), 0);
+  assert.ok(providers.inputTokenBudget({ maxTokens: 3000 }, 4096) < 1096);
+  let sent = 0;
+  await assert.rejects(providers.compressMessages({ ...profile, contextWindow: 1024 }, {
+    messages, estimateTokens: () => 64, fetchImpl: async () => { sent++; return ok(); }
+  }), { code: "context_too_small" });
+  assert.equal(sent, 0);
+});
 const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const ok = () => jsonResponse({ choices: [{ message: { content: "OK" }, finish_reason: "stop" }], usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 } });
 const unsupported = (param, message) => jsonResponse({ error: { code: "unsupported_parameter", param, message: message || `Unsupported parameter: '${param}' is not supported with this model.` } }, 400);

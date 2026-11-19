@@ -85,7 +85,8 @@ def main(argv=None):
                 # the attached record; the reading-state machine only counts a
                 # reply as having read a record when it shows such evidence.
                 reading_answers = {
-                    "review-new-reading": "\n\n第一张是正位的愚者，落在现状位，说的是还没出发。",
+                    "slow-review-r1": "\n\n第一张是正位的愚者，落在现状位。",
+                    "review-new-reading": "\n\n第一张是正位的塔，落在现状位，说的是还没出发。",
                     "reading-fixture": "\n\n第一张是正位的愚者，落在现状位，说的是还没出发。",
                 }
                 clarification_answers = {
@@ -351,7 +352,7 @@ def main(argv=None):
                         DivinationAiContext.buildReadingSnapshot({
                             id, layoutMode:'preset', deckType:'tarot', spreadId:'three-card-horizontal',
                             createdAt:Date.now(), cards:[
-                                {cardId:'major-00', positionNumber:1, orientation:'upright'},
+                                {cardId:id==='review-r1'?'major-00':'major-16', positionNumber:1, orientation:'upright'},
                                 {cardId:'major-01', positionNumber:2, orientation:'upright'},
                                 {cardId:'major-02', positionNumber:3, orientation:'upright'}
                             ]}, {locale:'zh-CN'}));
@@ -525,23 +526,32 @@ def main(argv=None):
             # down to its compact form first, so all three short turns survive.
             small_config = json.loads(json.dumps(config))
             small_config["profiles"][0]["contextWindow"] = 4096
-            with context(small_config) as c:
+            for locale in ["zh-CN", "en"]:
+                with context(small_config) as c:
+                    a = page(c)
+                    if a.evaluate("DivinationI18n.getLocale()") != locale:
+                        toggle_language(a)
+                    meter = a.locator("#aiContextMeter").inner_text()
+                    for question in ["small-name", "small-ack", "small-ask"]:
+                        send(a, question)
+                        done(a)
+                    assert len(bodies) == 3, "Three short questions must not trigger a fourth, summarization call"
+                    sent = bodies[-1]["messages"]
+                    assert [m["content"] for m in sent if m["role"]=="user"] == ["small-name","small-ack","small-ask"]
+                    system_prompt = bodies[0]["messages"][0]["content"]
+                    est = a.evaluate("s => DivinationAiContext.estimateConversationTokens({systemPrompt:s,messages:[]})", system_prompt)
+                    assert str(est) in meter.replace(",", ""), (est, meter)
+                    results["small_context_keeps_recent_turns_"+locale] = "pass"
+
+            tiny_config = json.loads(json.dumps(config))
+            tiny_config["profiles"][0]["contextWindow"] = 1024
+            with context(tiny_config) as c:
                 a = page(c)
-                send(a, "small-name")
-                done(a)
-                send(a, "small-ack")
-                done(a)
-                send(a, "small-ask")
-                done(a)
-                last = bodies[-1]
-                system_prompt = last["messages"][0]["content"]
-                joined = "\n".join(message["content"] for message in last["messages"])
-                for expected in ["small-name", "small-ack", "small-ask"]:
-                    assert expected in joined, (expected, [m["content"] for m in last["messages"]])
-                assert "应用内运行规范（简版）" in system_prompt
-                assert "## 三层模型" not in system_prompt
-                assert "奥莉薇娅" in system_prompt
-                results["small_context_keeps_recent_turns"] = "pass"
+                a.locator("#aiPromptInput").fill("你好")
+                a.locator("#aiSendBtn").click()
+                a.get_by_text("这段对话放不进当前上下文窗口了", exact=False).wait_for()
+                assert not bodies and not seen
+                results["tiny_context_rejected_before_provider"] = "pass"
 
             with context() as c:
                 a = page(c)

@@ -2280,6 +2280,15 @@
     return out;
   }
 
+  // Keep the explicit wire limit intact and allow headroom for the local estimate.
+  function inputTokenBudget(profile, windowSize) {
+    var explicit = Number(profile && profile.maxTokens);
+    var reserve = explicit > 0 ? explicit
+      : profile && profile.format === "anthropic-messages" ? ANTHROPIC_DEFAULT_MAX_TOKENS
+      : Math.min(4096, Math.floor(windowSize * 0.2));
+    return Math.max(0, Math.floor((windowSize - reserve) * 0.94));
+  }
+
   function compressMessages(profileInput, options) {
     var profile = normalizeProfile(profileInput);
     var opts = options && typeof options === "object" ? options : {};
@@ -2315,12 +2324,14 @@
       maxTokens: 2048
     });
 
+    var messages = [{ role: "user", content: transcriptLines.join("\n\n") }];
+    if (opts.estimateTokens && opts.estimateTokens({ systemPrompt: systemInstruction, messages: messages })
+        >= inputTokenBudget(compressionProfile, resolveContextWindow(profile).contextWindow)) {
+      return Promise.reject(AiProviderError("context_too_small", "Compression request exceeds the context window"));
+    }
     return streamChat(compressionProfile, {
       systemPrompt: systemInstruction,
-      messages: [{
-        role: "user",
-        content: transcriptLines.join("\n\n")
-      }],
+      messages: messages,
       stream: opts.stream !== undefined ? opts.stream : true,
       signal: opts.signal,
       fetchImpl: opts.fetchImpl,
@@ -2440,6 +2451,7 @@
     inferModelContextWindow: inferModelContextWindow,
     resolveContextWindow: resolveContextWindow,
     fetchModelContextWindow: fetchModelContextWindow,
+    inputTokenBudget: inputTokenBudget,
     compressMessages: compressMessages,
     buildRequest: buildRequest,
     streamChat: streamChat,

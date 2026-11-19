@@ -880,6 +880,7 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   };
   const fakeHistoryRecordWithQuestion = Object.assign({}, fakeHistoryRecord, {
     id: "hist-ui-2",
+    cards: [{slotIndex:0, positionNumber:1, positionName:"过去", cardId:"minor-wands-three", cardName:"权杖三", orientation:"upright"}].concat(fakeHistoryRecord.cards.slice(1)),
     question: "原始记录自带旧问题"
   });
   global.DivinationHistoryStore = {
@@ -1280,7 +1281,7 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   let sentSysPrompt = "";
   streamHook = (_profile, opts) => {
     sentSysPrompt = opts.systemPrompt;
-    return Promise.resolve({ text: "正位权杖三立在结果位，逆位圣杯二在关系位，先讲这两张。", reasoning: "", format: "openai-chat", model: "gpt-4o-mini" });
+    return Promise.resolve({ text: "正位权杖三意味着等待消息，塔提醒你准备应对变化。", reasoning: "", format: "openai-chat", model: "gpt-4o-mini" });
   };
   promptInput.value = "请直接给我结论";
   doc.getElementById("aiSendBtn").click();
@@ -1404,12 +1405,12 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   const addedWhileStreaming = contextModule.buildReadingSnapshot(fakeHistoryRecord, { locale: "zh-CN" });
   await memChatStore.setAttachedReadings(concurrentChat.id, ["hist-ui-2", "hist-ui-1"],
     pendingReadingChat.readingSnapshots.concat(addedWhileStreaming));
-  finishOldReading({ text: "这次请求只看到了第二副牌", format: "openai-chat", model: "gpt-4o-mini" });
+  finishOldReading({ text: "正位权杖三代表等待消息。", format: "openai-chat", model: "gpt-4o-mini" });
   await flush();
   assert.equal(activeSkillsListEl.textContent.includes("追问开窗深挖"), false, "An unseen attachment stays in full-reading mode after an older request finishes");
   streamHook = (_profile, opts) => {
     sentSysPrompt = opts.systemPrompt;
-    return Promise.resolve({ text: "完整解读新牌阵", format: "openai-chat", model: "gpt-4o-mini" });
+    return Promise.resolve({ text: "塔提醒你准备迎接变化。", format: "openai-chat", model: "gpt-4o-mini" });
   };
   promptInput.value = "看看新增的那副牌";
   doc.getElementById("aiSendBtn").click();

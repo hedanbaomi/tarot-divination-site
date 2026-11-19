@@ -456,23 +456,20 @@
   // Names are localized when the snapshot is built, and some decks (Mystagogus,
   // LXXXI) do not use Rider-Waite names, so matching the actual card names of the
   // record is more reliable than a hard-coded Major Arcana list.
-  function collectRecordCardTokens(snapshot) {
-    var tokens = [];
-    var cards = snapshot && Array.isArray(snapshot.cards) ? snapshot.cards : [];
-    for (var i = 0; i < cards.length; i += 1) {
-      var card = cards[i];
-      if (!card) continue;
-      var raw = card.cardName == null ? "" : String(card.cardName);
-      if (!raw) continue;
-      var parts = raw.split(/[\/|｜]/);
-      for (var p = 0; p < parts.length; p += 1) {
-        var token = normalizeCardToken(parts[p]);
-        if (token && tokens.indexOf(token) === -1) {
-          tokens.push(token);
-        }
-      }
+  function collectRecordCardTokens(snapshot, resolved) {
+    var tokens = new Set();
+    function addNames(card) {
+      [card.cardName, card.cardNameZh, card.cardNameEn].forEach(function (name) {
+        if (!name) return;
+        String(name).split(/[\/|｜]/).forEach(function (part) {
+          var token = normalizeCardToken(part).toLowerCase();
+          if (token) tokens.add(token);
+        });
+      });
     }
-    return tokens;
+    if (snapshot && snapshot.cards) snapshot.cards.forEach(addNames);
+    if (resolved && resolved.cards) resolved.cards.forEach(addNames);
+    return Array.from(tokens);
   }
 
   function textMentionsCardToken(text, token) {
@@ -518,88 +515,75 @@
     return arcanaEn.test(text) && cueEn.test(text);
   }
 
-  function assistantMessageReadsRecord(content, snapshot) {
-    var text = typeof content === "string" ? content : "";
-    if (!text.trim()) return false;
-
-    var tokens = collectRecordCardTokens(snapshot);
-    if (tokens.length > 0) {
-      var hasCue = /牌|张|位|阵|正位|逆位|抽/.test(text)
-        || /\b(?:cards?|positions?|slots?|spread|draw|drawn|upright|reversed|arcana)\b/i.test(text);
-      for (var t = 0; t < tokens.length; t += 1) {
-        if (!textMentionsCardToken(text, tokens[t])) continue;
-        if (hasCue || cardTokenIsDistinctive(tokens[t])) return true;
-      }
-      return hasStrongReadingMarker(text);
-    }
-
-    // Snapshots without card metadata (older records, hand-built tests) fall back
-    // to the generic markers plus the arcana list.
-    return hasStrongReadingMarker(text) || showsNamedArcanaWithCue(text);
+  function mentionsReadingCard(text, token) {
+    if (!textMentionsCardToken(text, token)) return false;
+    if (cardTokenIsDistinctive(token)) return true;
+    var escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    var interpretation = new RegExp(escaped + "(?:在.{0,6}位|(?:这张)?牌|正位|逆位|提醒|意味着|象征|代表|提示|指向|暗示|说明|\\s+(?:suggests?|means?|signals?|points? to)\\b)", "i");
+    return interpretation.test(text) || /正位|逆位|牌位|这张牌|第[一二三四五六七八九十百零\d]+张|\b(?:card|position|slot|upright|reversed)\b/i.test(text);
   }
 
   function assistantMessageShowsReading(content, snapshot) {
-    return assistantMessageReadsRecord(content, snapshot);
+    if (typeof content !== "string" || !content.trim()) return false;
+    var tokens = collectRecordCardTokens(snapshot);
+    if (tokens.length) return tokens.some(function (name) { return mentionsReadingCard(content, name); });
+    return hasStrongReadingMarker(content) || showsNamedArcanaWithCue(content);
   }
 
-  function computeHasUninterpretedReading(conv, uptoIndex) {
-    if (!conv || !Array.isArray(conv.readingIds) || conv.readingIds.length === 0) {
-      return false;
+  // When the same card is in two spreads, scope explicitly numbered passages to
+  // the order in the actual request. Unlabelled mentions must identify one record.
+  function interpretedRecordIds(text, records, useRequestOrder) {
+    var ids = new Set();
+    function matchPassage(passage, scope) {
+      scope.forEach(function (record) {
+        if (record.names.some(function (name) {
+          return mentionsReadingCard(passage, name) && !scope.some(function (other) {
+            return other !== record && other.names.indexOf(name) !== -1;
+          });
+        })) ids.add(record.id);
+      });
     }
-    var msgs = Array.isArray(conv.messages) ? conv.messages : [];
-    var limit = typeof uptoIndex === "number" ? Math.min(msgs.length, Math.max(0, uptoIndex)) : msgs.length;
+    var labels = /(?:\breading\s*#?\s*(\d+)\b|(?:占卜)?记录\s*(\d+)|第\s*(\d+|[一二三四五六七八九十])\s*(?:条记录|份记录|副牌阵|副牌|个牌阵))/gi;
+    var scope = records;
+    var start = 0;
+    var label;
+    while (useRequestOrder && (label = labels.exec(text))) {
+      matchPassage(text.slice(start, label.index), scope);
+      var raw = label[1] || label[2] || label[3];
+      var ordinal = Number(raw) || ("一二三四五六七八九十".indexOf(raw) + 1);
+      scope = records[ordinal - 1] ? [records[ordinal - 1]] : [];
+      start = labels.lastIndex;
+    }
+    matchPassage(text.slice(start), scope);
+    return Array.from(ids);
+  }
 
-    var activeIdSet = Object.create(null);
-    var activeIds = [];
-    for (var r = 0; r < conv.readingIds.length; r += 1) {
-      var id = conv.readingIds[r];
-      if (id && !activeIdSet[id]) {
-        activeIdSet[id] = true;
-        activeIds.push(id);
-      }
-    }
-
-    var assistants = [];
-    for (var i = 0; i < limit; i += 1) {
-      var m = msgs[i];
-      if (!m || m.role !== "assistant" || typeof m.content !== "string" || !m.content.trim()) continue;
-      assistants.push({ content: m.content, ts: Number(m.createdAt) || 0 });
-    }
-    if (assistants.length === 0) {
-      return true;
-    }
-
-    var snaps = Array.isArray(conv.readingSnapshots) ? conv.readingSnapshots : [];
-    var activeSnaps = [];
-    for (var s = 0; s < snaps.length; s += 1) {
-      if (snaps[s] && activeIdSet[snaps[s].id]) {
-        activeSnaps.push(snaps[s]);
-      }
-    }
-    if (activeSnaps.length === 0) {
-      return true;
-    }
-
-    // Per-record progress: a record counts as interpreted only when a reply that
-    // was written for a request started after it was attached carries evidence
-    // about that record's own cards. A greeting, a clarifying question, or a
-    // reply that predates the attachment never marks it read.
-    for (var k = 0; k < activeSnaps.length; k += 1) {
-      var snap = activeSnaps[k];
-      var attTs = Number(snap.attachedAt) || 0;
-      var read = false;
-      for (var a = 0; a < assistants.length; a += 1) {
-        if (attTs > 0 && assistants[a].ts <= attTs) continue;
-        if (assistantMessageReadsRecord(assistants[a].content, snap)) {
-          read = true;
-          break;
+  function computeHasUninterpretedReading(conv, uptoIndex, resolvedReadings) {
+    if (!conv || !Array.isArray(conv.readingIds) || !conv.readingIds.length) return false;
+    var snapshots = new Map((conv.readingSnapshots || []).map(function (snap) { return [snap.id, snap]; }));
+    var details = new Map((resolvedReadings || []).map(function (rec) { return [rec.id, rec]; }));
+    var records = conv.readingIds.map(function (id) {
+      var snap = snapshots.get(id);
+      return { id: id, attachedAt: Number(snap && snap.attachedAt) || 0, names: collectRecordCardTokens(snap, details.get(id)) };
+    });
+    var readIds = new Set();
+    (conv.messages || []).slice(0, uptoIndex).forEach(function (msg) {
+      if (msg.role !== "assistant" || msg.error || !msg.content) return;
+      var eligible = records.filter(function (record) {
+        return !record.attachedAt || record.attachedAt <= Number(msg.createdAt);
+      });
+      // New replies retain the attribution made at completion, even after a tab
+      // removes or reorders attachments. Old backups can only use unambiguous names.
+      var matched = msg.interpretedReadingIds;
+      if (!Array.isArray(matched)) {
+        matched = interpretedRecordIds(msg.content, eligible, false);
+        if (records.length === 1 && eligible.length && !eligible[0].names.length && assistantMessageShowsReading(msg.content)) {
+          matched.push(eligible[0].id);
         }
       }
-      if (!read) {
-        return true;
-      }
-    }
-    return false;
+      eligible.forEach(function (record) { if (matched.indexOf(record.id) !== -1) readIds.add(record.id); });
+    });
+    return records.some(function (record) { return !readIds.has(record.id); });
   }
 
   function initAiPage() {
@@ -1248,7 +1232,6 @@
       var records = getAttachedRecordsForConversation(targetConv);
       var messages = targetConv && Array.isArray(targetConv.messages) ? targetConv.messages : [];
       var limitIdx = typeof uptoIndex === "number" ? Math.min(messages.length, Math.max(0, uptoIndex)) : messages.length;
-      var hasUninterpretedReading = computeHasUninterpretedReading(targetConv, limitIdx);
       var summaryObj = targetConv && targetConv.contextSummary && targetConv.contextSummary.text
         ? targetConv.contextSummary
         : null;
@@ -1281,6 +1264,7 @@
       var resolvedReadings = typeof contextApi.resolveOrderedReadings === "function"
         ? contextApi.resolveOrderedReadings(records, { locale: locale, customLibrary: customLibrary })
         : null;
+      var hasUninterpretedReading = computeHasUninterpretedReading(targetConv, limitIdx, resolvedReadings);
       var readingsMd = contextApi.formatReadingsForPrompt(records, {
         locale: locale,
         customLibrary: customLibrary,
@@ -1325,15 +1309,13 @@
     // conversations keep their history.
     var PROMPT_PERSONA_LEVELS = ["full", "compact", "none"];
 
-    function fitPayloadToBudget(conv, uptoIndex, payload, hardCap) {
-      var current = payload;
+    function buildFittedPayload(conv, uptoIndex, hardCap) {
+      var payload;
       for (var i = 0; i < PROMPT_PERSONA_LEVELS.length; i += 1) {
-        if (!current || current.estimatedTokens < hardCap) return current;
-        var nextLevel = PROMPT_PERSONA_LEVELS[i + 1];
-        if (!nextLevel) break;
-        current = buildPromptPayloadForConversation(conv, uptoIndex, { personaLevel: nextLevel });
+        payload = buildPromptPayloadForConversation(conv, uptoIndex, { personaLevel: PROMPT_PERSONA_LEVELS[i] });
+        if (payload.estimatedTokens < hardCap) break;
       }
-      return current;
+      return payload;
     }
 
     function skillModeFallbackLabel(modeId) {
@@ -1375,11 +1357,13 @@
       if (draftPrompt) {
         previewMsgs.push({ role: "user", content: draftPrompt });
       }
-      var hasUninterpretedReading = computeHasUninterpretedReading(conv, rawMsgs.length);
+      var resolvedReadings = contextApi.resolveOrderedReadings(records, { locale: currentLocale(), customLibrary: customLibrary });
+      var hasUninterpretedReading = computeHasUninterpretedReading(conv, rawMsgs.length, resolvedReadings);
       var preview = typeof contextApi.previewActiveSkills === "function"
         ? contextApi.previewActiveSkills({
             locale: currentLocale(),
             records: records,
+            resolvedReadings: resolvedReadings,
             messages: previewMsgs,
             skillMode: activeMode,
             hasUninterpretedReading: hasUninterpretedReading,
@@ -1480,7 +1464,7 @@
       var profile = configStore.getActiveProfile();
       var ctxResolved = providers.resolveContextWindow(profile || {});
       var conv = state.activeConversation;
-      var payload = buildPromptPayloadForConversation(conv, conv && Array.isArray(conv.messages) ? conv.messages.length : 0);
+      var payload = buildFittedPayload(conv, undefined, providers.inputTokenBudget(profile, ctxResolved.contextWindow));
       var compressedCount = payload.compressedCount || 0;
       els.contextMeter.classList.toggle("is-compressed", compressedCount > 0);
 
@@ -2981,12 +2965,8 @@
       }
 
       var conv = conversationSnapshot;
-      var payload = buildPromptPayloadForConversation(conv, assistantMsgIndex);
-      var ctxResolved = providers.resolveContextWindow(profile);
-      var reserveOut = Number(profile.maxTokens) > 0
-        ? Math.min(Number(profile.maxTokens), Math.floor(ctxResolved.contextWindow * 0.5))
-        : Math.min(4096, Math.floor(ctxResolved.contextWindow * 0.2));
-      var inputBudget = Math.max(2048, ctxResolved.contextWindow - reserveOut);
+      var hardCap = providers.inputTokenBudget(profile, providers.resolveContextWindow(profile).contextWindow);
+      var payload = buildFittedPayload(conv, assistantMsgIndex, hardCap);
 
       state.streaming = true;
       state.compressing = false;
@@ -3000,10 +2980,14 @@
       };
       updateStreamingUi();
 
+      var requestRecords = (payload.resolvedReadings || []).map(function (reading) {
+        return { id: reading.id, names: collectRecordCardTokens(null, reading) };
+      });
       var prepPromise = Promise.resolve(payload);
       if (
         profile.autoCompress !== false
-        && payload.estimatedTokens >= Math.floor(inputBudget * 0.75)
+        && payload.estimatedTokens >= hardCap
+        && contextApi.estimateConversationTokens({ systemPrompt: payload.systemPrompt, messages: payload.apiMessages.slice(-1) }) < hardCap
         && payload.validMessages.length > 4
       ) {
         var keepCount = Math.min(4, Math.max(2, payload.validMessages.length - 2));
@@ -3026,6 +3010,7 @@
           prepPromise = providers.compressMessages(profile, Object.assign(aiUsageObserver(profile.model, "compression"), {
             previousSummary: payload.summaryText,
             messages: toCompress,
+            estimateTokens: contextApi.estimateConversationTokens,
             locale: currentLocale(),
             signal: state.abortController ? state.abortController.signal : undefined
           })).catch(function (compErr) {
@@ -3053,7 +3038,7 @@
                 compressedCount: coveredCountBefore + addedRawCount,
                 updatedAt: Date.now()
               };
-              return buildPromptPayloadForConversation(conv, assistantMsgIndex);
+              return buildFittedPayload(conv, assistantMsgIndex, hardCap);
             }
             return payload;
           }).finally(function () {
@@ -3072,9 +3057,7 @@
         }, 60);
       }
 
-      return prepPromise.then(function (readyPayload) {
-        var hardCap = Math.floor(inputBudget * 0.94);
-        var fitted = fitPayloadToBudget(conv, assistantMsgIndex, readyPayload, hardCap);
+      return prepPromise.then(function (fitted) {
         var finalMessages = truncateMessagesToBudget(
           fitted.apiMessages,
           fitted.systemPrompt,
@@ -3119,6 +3102,7 @@
         var targetMsg = conv.messages[assistantMsgIndex];
         if (targetMsg) {
           targetMsg.content = result.text || "";
+          targetMsg.interpretedReadingIds = interpretedRecordIds(targetMsg.content, requestRecords, true);
           targetMsg.reasoning = result.reasoning || "";
           targetMsg.error = result.completionStatus === "truncated"
             ? formatProviderError({ code: result.finishReason === "stream_closed" ? "response_incomplete" : "output_truncated" })
@@ -3141,6 +3125,7 @@
         }
         var targetMsg = conv.messages[assistantMsgIndex];
         if (targetMsg) {
+          targetMsg.interpretedReadingIds = [];
           if (err && err.code === "aborted") {
             if (!targetMsg.content) {
               targetMsg.error = tr("ai.stoppedEmpty", null, "已停止生成。", "Generation stopped.");
@@ -3908,6 +3893,7 @@
     truncateMessagesToBudget: truncateMessagesToBudget,
     hasPrecedingUserTurn: hasPrecedingUserTurn,
     assistantMessageShowsReading: assistantMessageShowsReading,
+    interpretedRecordIds: interpretedRecordIds,
     computeHasUninterpretedReading: computeHasUninterpretedReading,
     handleBack: function () {
       return controller ? controller.handleBack() : false;

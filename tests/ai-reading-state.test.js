@@ -213,3 +213,43 @@ test("legacy skill modes stay valid in storage", () => {
   assert.equal(chatStore.normalizeSkillMode("nonsense"), "auto");
   assert.equal(chatStore.normalizeSkillMode(""), "auto");
 });
+
+test("one reading never settles another by generic vocabulary; bilingual short names retain attribution", () => {
+  const a = snapWithCards("r1", ["愚者"], 100);
+  const b = snapWithCards("r2", ["死路"], 100);
+  const resolved = [{ id: "r2", cards: [{cardNameZh:"死路", cardNameEn:"Dead End"}] }];
+  const conv = {readingIds:["r1","r2"], readingSnapshots:[a,b], messages:[]};
+  const reply = content => ({role:"assistant",content,createdAt:100});
+  conv.messages = [reply("第一张是正位的愚者。")];
+  assert.equal(aiUi.computeHasUninterpretedReading(conv, 1, resolved), true);
+  for (const content of ["死路提醒你眼下先停一停。","Dead End asks you to pause."]) {
+    conv.messages[1] = reply(content);
+    assert.equal(aiUi.computeHasUninterpretedReading(conv, 2, resolved), false);
+  }
+  for (const content of ["开始解读这个牌阵前，你想先聊哪件事？","Would you like a cup of tea?"]) {
+    assert.equal(aiUi.assistantMessageShowsReading(content, b), false);
+  }
+  assert.equal(aiUi.assistantMessageShowsReading("世界很大，你的提醒很有帮助。", snapWithCards("r", ["世界"], 1)), false);
+});
+
+test("shared cards require a record reference; attribution survives reordered attachments and backup", async () => {
+  const records = ["a","b"].map(id => ({id, names:["愚者"]}));
+  assert.deepEqual(aiUi.interpretedRecordIds("愚者代表新开始。", records, true), []);
+  assert.deepEqual(aiUi.interpretedRecordIds("第一条记录愚者代表新开始。", records, true), ["a"]);
+  assert.deepEqual(aiUi.interpretedRecordIds("第一条记录愚者代表新开始，第二条记录愚者代表轻率。", records, true), ["a","b"]);
+  const opts = {indexedDB:null,memoryFallback:true};
+  const store = chatStore.createStore(opts);
+  const base = await store.createConversation({id:"q", readingIds:["a","b"], readingSnapshots:records.map(x=>snapWithCards(x.id, ["愚者"], 1))});
+  const draft = await store.appendMessages(base.id,[{role:"assistant", id:"reply", content:"", createdAt:2}]);
+  await store.completeMessage(base.id,{...draft.messages[0],content:"第一条记录愚者代表新开始。",interpretedReadingIds:["a"]});
+  const backup = await store.exportBackup(), restored = chatStore.createStore(opts);
+  await restored.importBackup(JSON.stringify(backup));
+  const conv = await restored.getConversation(base.id);
+  assert.deepEqual(conv.messages[0].interpretedReadingIds, ["a"]);
+  conv.readingIds = ["b"];
+  assert.equal(aiUi.computeHasUninterpretedReading(conv, 1), true);
+  conv.readingIds = ["a"];
+  assert.equal(aiUi.computeHasUninterpretedReading(conv, 1), false);
+  conv.readingSnapshots[0].attachedAt = 3;
+  assert.equal(aiUi.computeHasUninterpretedReading(conv, 1), true);
+});

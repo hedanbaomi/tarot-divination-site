@@ -51,7 +51,7 @@
   function normalizeMessage(raw) {
     var input = raw && typeof raw === "object" ? raw : {};
     var role = input.role === "assistant" ? "assistant" : "user";
-    return {
+    var message = {
       id: trimString(input.id) || generateMessageId(),
       role: role,
       content: typeof input.content === "string" ? input.content : String(input.content || ""),
@@ -61,6 +61,10 @@
       createdAt: parseTimestampMs(input.createdAt) || Date.now(),
       error: trimString(input.error)
     };
+    if (role === "assistant" && Array.isArray(input.interpretedReadingIds)) {
+      message.interpretedReadingIds = Array.from(new Set(input.interpretedReadingIds.map(trimString).filter(Boolean)));
+    }
+    return message;
   }
 
   function normalizeSnapshotCard(raw, fallbackIndex) {
