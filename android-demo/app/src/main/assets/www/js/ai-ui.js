@@ -519,8 +519,12 @@
     if (!textMentionsCardToken(text, token)) return false;
     if (cardTokenIsDistinctive(token)) return true;
     var escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    var interpretation = new RegExp(escaped + "(?:在.{0,6}位|(?:这张)?牌|正位|逆位|提醒|意味着|象征|代表|提示|指向|暗示|说明|\\s+(?:suggests?|means?|signals?|points? to)\\b)", "i");
-    return interpretation.test(text) || /正位|逆位|牌位|这张牌|第[一二三四五六七八九十百零\d]+张|\b(?:card|position|slot|upright|reversed)\b/i.test(text);
+    // Bind cues to this occurrence. A card in one sentence must not turn a
+    // casual reference to the sun/world elsewhere into a second interpretation.
+    var name = /[a-z]/i.test(token) ? "\\b" + escaped + "\\b" : escaped;
+    var before = "(?:(?:正位|逆位|第[一二三四五六七八九十百零\\d]+张|这张牌)(?:的|是|为|：|:)?\\s*|\\b(?:upright|reversed|card)\\s+(?:the\\s+)?)";
+    var after = "(?:在[^。！？；，,\\n]{0,6}位|(?:这张)?牌|正位|逆位|提醒|意味着|象征|代表|提示|指向|暗示|说明|\\s+(?:card|upright|reversed|suggests?|means?|signals?|points? to)\\b)";
+    return new RegExp(before + name + "|" + name + after, "i").test(normalizeCardToken(text));
   }
 
   function assistantMessageShowsReading(content, snapshot) {

@@ -230,6 +230,7 @@ test("one reading never settles another by generic vocabulary; bilingual short n
     assert.equal(aiUi.assistantMessageShowsReading(content, b), false);
   }
   assert.equal(aiUi.assistantMessageShowsReading("世界很大，你的提醒很有帮助。", snapWithCards("r", ["世界"], 1)), false);
+  assert.equal(aiUi.assistantMessageShowsReading("第一张是愚者。外面太阳出来了，我们继续聊。", snapWithCards("r", ["太阳"], 1)), false);
 });
 
 test("shared cards require a record reference; attribution survives reordered attachments and backup", async () => {
