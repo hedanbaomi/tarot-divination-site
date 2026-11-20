@@ -1,7 +1,7 @@
 """Check last-spread restoration using disposable Chrome profiles.
 
 Run: uv run --with playwright python tools/test-spread-selection-browser.py
-Add --base-url URL to verify a deployed site. Only the selected site's assets
+Add --android to exercise the APK assets, or --base-url URL to verify a deployed site. Only the selected site's assets
 are reachable; no existing browser profile is used.
 """
 import argparse
@@ -30,11 +30,54 @@ class Server(ThreadingHTTPServer):
     request_queue_size = 128
 
 
+def check_freeform_controls(page):
+    stage = page.locator(".table-stage")
+    cards = page.locator("#freeDrawCards .free-table-card")
+    page.locator("#layoutModeSelect").select_option("freeform", force=True)
+    stage.press("ArrowRight")
+    stage.press("End")
+    page.wait_for_function("document.querySelector('#deckNextBtn').disabled")
+    stage.press("Home")
+    page.wait_for_function("document.querySelector('#deckPrevBtn').disabled")
+    page.locator("#deckNextBtn").press("Enter")
+    assert cards.count() == 0
+    stage.press("Enter")
+    page.wait_for_function("document.querySelectorAll('.free-table-card').length === 1")
+    card = cards.first
+    before = card.get_attribute("aria-label")
+    assert card.locator("img.card-image").get_attribute("alt") == ""
+    handle = card.element_handle()
+    card.press("Space")
+    assert handle.evaluate("e => e.isConnected && document.activeElement === e")
+    label = card.get_attribute("aria-label")
+    name = card.locator("img.card-image").get_attribute("alt")
+    assert name and name in label and "1" in label and label != before
+    page.set_viewport_size({"width": 1440, "height": 740})
+    page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+    assert handle.evaluate("e => e.isConnected && document.activeElement === e")
+    stage.press("Enter")
+    page.wait_for_function("document.querySelectorAll('.free-table-card').length === 2")
+    page.set_viewport_size({"width": 390, "height": 740})
+    page.wait_for_function("""() => {
+        const box = document.querySelector('#freeDrawCards').getBoundingClientRect();
+        return [...document.querySelectorAll('.free-table-card')].every(card => {
+            const r = card.getBoundingClientRect();
+            return r.left >= box.left - 1 && r.right <= box.right + 1;
+        });
+    }""")
+    page.locator("#revealBtn").dispatch_event("click")
+    assert cards.evaluate_all("es => es.every(e => e.classList.contains('revealed'))")
+    assert all(cards.nth(i).locator("img.card-image").get_attribute("alt") for i in range(2))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", help="Verify an existing deployment instead of a local server")
+    parser.add_argument("--android", action="store_true", help="Use the bundled Android UI and its saved spread library")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
+    if args.android:
+        root /= "android-demo/app/src/main/assets/www"
     server = None
     if args.base_url:
         base = args.base_url.rstrip("/")
@@ -63,9 +106,13 @@ def main():
                                 if request.url.startswith(base + "/") and request.resource_type == "script" else None)
                         page.goto(base + "/" + path)
                         page.wait_for_function("document.querySelector('#spreadTitle').textContent.length > 0")
+                        if args.android and page.locator("#telemetryDialog[open]").count():
+                            page.locator("#telemetryNoticeClose").click()
                         return page
 
                     def selection(page):
+                        if args.android and page.locator("#telemetryDialog[open]").count():
+                            page.locator("#telemetryNoticeClose").click()
                         return page.evaluate("key => JSON.parse(localStorage.getItem(key))", KEY)
 
                     def expect_selection(page, spread, deck="tarot"):
@@ -88,6 +135,30 @@ def main():
                     try:
                         page = open_page(context)
                         expect_selection(page, "three-card-horizontal")
+                        if args.android:
+                            page.evaluate("""() => {
+                                window.chromeSignals = [];
+                                window.androidThemeChrome = {set: color => window.chromeSignals.push(color)};
+                                DivinationTheme.setTheme('grove');
+                            }""")
+                            classic = surface.startswith("classic")
+                            assert page.evaluate("window.chromeSignals.at(-1)") == ("#31483c" if classic else "#0d1511")
+                            assert page.locator('meta[name="theme-color"]').get_attribute("content") == "#31483c"
+                            page.evaluate("DivinationTheme.setTheme('celestial')")
+                            results.append(surface + ": native Grove palette and page theme color")
+                            change(page, "#deckSelect", "lxxxi")
+                            page.reload()
+                            backs = page.locator("#deckSpread .deck-card img")
+                            backs.first.wait_for(state="attached")
+                            assert backs.first.get_attribute("src") == "lxxxi-back"
+                            page.evaluate("""() => {
+                                window.__qMediaBase = location.origin + '/fixture-art';
+                                window.dispatchEvent(new Event('quareia:mediaready'));
+                            }""")
+                            assert backs.evaluate_all("""es => es.length === 81 && es.every(e =>
+                                e.getAttribute('src') === location.origin + '/fixture-art/lxxxi-back')"""), (surface, backs.count(), backs.first.get_attribute('src'))
+                            change(page, "#deckSelect", "tarot")
+                            results.append(surface + ": restored LXXXI fan refreshes when the host supplies artwork")
                         change(page, "#spreadSelect", "overview")
                         change(page, "#overviewMethod", "stacked")
                         page.wait_for_function("key => JSON.parse(localStorage.getItem(key)).overviewMethod === 'stacked'", arg=KEY)
@@ -128,7 +199,12 @@ def main():
                         page.locator("#customSpreadImportTab").click()
                         page.locator("#customSpreadImportCode").fill(code)
                         page.locator("#customSpreadImportUseBtn").click()
-                        page.wait_for_function("key => !!JSON.parse(localStorage.getItem(key)).customSpreadCode", arg=KEY)
+                        page.wait_for_function("key => document.querySelector('#spreadTitle').textContent === 'Persistence fixture' "
+                                               "&& JSON.parse(localStorage.getItem(key)).spreadId === document.querySelector('#spreadSelect').value",
+                                               arg=KEY)
+                        if args.android:
+                            assert "customSpreadCode" not in selection(page)
+                            assert page.evaluate("localStorage.getItem(DivinationCustomSpreads.STORAGE_KEY)")
                         custom_id = selection(page)["spreadId"]
                         expect_selection(page, custom_id)
                         context.close()
@@ -153,7 +229,7 @@ def main():
                         page.locator("#customSpreadLibrary .history-danger-btn").click()
                         page.locator("#confirmProceedBtn").click()
                         expect_selection(page, "three-card-horizontal")
-                        assert selection(page)["customSpreadCode"] is None
+                        assert selection(page).get("customSpreadCode") is None
                         page.reload()
                         expect_selection(page, "three-card-horizontal")
                         results.append(surface + ": deleted custom spread is not resurrected")
@@ -199,6 +275,10 @@ def main():
                         expect_selection(page, "overview")
                         assert page.locator("#deckSpread .deck-card").count() == 78
                         results.append(surface + ": unavailable storage leaves drawing functional")
+                        if surface.startswith("index"):
+                            check_freeform_controls(page)
+                            results.append(surface + ": keyboard fan, in-place reveal, accessible names and resize")
+
                     finally:
                         context.close()
         assert not errors, errors
