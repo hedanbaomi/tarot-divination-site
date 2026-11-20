@@ -8,7 +8,7 @@
     celestial: "#060919",
     parchment: "#efe4cc",
     ember: "#140a08",
-    grove: "#0d1511",
+    grove: "#31483c",
     "grove-light": "#31483c",
     jade: "#eef1e9",
     dusk: "#140f1e",
@@ -17,7 +17,6 @@
   var page = global.document && global.document.documentElement;
   var classic = page && page.dataset && page.dataset.pageVersion === "classic";
   if (classic) {
-    THEME_COLORS.grove = "#31483c";
     THEMES = ["celestial", "parchment", "ember", "grove"];
   }
   var initialized = false;
@@ -40,7 +39,9 @@
     if (meta) meta.setAttribute("content", color);
     try {
       if (global.androidThemeChrome && typeof global.androidThemeChrome.set === "function") {
-        global.androidThemeChrome.set(color, (id === "parchment" || id === "jade") ? "1" : "0");
+        // Android uses the chrome color to select its native About and dialog palette.
+        var nativeColor = id === "grove" && !classic ? "#0d1511" : color;
+        global.androidThemeChrome.set(nativeColor, (id === "parchment" || id === "jade") ? "1" : "0");
       }
     } catch (_error) {}
   }
