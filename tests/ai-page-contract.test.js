@@ -12,6 +12,8 @@ const aiUi = require("../js/ai-ui.js");
 const chatStoreModule = require("../js/ai-chat-store.js");
 const contextModule = require("../js/ai-context.js");
 const skillsModule = require("../js/ai-skills.js");
+const uiModules = ["markdown", "helpers", "readings", "context", "settings", "messages", "conversations", "backup", "bindings"];
+const uiScripts = uiModules.map(name => `js/ai-ui-${name}.js`);
 
 function sha256(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
@@ -336,6 +338,9 @@ function createFakeDomEnvironment() {
       if (!this.listeners[type]) this.listeners[type] = [];
       this.listeners[type].push(fn);
     },
+    removeEventListener(type, fn) {
+      this.listeners[type] = (this.listeners[type] || []).filter(handler => handler !== fn);
+    },
     dispatchEvent(ev) {
       const eventObj = Object.assign({
         defaultPrevented: false,
@@ -408,6 +413,8 @@ const REQUIRED_I18N_KEYS = [
 ];
 
 function assertAiHtmlContract(label, html) {
+  const loaded = Array.from(html.matchAll(/<script src="(js\/ai-ui[^"/?]*)(?:\?[^"/]*)?"><\/script>/g), m => m[1]);
+  assert.deepEqual(loaded, [...uiScripts, "js/ai-ui.js"], `${label}: AI UI script order`);
   for (const id of REQUIRED_HTML_IDS) {
     assert.ok(html.includes(`id="${id}"`), `${label} ai.html missing #${id}`);
   }
@@ -527,6 +534,7 @@ test("android ai.html, i18n, and shared AI assets stay synchronized with web", (
   }
 
   const shared = [
+    ...uiScripts,
     "css/ai-chat.css",
     "js/ai-providers.js",
     "js/ai-skills.js",
@@ -542,7 +550,7 @@ test("android ai.html, i18n, and shared AI assets stay synchronized with web", (
 });
 
 test("AI modules avoid unsafe DOM/eval APIs and markdown renderer neutralizes raw HTML, dangerous schemes, and deep quotes", () => {
-  const aiScripts = ["js/ai-providers.js", "js/ai-skills.js", "js/ai-context.js", "js/ai-chat-store.js", "js/ai-ui.js"];
+  const aiScripts = ["js/ai-providers.js", "js/ai-skills.js", "js/ai-context.js", "js/ai-chat-store.js", ...uiScripts, "js/ai-ui.js"];
   for (const rel of aiScripts) {
     const src = fs.readFileSync(path.join(rootDir, rel), "utf8");
     assert.equal(/\.innerHTML\b|\.outerHTML\b|insertAdjacentHTML|document\.write|\beval\s*\(|new Function\s*\(/.test(src), false,
@@ -595,6 +603,41 @@ test("AI modules avoid unsafe DOM/eval APIs and markdown renderer neutralizes ra
   assert.ok(maxBlockquoteDepth > 0 && maxBlockquoteDepth <= 6, "Blockquote recursion must be capped safely");
   assert.ok(container.textContent.includes("<script>alert(1)</script>"));
   assert.ok(container.textContent.includes("deeply nested quote"));
+});
+
+test("UI modules load independently without a DOM or a module loader", () => {
+  const vm = require("node:vm");
+  for (const name of uiModules) {
+    const rel = `js/ai-ui-${name}.js`;
+    const sym = `DivinationAiUi${name[0].toUpperCase()}${name.slice(1)}`;
+    const browser = {};
+    vm.runInNewContext(fs.readFileSync(path.join(rootDir, rel), "utf8"), browser);
+    const mod = require(`../${rel}`);
+    assert.equal(global[sym], mod);
+    assert.deepEqual(Object.keys(browser[sym]), Object.keys(mod));
+    assert.equal(typeof mod[({ markdown: "renderMarkdownInto", helpers: "tr" })[name] || "create"], "function");
+  }
+  assert.deepEqual(Object.keys(aiUi).sort(), ["assistantMessageShowsReading", "bootstrap", "computeHasUninterpretedReading", "handleBack", "hasPrecedingUserTurn", "interpretedRecordIds", "normalizeConversationMessagesForApi", "renderMarkdownInto", "truncateMessagesToBudget"]);
+});
+
+test("AI backup sends Markdown to the native SAF bridge and rejects oversized files before reading", t => {
+  const helpers = require("../js/ai-ui-helpers.js");
+  const calls = [], dialogs = [];
+  const bridge = global.androidHistoryExport, dialog = global.DivinationDialog;
+  t.after(() => { global.androidHistoryExport = bridge; global.DivinationDialog = dialog; });
+  global.androidHistoryExport = { save(...args) { calls.push(args); } };
+  global.DivinationDialog = { request(opts) { dialogs.push(opts); } };
+  const conv = { title: "SAF fixture", messages: [] };
+  const backup = require("../js/ai-ui-backup.js").create({ state: {activeConversation: conv}, chatStoreApi: chatStoreModule }, helpers);
+  backup.exportActiveConversationMarkdown();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].length, 2);
+  assert.match(calls[0][0], /SAF fixture/);
+  assert.match(calls[0][1], /^quareia-ai-reading-\d{4}-\d{2}-\d{2}\.md$/);
+  const target = { value: "file", files: [{ size: chatStoreModule.MAX_BACKUP_BYTES + 1, text: () => assert.fail("oversized file read") }] };
+  backup.importChatsBackup({target});
+  assert.equal(target.value, "");
+  assert.match(dialogs[0].message, /8 MiB/);
 });
 
 test("conversation turn helpers enforce strict user-first alternation and safe token-budget truncation", () => {
@@ -650,6 +693,8 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
     localStorage: global.localStorage,
     location: global.location,
     history: global.history,
+    addEventListener: global.addEventListener,
+    removeEventListener: global.removeEventListener,
     DivinationAiProviders: global.DivinationAiProviders,
     DivinationAiSkills: global.DivinationAiSkills,
     DivinationAiContext: global.DivinationAiContext,
@@ -667,6 +712,8 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
     global.localStorage = savedGlobals.localStorage;
     global.location = savedGlobals.location;
     global.history = savedGlobals.history;
+    global.addEventListener = savedGlobals.addEventListener;
+    global.removeEventListener = savedGlobals.removeEventListener;
     global.DivinationAiProviders = savedGlobals.DivinationAiProviders;
     global.DivinationAiSkills = savedGlobals.DivinationAiSkills;
     global.DivinationAiContext = savedGlobals.DivinationAiContext;
@@ -902,10 +949,22 @@ test("DivinationAiUi controller enforces streaming locks, incremental DOM patchi
   global.location = { search: "", pathname: "ai.html" };
   global.history = { replaceState() {} };
   global.addEventListener = (type, fn) => doc.addEventListener("window:" + type, fn);
+  global.removeEventListener = (type, fn) => doc.removeEventListener("window:" + type, fn);
 
   const flush = () => new Promise((r) => setTimeout(r, 15));
 
+  const previous = aiUi.bootstrap({ reset: true });
+  doc.getElementById("aiSidebarToggle").click();
+  doc.getElementById("aiThemeBtn").click();
+  assert.equal(previous.handleBack(), true);
+  assert.equal(doc.getElementById("aiThemePopover").hidden, true);
+  assert.equal(doc.getElementById("aiSidebarToggle").getAttribute("aria-expanded"), "true");
   const ctrl = aiUi.bootstrap({ reset: true });
+  assert.notEqual(ctrl, previous);
+  assert.equal(previous.handleBack(), false);
+  for (const type of ["keydown", "window:storage", "window:pagehide"]) assert.equal(doc.listeners[type].length, 1);
+  assert.equal(doc.getElementById("aiSendBtn").listeners.click.length, 1);
+  assert.equal(clearConfigBtn.listeners.click.length, 1);
   await flush();
 
   // 1. Initial auto-created active chat exists (1 active, 0 archived). Switching to empty Archived tab must NOT spawn blank active chats.
