@@ -5,3 +5,7 @@ node_modules/
 .env.*
 *.log
 .local/web-analytics-backfill-*/
+.local/ios-verify-*/
+.local/ios-fixture-*/
+.local/ios-update-smoke-*/
+.local/success-only-dryrun/

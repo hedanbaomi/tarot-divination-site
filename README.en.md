@@ -95,7 +95,6 @@ Mystagogus provides its 18-card signature layout. LXXXI provides four Chapter 10
 │   │   └── LXXXI_SOURCE.md
 │   └── icons/
 ├── android-demo/       # Offline Android app (source and build instructions)
-├── backend/            # Optional companion API service for the app (local development)
 └── telemetry-worker/   # Cloudflare Worker for anonymous usage statistics
 ```
 
@@ -152,4 +151,4 @@ Josephine McCarthy's written permission covers the GitHub Pages website and Andr
 
 ## License
 
-This repository uses a file/directory licence map: project-authored software for the root website, `backend/`, and `telemetry-worker/` is `AGPL-3.0-only`; public Android native code and software assets distributed in `android-demo/` are `MPL-2.0`. Third-party artwork, meanings, translations and adaptations, plus the private LXXXI provider/Vault/material/qv, are excluded from both open-source grants. Historical MIT permissions already received for `v1.2.0` and earlier remain valid. See [`LICENSE.md`](LICENSE.md), [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md), and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+This repository uses a file/directory licence map: project-authored software for the root website and `telemetry-worker/` is `AGPL-3.0-only`; public Android native code and software assets distributed in `android-demo/` are `MPL-2.0`. Third-party artwork, meanings, translations and adaptations, plus the private LXXXI provider/Vault/material/qv, are excluded from both open-source grants. Historical MIT permissions already received for `v1.2.0` and earlier remain valid. See [`LICENSE.md`](LICENSE.md), [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md), and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

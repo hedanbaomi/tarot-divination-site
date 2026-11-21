@@ -111,7 +111,6 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 │   │   └── LXXXI_SOURCE.md
 │   └── icons/
 ├── android-demo/       # Android 离线版（源码与构建说明）
-├── backend/            # Android 应用的可选配套 API 服务（本地开发用）
 └── telemetry-worker/   # 匿名使用统计的 Cloudflare Worker
 ```
 
@@ -170,4 +169,4 @@ Josephine McCarthy 的书面许可已明确覆盖 GitHub Pages 网站和 Android
 
 ## License
 
-本仓库采用文件/目录级许可地图：根网站、`backend/` 与 `telemetry-worker/` 的原创软件为 `AGPL-3.0-only`；`android-demo/` 的公开 Android 原生代码和 Android 分发的软件资产为 `MPL-2.0`。第三方牌面、牌意、翻译、改编内容以及私有 LXXXI provider/Vault/material/qv 均不进入上述开源许可。`v1.2.0` 及以前已取得的历史 MIT 授权继续有效。完整范围见 [`LICENSE.md`](LICENSE.md)、[`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) 与 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+本仓库采用文件/目录级许可地图：根网站与 `telemetry-worker/` 的原创软件为 `AGPL-3.0-only`；`android-demo/` 的公开 Android 原生代码和 Android 分发的软件资产为 `MPL-2.0`。第三方牌面、牌意、翻译、改编内容以及私有 LXXXI provider/Vault/material/qv 均不进入上述开源许可。`v1.2.0` 及以前已取得的历史 MIT 授权继续有效。完整范围见 [`LICENSE.md`](LICENSE.md)、[`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) 与 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。

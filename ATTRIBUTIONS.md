@@ -78,7 +78,7 @@ keywords, layouts, and translations.
 
 The non-commercial condition follows the Mystagogus/LXXXI materials wherever
 they are used in the authorised website, Android application, or Mini Program.
-It does not convert AGPL-licensed Web/Worker/backend software, MPL-licensed
+It does not convert AGPL-licensed Web/Worker software, MPL-licensed
 Android code, proprietary Mini Program code, infrastructure, or unrelated
 services into generally non-commercial software. No protected material may be
 used as a paid unlock, sold or commercially distributed on its own, or

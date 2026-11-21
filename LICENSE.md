@@ -10,7 +10,7 @@ content.
 ## AGPL-3.0-only: website and server software
 
 Unless a narrower notice or an exclusion below applies, project-authored
-software for the root website, its tests and maintenance tools, `backend/`, and
+software for the root website, its tests and maintenance tools, and
 `telemetry-worker/` is licensed under the GNU Affero General Public License,
 version 3 only (`AGPL-3.0-only`). The full text is in
 [`LICENSES/AGPL-3.0-only.txt`](LICENSES/AGPL-3.0-only.txt).
