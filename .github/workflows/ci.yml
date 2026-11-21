@@ -1,0 +1,129 @@
+name: CI
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  js-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check JavaScript syntax
+        run: |
+          git ls-files -z -- ':(glob)js/*.js' ':(glob)js/classic/*.js' \
+            ':(glob)android-demo/app/src/main/assets/www/js/*.js' \
+            ':(glob)android-demo/app/src/main/assets/www/js/classic/*.js' | xargs -0 -n1 node --check
+      - name: Web tests
+        run: node --test tests/*.test.js
+      - name: Android JavaScript tests
+        run: node --test android-demo/tests/*.test.js
+      - name: Check checkout hygiene
+        run: |
+          test -x android-demo/gradlew
+          if grep -q $'\r' android-demo/gradlew; then
+            echo 'android-demo/gradlew must use LF' >&2
+            exit 1
+          fi
+          test ! -e backend
+
+  telemetry-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: telemetry-worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check Worker syntax
+        run: |
+          for file in src/*.js test/*.js; do node --check "$file"; done
+      - name: Worker tests
+        run: node --test test/*.test.js
+
+  android-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Accept Android SDK licenses
+        run: |
+          # Keep sdkmanager's exit status even when yes receives SIGPIPE.
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses < <(yes)
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-home-cache-cleanup: true
+      - name: Run debug unit tests
+        working-directory: android-demo
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-unit-test-results
+          path: android-demo/app/build/test-results/testDebugUnitTest/
+
+  ai-browser-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Playwright and locate Chrome
+        run: |
+          python -m pip install playwright
+          if ! chrome=$(command -v google-chrome || command -v google-chrome-stable); then
+            python -m playwright install --with-deps chromium
+            chrome=$(python - <<'PY'
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as pw:
+              print(pw.chromium.executable_path)
+          PY
+            )
+          fi
+          test -x "$chrome"
+          echo "CHROME_BIN=$chrome" >> "$GITHUB_ENV"
+      - name: Run AI regressions against Web and bundled Android pages
+        run: |
+          for mode in web android; do
+            flags=()
+            if [[ $mode == android ]]; then flags+=(--android); fi
+            for script in test-ai-browser test-ai-context-browser test-ai-presets-browser test-ai-usage-browser; do
+              out="$RUNNER_TEMP/ai-browser/$mode/$script"
+              mkdir -p "$out"
+              python "tools/$script.py" "${flags[@]}" --browser-executable "$CHROME_BIN" \
+                --output "$out" 2>&1 | tee "$out/run.log"
+            done
+          done
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: ai-browser-diagnostics
+          path: ${{ runner.temp }}/ai-browser/
