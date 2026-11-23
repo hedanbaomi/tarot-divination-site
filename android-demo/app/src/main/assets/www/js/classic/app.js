@@ -78,6 +78,7 @@
     el.spreadSettingGroup = document.querySelector(".setting-group-spread");
     el.spreadSettingSummary = document.getElementById("spreadSettingSummary");
     el.shuffleBtn = document.getElementById("shuffleBtn");
+    el.imageBtn = document.getElementById("readingImageBtn");
     el.switchArcanaBtn = document.getElementById("switchArcanaBtn");
     el.deckArea = document.querySelector(".deck-area");
     el.deckSpread = document.getElementById("deckSpread");
@@ -1259,7 +1260,12 @@
     });
   }
 
+  function canExportImage() {
+    return isReadingComplete() && spread.every(function (entry) { return entry.revealed; });
+  }
+
   function renderResults() {
+    el.imageBtn.hidden = !canExportImage();
     if (isFreeform()) {
       el.resultsSection.style.display = "none";
       return;
@@ -1697,6 +1703,9 @@
     }, handleShuffle);
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);
+    el.imageBtn.addEventListener("click", function () {
+      if (canExportImage()) historyUiController.exportTableImage(createCurrentHistoryRecord());
+    });
     el.clearBtn.addEventListener("click", shuffleOnce);
     globalThis.addEventListener("quareia:languagechange", handleLanguageChange);
     if (globalThis.DivinationHistoryUi &&

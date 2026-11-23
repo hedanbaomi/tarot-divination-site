@@ -1,0 +1,77 @@
+.reading-image-dialog {
+  box-sizing: border-box;
+  width: min(56rem, calc(100vw - 1.5rem));
+  max-width: 100%;
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+.reading-image-dialog::backdrop { background: rgba(8, 9, 13, .7); }
+.reading-image-shell {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  max-height: 90dvh;
+  padding: clamp(.8rem, 2vw, 1.5rem);
+  gap: .75rem;
+}
+.reading-image-head, .reading-image-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
+}
+.reading-image-head h2 {
+  margin: 0;
+  font: 500 clamp(1.1rem, 3vw, 1.65rem)/1.25 var(--font-display);
+}
+.reading-image-sheet {
+  min-height: 4rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+}
+.reading-image-sheet img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.reading-image-sheet img[hidden], .reading-image-controls [hidden],
+#readingImageBtn[hidden], #freeBoardImageBtn[hidden] { display: none; }
+.reading-image-status {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  font-size: .85rem;
+}
+.reading-image-status:empty { display: none; }
+.reading-image-controls fieldset {
+  min-width: 0;
+  display: flex;
+  margin: 0 auto 0 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.reading-image-controls label { position: relative; cursor: pointer; }
+.reading-image-controls input { position: absolute; opacity: 0; }
+.reading-image-controls label span {
+  display: grid;
+  min-height: 40px;
+  padding: .4rem .65rem;
+  place-items: center;
+  font-size: .85rem;
+}
+.reading-image-controls input:checked + span {
+  color: var(--accent-light);
+  background: var(--accent-soft);
+  box-shadow: inset 0 -2px var(--accent);
+}
+.reading-image-controls input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -3px; }
+#readingImageBtn { margin-bottom: .85rem; }

@@ -287,8 +287,7 @@
   function triggerFileDownload(content, fileName, mimeType) {
     var nativeBridge = global.androidHistoryExport;
     if (nativeBridge && typeof nativeBridge.save === "function") {
-      nativeBridge.save(content, fileName);
-      return "android";
+      return nativeBridge.save(content, fileName) === false ? "busy" : "android";
     }
     var blob = new Blob([content], { type: mimeType });
     var url = URL.createObjectURL(blob);
@@ -3368,13 +3367,19 @@
       });
     }
 
+    function downloadAiExport(content, fileName, mimeType) {
+      if (triggerFileDownload(content, fileName, mimeType) === "busy") {
+        showToast(tr("history.exportBusy", null, "请先完成当前文件的导出。", "Finish the current file export first."), true);
+      }
+    }
+
     function exportActiveConversationMarkdown() {
       var conv = state.activeConversation;
       if (!conv) return;
       try {
         var md = chatStoreApi.formatConversationMarkdown(conv, { locale: currentLocale() });
         var stamp = new Date().toISOString().slice(0, 10);
-        triggerFileDownload(md, "quareia-ai-reading-" + stamp + ".md", "text/markdown;charset=utf-8");
+        downloadAiExport(md, "quareia-ai-reading-" + stamp + ".md", "text/markdown;charset=utf-8");
       } catch (_err) {
         if (typeof global.__quareiaHistoryExportResult === "function") {
           global.__quareiaHistoryExportResult({ ok: false });
@@ -3401,10 +3406,10 @@
             var archive = backup.conversations.map(function (conv) {
               return chatStoreApi.formatConversationMarkdown(conv, { locale: currentLocale() });
             }).join("\n---\n\n");
-            triggerFileDownload(archive, "quareia-ai-archive-" + stamp + ".md", "text/markdown;charset=utf-8");
+            downloadAiExport(archive, "quareia-ai-archive-" + stamp + ".md", "text/markdown;charset=utf-8");
           });
         }
-        triggerFileDownload(json, "quareia-ai-chats-" + stamp + ".json", "application/json;charset=utf-8");
+        downloadAiExport(json, "quareia-ai-chats-" + stamp + ".json", "application/json;charset=utf-8");
       }).catch(function () {
         if (typeof global.__quareiaHistoryExportResult === "function") {
           global.__quareiaHistoryExportResult({ ok: false });
