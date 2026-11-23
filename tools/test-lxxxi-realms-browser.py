@@ -59,14 +59,14 @@ def scenario(browser, base, android, classic, free):
                     return [s.borderLeftWidth, s.backgroundImage, s.outlineStyle];
                 }""")
                 assert style[0] == "4px" and style[2] == "solid", (key, style)
-                solid = {"underworld": "rgb(73, 74, 73)", "divine": "rgb(105, 74, 74)",
-                         "inner": "rgb(71, 78, 99)", "physical": "rgb(75, 95, 79)"}
+                solid = {"underworld": "rgb(20, 21, 24)", "divine": "rgb(178, 59, 59)",
+                         "inner": "rgb(54, 104, 168)", "physical": "rgb(60, 140, 91)"}
                 if key in solid:
                     assert solid[key] in style[1], style
                 if key == "inner-underworld":
-                    assert "to right" in style[1] and "rgb(71, 78, 99)" in style[1] and "rgb(73, 74, 73)" in style[1], style
+                    assert "to right" in style[1] and "rgb(54, 104, 168)" in style[1] and "rgb(20, 21, 24)" in style[1], style
                 if key == "inner-physical":
-                    assert "to right" not in style[1] and "rgb(71, 78, 99)" in style[1] and "rgb(75, 95, 79)" in style[1], style
+                    assert "to right" not in style[1] and "rgb(54, 104, 168)" in style[1] and "rgb(60, 140, 91)" in style[1], style
 
         for theme in page.evaluate("DivinationTheme.THEMES"):
             page.evaluate("t => DivinationTheme.setTheme(t)", theme)
