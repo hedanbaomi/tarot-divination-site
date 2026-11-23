@@ -455,7 +455,7 @@
         if (backImage) face.appendChild(makeBackImage(backImage));
       } else if (card.meaningVisible) {
         var meaning = meaningFor(source, card.orientation);
-        face.appendChild(textElement(document, "span", "free-board-card-meaning-kicker", t("freeBoard.meaning")));
+        face.appendChild(textElement(document, "span", "free-board-card-meaning-kicker", field(source.realm, "name") || t("freeBoard.meaning")));
         face.appendChild(textElement(document, "strong", "free-board-card-meaning-name", cardName(source)));
         face.appendChild(textElement(document, "span", "free-board-card-meaning-orientation", orientationLabel(card.orientation)));
         if (meaning.keywords.length) {
@@ -509,7 +509,9 @@
       cardElement.setAttribute("role", "listitem");
       cardElement.setAttribute("tabindex", "0");
       cardElement.setAttribute("data-card-id", card.cardId);
-      cardElement.setAttribute("aria-label", cardAriaLabel(card, source));
+      var realm = card.revealed && source.realm;
+      if (realm) cardElement.setAttribute("data-lxxxi-border", realm.border);
+      cardElement.setAttribute("aria-label", cardAriaLabel(card, source) + (realm ? " · " + field(realm, "name") : ""));
       cardElement.style.zIndex = String(card.z);
       cardElement.style.transform = cardTransform(card, visualCards[card.cardId]);
 

@@ -619,12 +619,15 @@
       if (item.revealed) front.removeAttribute("aria-hidden");
       else front.setAttribute("aria-hidden", "true");
     }
+    var realm = item.revealed && found.realm;
+    if (realm) el.setAttribute("data-lxxxi-border", realm.border);
+    else if (found.realm) el.removeAttribute("data-lxxxi-border");
     if (img) img.alt = item.revealed ? localizedCardName(found) : "";
     if (nameEl) nameEl.textContent = item.revealed ? localizedCardName(found) : "";
     el.setAttribute("aria-label", item.revealed
       ? t("freeBoard.cardAria", {
           index: index + 1,
-          name: localizedCardName(found),
+          name: localizedCardName(found) + (realm ? " · " + localized(realm, "name") : ""),
           orientation: t(item.orientation === "reversed" ? "orientation.reversed" : "orientation.upright")
         })
       : t("freeBoard.cardHiddenAria", { index: index + 1 }));
@@ -1387,6 +1390,8 @@
   function updateSpreadCardAria(cardEl, entry, position) {
     var flipButton = cardEl && cardEl.querySelector(".spread-card-flip");
     if (!flipButton) return;
+    var realm = entry.revealed && entry.card.realm;
+    if (realm) cardEl.setAttribute("data-lxxxi-border", realm.border);
     if (entry.revealed && globalThis.DivinationCardNotes) {
       globalThis.DivinationCardNotes.markRevealedCard(cardEl, entry.card.deck || deckType, entry.card.id);
     }
@@ -1401,7 +1406,7 @@
         layer: layer,
         card: localizedCardName(entry.card),
         orientation: getOrientationLabel(entry.orientation)
-      })
+      }) + (realm ? " · " + localized(realm, "name") : "")
     );
     flipButton.setAttribute(
       "aria-pressed",
@@ -1483,7 +1488,7 @@
     meaningPanel.className = "spread-card-meaning";
     var meaningKicker = document.createElement("span");
     meaningKicker.className = "spread-card-meaning-kicker";
-    meaningKicker.textContent = t("app.meaningTitle");
+    meaningKicker.textContent = localized(card.realm, "name") || t("app.meaningTitle");
     var meaningName = document.createElement("strong");
     meaningName.className = "spread-card-meaning-name";
     meaningName.textContent = localizedCardName(card);
@@ -1599,8 +1604,9 @@
     setText("[data-meaning-name]", localizedCardName(entry.card));
     setText("[data-meaning-meta]", [
       (position.number ? position.number + '. ' : '') + position.name,
-      t(entry.orientation === "reversed" ? "orientation.reversed" : "orientation.upright")
-    ].join(" · "));
+      t(entry.orientation === "reversed" ? "orientation.reversed" : "orientation.upright"),
+      localized(entry.card.realm, "name")
+    ].filter(Boolean).join(" · "));
     setText("[data-meaning-keywords]", interpretation.keywords.join(" · "));
     setText("[data-meaning-text]", interpretation.meaning || "");
     var oldNote = panel.querySelector(".card-note-link");
@@ -2021,6 +2027,7 @@
       var resultImg = createCardImage(card, "result-card-image", entry.orientation);
       if (card.deck === "mystagogus") resultImg.classList.add("result-card-image-m");
       if (card.deck === "lxxxi") resultImg.classList.add("result-card-image-lxxxi");
+      if (card.realm) resultImg.setAttribute("data-lxxxi-border", card.realm.border);
       resultCard.appendChild(resultImg);
     }
 
@@ -2047,6 +2054,12 @@
     header.appendChild(posEl);
     header.appendChild(nameEl);
     header.appendChild(orientEl);
+    if (card.realm) {
+      var realmLabel = document.createElement("span");
+      realmLabel.className = "result-suit";
+      realmLabel.textContent = localized(card.realm, "name");
+      header.appendChild(realmLabel);
+    }
     if (entry.revealed && globalThis.DivinationCardNotes) {
       var note = globalThis.DivinationCardNotes.createButton(card.deck || deckType, card.id);
       if (note) header.appendChild(note);

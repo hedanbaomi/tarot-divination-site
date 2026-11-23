@@ -1,0 +1,39 @@
+/* Heraldic realm colours faithful to the printed LXXXI borders (red, blue,
+   green, black), tuned to stay legible at 4px on small screens without turning
+   neon. Keep these independent of the UI theme; the outer keyline separates
+   dark edges from dark tables without cutting into the colour band. */
+:root {
+  --lxxxi-divine: #b23b3b;
+  --lxxxi-inner: #3668a8;
+  --lxxxi-physical: #3c8c5b;
+  --lxxxi-underworld: #141518;
+  --lxxxi-keyline: rgba(214, 208, 196, 0.48);
+}
+
+[data-lxxxi-border="divine"] { --realm-edge: var(--lxxxi-divine); }
+[data-lxxxi-border="inner"] { --realm-edge: var(--lxxxi-inner); }
+[data-lxxxi-border="physical"] { --realm-edge: var(--lxxxi-physical); }
+[data-lxxxi-border="underworld"] {
+  --realm-edge: var(--lxxxi-underworld);
+  --lxxxi-keyline: rgba(224, 218, 206, 0.78);
+}
+
+[data-lxxxi-border="inner-underworld"] {
+  --realm-band: linear-gradient(to right, var(--lxxxi-inner) 50%, var(--lxxxi-underworld) 50%);
+  --lxxxi-keyline: rgba(224, 218, 206, 0.78);
+}
+[data-lxxxi-border="inner-physical"] {
+  --realm-band: linear-gradient(to bottom, var(--lxxxi-inner) 50%, var(--lxxxi-physical) 50%);
+}
+
+.spread-card[data-lxxxi-border] .spread-card-front,
+.spread-card.meaning-visible[data-lxxxi-border] .spread-card-back,
+.free-board-card[data-lxxxi-border],
+img.result-card-image[data-lxxxi-border] {
+  border: 4px solid transparent;
+  background:
+    linear-gradient(var(--neutral-contain), var(--neutral-contain)) padding-box,
+    var(--realm-band, linear-gradient(var(--realm-edge), var(--realm-edge))) border-box;
+  outline: 1px solid var(--lxxxi-keyline);
+  outline-offset: 0;
+}
