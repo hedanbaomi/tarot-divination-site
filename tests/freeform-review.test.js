@@ -25,9 +25,9 @@ var history = read("js/history-ui.js");
 test("进入自由画板用独立的整副牌池，而不是预设牌阵剩下的牌", function () {
   assert.match(app, /function freeformDeckCards\(\)/);
   assert.match(app, /freeBoardCardsForDeck\(deckType, deckType === "tarot" \? arcanaFilter : "not-applicable"\)/);
-  assert.match(app, /if \(isFreeform\(\)\) \{\r?\n\s*pile = shuffle\(freeformDeckCards\(\)\);/);
+  assert.match(app, /var eligible = isFreeform\(\) \? freeformDeckCards\(\) : activeDeckCards\(\);/);
   assert.match(app, /handleLayoutModeChange/);
-  assert.match(app, /buildPile\(\);\r?\n\s*renderFreeformFan\(\);\r?\n\s*scheduleFreeformDraft\(\);/);
+  assert.match(app, /buildPile\(order\);\r?\n\s*renderFreeformFan\(\);\r?\n\s*scheduleFreeformDraft\(\);/);
 });
 
 test("抽牌时就决定正逆位，翻面、撤销和重做都用同一个结果", function () {

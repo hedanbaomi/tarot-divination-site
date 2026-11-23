@@ -395,3 +395,29 @@ test("pure pinch and zoom helpers preserve the anchor and enforce bounds", funct
   assert.equal(pinched.zoom, 2);
   assert.equal(pinched.panX, 120);
 });
+
+test("shuffle freezes the candidate order before confirmation and Keep preserves the Free Board", async function (t) {
+  const { ui } = setup();
+  const original = ui.getState().remainingPile.slice();
+  ui.drawAt(0);
+  const before = ui.getState();
+  let decide;
+  const dialog = globalThis.DivinationDialog;
+  globalThis.DivinationDialog = { request: () => new Promise(resolve => { decide = resolve; }) };
+  t.after(() => {
+    if (dialog === undefined) delete globalThis.DivinationDialog;
+    else globalThis.DivinationDialog = dialog;
+  });
+  const rng = t.mock.method(Math, "random", () => 0);
+  const keep = ui.shuffle();
+  decide(false);
+  assert.equal(await keep, false);
+  assert.deepEqual(ui.getState(), before);
+
+  const clear = ui.shuffle();
+  rng.mock.mockImplementation(() => { throw new Error("order changed after release"); });
+  decide(true);
+  assert.equal(await clear, true);
+  assert.deepEqual(ui.getState().remainingPile, [original[1], original[2], original[0]]);
+  assert.equal(ui.getState().cards.length, 0);
+});

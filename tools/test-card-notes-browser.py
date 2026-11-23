@@ -123,12 +123,11 @@ def library_checks(page, android):
     return saved
 
 
-def draw_preset(page, classic):
+def draw_preset(page):
     page.locator("#shuffleBtn").click()
-    if not classic:
-        ring = page.locator(".deck-ring.is-shuffling")
-        ring.wait_for(state="attached")
-        ring.wait_for(state="detached", timeout=12000)
+    shuffling = page.locator("#deckSpread.is-shuffling")
+    shuffling.wait_for(state="attached")
+    shuffling.wait_for(state="detached", timeout=12000)
     for _ in range(3):
         page.locator("#deckSpread .deck-card").first.press("Enter")
     page.locator("#revealBtn").click()
@@ -136,7 +135,7 @@ def draw_preset(page, classic):
 
 
 def exercise_board(page, android, classic):
-    draw_preset(page, classic)
+    draw_preset(page)
     links = page.locator("#resultsList .card-note-link")
     expect(links).to_have_count(3)
     before = links.count()

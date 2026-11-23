@@ -2517,8 +2517,45 @@ html.ui2 .deck-ring.is-shuffling .deck-card:not(.shuffle-clone) {
   opacity: 0 !important;
   pointer-events: none !important;
 }
+/* 按住洗牌：牌堆跟着手指一直洗，松手才收牌 */
+html.ui2 .table-head .deck-tools {
+  position: relative;
+}
+html.ui2 #shuffleBtn {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+html.ui2 #shuffleBtn:active { transform: none; }
+html.ui2 #shuffleBtn.is-holding {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+html.ui2 .shuffle-hold-hint {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: var(--accent);
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  pointer-events: none;
+}
+html.ui2 #shuffleBtn.is-holding + .shuffle-hold-hint {
+  opacity: 1;
+  transform: translateY(0);
+}
 
-
+@media (prefers-reduced-motion: reduce) {
+  html.ui2 .shuffle-hold-hint,
+  html.ui2 #shuffleBtn { transition: none; transform: none; }
+}
 
 /* position guide rows: no boxes, just type */
 html.ui2 .position-guide ol li {

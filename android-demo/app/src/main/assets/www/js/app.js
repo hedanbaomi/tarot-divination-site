@@ -222,12 +222,15 @@
     return freeBoardCardsForDeck(deckType, deckType === "tarot" ? arcanaFilter : "not-applicable");
   }
 
-  function buildPile() {
-    if (isFreeform()) {
-      pile = shuffle(freeformDeckCards());
-      return;
+  function buildPile(order) {
+    var eligible = isFreeform() ? freeformDeckCards() : activeDeckCards();
+    if (order) {
+      var allowed = new Set(eligible);
+      pile = order.filter(function (card) { return allowed.has(card); });
+    } else {
+      pile = shuffle(eligible);
     }
-    pile = shuffle(activeDeckCards());
+    if (isFreeform()) return;
     if (isOverviewStacking()) {
       pile = getAvailableOverviewStackingCards(pile, spread, currentPhase);
     } else if (currentPositionDrawRule()) {
@@ -469,7 +472,7 @@
   }
 
   // Full reset: rebuild pile and clear the spread.
-  function resetDeck() {
+  function resetDeck(order) {
     if (historyUiController) historyUiController.resetQuestion();
     freeDrawn.length = 0;
     freeRedo.length = 0;
@@ -477,7 +480,7 @@
     if (isFreeform()) {
       /* freeform keeps the deck on the table: a reshuffle means a freshly
          built (and shuffled) pile, not just putting the drawn cards back */
-      buildPile();
+      buildPile(order);
       renderFreeformFan();
       scheduleFreeformDraft();
       return;
@@ -485,7 +488,7 @@
     currentPhase = "major";
     spread = [];
     readingReported = false;
-    buildPile();
+    buildPile(order);
     renderSpreadCards();
     renderDeckSpread();
     renderSpreadMeta();
@@ -2499,20 +2502,13 @@
   }
 
   async function handleShuffle() {
-    if (isFreeform()) {
-      /* ask first only when cards are already laid out on the table */
-      if (freeDrawn.length && !(await confirmIfSpread(t("confirm.shuffle"), t("confirm.keep")))) return;
-      resetDeck();
-      window.requestAnimationFrame(function () {
-        globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
-      });
-      return;
-    }
-    if (!(await confirmIfSpread(t("confirm.shuffle"), t("confirm.keep")))) return;
-    resetDeck();
-    window.requestAnimationFrame(function () {
-      globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
-    });
+    // Freeze the order on release. Keeping the reading discards this candidate.
+    var order = shuffle(allDecksForFreeBoard()[deckType]);
+    var needsConfirmation = !isFreeform() || freeDrawn.length > 0;
+    if (needsConfirmation && !(await confirmIfSpread(t("confirm.shuffle"), t("confirm.keep")))) return false;
+    resetDeck(order);
+    globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
+    return true;
   }
 
   function leaveFreeform(park) {
@@ -2680,14 +2676,16 @@
     el.arcanaFilter.addEventListener("change", handleArcanaChange);
     el.overviewMethod.addEventListener("change", handleOverviewMethodChange);
     el.spreadSelect.addEventListener("change", handleSpreadChange);
-    el.shuffleBtn.addEventListener("click", handleShuffle);
+    var shuffleOnce = globalThis.DivinationShuffleGesture.bind(el.shuffleBtn, function () {
+      return globalThis.DivinationShuffle;
+    }, handleShuffle);
     var freeUndoBtn = document.getElementById("freeUndoBtn");
     if (freeUndoBtn) freeUndoBtn.addEventListener("click", undoFreeDraw);
     var freeRedoBtn = document.getElementById("freeRedoBtn");
     if (freeRedoBtn) freeRedoBtn.addEventListener("click", redoFreeDraw);
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);
-    if (el.clearBtn) el.clearBtn.addEventListener("click", handleShuffle);
+    if (el.clearBtn) el.clearBtn.addEventListener("click", shuffleOnce);
     globalThis.addEventListener("quareia:languagechange", handleLanguageChange);
     if (globalThis.DivinationHistoryUi &&
         globalThis.DivinationHistoryStore &&

@@ -7,6 +7,12 @@ var test = require("node:test");
 
 var root = path.join(__dirname, "..");
 var ring = fs.readFileSync(path.join(root, "js/deck-ring.js"), "utf8");
+var sources = {
+  app: fs.readFileSync(path.join(root, "js/app.js"), "utf8"),
+  i18n: fs.readFileSync(path.join(root, "js/i18n.js"), "utf8"),
+  html: fs.readFileSync(path.join(root, "index.html"), "utf8"),
+  css: fs.readFileSync(path.join(root, "css/redesign.css"), "utf8")
+};
 
 function between(source, from, to) {
   var start = source.indexOf(from);
@@ -50,12 +56,28 @@ test("Enter draws only when the table itself is focused; buttons keep their own 
 });
 
 test("the shuffle IIFE reads the same arc span as the fan", function () {
-  var at = ring.indexOf("function playShuffle()");
-  var shuffle = ring.slice(at - 900, at);
+  var shuffle = fs.readFileSync(path.join(root, "js/deck-shuffle.js"), "utf8");
   assert.match(ring, /window\.DivinationDeckArc = ARC_SPREAD;/);
   assert.match(shuffle, /var ARC_SPREAD = window\.DivinationDeckArc \|\| 0\.82;/);
   /* the arc helper must not reach for a variable it cannot see */
-  assert.match(ring, /var a = \(u \* 180 - 90\) \* ARC_SPREAD;/);
+  assert.match(shuffle, /var a = \(u \* 180 - 90\) \* ARC_SPREAD;/);
+});
+
+test("hold-to-shuffle is announced in both languages and hinted in place", function () {
+  assert.match(sources.html, /id="shuffleBtn"[^>]*data-i18n-title="deck\.shuffleHold"/);
+  assert.match(sources.html, /<span class="shuffle-hold-hint" id="shuffleHint" data-i18n="deck\.shuffleRelease"/);
+  /* the hint must be labelled by the language switch, not left as a hardcoded string */
+  assert.match(sources.i18n, /"deck\.shuffleHold": "按住不放/);
+  assert.match(sources.i18n, /"deck\.shuffleRelease": "松手收牌"/);
+  assert.match(sources.i18n, /"deck\.shuffleHold": "Hold to keep shuffling/);
+  assert.match(sources.i18n, /"deck\.shuffleRelease": "Release to collect"/);
+  assert.match(sources.i18n, /\[data-i18n-title\]/);
+
+  /* press feedback and the hint both hang off the button without shifting the row */
+  assert.match(sources.css, /html\.ui2 #shuffleBtn \{[\s\S]*?touch-action: none;/);
+  assert.match(sources.css, /html\.ui2 #shuffleBtn\.is-holding \{/);
+  assert.match(sources.css, /html\.ui2 #shuffleBtn\.is-holding \+ \.shuffle-hold-hint \{/);
+  assert.match(sources.css, /html\.ui2 \.shuffle-hold-hint \{[\s\S]*?position: absolute;/);
 });
 
 test("paging: Home and End stop a glide that is still running", function () {
