@@ -266,8 +266,13 @@ test("bulk and individual reveals save the same validated Tarot reading exactly 
       freeBoardDeckName: function () { return "Tarot"; },
       historyUiController: { saveFreeformReading: function (input) { saved.push(records.buildFreeformLayoutRecord(input)); } }
     });
+    var faces = [];
     var reveal = instantiate("revealFreeCards", {
-      freeDrawn: drawn, renderFreeDraw: function () {}, renderResults: function () { renders++; },
+      freeDrawn: drawn,
+      document: { querySelector: function (selector) { faces.push(selector); return null; } },
+      applyFreeCardFace: function () {},
+      syncFreeActions: function () {},
+      renderResults: function () { renders++; },
       saveFreeformDraftNow: function () {}, notifyFreeformReadingCompleted: function () {}, saveFreeformHistory: save
     });
     if (!bulk) { reveal([drawn[0]]); assert.equal(saved.length, 0); }
@@ -275,9 +280,118 @@ test("bulk and individual reveals save the same validated Tarot reading exactly 
     reveal(drawn);
     assert.equal(renders, bulk ? 1 : 2);
     assert.equal(saved.length, 1);
+    assert.ok(faces.length > 0, "翻牌应当按 data-card-id 找到那张牌并只更新它");
+    assert.match(faces[faces.length - 1], /\.free-table-card\[data-card-id="major-16"\]|\.free-table-card\[data-card-id="minor-cups-ace"\]/);
     assert.deepEqual(saved[0].cards.map(function (c) { return [c.arcana, c.cardName, c.orientation, c.boardRotation]; }),
       [["major", "塔", "reversed", 15], ["minor", "圣杯王牌", "reversed", 15]]);
   });
+});
+
+test("白盒：翻牌只改这张牌的状态，不重建画板（真正跑一遍 applyFreeCardFace）", function () {
+  var makeClassList = function (set) {
+    return {
+      toggle: function (name, on) { if (on) set.add(name); else set.delete(name); },
+      add: function (name) { set.add(name); },
+      remove: function (name) { set.delete(name); }
+    };
+  };
+  var cardClasses = new Set();
+  var frontClasses = new Set();
+  var front = {
+    attrs: { "aria-hidden": "true" },
+    classList: makeClassList(frontClasses),
+    setAttribute: function (k, v) { front.attrs[k] = v; },
+    removeAttribute: function (k) { delete front.attrs[k]; }
+  };
+  var img = { alt: "" };
+  var nameEl = { textContent: "" };
+  var el = {
+    attrs: {},
+    classList: makeClassList(cardClasses),
+    setAttribute: function (k, v) { el.attrs[k] = v; },
+    querySelector: function (selector) {
+      if (selector === ".spread-card-front") return front;
+      if (selector === ".spread-card-front .card-image") return img;
+      if (selector === ".spread-card-caption .name") return nameEl;
+      return null;
+    }
+  };
+  var lookups = 0;
+  var applyFreeCardFace = instantiate("applyFreeCardFace", {
+    cardById: function (id) { lookups += 1; return id === "major-16" ? { id: id, name: "塔" } : null; },
+    localizedCardName: function (card) { return card.name; },
+    t: function (key, vars) { return vars ? key + " " + JSON.stringify(vars) : key; }
+  });
+
+  var item = { id: "major-16", revealed: false, orientation: "reversed" };
+  applyFreeCardFace(el, item, 0);
+  assert.equal(cardClasses.has("revealed"), false);
+  assert.equal(frontClasses.has("reversed"), true, "逆位要落在 front 上，牌面才会真的转 180°");
+  assert.equal(front.attrs["aria-hidden"], "true");
+  assert.equal(img.alt, "", "没翻开的牌不能把牌名读给读屏软件");
+  assert.equal(nameEl.textContent, "");
+  assert.match(el.attrs["aria-label"], /freeBoard\.cardHiddenAria/);
+
+  item.revealed = true;
+  applyFreeCardFace(el, item, 0);
+  assert.equal(cardClasses.has("revealed"), true);
+  assert.equal(front.attrs["aria-hidden"], undefined, "翻开后要摘掉 aria-hidden");
+  assert.equal(img.alt, "塔");
+  assert.equal(nameEl.textContent, "塔");
+  assert.match(el.attrs["aria-label"], /freeBoard\.cardAria/);
+  assert.match(el.attrs["aria-label"], /reversed/);
+  assert.equal(lookups, 2, "没传 card 时每次自己查一次");
+
+  lookups = 0;
+  applyFreeCardFace(el, item, 0, { id: "major-16", name: "塔" });
+  assert.equal(lookups, 0, "buildFreeTableCard 已经查过牌，不应该再查一次");
+});
+
+test("白盒：只有画板变窄才收横向坐标，刷新恢复与纵向位置都不动（真正跑一遍 fitFreeCardsToWidth）", function () {
+  var fit = instantiate("fitFreeCardsToWidth", {});
+
+  /* 宽度没变（刷新恢复草稿走的就是这条路）：负 y 和留白区的牌都不许动 */
+  var same = [{ x: 184, y: -20 }, { x: 300, y: 480 }];
+  assert.equal(fit(same, 354, 354, 44), false);
+  assert.deepEqual(same.map(function (item) { return [item.x, item.y]; }), [[184, -20], [300, 480]]);
+
+  /* 变宽：同样不动 */
+  assert.equal(fit(same, 640, 354, 44), false);
+  assert.equal(same[0].x, 184);
+
+  /* 变窄：x 按宽度比例收进画板，y 原样保留 */
+  var shrinking = [{ x: 180, y: -20 }, { x: 354, y: 470 }];
+  assert.equal(fit(shrinking, 177, 354, 44), true);
+  assert.equal(shrinking[0].x, 90);
+  assert.equal(shrinking[0].y, -20, "纵向坐标不能被高度变化改掉");
+  assert.equal(shrinking[1].x, 133, "越界只做最小内推，不丢回默认网格");
+  assert.equal(shrinking[1].y, 470);
+
+  /* 收进同一个点时要错开，不能叠成一张 */
+  var collided = [{ x: 300, y: 100 }, { x: 300, y: 100 }];
+  assert.equal(fit(collided, 100, 400, 44), true);
+  assert.notEqual(collided[0].x + ":" + collided[0].y, collided[1].x + ":" + collided[1].y);
+});
+
+test("白盒：翻牌与重绘的分工（不整块重绘、不丢回默认网格、不按高度重排）", function () {
+  var reveal = grab("revealFreeCards");
+  assert.doesNotMatch(reveal, /renderFreeDraw\(/, "翻牌不能再整块重绘");
+  assert.match(reveal, /var pending = items\.filter\(function \(item\) \{ return !item\.revealed; \}\)/);
+  assert.match(reveal, /if \(pending\.indexOf\(item\) === -1\) return;/);
+  assert.match(reveal, /applyFreeCardFace\(cardEl, item, index\)/);
+  assert.match(reveal, /syncFreeActions\(\)/);
+
+  var render = grab("renderFreeDraw");
+  assert.match(render, /if \(fitFreeCardsToWidth\(freeDrawn, layerW, freeformLayerW, halfW\)\) \{/);
+  assert.doesNotMatch(render, /freeDefaultPoint\(/, "重排不能把牌丢回默认网格");
+  assert.doesNotMatch(render, /freeformRelayout/, "不再有整块重排开关");
+  assert.doesNotMatch(render, /layerH !== freeformLayerH/, "高度变化（地址栏、软键盘）不能触发重排");
+  assert.doesNotMatch(grab("restoreFreeformDraft"), /freeformRelayout = true;/);
+
+  var build = grab("buildFreeTableCard");
+  assert.match(build, /applyFreeCardFace\(el, item, index, card\)/, "牌面状态只在一处设置");
+  assert.doesNotMatch(build, /front\.classList\.add\("reversed"\)/, "逆位不能两处各写一半");
+  assert.doesNotMatch(build, /nameEl\.textContent =/, "牌名交给 applyFreeCardFace");
 });
 
 test("白盒：扇形点击守卫不会抢走牌阵里卡片的点击", function () {

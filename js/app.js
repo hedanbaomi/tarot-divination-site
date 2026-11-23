@@ -552,6 +552,32 @@
     };
   }
 
+  /* 牌面状态（翻开 / 朝向 / 牌名 / 读屏文案）统一在这里更新。
+     翻牌时只改状态、不重建元素：重建会让牌按新的钳制范围重新定位，看起来就是「瞬移」。 */
+  function applyFreeCardFace(el, item, index, card) {
+    if (!el || !item) return;
+    var found = card || cardById(item.id);
+    if (!found) return;
+    var front = el.querySelector(".spread-card-front");
+    var img = el.querySelector(".spread-card-front .card-image");
+    var nameEl = el.querySelector(".spread-card-caption .name");
+    el.classList.toggle("revealed", !!item.revealed);
+    if (front) {
+      front.classList.toggle("reversed", item.orientation === "reversed");
+      if (item.revealed) front.removeAttribute("aria-hidden");
+      else front.setAttribute("aria-hidden", "true");
+    }
+    if (img) img.alt = item.revealed ? localizedCardName(found) : "";
+    if (nameEl) nameEl.textContent = item.revealed ? localizedCardName(found) : "";
+    el.setAttribute("aria-label", item.revealed
+      ? t("freeBoard.cardAria", {
+          index: index + 1,
+          name: localizedCardName(found),
+          orientation: t(item.orientation === "reversed" ? "orientation.reversed" : "orientation.upright")
+        })
+      : t("freeBoard.cardHiddenAria", { index: index + 1 }));
+  }
+
   function buildFreeTableCard(item, index) {
     var card = cardById(item.id);
     if (!card) return null;
@@ -564,13 +590,7 @@
     /* 未翻开的牌不给辅助技术读牌名，只报「第几张、未翻开」 */
     el.setAttribute("role", "button");
     el.setAttribute("tabindex", "0");
-    el.setAttribute("aria-label", item.revealed
-      ? t("freeBoard.cardAria", {
-          index: index + 1,
-          name: localizedCardName(card),
-          orientation: t(item.orientation === "reversed" ? "orientation.reversed" : "orientation.upright")
-        })
-      : t("freeBoard.cardHiddenAria", { index: index + 1 }));
+    /* 牌名与读屏文案统一由 applyFreeCardFace 维护（翻牌时也只改状态，不重建元素） */
 
     var inner = document.createElement("div");
     inner.className = "spread-card-inner";
@@ -586,12 +606,8 @@
 
     var front = document.createElement("div");
     front.className = "spread-card-face spread-card-front";
-    /* 逆位要靠 front 上的 reversed 类把牌面转 180°，只给 img 加类不会转 */
-    if (item.orientation === "reversed") front.classList.add("reversed");
-    if (!item.revealed) front.setAttribute("aria-hidden", "true");
-    /* 方向在抽牌那一刻就定下来，翻面、重绘、撤销重做都沿用同一个结果 */
+    /* 逆位、aria-hidden、alt、牌名都交给 applyFreeCardFace 统一设置，避免两处各写一半 */
     var img = createCardImage(card, "card-image", item.orientation || "upright");
-    if (!item.revealed) img.alt = "";
     if (deckType === "mystagogus") img.classList.add("card-image-m");
     if (deckType === "lxxxi") img.classList.add("card-image-lxxxi");
     front.appendChild(img);
@@ -599,13 +615,13 @@
     caption.className = "spread-card-caption";
     var nameEl = document.createElement("span");
     nameEl.className = "name";
-    nameEl.textContent = item.revealed ? localizedCardName(card) : "";
     caption.appendChild(nameEl);
     front.appendChild(caption);
 
     inner.appendChild(back);
     inner.appendChild(front);
     el.appendChild(inner);
+    applyFreeCardFace(el, item, index, card);
     return el;
   }
 
@@ -789,6 +805,41 @@
     el.revealBtn.textContent = total > 0 && revealed === total ? t("app.revealedAll") : t("spread.reveal");
   }
 
+  /* 画板变窄（转屏、窗口缩小、换成窄屏设备）时，只把横向越界的牌按宽度比例收回来，
+     尽量避免破坏用户摆好的牌阵；纵向坐标一律不动 —— 手机上地址栏收起、软键盘、
+     甚至刷新恢复草稿都会改变画板高度，那些都不该让牌挪位。 */
+  function fitFreeCardsToWidth(items, layerW, prevW, halfW) {
+    if (!items || !items.length || !layerW || !prevW || layerW >= prevW) return false;
+    var ratio = layerW / prevW;
+    var minX = halfW;
+    var maxX = Math.max(halfW, layerW - halfW);
+    var used = Object.create(null);
+    var changed = false;
+    items.forEach(function (item) {
+      var source = typeof item.x === "number" && isFinite(item.x) ? item.x : minX;
+      var x = Math.round(source * ratio);
+      if (x < minX) x = minX;
+      else if (x > maxX) x = maxX;
+      var key = x + ":" + Math.round(item.y || 0);
+      var guard = 0;
+      /* 收进来之后如果和前面的牌落到同一点，先往右错开；右边就是边界了就往左，别叠成一张 */
+      while (used[key] && guard < 6) {
+        var next = x + 10;
+        if (next > maxX) next = x - 10;
+        if (next < minX || next === x) break;
+        x = next;
+        key = x + ":" + Math.round(item.y || 0);
+        guard += 1;
+      }
+      used[key] = true;
+      if (x !== item.x) {
+        item.x = x;
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
   function renderFreeDraw() {
     var wrap = document.getElementById("freeDraw");
     if (!wrap) return;
@@ -798,14 +849,13 @@
       box.innerHTML = "";
       var layerW = box.clientWidth;
       var layerH = box.clientHeight;
+      var placed = [];
       freeDrawn.forEach(function (item, index) {
         if (legacyViewport && layerW && layerH) {
           // The original board used world coordinates anchored at its center.
           item.x = layerW / 2 + legacyViewport.panX + item.x * legacyViewport.zoom;
           item.y = layerH / 2 + legacyViewport.panY + item.y * legacyViewport.zoom;
         }
-        if (layerW) item.x = Math.max(46, Math.min(layerW - 46, item.x));
-        if (layerH) item.y = Math.max(70, Math.min(layerH - 70, item.y));
         var el = buildFreeTableCard(item, index);
         if (!el) return;
         el.style.zIndex = String(10 + freeIndex(item.id));
@@ -813,7 +863,17 @@
         el.style.left = item.x + "px";
         el.style.top = item.y + "px";
         box.appendChild(el);
+        placed.push({ item: item, el: el });
       });
+      var halfW = ((placed[0] && placed[0].el.offsetWidth) || 84) / 2 + 2;
+      if (fitFreeCardsToWidth(freeDrawn, layerW, freeformLayerW, halfW)) {
+        placed.forEach(function (entry) {
+          entry.el.style.left = entry.item.x + "px";
+        });
+        scheduleFreeformDraft();
+      }
+      freeformLayerW = layerW;
+      freeformLayerH = layerH;
       if (layerW && layerH) legacyViewport = null;
     }
     var undo = document.getElementById("freeUndoBtn");
@@ -829,6 +889,8 @@
   var FREEFORM_DRAFT_KEY = "quareia-divination-free-board-draft-v1";
   var freeformDraftTimer = 0;
   var legacyViewport = null;
+  var freeformLayerW = 0;
+  var freeformLayerH = 0;
   var parkedDraft = null;
 
   function isShuffleRunning() {
@@ -1403,6 +1465,15 @@
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape") hideCardMeaning();
   });
+  var meaningCloseBtn = document.getElementById("cardMeaningClose");
+  if (meaningCloseBtn) {
+    meaningCloseBtn.addEventListener("click", function () { hideCardMeaning(); });
+  }
+  /* 面板在脚本之后才解析出来，直接绑会拿到 null；用事件委托兜住关闭按钮 */
+  document.addEventListener("click", function (event) {
+    if (!event.target || !event.target.closest) return;
+    if (event.target.closest("#cardMeaningClose")) hideCardMeaning();
+  });
 
   function renderSpreadCards() {
     if (isFreeform()) return;
@@ -1586,9 +1657,17 @@
   }
 
   function revealFreeCards(items) {
-    if (!items.some(function (item) { return !item.revealed; })) return;
-    items.forEach(function (item) { item.revealed = true; });
-    renderFreeDraw();
+    /* 只处理这次真正翻开的牌：一键开牌时会带着已经翻开的牌一起传进来 */
+    var pending = items.filter(function (item) { return !item.revealed; });
+    if (!pending.length) return;
+    pending.forEach(function (item) { item.revealed = true; });
+    /* 只更新被翻开的牌本身：整块重绘会重排位置，牌会「瞬移」 */
+    freeDrawn.forEach(function (item, index) {
+      if (pending.indexOf(item) === -1) return;
+      var cardEl = document.querySelector('.free-table-card[data-card-id="' + item.id + '"]');
+      if (cardEl) applyFreeCardFace(cardEl, item, index);
+    });
+    syncFreeActions();
     renderResults();
     saveFreeformDraftNow();
     if (freeDrawn.every(function (item) { return item.revealed; })) {
@@ -2231,21 +2310,83 @@
     el.positionGuide.open = true;
   }
 
-  async function handleShuffle() {
-    if (isFreeform()) {
-      /* ask first only when cards are already laid out on the table */
-      if (freeDrawn.length && !(await confirmIfSpread(t("confirm.shuffle"), t("confirm.keep")))) return;
-      resetDeck();
-      window.requestAnimationFrame(function () {
-        globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
-      });
-      return;
-    }
-    if (!(await confirmIfSpread(t("confirm.shuffle"), t("confirm.keep")))) return;
-    resetDeck();
+  /* ---------- 洗牌手势：按住多久洗多久，松手停手 ---------- */
+  var shuffleHold = { pointerId: null, suppressClickUntil: 0 };
+
+  function shuffleVisual() {
+    return globalThis.DivinationShuffle || null;
+  }
+
+  async function confirmShuffleIfNeeded() {
+    /* ask first only when cards are already laid out on the table */
+    if (isFreeform() && !freeDrawn.length) return true;
+    return await confirmIfSpread(t("confirm.shuffle"), t("confirm.keep"));
+  }
+
+  function dispatchShuffled() {
     window.requestAnimationFrame(function () {
       globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
     });
+  }
+
+  async function handleShuffle() {
+    if (shuffleHold.pointerId !== null) return; /* 手势还没收尾，交给它 */
+    if (!(await confirmShuffleIfNeeded())) return;
+    resetDeck();
+    dispatchShuffled();
+  }
+
+  /* 松手：手已经把牌洗好了，这里只问确认，然后让动画收牌摊开 */
+  function settleShuffleHold() {
+    var visual = shuffleVisual();
+    var animated = !!(visual && typeof visual.isRunning === "function" && visual.isRunning());
+    if (!animated) {
+      handleShuffle();
+      return;
+    }
+    confirmShuffleIfNeeded().then(function (allowed) {
+      if (shuffleHold.pointerId !== null) return; /* 又按下了，让新一轮自己收尾 */
+      if (!allowed) {
+        if (visual.cancel) visual.cancel();
+        return;
+      }
+      resetDeck();
+      if (visual.finish) visual.finish();
+    });
+  }
+
+  function beginShuffleHold(event) {
+    if (!event || (event.pointerType === "mouse" && event.button !== 0)) return;
+    if (shuffleHold.pointerId !== null) return;
+    var visual = shuffleVisual();
+    if (!visual || typeof visual.begin !== "function") return;
+    shuffleHold.pointerId = event.pointerId;
+    el.shuffleBtn.classList.add("is-holding");
+    if (el.shuffleBtn.setPointerCapture) {
+      try { el.shuffleBtn.setPointerCapture(event.pointerId); } catch (_error) {}
+    }
+    visual.begin();
+  }
+
+  function endShuffleHold(event) {
+    if (shuffleHold.pointerId === null) return;
+    if (event && event.pointerId !== undefined && event.pointerId !== shuffleHold.pointerId) return;
+    var released = shuffleHold.pointerId;
+    shuffleHold.pointerId = null;
+    shuffleHold.suppressClickUntil = Date.now() + 700;
+    el.shuffleBtn.classList.remove("is-holding");
+    if (el.shuffleBtn.releasePointerCapture) {
+      try { el.shuffleBtn.releasePointerCapture(released); } catch (_error) {}
+    }
+    var visual = shuffleVisual();
+    if (visual && typeof visual.release === "function") visual.release();
+    settleShuffleHold();
+  }
+
+  function handleShuffleClick(event) {
+    /* 按住松手后浏览器还会补一个合成 click（detail 非 0），吞掉它 */
+    if (event.detail !== 0 && Date.now() < shuffleHold.suppressClickUntil) return;
+    handleShuffle();
   }
 
   function leaveFreeform(park) {
@@ -2410,7 +2551,14 @@
     el.arcanaFilter.addEventListener("change", handleArcanaChange);
     el.overviewMethod.addEventListener("change", handleOverviewMethodChange);
     el.spreadSelect.addEventListener("change", handleSpreadChange);
-    el.shuffleBtn.addEventListener("click", handleShuffle);
+    el.shuffleBtn.addEventListener("click", handleShuffleClick);
+    el.shuffleBtn.addEventListener("pointerdown", beginShuffleHold);
+    el.shuffleBtn.addEventListener("pointerup", endShuffleHold);
+    el.shuffleBtn.addEventListener("pointercancel", endShuffleHold);
+    el.shuffleBtn.addEventListener("contextmenu", function (event) {
+      /* 长按在触屏上会弹菜单：按住洗牌期间别让菜单打断手势 */
+      if (shuffleHold.pointerId !== null) event.preventDefault();
+    });
     var freeUndoBtn = document.getElementById("freeUndoBtn");
     if (freeUndoBtn) freeUndoBtn.addEventListener("click", undoFreeDraw);
     var freeRedoBtn = document.getElementById("freeRedoBtn");

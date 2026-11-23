@@ -190,6 +190,8 @@
     "spread.settingsClose": "关闭牌阵设置",
       "deck.initialRemaining": "剩 78 张",
       "deck.shuffle": "洗牌",
+      "deck.shuffleHold": "按住不放，洗到心里听见那一声咔哒再松手",
+      "deck.shuffleRelease": "松手收牌",
     "deck.prev": "往前翻一张牌",
     "deck.next": "往后翻一张牌",
       "deck.initialCta": "轻点环绕四周的任意一张牌，把它抽进中央牌阵",
@@ -625,6 +627,8 @@
     "spread.settingsClose": "Close spread settings",
       "deck.initialRemaining": "78 remaining",
       "deck.shuffle": "Shuffle",
+      "deck.shuffleHold": "Hold to keep shuffling until you hear the click",
+      "deck.shuffleRelease": "Release to collect",
     "deck.prev": "Previous card",
     "deck.next": "Next card",
       "deck.initialCta": "Tap any card in the ring to draw it into the spread",
@@ -924,6 +928,9 @@
     });
     Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-aria-label]"), function (element) {
       element.setAttribute("aria-label", t(element.getAttribute("data-i18n-aria-label")));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-title]"), function (element) {
+      element.setAttribute("title", t(element.getAttribute("data-i18n-title")));
     });
     var toggle = document.getElementById("languageToggle");
     if (toggle) {
