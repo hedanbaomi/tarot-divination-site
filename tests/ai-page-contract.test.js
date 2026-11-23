@@ -509,7 +509,7 @@ test("android ai.html, i18n, and shared AI assets stay synchronized with web", (
   assert.equal(androidHtml.includes("web-analytics.js"), false, "Android ai.html must omit web-analytics.js");
   assert.equal(androidHtml.includes("web-telemetry.js"), false, "Android ai.html must omit web-telemetry.js");
   assert.ok(androidHtml.includes('href="css/android-shell.css"'), "Android ai.html must include android-shell.css");
-  assert.ok(androidHtml.includes('src="js/back-handler.js"'), "Android ai.html must load back-handler.js");
+  assert.match(androidHtml, /src="js\/back-handler\.js\?v=[^"]+"/, "Android ai.html must load the versioned back handler");
   assert.ok(androidHtml.includes('<strong id="languageToggleValue"'), "Android ai.html must keep 2-child #languageToggle");
 
   assert.ok(androidThemeSrc.includes("syncFromStorage"), "android theme.js must support cross-tab/pageshow theme sync");

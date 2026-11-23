@@ -197,6 +197,7 @@
       undo: options.undo || byId(document, "freeBoardUndoBtn"),
       redo: options.redo || byId(document, "freeBoardRedoBtn"),
       revealAll: options.revealAll || byId(document, "freeBoardRevealAllBtn"),
+      image: byId(document, "freeBoardImageBtn"),
       resetView: options.resetView || byId(document, "freeBoardResetViewBtn"),
       shuffle: options.shuffle || byId(document, "freeBoardShuffleBtn"),
       discard: options.discard || byId(document, "freeBoardDiscardDraftBtn")
@@ -615,6 +616,7 @@
       if (elements.hint) elements.hint.textContent = t("freeBoard.hint");
       if (elements.undo) elements.undo.disabled = !stateController.canUndo();
       if (elements.redo) elements.redo.disabled = !stateController.canRedo();
+      if (elements.image) elements.image.hidden = !state.cards.some(function (card) { return card.revealed; });
       if (elements.revealAll) elements.revealAll.disabled = state.cards.length === 0 ||
         state.cards.every(function (card) { return card.revealed; });
       if (elements.shuffle) elements.shuffle.disabled = state.cards.length === 0 && state.remainingPile.length === 0;
@@ -644,7 +646,7 @@
       });
     }
 
-    function buildHistoryRecord() {
+    function buildHistoryRecord(withLayout) {
       if (!stateController || !recordsApi || typeof recordsApi.buildFreeformRecord !== "function") {
         throw new Error("freeform history API is unavailable");
       }
@@ -667,7 +669,8 @@
           drawOrder: card.drawOrder
         };
       });
-      return recordsApi.buildFreeformRecord({
+      var build = withLayout ? recordsApi.buildFreeformLayoutRecord : recordsApi.buildFreeformRecord;
+      return build({
         deckType: type,
         deckMode: type,
         deckName: state.deck.deckName || (context && context.deckName) || type,
@@ -1101,6 +1104,13 @@
       if (elements.undo) elements.undo.addEventListener("click", function () { mutate("undo", [], "undo"); });
       if (elements.redo) elements.redo.addEventListener("click", function () { mutate("redo", [], "redo"); });
       if (elements.revealAll) elements.revealAll.addEventListener("click", revealAll);
+      if (elements.image) elements.image.addEventListener("click", function () {
+        var state = getState();
+        if (state && state.cards.some(function (card) { return card.revealed; })) {
+          var width = cardElements[state.cards[0].cardId].offsetWidth;
+          options.getHistoryController().exportTableImage(buildHistoryRecord(true), width);
+        }
+      });
       if (elements.resetView) elements.resetView.addEventListener("click", resetView);
       if (elements.shuffle && root.DivinationShuffleGesture) {
         root.DivinationShuffleGesture.bind(elements.shuffle, function () {

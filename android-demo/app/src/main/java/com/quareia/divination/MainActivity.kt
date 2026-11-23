@@ -2,12 +2,17 @@ package com.quareia.divination
 
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.OpenableColumns
+import android.util.Base64
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.ValueCallback
@@ -24,12 +29,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.webkit.WebViewAssetLoader
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.lang.ref.WeakReference
 import org.json.JSONObject
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 /**
  * Hosts the bundled Quareia divination website inside an Android WebView,
@@ -45,8 +55,26 @@ class MainActivity : ComponentActivity() {
     private var homePageFinished = false
     private var backDispatchPending = false
     private var lxxxiRouteToken = ""
-    private var pendingHistoryExportFile: File? = null
-    private var pendingHistoryExportName: String? = null
+    // JavaScript interface calls arrive on the WebView's bridge thread. Reserve
+    // the shared picker before writing anything to cache.
+    private lateinit var exportReserved: AtomicBoolean
+    @Volatile private var exportPage = 0
+    private var pendingExport: PendingExport? = null
+
+    internal class ExportReservation : ViewModel() {
+        val busy = AtomicBoolean()
+    }
+
+    private enum class ExportKind(val extension: String) {
+        JSON(".json"), MARKDOWN(".md"), PNG(".png"),
+    }
+
+    private data class PendingExport(
+        val file: File?,
+        val name: String,
+        val kind: ExportKind,
+        val page: Int?,
+    )
     private val webFileChooser: WebFileChooser = WebFileChooser(
         registerForActivityResult(OpenDocumentForWebViewContract) { uris ->
             // A result that arrives after onDestroy has nowhere to go;
@@ -56,10 +84,13 @@ class MainActivity : ComponentActivity() {
     )
     private val historyExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
-    ) { uri -> completeHistoryExport(uri) }
+    ) { uri -> completeExport(ExportKind.JSON, uri) }
     private val markdownExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("text/markdown")
-    ) { uri -> completeHistoryExport(uri) }
+    ) { uri -> completeExport(ExportKind.MARKDOWN, uri) }
+    private val pngExportLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("image/png")
+    ) { uri -> completeExport(ExportKind.PNG, uri) }
 
     internal enum class NavigationAction {
         ALLOW_IN_WEBVIEW,
@@ -120,14 +151,42 @@ class MainActivity : ComponentActivity() {
         private const val STATE_HISTORY_EXPORT_PATH = "pendingHistoryExportPath"
         private const val STATE_HISTORY_EXPORT_NAME = "pendingHistoryExportName"
         private const val HISTORY_EXPORT_PREFIX = "quareia-history-export-"
+        internal const val MAX_PNG_EXPORT_BYTES = 16 * 1024 * 1024
+        private const val MAX_PNG_BASE64_LENGTH = (MAX_PNG_EXPORT_BYTES + 2) / 3 * 4
+        private val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+        private val EXPORT_NAME_UNSAFE = Regex("[^A-Za-z0-9._-]")
         private val ROUTE_TOKEN_PATTERN = Regex("[0-9a-f]{32}")
         internal const val WEB_BACK_HANDLER =
             "(function(){return Boolean(window.DivinationUiBack && window.DivinationUiBack.handleBack && window.DivinationUiBack.handleBack());})()"
+
+        private fun writeExport(resolver: ContentResolver, export: PendingExport, uri: Uri): String {
+            // The URI comes from the user's CreateDocument result.
+            check(uri.scheme == "content")
+            val staged = checkNotNull(export.file)
+            val output = resolver.openOutputStream(uri, "w")
+                ?: error("Could not open the selected destination")
+            output.use { destination ->
+                staged.inputStream().use { source -> source.copyTo(destination) }
+            }
+            return try {
+                resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0).orEmpty() else ""
+                    }
+                    ?.takeIf(String::isNotBlank)
+                    ?: export.name
+            } catch (_: Exception) {
+                export.name
+            }
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A recreated activity shares the reservation while the original
+        // request is still writing to its selected document.
+        exportReserved = ViewModelProvider(this)[ExportReservation::class.java].busy
 
         // Preserve the capability URL across WebView state restoration. A
         // fresh launch still gets a new value, and every home-page reload is
@@ -136,7 +195,7 @@ class MainActivity : ComponentActivity() {
             ?.getString(STATE_LXXXI_ROUTE_TOKEN)
             ?.takeIf(ROUTE_TOKEN_PATTERN::matches)
             ?: UUID.randomUUID().toString().replace("-", "")
-        restorePendingHistoryExport(savedInstanceState)
+        restorePendingExport(savedInstanceState)
 
         // Edge-to-edge; start with the persisted theme so cold start matches.
         val initialPalette = AppTheme.paletteFor(this)
@@ -173,8 +232,7 @@ class MainActivity : ComponentActivity() {
             // Expose the anonymous, opt-out usage-statistics bridge. The page
             // calls it from completion hooks; it never reads card content.
             addJavascriptInterface(TelemetryBridge(), "androidTelemetry")
-            // History export uses the Android system save picker so the user
-            // chooses the destination instead of losing a WebView download.
+            // The system document picker grants access to the user-selected location.
             addJavascriptInterface(HistoryExportBridge(this@MainActivity), "androidHistoryExport")
             // The web menu opens the native attribution and privacy screen
             // through this narrowly scoped bridge. Native chrome does not sit
@@ -247,9 +305,9 @@ class MainActivity : ComponentActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString(STATE_LXXXI_ROUTE_TOKEN, lxxxiRouteToken)
-        pendingHistoryExportFile?.let {
-            outState.putString(STATE_HISTORY_EXPORT_PATH, it.absolutePath)
-            outState.putString(STATE_HISTORY_EXPORT_NAME, pendingHistoryExportName)
+        pendingExport?.let {
+            outState.putString(STATE_HISTORY_EXPORT_PATH, it.file?.absolutePath)
+            outState.putString(STATE_HISTORY_EXPORT_NAME, it.name)
         }
         webView.saveState(outState)
     }
@@ -309,6 +367,12 @@ class MainActivity : ComponentActivity() {
                 return lxxxiRoute.response(assets, url, request.method)
             }
             return publicAssetRoute.response(url)
+        }
+
+        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+            // Export callbacks belong to the document that requested the picker.
+            exportPage++
+            super.onPageStarted(view, url, favicon)
         }
 
         // Only the first completed load of the internal home page starts the
@@ -371,74 +435,132 @@ class MainActivity : ComponentActivity() {
             webView.removeJavascriptInterface("androidAiConfig")
             webView.destroy()
         }
-        if (!isChangingConfigurations) clearPendingHistoryExport()
+        if (!isChangingConfigurations) {
+            pendingExport?.let {
+                it.file?.delete()
+                pendingExport = null
+                exportReserved.set(false)
+            }
+        }
         super.onDestroy()
     }
 
-    /** Stage the JSON/Markdown privately, then let the user choose its final location. */
-    internal fun requestHistoryExport(json: String, requestedName: String) {
-        if (pendingHistoryExportFile != null) return
-        val fileName = normalizeHistoryExportName(requestedName)
-        val isMarkdown = fileName.endsWith(".md", ignoreCase = true)
-        try {
-            val staged = File.createTempFile(HISTORY_EXPORT_PREFIX, if (isMarkdown) ".md" else ".json", cacheDir)
-            staged.writeText(json, Charsets.UTF_8)
-            pendingHistoryExportFile = staged
-            pendingHistoryExportName = fileName
-            if (isMarkdown) {
-                markdownExportLauncher.launch(fileName)
-            } else {
-                historyExportLauncher.launch(fileName)
-            }
-        } catch (_error: Throwable) {
-            pendingHistoryExportFile?.delete()
-            pendingHistoryExportFile = null
-            pendingHistoryExportName = null
-            notifyHistoryExport(false, false, fileName)
-        }
+    internal fun requestHistoryExport(content: String, requestedName: String): Boolean {
+        val name = normalizeHistoryExportName(requestedName)
+        val kind = if (name.endsWith(".md", ignoreCase = true)) ExportKind.MARKDOWN else ExportKind.JSON
+        return stageExport(name, kind) { it.writeText(content, Charsets.UTF_8) }
     }
 
-    private fun completeHistoryExport(uri: Uri?) {
-        val staged = pendingHistoryExportFile
-        val requestedName = pendingHistoryExportName.orEmpty()
-        pendingHistoryExportFile = null
-        pendingHistoryExportName = null
+    internal fun requestPngExport(base64: String, requestedName: String): Boolean {
+        val basename = requestedName.substringAfterLast('/').substringAfterLast('\\')
+        val stem = if (basename.endsWith(".png", ignoreCase = true)) basename.dropLast(4) else basename
+        val cleaned = stem.take(256).replace(EXPORT_NAME_UNSAFE, "-").trim('.', '_', '-').take(120).trimEnd('.')
+        val name = "${cleaned.ifBlank { "quareia-reading" }}.png"
+        return stageExport(name, ExportKind.PNG) { it.writeBytes(decodePng(base64)) }
+    }
 
-        if (uri == null || staged == null) {
+    private fun decodePng(base64: String): ByteArray {
+        val length = base64.length
+        require(length in 4..MAX_PNG_BASE64_LENGTH && length % 4 == 0)
+        val padding = when {
+            base64.endsWith("==") -> 2
+            base64.endsWith("=") -> 1
+            else -> 0
+        }
+        require(length / 4 * 3 - padding <= MAX_PNG_EXPORT_BYTES)
+        for (index in 0 until length - padding) {
+            val char = base64[index]
+            require(char in 'A'..'Z' || char in 'a'..'z' || char in '0'..'9' || char == '+' || char == '/')
+        }
+        val decoded = Base64.decode(base64, Base64.DEFAULT)
+        require(decoded.size > PNG_SIGNATURE.size &&
+            PNG_SIGNATURE.indices.all { decoded[it] == PNG_SIGNATURE[it] })
+        return decoded
+    }
+
+    private fun stageExport(name: String, kind: ExportKind, write: (File) -> Unit): Boolean {
+        if (!exportReserved.compareAndSet(false, true)) return false
+        val page = exportPage
+        var staged: File? = null
+        val export = try {
+            val temp = File.createTempFile(HISTORY_EXPORT_PREFIX, kind.extension, cacheDir)
+            staged = temp
+            write(temp)
+            PendingExport(temp, name, kind, page)
+        } catch (_: Exception) {
             staged?.delete()
-            notifyHistoryExport(false, true, requestedName)
+            PendingExport(null, name, kind, page)
+        }
+
+        runOnUiThread {
+            if (isDestroyed || isFinishing || export.page != exportPage || export.file == null) {
+                endPendingExport(export, cancelled = false)
+                return@runOnUiThread
+            }
+            pendingExport = export
+            try {
+                val launcher = when (kind) {
+                    ExportKind.JSON -> historyExportLauncher
+                    ExportKind.MARKDOWN -> markdownExportLauncher
+                    ExportKind.PNG -> pngExportLauncher
+                }
+                launcher.launch(name)
+            } catch (_: Exception) {
+                endPendingExport(export, cancelled = false)
+            }
+        }
+        return true
+    }
+
+    private fun completeExport(kind: ExportKind, uri: Uri?) {
+        val export = pendingExport?.takeIf { it.kind == kind } ?: return
+        if (uri == null) {
+            endPendingExport(export, cancelled = true)
             return
         }
 
+        // The picker returned exactly once. Transfer ownership of the staged
+        // file to the worker so onDestroy cannot remove it during the copy.
+        pendingExport = null
+        val reservation = exportReserved
+        val resolver = applicationContext.contentResolver
+        val caller = WeakReference(this)
+        val main = Handler(Looper.getMainLooper())
         try {
-            val output = contentResolver.openOutputStream(uri, "w")
-                ?: error("Could not open the selected destination")
-            output.use { destination ->
-                staged.inputStream().use { source -> source.copyTo(destination) }
-            }
-            staged.delete()
-            notifyHistoryExport(true, false, selectedHistoryExportName(uri, requestedName))
-        } catch (_error: Throwable) {
-            staged.delete()
-            notifyHistoryExport(false, false, requestedName)
-        }
-    }
-
-    private fun selectedHistoryExportName(uri: Uri, fallback: String): String {
-        return try {
-            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-                ?.use { cursor ->
-                    if (cursor.moveToFirst()) cursor.getString(0).orEmpty() else ""
+            thread(name = "quareia-file-export") {
+                val fileName = try {
+                    writeExport(resolver, export, uri)
+                } catch (_: Exception) {
+                    null
+                } finally {
+                    export.file?.delete()
                 }
-                ?.takeIf(String::isNotBlank)
-                ?: fallback
-        } catch (_error: Throwable) {
-            fallback
+                main.post {
+                    reservation.set(false)
+                    caller.get()?.notifyExport(
+                        export, ok = fileName != null, cancelled = false, fileName = fileName ?: export.name,
+                    )
+                }
+            }
+        } catch (_: Exception) {
+            endPendingExport(export, cancelled = false)
         }
     }
 
-    private fun notifyHistoryExport(ok: Boolean, cancelled: Boolean, fileName: String) {
-        if (!this::webView.isInitialized) return
+    private fun endPendingExport(export: PendingExport, cancelled: Boolean) {
+        export.file?.delete()
+        pendingExport = null
+        exportReserved.set(false)
+        notifyExport(export, ok = false, cancelled = cancelled)
+    }
+
+    private fun notifyExport(
+        export: PendingExport,
+        ok: Boolean,
+        cancelled: Boolean,
+        fileName: String = export.name,
+    ) {
+        if (isDestroyed || isFinishing || export.page != exportPage || !this::webView.isInitialized) return
         val script = "window.__quareiaHistoryExportResult && " +
             "window.__quareiaHistoryExportResult({" +
             "ok:$ok,cancelled:$cancelled,fileName:${JSONObject.quote(fileName)}" +
@@ -446,30 +568,27 @@ class MainActivity : ComponentActivity() {
         webView.evaluateJavascript(script, null)
     }
 
-    private fun restorePendingHistoryExport(savedInstanceState: Bundle?) {
-        val path = savedInstanceState?.getString(STATE_HISTORY_EXPORT_PATH) ?: return
-        val name = savedInstanceState.getString(STATE_HISTORY_EXPORT_NAME).orEmpty()
-        if (name.isBlank()) return
-        try {
-            val candidate = File(path).canonicalFile
-            if (candidate.exists() && candidate.parentFile == cacheDir.canonicalFile) {
-                pendingHistoryExportFile = candidate
-                pendingHistoryExportName = name
+    private fun restorePendingExport(savedInstanceState: Bundle?) {
+        val name = savedInstanceState?.getString(STATE_HISTORY_EXPORT_NAME) ?: return
+        val kind = ExportKind.entries.firstOrNull { name.endsWith(it.extension, ignoreCase = true) } ?: return
+        val path = savedInstanceState.getString(STATE_HISTORY_EXPORT_PATH)
+        val staged = try {
+            path?.let { File(it).canonicalFile }?.takeIf {
+                it.isFile && it.parentFile == cacheDir.canonicalFile &&
+                    it.name.startsWith(HISTORY_EXPORT_PREFIX) && it.name.endsWith(kind.extension)
             }
-        } catch (_error: Throwable) {
-            // A stale or invalid cache path is not allowed to affect launch.
+        } catch (_: Exception) {
+            null
         }
-    }
-
-    private fun clearPendingHistoryExport() {
-        pendingHistoryExportFile?.delete()
-        pendingHistoryExportFile = null
-        pendingHistoryExportName = null
+        // The picker result survives recreation even if Android reclaimed the
+        // cache. The new WebView has no callback from the previous document.
+        pendingExport = PendingExport(staged, name, kind, page = null)
+        exportReserved.set(true)
     }
 
     private fun normalizeHistoryExportName(requestedName: String): String {
         val basename = requestedName.substringAfterLast('/').substringAfterLast('\\')
-        val cleaned = basename.replace(Regex("[^A-Za-z0-9._-]"), "-").trim('.')
+        val cleaned = basename.replace(EXPORT_NAME_UNSAFE, "-").trim('.')
         if (cleaned.isBlank()) return "tarot-history.json"
         if (cleaned.endsWith(".md", ignoreCase = true)) return cleaned
         return if (cleaned.endsWith(".json", ignoreCase = true)) cleaned else "$cleaned.json"
@@ -527,9 +646,12 @@ internal class QuareiaWebChromeClient(
 private class HistoryExportBridge(private val activity: MainActivity) {
 
     @android.webkit.JavascriptInterface
-    fun save(json: String, fileName: String) {
-        activity.runOnUiThread { activity.requestHistoryExport(json, fileName) }
-    }
+    fun save(content: String, fileName: String): Boolean =
+        activity.requestHistoryExport(content, fileName)
+
+    @android.webkit.JavascriptInterface
+    fun savePng(base64: String, fileName: String): Boolean =
+        activity.requestPngExport(base64, fileName)
 }
 
 /** Paints system bars to match the WebView theme chosen in the app menu. */
