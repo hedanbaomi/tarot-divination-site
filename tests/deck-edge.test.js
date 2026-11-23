@@ -68,3 +68,17 @@ test("paging: Home and End stop a glide that is still running", function () {
   var fan = between(ring, "function pageFan(direction) {", "var start = 0;");
   assert.match(fan, /stopGlide\(\);/);
 });
+
+test("portrait fan geometry preserves constant top gap and accounts for wrapped header height", function () {
+  var androidRing = fs.readFileSync(
+    path.join(root, "android-demo/app/src/main/assets/www/js/deck-ring.js"),
+    "utf8"
+  );
+  [ring, androidRing].forEach(function (source) {
+    var geo = between(source, "function geometry()", "function layout()");
+    assert.doesNotMatch(geo, /ch \* 1\.08|w < 620 \? 1\.08/);
+    assert.match(geo, /var spreadSpan = count === 0 \? 0 : \(w < 620 \? ch : ch \* 0\.86\);/);
+    assert.match(geo, /plane\.style\.minHeight = h \+ "px";/);
+    assert.match(geo, /var chromeH = /);
+  });
+});

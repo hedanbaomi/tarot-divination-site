@@ -3093,6 +3093,7 @@ html.ui2 .table-center .spread-board-scroll {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  margin: -10px 0 -2px;
 }
 html.ui2 .table-center .spread-grid {
   width: max-content;
@@ -3282,4 +3283,104 @@ html.ui2 .free-table-card .spread-card-caption span.name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ---------- portrait spread header & history actual-layout fit ---------- */
+html.ui2 .table-stage .spread-head {
+  flex-wrap: wrap;
+  row-gap: 6px;
+  max-width: 100%;
+}
+html.ui2 .table-stage .spread-head .spread-name {
+  text-align: center;
+  min-width: 0;
+}
+html.ui2 .table-stage .spread-head .card-count {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+html.ui2 .spread-settings-btn {
+  height: auto;
+  min-height: 26px;
+  padding: 4px 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+@media (max-width: 860px) {
+  html.ui2 .masthead-actions {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    max-width: 100%;
+  }
+  html.ui2 .table-stage .spread-head {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  html.ui2 .spread-settings-btn {
+    height: auto;
+    min-height: 28px;
+    padding: 4px 10px;
+  }
+}
+
+html.ui2 .history-detail-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+html.ui2 .history-detail-body > * {
+  min-width: 0;
+}
+html.ui2 .history-actual-layout {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+html.ui2 .history-spread-board-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 34px 18px 38px;
+}
+html.ui2 .history-spread-grid:not(.custom-spread-layout) {
+  width: max-content;
+  min-width: 100%;
+  justify-content: center;
+  margin: 0 auto;
+}
+@media (max-width: 560px) {
+  html.ui2 .history-spread-board-scroll {
+    padding: 32px 12px 36px;
+  }
+  html.ui2 .history-spread-grid:not(.custom-spread-layout) {
+    grid-template-columns: repeat(var(--spread-columns, 3), 70px);
+    grid-template-rows: repeat(var(--spread-rows, 1), 116px);
+    gap: 12px 10px;
+  }
+  html.ui2 .history-spread-grid.overview-stacking {
+    grid-template-rows: repeat(var(--spread-rows, 1), 144px);
+    gap: 14px 12px;
+  }
+  html.ui2 .history-spread-grid:not(.custom-spread-layout) .spread-card {
+    width: 70px;
+  }
+}
+
+/* history actual-layout cards live inside a top-layer <dialog>, so they keep inline flip meaning */
+html.ui2 .history-spread-card.revealed.meaning-visible {
+  transform: translate(var(--position-offset-x, 0), var(--position-offset-y, 0))
+    rotate(var(--position-rotation, 0deg)) scale(1.55);
+  outline: none;
+}
+html.ui2 .history-spread-card.revealed.meaning-visible .spread-card-inner {
+  transform: rotateY(360deg);
+}
+html.ui2 .history-spread-card.meaning-visible .spread-card-meaning {
+  display: flex !important;
+}
+html.ui2 .history-spread-card.meaning-visible .spread-card-back-art {
+  display: none;
+}
+html.ui2 .history-spread-card.meaning-visible .spread-card-back::before,
+html.ui2 .history-spread-card.meaning-visible .spread-card-back::after {
+  opacity: 0;
 }
