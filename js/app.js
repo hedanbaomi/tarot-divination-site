@@ -26,6 +26,48 @@
   var historyUiController = null;
   var freeBoardUi = null;
   var customSpreadsUi = null;
+  var SPREAD_SELECTION_KEY = "quareia-spread-selection-v1";
+
+  function saveSpreadSelection() {
+    try {
+      window.localStorage.setItem(SPREAD_SELECTION_KEY, JSON.stringify({
+        deckType: deckType,
+        spreadId: selectedSpreadId,
+        overviewMethod: overviewMethod,
+        customSpreadCode: customSpreadsUi ? customSpreadsUi.exportCode(selectedSpreadId) : null
+      }));
+    } catch (_error) { /* Drawing still works when browser storage is unavailable. */ }
+  }
+
+  function readSpreadSelection() {
+    var saved;
+    try {
+      saved = JSON.parse(window.localStorage.getItem(SPREAD_SELECTION_KEY));
+    } catch (_error) { return null; }
+    if (!saved || ["tarot", "mystagogus", "lxxxi"].indexOf(saved.deckType) === -1 ||
+        typeof saved.spreadId !== "string") return null;
+    return saved;
+  }
+
+  function restoreSpreadSelection(saved) {
+    if (!saved) return;
+    deckType = saved.deckType;
+    var custom = customSpreadsUi && customSpreadsUi.getById(saved.spreadId);
+    var available = getSpreadsForDeck(deckType).some(function (definition) {
+      return definition.id === saved.spreadId;
+    }) || (custom && customSpreadSupportsDeck(custom, deckType));
+    selectedSpreadId = available ? saved.spreadId : defaultSpreadIdForDeck(deckType);
+    overviewMethod = saved.overviewMethod === "stacked" ? "stacked" : "single";
+    if (available && custom) {
+      arcanaFilter = customSpreadTarotFilter(custom, deckType, arcanaFilter);
+      if (arcanaFilter === "major-only" && custom.positions.length > tarotDeckFull.filter(function (card) {
+        return card.arcana === "major";
+      }).length) arcanaFilter = "mixed";
+    }
+    el.deckSelect.value = deckType;
+    el.arcanaFilter.value = arcanaFilter;
+    el.overviewMethod.value = overviewMethod;
+  }
 
   function cacheElements() {
     el.settings = document.getElementById("settings");
@@ -429,6 +471,7 @@
 
   // Full reset: rebuild pile and clear the spread.
   function resetDeck() {
+    if (historyUiController) historyUiController.resetQuestion();
     freeDrawn.length = 0;
     freeRedo.length = 0;
     freeBoardReadingReported = false;
@@ -775,6 +818,7 @@
         if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
         item.x = originX + dx;
         item.y = originY + dy;
+        if (item._fit) delete item._fit;
         el.style.left = item.x + "px";
         el.style.top = item.y + "px";
       }
@@ -805,35 +849,117 @@
     el.revealBtn.textContent = total > 0 && revealed === total ? t("app.revealedAll") : t("spread.reveal");
   }
 
-  /* 画板变窄（转屏、窗口缩小、换成窄屏设备）时，只把横向越界的牌按宽度比例收回来，
+  /* 画板变窄（转屏、窗口缩小、换成窄屏设备）时，把横向坐标按宽度比例收回画板内，
      尽量避免破坏用户摆好的牌阵；纵向坐标一律不动 —— 手机上地址栏收起、软键盘、
-     甚至刷新恢复草稿都会改变画板高度，那些都不该让牌挪位。 */
+     甚至刷新恢复草稿都会改变画板高度，那些都不该让牌挪位。
+     第一次渲染（刷新恢复草稿）拿不到上一次的宽度，没有比例可算，只做最小内推：
+     越界的牌收回边界，画板内的牌一张都不动，也不会丢回默认网格。 */
   function fitFreeCardsToWidth(items, layerW, prevW, halfW) {
-    if (!items || !items.length || !layerW || !prevW || layerW >= prevW) return false;
-    var ratio = layerW / prevW;
-    var minX = halfW;
-    var maxX = Math.max(halfW, layerW - halfW);
-    var used = Object.create(null);
-    var changed = false;
-    items.forEach(function (item) {
-      var source = typeof item.x === "number" && isFinite(item.x) ? item.x : minX;
-      var x = Math.round(source * ratio);
-      if (x < minX) x = minX;
-      else if (x > maxX) x = maxX;
-      var key = x + ":" + Math.round(item.y || 0);
-      var guard = 0;
-      /* 收进来之后如果和前面的牌落到同一点，先往右错开；右边就是边界了就往左，别叠成一张 */
-      while (used[key] && guard < 6) {
-        var next = x + 10;
-        if (next > maxX) next = x - 10;
-        if (next < minX || next === x) break;
-        x = next;
-        key = x + ":" + Math.round(item.y || 0);
-        guard += 1;
+    if (!items || !items.length || !layerW) return false;
+    function setFitState(item, raw, at) {
+      Object.defineProperty(item, "_fit", {
+        value: { raw: raw, at: at },
+        writable: true,
+        configurable: true
+      });
+    }
+    /* 变宽、等宽都不碰坐标，只有确实变窄才收 */
+    if (prevW > 0 && layerW >= prevW) {
+      if (layerW > prevW) {
+        items.forEach(function (item) {
+          if (item._fit && typeof item.x === "number" && isFinite(item.x)) {
+            setFitState(item, item.x, item.x);
+          }
+        });
       }
-      used[key] = true;
-      if (x !== item.x) {
-        item.x = x;
+      return false;
+    }
+    var ratio = prevW > 0 ? layerW / prevW : 1;
+    var padX = Math.ceil(halfW);
+    var minX = padX;
+    var maxX = Math.max(minX, Math.floor(layerW - padX));
+    /* 错开用牌宽做步长：10px 比牌窄太多，同等高度收进来十来张还是一坨 */
+    var step = Math.max(12, Math.round(halfW));
+    var rowBandY = Math.max(24, Math.round(step * 1.4));
+    var changed = false;
+
+    var entries = items.map(function (item, index) {
+      var validX = typeof item.x === "number" && isFinite(item.x);
+      var rawItemX = validX ? item.x : minX;
+      var hasState = prevW > 0 && validX && item._fit &&
+        typeof item._fit.raw === "number" && isFinite(item._fit.raw) &&
+        item._fit.at === rawItemX;
+      var source = hasState ? item._fit.raw : rawItemX;
+      var scaled = source * ratio;
+      var y = typeof item.y === "number" && isFinite(item.y) ? item.y : 0;
+      var clampedLeft = scaled < minX;
+      var clampedRight = scaled > maxX;
+      var clampedVal = clampedLeft ? minX : (clampedRight ? maxX : scaled);
+      return {
+        item: item,
+        index: index,
+        raw: scaled,
+        x: Math.round(clampedVal),
+        y: y,
+        clampedLeft: clampedLeft,
+        clampedRight: clampedRight,
+        pushedLeft: clampedRight,
+        pushedRight: clampedLeft
+      };
+    });
+
+    function gapBetween(mover, anchor, bothClamped) {
+      if (bothClamped) return step;
+      var diff = Math.abs(anchor.raw - mover.raw);
+      return Math.min(step, Math.max(12, Math.round(diff)));
+    }
+
+    /* 左边界内推：按原始横向位置从左往右，被左边界收进来的牌依次向右推开同排邻牌 */
+    var byLeft = entries.slice().sort(function (a, b) {
+      return a.raw - b.raw || a.index - b.index;
+    });
+    for (var i = 0; i < byLeft.length; i += 1) {
+      var cur = byLeft[i];
+      for (var j = 0; j < i; j += 1) {
+        var prev = byLeft[j];
+        if (!prev.pushedRight) continue;
+        if (Math.abs(cur.y - prev.y) >= rowBandY) continue;
+        var need = gapBetween(cur, prev, prev.clampedLeft && cur.clampedLeft);
+        if (cur.x - prev.x < need) {
+          var nextRight = Math.min(maxX, prev.x + need);
+          if (nextRight > cur.x) {
+            cur.x = nextRight;
+            cur.pushedRight = true;
+          }
+        }
+      }
+    }
+
+    /* 右边界内推：按原始横向位置从右往左，被右边界收进来的牌依次向左推开同排邻牌 */
+    var byRight = entries.slice().sort(function (a, b) {
+      return b.raw - a.raw || a.index - b.index;
+    });
+    for (var r = 0; r < byRight.length; r += 1) {
+      var curR = byRight[r];
+      for (var k = 0; k < r; k += 1) {
+        var prevR = byRight[k];
+        if (!prevR.pushedLeft) continue;
+        if (Math.abs(curR.y - prevR.y) >= rowBandY) continue;
+        var needL = gapBetween(curR, prevR, prevR.clampedRight && curR.clampedRight);
+        if (prevR.x - curR.x < needL) {
+          var nextLeft = Math.max(minX, prevR.x - needL);
+          if (nextLeft < curR.x) {
+            curR.x = nextLeft;
+            curR.pushedLeft = true;
+          }
+        }
+      }
+    }
+
+    entries.forEach(function (e) {
+      if (prevW > 0) setFitState(e.item, e.raw, e.x);
+      if (e.x !== e.item.x) {
+        e.item.x = e.x;
         changed = true;
       }
     });
@@ -872,15 +998,35 @@
         });
         scheduleFreeformDraft();
       }
-      freeformLayerW = layerW;
-      freeformLayerH = layerH;
-      if (layerW && layerH) legacyViewport = null;
+      if (isFreeform() && layerW > 0) freeformLayerW = layerW;
+      if (layerW && layerH && legacyViewport) {
+        legacyViewport = null;
+        scheduleFreeformDraft();
+      }
     }
     var undo = document.getElementById("freeUndoBtn");
     var redo = document.getElementById("freeRedoBtn");
     if (undo) undo.disabled = freeDrawn.length === 0;
     if (redo) redo.disabled = freeRedo.length === 0;
     syncFreeActions();
+  }
+
+  /* 窗口尺寸变化：只有画板「宽度」真的变了才需要重绘。
+     手机上地址栏收起/展开、软键盘只改高度，牌本来就不按高度排，重绘纯属白花钱；
+     而拖动窗口时 resize 每帧都来，这里用 rAF 合帧再重建，避免掉帧。 */
+  var freeformResizeFrame = 0;
+  function scheduleFreeformResizeRender() {
+    if (freeformResizeFrame) return;
+    var raf = window.requestAnimationFrame || function (cb) {
+      return window.setTimeout(cb, 16);
+    };
+    freeformResizeFrame = raf(function () {
+      freeformResizeFrame = 0;
+      if (!isFreeform() || !freeDrawn.length) return;
+      var box = document.getElementById("freeDrawCards");
+      if (!box || box.clientWidth === freeformLayerW) return;
+      renderFreeDraw();
+    });
   }
 
   /* ---------- freeform draft ----------
@@ -890,7 +1036,6 @@
   var freeformDraftTimer = 0;
   var legacyViewport = null;
   var freeformLayerW = 0;
-  var freeformLayerH = 0;
   var parkedDraft = null;
 
   function isShuffleRunning() {
@@ -969,6 +1114,7 @@
   }
 
   function clearFreeformDraft() {
+    freeformLayerW = 0;
     parkedDraft = null;
     if (freeformDraftTimer) {
       window.clearTimeout(freeformDraftTimer);
@@ -2128,6 +2274,7 @@
     applyDeckUi();
     renderSpreadDefinition();
     resetDeck();
+    saveSpreadSelection();
   }
 
   async function handleSpreadChange() {
@@ -2155,6 +2302,7 @@
     applyDeckUi();
     renderSpreadDefinition();
     resetDeck();
+    saveSpreadSelection();
   }
 
   async function activateCustomSpread(spreadDefinition) {
@@ -2177,6 +2325,7 @@
     applyLayoutUi();
     resetDeck();
     syncCustomSelectVisuals();
+    saveSpreadSelection();
     return true;
   }
 
@@ -2191,6 +2340,7 @@
     }
     renderSpreadDefinition();
     syncCustomSelectVisuals();
+    saveSpreadSelection();
   }
 
   function populateSpreadSelect() {
@@ -2283,6 +2433,7 @@
     populateSpreadSelect();
     renderSpreadDefinition();
     resetDeck();
+    saveSpreadSelection();
   }
 
   function renderSpreadDefinition() {
@@ -2418,6 +2569,7 @@
       return;
     }
 
+    if (historyUiController) historyUiController.resetQuestion();
     if (restoreFreeformDraft(true) >= 0) {
       spread = [];
       currentPhase = "major";
@@ -2528,16 +2680,19 @@
     layoutMode = el.layoutModeSelect ? (el.layoutModeSelect.value || "preset") : "preset";
     arcanaFilter = el.arcanaFilter.value;
     overviewMethod = el.overviewMethod.value || "single";
+    var savedSelection = readSpreadSelection();
     if (globalThis.DivinationCustomSpreadUi && globalThis.DivinationCustomSpreads) {
       customSpreadsUi = globalThis.DivinationCustomSpreadUi.init({
         document: document,
         core: globalThis.DivinationCustomSpreads,
         platform: "web",
         storage: null,
+        initialSpreadCode: savedSelection && savedSelection.customSpreadCode,
         activateSpread: activateCustomSpread,
         onCatalogueChange: handleCustomCatalogueChange
       });
     }
+    restoreSpreadSelection(savedSelection);
     applyDeckUi();
     populateSpreadSelect();
     selectedSpreadId = el.spreadSelect.value;
@@ -2600,9 +2755,9 @@
     if (freeformDraftTimer) saveFreeformDraftNow();
   });
 
-  /* 屏幕尺寸变了：把自由画板上的牌拉回可视范围 */
+  /* 屏幕尺寸变了：只有画板宽度变了才把牌收进画板内，并且合帧，避免拖动窗口时掉帧 */
   window.addEventListener("resize", function () {
-    if (isFreeform() && freeDrawn.length) renderFreeDraw();
+    if (isFreeform() && freeDrawn.length) scheduleFreeformResizeRender();
   });
 
   if (document.readyState === "loading") {

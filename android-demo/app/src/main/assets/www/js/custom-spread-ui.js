@@ -96,6 +96,11 @@
     var maxRows = Math.max(1, numberOr(core.MAX_ROWS, 10));
     var maxPositions = Math.max(1, numberOr(core.MAX_POSITIONS, 24));
     var library = core.createLibrary({ platform: platform, storage: options.storage || null });
+    // Web libraries are session-only; restore just the last opened custom spread.
+    if (platform === "web" && typeof options.initialSpreadCode === "string") {
+      try { library.importCode(options.initialSpreadCode); }
+      catch (_error) { /* Invalid saved definitions fall back to a preset. */ }
+    }
     var activateSpread = typeof options.activateSpread === "function"
       ? options.activateSpread
       : function () { return Promise.resolve(true); };
@@ -1276,6 +1281,7 @@
     activeController = {
       list: library.list,
       getById: library.getById,
+      exportCode: library.exportCode,
       open: openDialog,
       refreshLanguage: refreshLanguage,
       handleBack: handleBack

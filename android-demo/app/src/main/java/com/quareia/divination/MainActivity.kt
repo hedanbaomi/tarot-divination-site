@@ -10,11 +10,13 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebChromeClient.FileChooserParams
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -26,6 +28,7 @@ import androidx.webkit.WebViewAssetLoader
 import java.io.ByteArrayInputStream
 import java.io.File
 import org.json.JSONObject
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -44,19 +47,75 @@ class MainActivity : ComponentActivity() {
     private var lxxxiRouteToken = ""
     private var pendingHistoryExportFile: File? = null
     private var pendingHistoryExportName: String? = null
+    private val webFileChooser: WebFileChooser = WebFileChooser(
+        registerForActivityResult(OpenDocumentForWebViewContract) { uris ->
+            // A result that arrives after onDestroy has nowhere to go;
+            // deliver() ignores it.
+            webFileChooser.deliver(uris)
+        }
+    )
     private val historyExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri -> completeHistoryExport(uri) }
+    private val markdownExportLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/markdown")
+    ) { uri -> completeHistoryExport(uri) }
+
+    internal enum class NavigationAction {
+        ALLOW_IN_WEBVIEW,
+        OPEN_EXTERNAL,
+        BLOCK,
+    }
 
     internal companion object {
         internal const val HOME_URL = "https://appassets.androidplatform.net/assets/www/index.html"
         internal const val CLASSIC_URL = "https://appassets.androidplatform.net/assets/www/classic.html"
+        internal const val AI_URL = "https://appassets.androidplatform.net/assets/www/ai.html"
 
         internal fun isReadingPage(url: String?): Boolean =
-            url == HOME_URL || url == CLASSIC_URL || url == "$HOME_URL?view=modern"
+            url == HOME_URL ||
+                url == CLASSIC_URL ||
+                url == "$HOME_URL?view=modern" ||
+                url == AI_URL ||
+                (url != null && url.startsWith("$AI_URL?"))
 
         internal const val APP_HOST = "appassets.androidplatform.net"
         internal const val PROTECTED_PREFIX = "/_m/"
+
+        internal fun classifyNavigation(url: Uri?): NavigationAction {
+            if (url == null) return NavigationAction.BLOCK
+            val scheme = url.scheme?.lowercase(Locale.ROOT) ?: return NavigationAction.BLOCK
+            val host = url.host?.lowercase(Locale.ROOT)
+            if ((scheme == "http" || scheme == "https") && host == APP_HOST) {
+                val path = url.path.orEmpty()
+                return if (
+                    scheme == "https" &&
+                    url.port == -1 &&
+                    path.startsWith("/assets/www/") &&
+                    url.pathSegments.none { it == "." || it == ".." }
+                ) {
+                    NavigationAction.ALLOW_IN_WEBVIEW
+                } else {
+                    NavigationAction.BLOCK
+                }
+            }
+            if (scheme == "file") {
+                val path = url.path.orEmpty()
+                return if (
+                    host.isNullOrEmpty() &&
+                    path.startsWith("/android_asset/") &&
+                    url.pathSegments.none { it == "." || it == ".." }
+                ) {
+                    NavigationAction.ALLOW_IN_WEBVIEW
+                } else {
+                    NavigationAction.BLOCK
+                }
+            }
+            if (scheme == "http" || scheme == "https" || scheme == "mailto" || scheme == "tel") {
+                return NavigationAction.OPEN_EXTERNAL
+            }
+            return NavigationAction.BLOCK
+        }
         private const val STATE_LXXXI_ROUTE_TOKEN = "lxxxiRouteToken"
         private const val STATE_HISTORY_EXPORT_PATH = "pendingHistoryExportPath"
         private const val STATE_HISTORY_EXPORT_NAME = "pendingHistoryExportName"
@@ -122,12 +181,18 @@ class MainActivity : ComponentActivity() {
             // over the homepage anymore.
             addJavascriptInterface(AboutBridge(this@MainActivity), "androidAbout")
             addJavascriptInterface(ThemeChromeBridge(this@MainActivity), "androidThemeChrome")
+            addJavascriptInterface(AiConfigBridge(this@MainActivity), "androidAiConfig")
 
             webViewClient = QuareiaWebViewClient(
                 publicAssetRoute,
                 LxxxiAssetRoute(lxxxiRouteToken, LxxxiAssetProviderFactory.create()),
             )
-            webChromeClient = WebChromeClient()
+            // ai.html imports a JSON conversation backup through a hidden
+            // <input type="file">; the stock WebChromeClient ignores it, so
+            // the page could never open a picker. This client forwards the
+            // request to the system document picker (user-picked URI only,
+            // allowContentAccess stays off).
+            webChromeClient = QuareiaWebChromeClient(webFileChooser)
             scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
         }
 
@@ -275,45 +340,56 @@ class MainActivity : ComponentActivity() {
             view: WebView?,
             request: WebResourceRequest?
         ): Boolean {
-            val url = request?.url ?: return false
-            val scheme = url.scheme?.lowercase()
-            if (scheme == "http" || scheme == "https" || scheme == "mailto" || scheme == "tel") {
-                // Only delegate genuinely external links; the virtual appassets
-                // host is internal and must stay inside the WebView.
-                if (url.host == "appassets.androidplatform.net") return false
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, url))
-                } catch (_: ActivityNotFoundException) {
-                    // No handler available — silently ignore in the demo.
+            val url = request?.url
+            return when (classifyNavigation(url)) {
+                NavigationAction.ALLOW_IN_WEBVIEW -> false
+                NavigationAction.OPEN_EXTERNAL -> {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, url))
+                    } catch (_: ActivityNotFoundException) {
+                        // No handler available — silently ignore in the demo.
+                    }
+                    true
                 }
-                return true
+                // Block non-http(s)/mailto/tel schemes (intent:, javascript:,
+                // data:, blob:, about:, content:, non-asset file://, etc.) so
+                // untrusted navigations never run inside the bridged WebView.
+                NavigationAction.BLOCK -> true
             }
-            return false
         }
     }
 
     override fun onDestroy() {
+        // A WebView whose leading page asked for a file must not leave the
+        // generic callback outstanding once the host is gone.
+        webFileChooser.discard()
         if (this::webView.isInitialized) {
             webView.removeJavascriptInterface("androidTelemetry")
             webView.removeJavascriptInterface("androidHistoryExport")
             webView.removeJavascriptInterface("androidAbout")
             webView.removeJavascriptInterface("androidThemeChrome")
+            webView.removeJavascriptInterface("androidAiConfig")
             webView.destroy()
         }
         if (!isChangingConfigurations) clearPendingHistoryExport()
         super.onDestroy()
     }
 
-    /** Stage the JSON privately, then let the user choose its final location. */
+    /** Stage the JSON/Markdown privately, then let the user choose its final location. */
     internal fun requestHistoryExport(json: String, requestedName: String) {
         if (pendingHistoryExportFile != null) return
         val fileName = normalizeHistoryExportName(requestedName)
+        val isMarkdown = fileName.endsWith(".md", ignoreCase = true)
         try {
-            val staged = File.createTempFile(HISTORY_EXPORT_PREFIX, ".json", cacheDir)
+            val staged = File.createTempFile(HISTORY_EXPORT_PREFIX, if (isMarkdown) ".md" else ".json", cacheDir)
             staged.writeText(json, Charsets.UTF_8)
             pendingHistoryExportFile = staged
             pendingHistoryExportName = fileName
-            historyExportLauncher.launch(fileName)
+            if (isMarkdown) {
+                markdownExportLauncher.launch(fileName)
+            } else {
+                historyExportLauncher.launch(fileName)
+            }
         } catch (_error: Throwable) {
             pendingHistoryExportFile?.delete()
             pendingHistoryExportFile = null
@@ -395,6 +471,7 @@ class MainActivity : ComponentActivity() {
         val basename = requestedName.substringAfterLast('/').substringAfterLast('\\')
         val cleaned = basename.replace(Regex("[^A-Za-z0-9._-]"), "-").trim('.')
         if (cleaned.isBlank()) return "tarot-history.json"
+        if (cleaned.endsWith(".md", ignoreCase = true)) return cleaned
         return if (cleaned.endsWith(".json", ignoreCase = true)) cleaned else "$cleaned.json"
     }
 
@@ -419,6 +496,30 @@ class MainActivity : ComponentActivity() {
         val controller = WindowCompat.getInsetsController(window, window.decorView)
         controller.isAppearanceLightStatusBars = light
         controller.isAppearanceLightNavigationBars = light
+    }
+}
+
+/**
+ * WebView chrome hooks. The only override that matters here is the file
+ * picker: the bundled ai.html imports a JSON conversation backup through a
+ * hidden `<input type="file">`, and a plain `WebChromeClient` returns "not
+ * handled", which leaves the page unable to open any picker. Everything else
+ * keeps the stock behaviour.
+ */
+internal class QuareiaWebChromeClient(
+    private val fileChooser: WebFileChooser,
+) : WebChromeClient() {
+
+    override fun onShowFileChooser(
+        webView: WebView?,
+        filePathCallback: ValueCallback<Array<Uri>>?,
+        fileChooserParams: FileChooserParams?,
+    ): Boolean {
+        fileChooser.open(fileChooserParams, filePathCallback)
+        // Claim the request even when it resolves to a cancel: the class
+        // contract requires the callback to be answered exactly once, and the
+        // caller cannot answer it a second time.
+        return true
     }
 }
 
@@ -455,6 +556,39 @@ private class AboutBridge(private val activity: ComponentActivity) {
     @android.webkit.JavascriptInterface
     fun setLocale(locale: String) {
         AppLocale.set(activity, locale)
+    }
+}
+
+/** Persists user-configured AI provider profiles locally outside cloud backup. */
+internal class AiConfigBridge(context: Context) {
+    private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    @android.webkit.JavascriptInterface
+    fun read(): String = prefs.getString(KEY_CONFIG_JSON, "") ?: ""
+
+    @android.webkit.JavascriptInterface
+    fun write(json: String?): Boolean {
+        if (json.isNullOrBlank()) return false
+        val bytes = json.toByteArray(Charsets.UTF_8)
+        if (bytes.size > MAX_CONFIG_BYTES) return false
+        val parsed = try {
+            JSONObject(json)
+        } catch (_error: Throwable) {
+            return false
+        }
+        if (parsed.optInt("version", -1) <= 0) return false
+        return prefs.edit().putString(KEY_CONFIG_JSON, json).commit()
+    }
+
+    @android.webkit.JavascriptInterface
+    fun clear() {
+        prefs.edit().remove(KEY_CONFIG_JSON).commit()
+    }
+
+    internal companion object {
+        internal const val PREFS_NAME = "quareia_ai_config"
+        internal const val KEY_CONFIG_JSON = "config_json"
+        internal const val MAX_CONFIG_BYTES = 262_144
     }
 }
 

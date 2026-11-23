@@ -39,6 +39,48 @@ class TelemetryControllerTest {
     }
 
     @Test
+    fun aiUsageValidatesFieldsAndPreservesUnknownAndZero() {
+        val payloads = mutableListOf<org.json.JSONObject>()
+        TelemetryController.setSenderForTesting { payloads.add(it); true }
+        val bridge = TelemetryBridge()
+        val token = bridge.beginAiUsage()
+        assertFalse(preferences().contains("install_uuid"))
+        bridge.logAiUsage("a".repeat(32), "gpt-6.1-terra", "conversation", -1, token)
+        bridge.logAiUsage("b".repeat(32), "claude-opus-5-5", "compression", 0, token)
+        bridge.logAiUsage("c".repeat(32), "gemini-4-carbon", "conversation", 1234, token)
+        bridge.logAiUsage("invalid", "gpt-6.1-terra", "conversation", 10, token)
+        bridge.logAiUsage("d".repeat(32), "invalid model", "conversation", 10, token)
+        bridge.logAiUsage("d".repeat(32), "model", "probe", 10, token)
+        bridge.logAiUsage("d".repeat(32), "model", "conversation", -2, token)
+        assertTrue(TelemetryController.awaitIdleForTesting())
+        assertThat(payloads.size, `is`(3))
+        assertTrue(payloads[0].isNull("total_tokens"))
+        assertThat(payloads[1].getLong("total_tokens"), `is`(0L))
+        assertThat(payloads[2].getLong("total_tokens"), `is`(1234L))
+        assertThat(payloads[0].getString("event"), `is`("ai_usage"))
+        assertThat(payloads[0].getString("platform"), `is`("android"))
+        assertFalse(payloads[0].has("apiKey"))
+        assertFalse(payloads[0].has("prompt"))
+    }
+
+    @Test
+    fun aiUsageDropsRequestsStartedBeforeOptOutEvenAfterReenable() {
+        val sends = AtomicInteger()
+        TelemetryController.setSenderForTesting { sends.incrementAndGet(); true }
+        val oldToken = TelemetryController.beginAiUsage()
+        TelemetryController.setEnabled(false)
+        assertThat(TelemetryController.beginAiUsage(), `is`(""))
+        TelemetryController.setEnabled(true)
+        TelemetryController.logAiUsage("a".repeat(32), "model", "conversation", 15, oldToken)
+        assertTrue(TelemetryController.awaitIdleForTesting())
+        assertThat(sends.get(), `is`(0))
+        assertFalse(preferences().contains("install_uuid"))
+        TelemetryController.logAiUsage("b".repeat(32), "model", "conversation", 15, TelemetryController.beginAiUsage())
+        assertTrue(TelemetryController.awaitIdleForTesting())
+        assertThat(sends.get(), `is`(1))
+    }
+
+    @Test
     fun telemetryIsEnabledByDefault() {
         assertTrue(TelemetryController.isEnabled())
     }

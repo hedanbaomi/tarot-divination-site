@@ -1,5 +1,25 @@
 # Quareia Telemetry Worker deployment record
 
+## 2026-11-16: successful AI calls only
+
+- Source: `e844205`. Updated the client completion gate to omit unsuccessful calls, including cancellations and blocked/truncated output. Successful calls without provider usage remain unknown.
+- Worker version `2de4de91-4bff-42a8-9801-edd9d27b28b8` updates the admin counting explanation only. Deployment used `--keep-vars`; health and exact admin HTML checks passed. No database migration or historical row mutation was performed.
+- Validation: 284 web, 25 Android JavaScript and 216 Worker tests passed; offline browser checks passed for both web and Android resources, including failed calls. Worker dry-run passed.
+- The source merge publishes the web collector. Existing open pages must reload; older unknown-usage records cannot be reclassified because they have no outcome field. Android resources are synchronized, with packaging still paused.
+
+## 2026-11-16: AI usage statistics
+
+- Worker source: `e2b743c` (`feat(telemetry): track AI usage across web and Android`).
+- Deployed Worker version: `d26c7939-9031-431c-bf9a-6bceb314dd47` on the existing custom domain with `--keep-vars`; bindings, variables and the daily cron are preserved.
+- Applied only the additive `0006_ai_usage.sql`. A D1 Time Travel bookmark was recorded beforehand. Announcement count/revision and per-platform install counts matched their pre-migration values; the new AI table started empty. No synthetic events were inserted into production.
+- Validation: 259 web, 25 Android JavaScript, 155 Android native, and 216 Worker tests passed. Clean dependency installation, local migrations 0001–0006 and Worker dry-run passed. DSH / DeepSeek V4.1 Flash completed independent read-only client, native-bridge, authentication and migration review with no blocking findings.
+- A synthetic local admin preview verified 400 known tokens, three rounds, one unknown-usage request and four total requests, with platform/window filtering and no page overflow at 390px.
+- Production checks passed: health 200, exact deployed admin HTML match, security headers, unauthenticated AI summary 401, allowed-origin event preflight 204, and unchanged iOS update response. Authenticated admin behavior was validated locally; no production admin credential was read.
+- The website collector is delivered with the associated source merge to `main`. Android source is included for the next app build; packaging remains paused and no APK, release, update announcement or download metadata is published.
+- Rollback: restore the previous Worker version `a99bbdb4-5e5d-4367-b510-44cd90a84384` and website revision. Leave the additive AI table and collected records intact.
+
+See [AI usage statistics](../docs/ai-usage-statistics.md) for counting and privacy boundaries.
+
 ## 2026-11-09: Cloudflare Web Analytics historical backfill
 
 - Source: `64a2548f5f782f747832eea4d9ecceb86395a287`; deployed Worker version

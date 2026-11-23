@@ -20,8 +20,16 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!--
+      Exclude both native and WebView copies of BYOK credentials.
+      Excluding app_webview also excludes its history and settings from
+      automatic backup; the pages' manual JSON export/import remains available.
+      API 24-30 use fullBackupContent; API 31+ use dataExtractionRules.
+    -->
     <application
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:name=".QuareiaApplication"

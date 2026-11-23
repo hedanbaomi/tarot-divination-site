@@ -135,9 +135,11 @@
     /* 自由模式下没有牌阵：扇形的下沿就是舞台的下沿 */
     if (count === 0) ch = 0;
     var gap = w < 620 ? 46 : 66;
-    var cf = w < 620 ? 1.08 : 0.86;
-    var h = Math.round(ry + gap + 42 + ch * cf + 24);
-    var cy = h - 24 - ch * cf;
+    /* Keep portrait vertical gap constant so tall spreads (Tree of Life, Health, Mystagogus)
+       do not pick up extra dead space below the fan. */
+    var spreadSpan = count === 0 ? 0 : (w < 620 ? ch : ch * 0.86);
+    var h = Math.round(ry + gap + 42 + spreadSpan + 24);
+    var cy = h - 24 - spreadSpan;
     if (count === 0) {
       /* 自由模式没有牌阵：牌弧的下沿要留够空间，别压住下面那行提示 */
       var halfCard = (w < 620 ? 102 : 117) / 2 + 16;
@@ -147,10 +149,14 @@
       cy = Math.round(cy - ry * 0.22);
     }
 
+    var head = stage.querySelector(".spread-head");
+    var nav = stage.querySelector(".fan-nav");
+    var chromeH = (head ? head.offsetHeight : 0) + (nav ? nav.offsetHeight : 0);
     stage.style.setProperty("--ring-rx", rx + "px");
     stage.style.setProperty("--ring-ry", ry + "px");
     stage.style.setProperty("--ring-cy", cy + "px");
-    stage.style.minHeight = h + 44 + "px";
+    plane.style.minHeight = h + "px";
+    stage.style.minHeight = h + Math.max(44, chromeH + 8) + "px";
     buildLut(rx, ry);
     /* 同一次拖动内复用测量结果；拖动结束或下次按下时作废 */
     var g = { rx: rx, ry: ry };

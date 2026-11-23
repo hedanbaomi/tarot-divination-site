@@ -367,10 +367,30 @@ test("白盒：只有画板变窄才收横向坐标，刷新恢复与纵向位�
   assert.equal(shrinking[1].x, 133, "越界只做最小内推，不丢回默认网格");
   assert.equal(shrinking[1].y, 470);
 
-  /* 收进同一个点时要错开，不能叠成一张 */
-  var collided = [{ x: 300, y: 100 }, { x: 300, y: 100 }];
-  assert.equal(fit(collided, 100, 400, 44), true);
-  assert.notEqual(collided[0].x + ":" + collided[0].y, collided[1].x + ":" + collided[1].y);
+  /* 第一次渲染（刷新恢复草稿）没有上一次的宽度：没有比例可算，只做最小内推 */
+  var first = [{ x: 700, y: 300 }, { x: 120, y: 300 }, { x: -30, y: 40 }];
+  assert.equal(fit(first, 354, 0, 44), true);
+  assert.deepEqual(first.map(function (item) { return [item.x, item.y]; }),
+    [[310, 300], [120, 300], [44, 40]],
+    "框内的牌不动，只把越界的收回边界");
+
+  /* 收进同一个点时按半个牌宽左右交错，不能叠成一张 */
+  var collided = [{ x: 900, y: 100 }, { x: 900, y: 100 }];
+  assert.equal(fit(collided, 354, 900, 44), true);
+  assert.equal(collided[0].x, 310);
+  assert.equal(Math.abs(collided[1].x - collided[0].x), 44, "错开步长要按牌宽，不是 10px");
+  assert.ok(collided[1].x >= 44 && collided[1].x <= 310);
+});
+
+test("白盒：窗口尺寸变化只在宽度变了才重绘，并且合帧（拖动窗口不掉帧）", function () {
+  var resize = grab("scheduleFreeformResizeRender");
+  assert.match(resize, /requestAnimationFrame/, "resize 重绘要合帧");
+  assert.match(resize, /box\.clientWidth === freeformLayerW/, "只是高度变化（地址栏、软键盘）不该重绘");
+  assert.match(resize, /renderFreeDraw\(\)/);
+  assert.match(appSource, /if \(isFreeform\(\) && freeDrawn\.length\) scheduleFreeformResizeRender\(\);/);
+  assert.doesNotMatch(appSource, /if \(isFreeform\(\) && freeDrawn\.length\) renderFreeDraw\(\);/,
+    "resize 里不能直接整块重建");
+  assert.doesNotMatch(appSource, /freeformLayerH/, "高度不用记，牌根本不按高度排");
 });
 
 test("白盒：翻牌与重绘的分工（不整块重绘、不丢回默认网格、不按高度重排）", function () {
@@ -402,4 +422,180 @@ test("白盒：扇形点击守卫不会抢走牌阵里卡片的点击", function
 test("白盒：牌意浮层用的是 meaning 字段，不是不存在的 text", function () {
   assert.match(appSource, /setText\("\[data-meaning-text\]", interpretation\.meaning \|\| ""\)/);
   assert.doesNotMatch(appSource, /interpretation\.text/);
+});
+
+test("白盒：连续 1px 步长缩窗不量化漂移/坍缩，手动改坐标后按新坐标缩放", function () {
+  var fit = instantiate("fitFreeCardsToWidth", {});
+  var cards = [
+    { x: 200, y: 100 },
+    { x: 300, y: 100 },
+    { x: 400, y: 100 },
+    { x: 500, y: 100 },
+    { x: 800, y: 106 }
+  ];
+  for (var w = 999; w >= 500; w -= 1) {
+    fit(cards, w, w + 1, 44);
+  }
+  assert.deepEqual(
+    cards.map(function (c) { return c.x; }),
+    [100, 150, 200, 250, 400],
+    "连续 1px 缩窗后各牌必须精确落在目标比例坐标，不能漂移或坍缩"
+  );
+
+  /* 手动把第一张牌拖到新位置（以及源码里 onMove 会清理 _fit），再缩窗应按新坐标继续缩放 */
+  assert.match(grab("bindFreeTableCard"), /if \(item\._fit\) delete item\._fit;/);
+  cards[0].x = 200;
+  fit(cards, 250, 500, 44);
+  assert.equal(cards[0].x, 100, "手动改 x 后应按新坐标 200 * 0.5 = 100 缩放，而不是旧缩放缓存");
+});
+
+test("白盒：prevW=0 首帧恢复不拆框内叠牌、保留近邻越界顺序且框内邻牌不重叠", function () {
+  var fit = instantiate("fitFreeCardsToWidth", {});
+
+  var stacked = [{ x: 120, y: 92 }, { x: 120, y: 92 }];
+  assert.equal(fit(stacked, 354, 0, 44), false);
+  assert.deepEqual(stacked, [{ x: 120, y: 92 }, { x: 120, y: 92 }]);
+
+  var nearRows = [{ x: 700, y: 100 }, { x: 900, y: 105 }];
+  assert.equal(fit(nearRows, 354, 0, 44), true);
+  assert.deepEqual(nearRows, [{ x: 266, y: 100 }, { x: 310, y: 105 }]);
+
+  var mixed = [{ x: 240, y: 120 }, { x: 760, y: 120 }, { x: 820, y: 120 }];
+  assert.equal(fit(mixed, 339, 0, 39), true);
+  assert.deepEqual(
+    mixed.map(function (c) { return c.x; }),
+    [222, 261, 300],
+    "右侧越界牌左推时应把近距离框内邻牌一并推开，避免重叠"
+  );
+});
+
+test("白盒：leaveFreeform(true) 隐藏时不清空 freeformLayerW，clearFreeformDraft() 才置 0", function () {
+  var vm = require("node:vm");
+  var wrap = { hidden: false };
+  var box = { innerHTML: "", clientWidth: 0, clientHeight: 0 };
+  var removedKeys = [];
+  var state = {
+    layoutMode: "freeform",
+    freeformLayerW: 920,
+    freeDrawn: [{ id: "major-00", x: 240, y: 120, revealed: false, angle: 0, orientation: "upright" }],
+    freeRedo: [],
+    parkedDraft: null,
+    freeformDraftTimer: 0,
+    legacyViewport: null,
+    FREEFORM_DRAFT_KEY: "draft",
+    isFreeform: function () { return state.layoutMode === "freeform"; },
+    saveFreeformDraftNow: function (park) { state.parkedDraft = { parked: !!park }; },
+    scheduleFreeformDraft: function () {},
+    syncFreeActions: function () {},
+    buildFreeTableCard: function () { return null; },
+    bindFreeTableCard: function () {},
+    freeIndex: function () { return 0; },
+    window: {
+      clearTimeout: function () {},
+      localStorage: { removeItem: function (k) { removedKeys.push(k); } }
+    },
+    document: {
+      getElementById: function (id) {
+        if (id === "freeDraw") return wrap;
+        if (id === "freeDrawCards") return box;
+        return null;
+      }
+    }
+  };
+  var defs = ["fitFreeCardsToWidth", "renderFreeDraw", "clearFreeformDraft", "leaveFreeform"];
+  vm.runInNewContext(defs.map(grab).join("\n"), state);
+
+  state.leaveFreeform(true);
+  assert.equal(state.layoutMode, "preset");
+  assert.equal(wrap.hidden, true);
+  assert.equal(state.freeformLayerW, 920, "暂存返回预设时容器隐藏导致 clientWidth=0，不得覆盖旧宽度");
+
+  state.clearFreeformDraft();
+  assert.equal(state.freeformLayerW, 0, "清空并放弃草稿时必须重置 freeformLayerW");
+  assert.deepEqual(removedKeys, ["draft"]);
+});
+
+test("白盒：真实 i18n 无重复 freeBoard.cardAria 键，现代与经典翻牌 aria-label 均完整", function () {
+  var vm = require("node:vm");
+  var i18nSource = fs.readFileSync(path.join(root, "js/i18n.js"), "utf8");
+  var classicSource = fs.readFileSync(path.join(root, "js/classic/messages.js"), "utf8");
+
+  /* 检查 zh-CN 与 en 字典块内不存在重复属性键 */
+  ["zh-CN", "en"].forEach(function (locale) {
+    var marker = '"' + locale + '": {';
+    var start = i18nSource.indexOf(marker);
+    assert.notEqual(start, -1, "找不到语言块 " + locale);
+    var end = i18nSource.indexOf("\n    }", start);
+    assert.notEqual(end, -1, "找不到语言块结束 " + locale);
+    var block = i18nSource.slice(start, end);
+    var seen = Object.create(null);
+    var keyPattern = /"([^"]+)"\s*:/g;
+    var match = keyPattern.exec(block);
+    while (match) {
+      var key = match[1];
+      if (key !== locale) {
+        assert.equal(seen[key], undefined, locale + " 存在重复键：" + key);
+        seen[key] = true;
+      }
+      match = keyPattern.exec(block);
+    }
+    assert.ok(seen["freeBoard.cardAria"], locale + " 必须保留 freeBoard.cardAria");
+  });
+
+  function loadI18n(withClassic) {
+    var sandbox = { globalThis: null, window: {}, navigator: { language: "zh-CN" } };
+    sandbox.globalThis = sandbox;
+    sandbox.window = sandbox;
+    if (withClassic) vm.runInNewContext(classicSource, sandbox);
+    vm.runInNewContext(i18nSource, sandbox);
+    return sandbox.DivinationI18n;
+  }
+
+  var modernI18n = loadI18n(false);
+  var card = { id: "major-16", name: "塔", nameEn: "The Tower" };
+  var makeClassList = function () { return { toggle: function () {}, add: function () {}, remove: function () {} }; };
+  var makeCardEl = function () {
+    var front = { attrs: {}, classList: makeClassList(), setAttribute: function (k, v) { front.attrs[k] = v; }, removeAttribute: function (k) { delete front.attrs[k]; } };
+    var img = { alt: "" };
+    var nameEl = { textContent: "" };
+    var el = {
+      attrs: {},
+      classList: makeClassList(),
+      setAttribute: function (k, v) { el.attrs[k] = v; },
+      querySelector: function (sel) {
+        if (sel === ".spread-card-front") return front;
+        if (sel === ".spread-card-front .card-image") return img;
+        if (sel === ".spread-card-caption .name") return nameEl;
+        return null;
+      }
+    };
+    return el;
+  };
+  var applyModern = instantiate("applyFreeCardFace", {
+    cardById: function () { return card; },
+    localizedCardName: function (c) { return modernI18n.field(c, "name"); },
+    t: function (k, vars) { return modernI18n.t(k, vars); }
+  });
+
+  modernI18n.setLocale("zh-CN");
+  var elZh = makeCardEl();
+  applyModern(elZh, { id: "major-16", revealed: true, orientation: "reversed" }, 0, card);
+  assert.equal(elZh.attrs["aria-label"], "第 1 张牌，塔，逆位");
+
+  modernI18n.setLocale("en");
+  var elEn = makeCardEl();
+  applyModern(elEn, { id: "major-16", revealed: true, orientation: "upright" }, 1, card);
+  assert.equal(elEn.attrs["aria-label"], "Card 2, The Tower, Upright");
+
+  var classicI18n = loadI18n(true);
+  classicI18n.setLocale("zh-CN");
+  assert.equal(
+    classicI18n.t("freeBoard.cardAria", { card: "塔", state: "已开牌", orientation: " · 正位" }),
+    "塔，已开牌 · 正位。拖动改变位置，轻点选中"
+  );
+  classicI18n.setLocale("en");
+  assert.equal(
+    classicI18n.t("freeBoard.cardAria", { card: "The Tower", state: "Revealed", orientation: " · Upright" }),
+    "The Tower, Revealed · Upright. Drag to move; tap to select."
+  );
 });

@@ -1,13 +1,9 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
--->
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 24-30. SharedPreferences backup paths include the .xml suffix.
+     WebView Local Storage cannot be filtered by key, so exclude the entire
+     WebView directory, including its history, conversations and settings.
+     Users can transfer history and conversations with manual JSON backups. -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="quareia_ai_config.xml"/>
+    <exclude domain="root" path="app_webview/"/>
 </full-backup-content>

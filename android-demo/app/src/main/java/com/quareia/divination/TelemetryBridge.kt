@@ -10,7 +10,7 @@ import android.webkit.JavascriptInterface
  * request is performed off the main thread by [TelemetryController]. None of
  * these methods ever read card faces, names, orientations, spread layouts,
  * questions, notes, or history — they only pass the deck type and the number
- * of cards in the finished spread.
+ * of cards in the finished spread, or model ID/token counts/request kind for AI usage.
  *
  * Every method is a thin, argument-validated pass-through, so a malformed call
  * from the page can never crash the app.
@@ -24,6 +24,15 @@ internal class TelemetryBridge {
     @JavascriptInterface
     fun setEnabled(enabled: Boolean) {
         TelemetryController.setEnabled(enabled)
+    }
+
+    /** Capture consent before a model request; disabling invalidates the token. */
+    @JavascriptInterface
+    fun beginAiUsage(): String = TelemetryController.beginAiUsage()
+
+    @JavascriptInterface
+    fun logAiUsage(requestId: String, modelId: String, usageKind: String, totalTokens: Long, consentToken: String) {
+        TelemetryController.logAiUsage(requestId, modelId, usageKind, totalTokens, consentToken)
     }
 
     /** To be called once per finished spread; fire-and-forget on failure. */

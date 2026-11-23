@@ -14,7 +14,8 @@
       global.DivinationMenu,
       global.DivinationCardOverlays,
       global.DivinationSpreadSettings,
-      global.DivinationAdvancedSettings
+      global.DivinationAdvancedSettings,
+      global.DivinationAiUi
     ];
     for (var i = 0; i < handlers.length; i += 1) {
       var handler = handlers[i];

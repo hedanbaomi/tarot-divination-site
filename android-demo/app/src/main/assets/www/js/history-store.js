@@ -55,6 +55,7 @@
 
     if (!recordsApi ||
         typeof recordsApi.validateRecord !== "function" ||
+        typeof recordsApi.normalizeQuestion !== "function" ||
         typeof recordsApi.isRecentDuplicate !== "function" ||
         typeof recordsApi.resolveImportedIds !== "function") {
       throw new Error("DivinationHistoryRecords API is unavailable");
@@ -280,6 +281,41 @@
       });
     }
 
+    function updateQuestion(id, question) {
+      if (typeof id !== "string" || id.length === 0) {
+        return Promise.reject(new Error("History record id is required"));
+      }
+      return Promise.resolve().then(function () {
+        var normalized = recordsApi.normalizeQuestion(question);
+        return runTransaction("readwrite", function (store, succeed, fail) {
+          var request = store.get(id);
+          request.onsuccess = function () {
+            try {
+              if (request.result === undefined) {
+                succeed(null);
+                return;
+              }
+              var record = request.result;
+              recordsApi.validateRecord(record);
+              if (normalized) record.question = normalized;
+              else delete record.question;
+              recordsApi.validateRecord(record);
+              var putRequest = store.put(record);
+              putRequest.onsuccess = function () { succeed(cloneJson(record)); };
+              putRequest.onerror = function () {
+                fail(putRequest.error || new Error("Could not update the history question"));
+              };
+            } catch (error) {
+              fail(error);
+            }
+          };
+          request.onerror = function () {
+            fail(request.error || new Error("Could not read the history record"));
+          };
+        });
+      });
+    }
+
     function deleteRecord(id) {
       if (typeof id !== "string" || id.length === 0) {
         return Promise.reject(new Error("History record id is required"));
@@ -362,6 +398,7 @@
       listRecords: listRecords,
       getRecord: getRecord,
       saveRecord: saveRecord,
+      updateQuestion: updateQuestion,
       deleteRecord: deleteRecord,
       clearRecords: clearRecords,
       importRecords: importRecords

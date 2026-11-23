@@ -21,6 +21,47 @@
   var historyUiController = null;
   var freeBoardUi = null;
   var customSpreadsUi = null;
+  var SPREAD_SELECTION_KEY = "quareia-spread-selection-v1";
+
+  function saveSpreadSelection() {
+    try {
+      window.localStorage.setItem(SPREAD_SELECTION_KEY, JSON.stringify({
+        deckType: deckType,
+        spreadId: selectedSpreadId,
+        overviewMethod: overviewMethod
+      }));
+    } catch (_error) { /* Drawing still works when browser storage is unavailable. */ }
+  }
+
+  function readSpreadSelection() {
+    var saved;
+    try {
+      saved = JSON.parse(window.localStorage.getItem(SPREAD_SELECTION_KEY));
+    } catch (_error) { return null; }
+    if (!saved || ["tarot", "mystagogus", "lxxxi"].indexOf(saved.deckType) === -1 ||
+        typeof saved.spreadId !== "string") return null;
+    return saved;
+  }
+
+  function restoreSpreadSelection(saved) {
+    if (!saved) return;
+    deckType = saved.deckType;
+    var custom = customSpreadsUi && customSpreadsUi.getById(saved.spreadId);
+    var available = getSpreadsForDeck(deckType).some(function (definition) {
+      return definition.id === saved.spreadId;
+    }) || (custom && customSpreadSupportsDeck(custom, deckType));
+    selectedSpreadId = available ? saved.spreadId : defaultSpreadIdForDeck(deckType);
+    overviewMethod = saved.overviewMethod === "stacked" ? "stacked" : "single";
+    if (available && custom) {
+      arcanaFilter = customSpreadTarotFilter(custom, deckType, arcanaFilter);
+      if (arcanaFilter === "major-only" && custom.positions.length > tarotDeckFull.filter(function (card) {
+        return card.arcana === "major";
+      }).length) arcanaFilter = "mixed";
+    }
+    el.deckSelect.value = deckType;
+    el.arcanaFilter.value = arcanaFilter;
+    el.overviewMethod.value = overviewMethod;
+  }
 
   function cacheElements() {
     el.settings = document.getElementById("settings");
@@ -396,6 +437,7 @@
 
   // Full reset: rebuild pile and clear the spread.
   function resetDeck() {
+    if (historyUiController) historyUiController.resetQuestion();
     if (isFreeform()) {
       if (freeBoardUi && typeof freeBoardUi.reconfigure === "function") {
         freeBoardUi.reconfigure(freeBoardContext());
@@ -961,6 +1003,7 @@
 
   function notifyFreeBoardReadingCompleted(state, reason) {
     if (!state || !Array.isArray(state.cards)) return;
+    if (historyUiController && (reason === "clear" || reason === "reconfigure")) historyUiController.resetQuestion();
     if (state.cards.length === 0 || (reason === "draw" && state.cards.length === 1)) {
       freeBoardReadingReported = false;
     }
@@ -1306,6 +1349,7 @@
     applyDeckUi();
     renderSpreadDefinition();
     resetDeck();
+    saveSpreadSelection();
   }
 
   async function handleSpreadChange() {
@@ -1327,6 +1371,7 @@
     applyDeckUi();
     renderSpreadDefinition();
     resetDeck();
+    saveSpreadSelection();
   }
 
   async function activateCustomSpread(spreadDefinition) {
@@ -1349,6 +1394,7 @@
     applyLayoutUi();
     resetDeck();
     syncCustomSelectVisuals();
+    saveSpreadSelection();
     return true;
   }
 
@@ -1363,6 +1409,7 @@
     }
     renderSpreadDefinition();
     syncCustomSelectVisuals();
+    saveSpreadSelection();
   }
 
   function populateSpreadSelect() {
@@ -1453,6 +1500,7 @@
     populateSpreadSelect();
     renderSpreadDefinition();
     resetDeck();
+    saveSpreadSelection();
   }
 
   function renderSpreadDefinition() {
@@ -1511,6 +1559,7 @@
     }
 
     if (newLayoutMode === "freeform") {
+      if (historyUiController) historyUiController.resetQuestion();
       // Entering the board intentionally ends the current preset reading, but
       // preserves deck, Tarot orientation, and Tarot filter selections.
       spread = [];
@@ -1598,6 +1647,7 @@
     layoutMode = el.layoutModeSelect ? (el.layoutModeSelect.value || "preset") : "preset";
     arcanaFilter = el.arcanaFilter.value;
     overviewMethod = el.overviewMethod.value || "single";
+    var savedSelection = readSpreadSelection();
     if (globalThis.DivinationCustomSpreadUi && globalThis.DivinationCustomSpreads) {
       customSpreadsUi = globalThis.DivinationCustomSpreadUi.init({
         document: document,
@@ -1608,6 +1658,7 @@
         onCatalogueChange: handleCustomCatalogueChange
       });
     }
+    restoreSpreadSelection(savedSelection);
     applyDeckUi();
     populateSpreadSelect();
     selectedSpreadId = el.spreadSelect.value;
@@ -1684,6 +1735,13 @@
       resetDeck();
     }
   }
+
+  window.addEventListener("quareia:mediaready", function () {
+    if (deckType !== "lxxxi" || isFreeform()) return;
+    renderDeckSpread();
+    renderSpreadCards();
+    renderResults();
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
