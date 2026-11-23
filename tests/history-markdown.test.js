@@ -6,9 +6,9 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const scripts = ["tarot-data", "mystagogus-data", "lxxxi-data", "spreads", "i18n-data-en", "i18n", "history-markdown", "history-ui"];
-function load() {
+function load(assets = root) {
   const context = vm.createContext({});
-  scripts.forEach((name) => vm.runInContext(fs.readFileSync(path.join(root, "js", name + ".js"), "utf8"), context));
+  scripts.forEach((name) => vm.runInContext(fs.readFileSync(path.join(assets, "js", name + ".js"), "utf8"), context));
   return context;
 }
 function record(deckType, cardId, extra = {}) {
@@ -85,4 +85,37 @@ test("escapes hostile imported text and reports missing source data", () => {
 test("Android formatter mirrors the web formatter", () => {
   assert.equal(fs.readFileSync(path.join(root, "js/history-markdown.js"), "utf8"),
     fs.readFileSync(path.join(root, "android-demo/app/src/main/assets/www/js/history-markdown.js"), "utf8"));
+});
+
+test("single and batch Markdown exports credit only the decks in the file, once per deck", () => {
+  const guidebooks = {
+    tarot: "https://www.quareia.com/s/tarotbook-for-Q-website-g5at.pdf",
+    mystagogus: "https://www.quareia.com/s/mystagogus-online.pdf",
+    lxxxi: "https://www.quareia.com/s/deckbook-web.pdf"
+  };
+  const records = { tarot: record("tarot", "major-00"), mystagogus: record("mystagogus", "m-01"), lxxxi: record("lxxxi", "lxxxi-01") };
+  for (const assets of [root, path.join(root, "android-demo/app/src/main/assets/www")]) {
+    const context = load(assets);
+    for (const [locale, heading] of [["zh-CN", "来源与致谢"], ["en", "Sources and credits"]]) {
+      context.DivinationI18n.setLocale(locale);
+      for (const selection of [["tarot"], ["mystagogus"], ["lxxxi"], ["lxxxi", "tarot", "lxxxi", "mystagogus"]]) {
+        const markdown = context.DivinationHistoryUi.formatMarkdown(selection.map(deck => records[deck]));
+        const sections = markdown.split("\n## " + heading + "\n");
+        assert.equal(sections.length, 2);
+        const credits = sections[1].trim().split("\n");
+        assert.equal(credits.length, new Set(selection).size);
+        for (const [deck, url] of Object.entries(guidebooks)) {
+          const matches = credits.filter(line => line.includes("](" + url + ")"));
+          assert.equal(matches.length, selection.includes(deck) ? 1 : 0);
+          if (!matches.length) continue;
+          assert.ok(matches[0].startsWith("- **" + context.DivinationI18n.t("deck.name." + deck) + "**"));
+          assert.match(matches[0], /Josephine McCarthy/);
+          if (deck === "tarot") {
+            assert.match(matches[0], /21世纪的塔罗技能|Tarot Skills for the 21st Century/);
+            assert.match(matches[0], /Quareia 训练教材|Quareia training materials/);
+          }
+        }
+      }
+    }
+  }
 });
