@@ -1,13 +1,31 @@
-/* Heraldic realm colours faithful to the printed LXXXI borders (red, blue,
-   green, black), tuned to stay legible at 4px on small screens without turning
-   neon. Keep these independent of the UI theme; the outer keyline separates
-   dark edges from dark tables without cutting into the colour band. */
+/* The colour band sits between two hairlines. In particular the black band
+   keeps its full width even against black artwork, letterboxing or a dark table. */
 :root {
-  --lxxxi-divine: #b23b3b;
-  --lxxxi-inner: #3668a8;
-  --lxxxi-physical: #3c8c5b;
+  --lxxxi-divine: #ca655e;
+  --lxxxi-inner: #588dc6;
+  --lxxxi-physical: #5ca078;
   --lxxxi-underworld: #141518;
-  --lxxxi-keyline: rgba(214, 208, 196, 0.48);
+  --lxxxi-keyline: #403c3b;
+  --lxxxi-lining: #302e30;
+  --lxxxi-black-keyline: #b8b2a8;
+  --lxxxi-black-lining: #a49f98;
+}
+
+:root:is([data-theme="parchment"], [data-theme="jade"]) {
+  --lxxxi-divine: #a23e3e;
+  --lxxxi-inner: #34649e;
+  --lxxxi-physical: #357450;
+  --lxxxi-keyline: #6b655d;
+  --lxxxi-lining: #e3dacb;
+  --lxxxi-black-keyline: #948b7c;
+  --lxxxi-black-lining: #c5bcb0;
+}
+
+/* The lighter Grove table is sage rather than white. */
+:root[data-theme="grove-light"] {
+  --lxxxi-keyline: #393b33;
+  --lxxxi-lining: #312f2c;
+  --lxxxi-black-keyline: #cec6af;
 }
 
 [data-lxxxi-border="divine"] { --realm-edge: var(--lxxxi-divine); }
@@ -15,25 +33,43 @@
 [data-lxxxi-border="physical"] { --realm-edge: var(--lxxxi-physical); }
 [data-lxxxi-border="underworld"] {
   --realm-edge: var(--lxxxi-underworld);
-  --lxxxi-keyline: rgba(224, 218, 206, 0.78);
 }
 
 [data-lxxxi-border="inner-underworld"] {
   --realm-band: linear-gradient(to right, var(--lxxxi-inner) 50%, var(--lxxxi-underworld) 50%);
-  --lxxxi-keyline: rgba(224, 218, 206, 0.78);
 }
 [data-lxxxi-border="inner-physical"] {
   --realm-band: linear-gradient(to bottom, var(--lxxxi-inner) 50%, var(--lxxxi-physical) 50%);
+}
+
+[data-lxxxi-border="underworld"],
+[data-lxxxi-border="inner-underworld"] {
+  --lxxxi-keyline: var(--lxxxi-black-keyline);
+  --lxxxi-lining: var(--lxxxi-black-lining);
 }
 
 .spread-card[data-lxxxi-border] .spread-card-front,
 .spread-card.meaning-visible[data-lxxxi-border] .spread-card-back,
 .free-board-card[data-lxxxi-border],
 img.result-card-image[data-lxxxi-border] {
-  border: 4px solid transparent;
+  border: 5px solid transparent;
+  padding: 1px;
   background:
-    linear-gradient(var(--neutral-contain), var(--neutral-contain)) padding-box,
+    linear-gradient(var(--neutral-contain), var(--neutral-contain)) content-box,
+    linear-gradient(var(--lxxxi-lining), var(--lxxxi-lining)) padding-box,
     var(--realm-band, linear-gradient(var(--realm-edge), var(--realm-edge))) border-box;
   outline: 1px solid var(--lxxxi-keyline);
   outline-offset: 0;
+}
+
+/* Absolutely positioned children start at the padding edge. Reserve the same
+   inner hairline for them that the replaced thumbnail gets from its padding. */
+.spread-card[data-lxxxi-border] .spread-card-front .card-image {
+  inset: 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+}
+.spread-card.meaning-visible[data-lxxxi-border] .spread-card-meaning,
+.free-board-card[data-lxxxi-border] .free-board-card-inner {
+  inset: 1px;
 }
