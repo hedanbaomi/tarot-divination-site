@@ -5,6 +5,13 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  // Official guidebook links from Quareia's Free Books page.
+  var guidebooks = {
+    tarot: "https://www.quareia.com/s/tarotbook-for-Q-website-g5at.pdf",
+    mystagogus: "https://www.quareia.com/s/mystagogus-online.pdf",
+    lxxxi: "https://www.quareia.com/s/deckbook-web.pdf"
+  };
+
   // Imported names and questions are literal note text, including in Obsidian.
   function inline(value) {
     return String(value == null ? "" : value)
@@ -20,7 +27,9 @@
   function format(records, display) {
     var t = display.t;
     var lines = ["# " + t("history.notesTitle")];
+    var decks = new Set();
     records.forEach(function (record) {
+      decks.add(record.deckType);
       var freeform = record.layoutMode === "freeform";
       lines.push("", "## " + inline(display.spreadName(record)), "",
         "- **" + t("history.field.time") + "**: " + display.formatTime(record.createdAt),
@@ -58,6 +67,14 @@
         lines.push("", interpretation.meaning || t("history.meaningUnavailable"));
       });
     });
+    var citedDecks = Object.keys(guidebooks).filter(function (deck) { return decks.has(deck); });
+    if (citedDecks.length) {
+      lines.push("", "## " + t("history.sourcesAndCredits"), "");
+      citedDecks.forEach(function (deck) {
+        lines.push("- **" + t("deck.name." + deck) + "** — " +
+          t("history.credit." + deck, { url: guidebooks[deck] }));
+      });
+    }
     return lines.join("\n") + "\n";
   }
 
