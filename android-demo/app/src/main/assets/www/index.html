@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="css/custom-spreads.css?v=20261112-review5">
   <link rel="stylesheet" href="css/redesign.css?v=20261123-portrait">
   <link rel="stylesheet" href="css/android-shell.css?v=1.5.1">
+  <link rel="stylesheet" href="css/card-notes.css">
 </head>
 <body>
   <div class="sky-moon" id="skyMoon" role="button" tabindex="0"
@@ -70,6 +71,8 @@
               aria-label="切换至英文" data-i18n-aria-label="language.switchLabel">
               <span data-i18n="menu.language">语言</span><strong id="languageToggleValue" data-i18n="language.switch">EN</strong>
             </button>
+            <button class="menu-action" id="cardNotesOpenBtn" type="button" aria-haspopup="dialog"
+              aria-controls="cardNotesDialog" data-i18n="notes.library">卡牌笔记</button>
             <button class="menu-action" id="historyOpenBtn" type="button"
               aria-haspopup="dialog" aria-controls="historyDialog" data-i18n="history.open">占卜历史</button>
             <a class="menu-action" id="aiOpenLink" href="ai.html" style="text-decoration:none"
@@ -216,6 +219,44 @@
       </div>
       <div class="results-list" id="resultsList"></div>
     </section>
+
+    <dialog class="card-notes-dialog" id="cardNotesDialog" aria-labelledby="cardNotesTitle">
+      <div class="card-notes-shell">
+        <header class="card-notes-head">
+          <div>
+            <p id="cardNotesDeck" class="card-notes-deck" hidden></p>
+            <h2 id="cardNotesTitle" tabindex="-1">卡牌笔记</h2>
+          </div>
+          <button id="cardNotesBackBtn" class="btn-mini" type="button" data-i18n="notes.back">返回</button>
+        </header>
+        <section id="cardNotesLibrary">
+          <div class="card-notes-controls">
+            <label class="card-notes-search"><span data-i18n="notes.search">搜索牌名或笔记</span>
+              <input id="cardNotesSearch" type="search" autocomplete="off" dir="auto">
+            </label>
+            <label class="card-notes-filter">
+              <input id="cardNotesOnlySaved" type="checkbox"><span data-i18n="notes.onlySaved">只看有笔记的牌</span>
+            </label>
+          </div>
+          <div id="cardNotesList" class="card-notes-list"></div>
+          <footer class="card-notes-backup">
+            <p data-i18n="notes.local">笔记自动保存在本机。换设备或清理数据前，请导出备份。</p>
+            <button id="cardNotesExportBtn" class="btn-mini" type="button" data-i18n="notes.export">导出笔记 JSON</button>
+            <button id="cardNotesImportBtn" class="btn-mini" type="button" data-i18n="notes.import">导入笔记 JSON</button>
+            <input id="cardNotesImportInput" type="file" accept=".json,application/json" hidden>
+          </footer>
+        </section>
+        <section id="cardNotesEditor" hidden>
+          <label for="cardNotesText" data-i18n="notes.text">个人笔记</label>
+          <textarea id="cardNotesText" rows="10" dir="auto" spellcheck="false" autocomplete="off"></textarea>
+        </section>
+        <p id="cardNotesStatus" class="card-notes-status" role="status" aria-live="polite"></p>
+        <div id="cardNotesRecovery" hidden>
+          <button id="cardNotesRetry" type="button" class="btn-mini" data-i18n="notes.retry">重试</button>
+          <button id="cardNotesDiscard" type="button" class="btn-mini" data-i18n="notes.discard">放弃未保存的修改</button>
+        </div>
+      </div>
+    </dialog>
 
     <dialog class="history-dialog" id="historyDialog" aria-labelledby="historyDialogTitle"
       aria-describedby="historyPrivacy">
@@ -597,7 +638,7 @@
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js?v=20261112-review5"></script>
   <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js?v=20261123-questions"></script>
+  <script src="js/i18n.js?v=20261123-card-notes"></script>
   <script src="js/theme.js?v=20261120-153"></script>
   <script src="js/menu.js?v=1.5.0"></script>
   <script src="js/telemetry-notice.js?v=1.5.0"></script>
@@ -608,13 +649,16 @@
   <script src="js/custom-spread-ui.js?v=20261112-review5"></script>
   <script src="js/free-board-model.js?v=20261112-review5"></script>
   <script src="js/free-board-draft.js?v=20261112-review5"></script>
+  <script src="js/native-file-export.js"></script>
+  <script src="js/card-notes-store.js"></script>
+  <script src="js/card-notes.js"></script>
   <script src="js/history-records.js?v=20261123-questions"></script>
   <script src="js/history-store.js?v=20261123-questions"></script>
   <script src="js/history-markdown.js"></script>
-  <script src="js/history-ui.js?v=20261123-questions"></script>
-  <script src="js/free-board-ui.js?v=20261112-classic"></script>
-  <script src="js/back-handler.js?v=1.5.0"></script>
-  <script src="js/app.js?v=20261123-questions"></script>
+  <script src="js/history-ui.js?v=20261123-card-notes"></script>
+  <script src="js/free-board-ui.js?v=20261123-card-notes"></script>
+  <script src="js/back-handler.js?v=20261123-card-notes"></script>
+  <script src="js/app.js?v=20261123-card-notes"></script>
   <script src="js/deck-ring.js?v=20261123-portrait"></script>
   <div class="spread-popover" id="spreadPopover" hidden role="dialog" aria-modal="false"
     aria-label="牌阵设置" data-i18n-aria-label="spread.settings">

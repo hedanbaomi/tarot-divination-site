@@ -603,6 +603,12 @@
     var img = el.querySelector(".spread-card-front .card-image");
     var nameEl = el.querySelector(".spread-card-caption .name");
     el.classList.toggle("revealed", !!item.revealed);
+    el.setAttribute("role", item.revealed ? "group" : "button");
+    var note = el.querySelector(":scope > .card-note-link");
+    if (item.revealed && !note && globalThis.DivinationCardNotes) {
+      note = globalThis.DivinationCardNotes.createButton(found.deck || deckType, found.id);
+      if (note) el.appendChild(note);
+    }
     if (front) {
       front.classList.toggle("reversed", item.orientation === "reversed");
       if (item.revealed) front.removeAttribute("aria-hidden");
@@ -708,12 +714,14 @@
     document.addEventListener("pointerdown", function (ev) {
       var p = document.getElementById("freeAnglePanel");
       if (!p || p.hidden) return;
+      if (globalThis.DivinationCardNotes && globalThis.DivinationCardNotes.isOpen()) return;
+      if (ev.target.closest && ev.target.closest(".card-note-link")) return;
       if (p.contains(ev.target)) return;
       if (freeAngleEl && freeAngleEl.contains(ev.target)) return;
       hideFreeAngle();
     });
     document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape") hideFreeAngle();
+      if (ev.key === "Escape" && !(globalThis.DivinationCardNotes && globalThis.DivinationCardNotes.isOpen())) hideFreeAngle();
     });
     return panel;
   }
@@ -767,10 +775,12 @@
     var longPressed = false;
     /* 长按（触屏）/ 右键（鼠标）：调这张牌的角度 */
     el.addEventListener("contextmenu", function (ev) {
+      if (ev.target.closest(".card-note-link")) return;
       ev.preventDefault();
       openFreeAngle(el, item);
     });
     el.addEventListener("pointerdown", function (ev) {
+      if (ev.target.closest(".card-note-link")) return;
       longPressed = false;
       angleTimer = window.setTimeout(function () {
         longPressed = true;
@@ -789,6 +799,7 @@
 
     /* 键盘与读屏用户：Tab 到牌上，Enter / 空格翻面；R 键旋转 */
     el.addEventListener("keydown", function (ev) {
+      if (ev.target.closest(".card-note-link")) return;
       if (ev.key !== "Enter" && ev.key !== " " && ev.key !== "Spacebar") return;
       ev.preventDefault();
       if (item.revealed) return;
@@ -800,6 +811,7 @@
       if (ev.detail === 0) revealFreeCards([item]);
     });
     el.addEventListener("pointerdown", function (ev) {
+      if (ev.target.closest(".card-note-link")) return;
       if (ev.pointerType === "mouse" && ev.button !== 0) return;
       var startX = ev.clientX;
       var startY = ev.clientY;
@@ -1370,6 +1382,9 @@
   function updateSpreadCardAria(cardEl, entry, position) {
     var flipButton = cardEl && cardEl.querySelector(".spread-card-flip");
     if (!flipButton) return;
+    if (entry.revealed && globalThis.DivinationCardNotes) {
+      globalThis.DivinationCardNotes.markRevealedCard(cardEl, entry.card.deck || deckType, entry.card.id);
+    }
     var layer = isOverviewStacking()
       ? " · " + (entry.layer === "major" ? t("app.layerMajorBase") : t("app.layerMinorTop"))
       : "";
@@ -1583,6 +1598,12 @@
     ].join(" · "));
     setText("[data-meaning-keywords]", interpretation.keywords.join(" · "));
     setText("[data-meaning-text]", interpretation.meaning || "");
+    var oldNote = panel.querySelector(".card-note-link");
+    if (oldNote) oldNote.remove();
+    if (globalThis.DivinationCardNotes) {
+      var note = globalThis.DivinationCardNotes.createButton(entry.card.deck || deckType, entry.card.id);
+      if (note) panel.appendChild(note);
+    }
 
     panel.hidden = false;
     var rect = cardEl.getBoundingClientRect();
@@ -1601,6 +1622,7 @@
   }
   window.DivinationCardOverlays = {
     handleBack: function () {
+      if (globalThis.DivinationCardNotes && globalThis.DivinationCardNotes.isOpen()) return false;
       var angle = document.getElementById("freeAnglePanel");
       if (angle && !angle.hidden) { hideFreeAngle(); return true; }
       var meaning = document.getElementById("cardMeaningPanel");
@@ -1614,11 +1636,13 @@
   document.addEventListener("pointerdown", function (event) {
     var panel = document.getElementById("cardMeaningPanel");
     if (!panel || panel.hidden) return;
+    if (globalThis.DivinationCardNotes && globalThis.DivinationCardNotes.isOpen()) return;
+    if (event.target.closest && event.target.closest(".card-note-link")) return;
     if (panel.contains(event.target) || (meaningAnchor && meaningAnchor.contains(event.target))) return;
     hideCardMeaning();
   });
   document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape") hideCardMeaning();
+    if (event.key === "Escape" && !(globalThis.DivinationCardNotes && globalThis.DivinationCardNotes.isOpen())) hideCardMeaning();
   });
   var meaningCloseBtn = document.getElementById("cardMeaningClose");
   if (meaningCloseBtn) {
@@ -2030,6 +2054,10 @@
     header.appendChild(posEl);
     header.appendChild(nameEl);
     header.appendChild(orientEl);
+    if (entry.revealed && globalThis.DivinationCardNotes) {
+      var note = globalThis.DivinationCardNotes.createButton(card.deck || deckType, card.id);
+      if (note) header.appendChild(note);
+    }
 
     if (card.suit) {
       var suitEl = document.createElement("span");

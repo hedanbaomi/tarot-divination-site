@@ -515,6 +515,10 @@
 
       var inner = makeCardFace(state, card, source);
       cardElement.appendChild(inner);
+      if (card.revealed && globalThis.DivinationCardNotes) {
+        var note = globalThis.DivinationCardNotes.createButton(deckTypeFromState(state), card.cardId);
+        if (note) cardElement.appendChild(note);
+      }
       var drawOrder = textElement(document, "span", "free-board-card-draw-order",
         t("freeBoard.drawOrder", { order: card.drawOrder }));
       drawOrder.setAttribute("data-draw-order", String(card.drawOrder));
@@ -892,6 +896,7 @@
     }
 
     function handlePointerDown(event) {
+      if (event.target.closest && event.target.closest(".card-note-link")) return;
       if (event.button != null && event.button !== 0) return;
       var id = pointerId(event);
       var point = pointerPosition(event);
@@ -1056,6 +1061,7 @@
     }
 
     function handleKeydown(event) {
+      if (event.target.closest && event.target.closest(".card-note-link")) return;
       var cardElement = findCardElement(event.target);
       if (!cardElement || (event.key !== "Enter" && event.key !== " ")) return;
       var cardId = cardElement.getAttribute("data-card-id");

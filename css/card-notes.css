@@ -1,0 +1,163 @@
+.card-notes-dialog {
+  box-sizing: border-box;
+  width: min(42rem, calc(100% - 2rem));
+  max-height: 90vh;
+  max-height: 90dvh;
+  padding: 0;
+  margin: auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  background: var(--dialog-bg);
+  box-shadow: var(--shadow);
+}
+.card-notes-dialog::backdrop { background: rgba(0,0,0,.65); }
+.card-notes-dialog [hidden] { display: none !important; }
+.card-notes-shell { padding: clamp(14px, 3vw, 24px); }
+.card-notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.card-notes-head > div { min-width: 0; }
+.card-notes-head h2 {
+  font: 600 1.25rem/1.4 var(--font-display);
+  overflow-wrap: anywhere;
+}
+.card-notes-head button { flex: none; }
+.card-notes-deck, .card-notes-search span, #cardNotesEditor label {
+  display: block;
+  margin-bottom: .35rem;
+  font-size: .82rem;
+  color: var(--text-secondary);
+}
+.card-notes-controls, .card-notes-backup, #cardNotesRecovery {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+}
+.card-notes-search { flex: 1 1 15rem; min-width: 0; }
+.card-notes-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  min-height: 2.5rem;
+  color: var(--text-secondary);
+  font-size: .85rem;
+}
+.card-notes-filter input { accent-color: var(--accent); }
+.card-notes-search input, #cardNotesText {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: .65rem .8rem;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  background: var(--bg-card);
+  font: 1rem/1.65 var(--font-body);
+}
+#cardNotesText {
+  height: min(48vh, 23rem);
+  min-height: 7rem;
+  resize: vertical;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.card-notes-list {
+  max-height: min(44vh, 24rem);
+  margin: .75rem 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.card-notes-list section + section { margin-top: 1rem; }
+.card-notes-list h3 {
+  font: 600 1rem/1.5 var(--font-display);
+  color: var(--text-secondary);
+}
+.card-notes-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 0 .7rem;
+}
+.card-notes-card {
+  text-align: start;
+  min-height: 44px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: .45rem .25rem;
+  background: transparent;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+  font: inherit;
+  cursor: pointer;
+}
+.card-notes-card.has-note::before, .card-note-link.has-note::before {
+  content: "";
+  display: inline-block;
+  width: .45em;
+  height: .45em;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-inline-end: .4em;
+  background-color: currentColor;
+}
+.card-notes-card.has-note::before { color: var(--accent); }
+.card-notes-backup { border-top: 1px solid var(--accent-border); padding-top: .75rem; }
+.card-notes-backup p, .card-notes-status {
+  color: var(--text-secondary);
+  font-size: .82rem;
+  line-height: 1.5;
+}
+.card-notes-backup p { width: 100%; }
+.card-notes-status:not(:empty), #cardNotesRecovery { margin-top: .6rem; }
+.card-note-link {
+  background: var(--bg-card);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font: 500 .78rem/1.3 var(--font-body);
+  padding: .28rem .5rem;
+  cursor: pointer;
+}
+.card-note-link:focus-visible, .card-notes-dialog :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.card-meaning .card-note-link, .history-detail-card .card-note-link { margin-top: .35rem; }
+/* A bookmark at the top edge stays visible before the reader opens the card meaning. */
+.spread-card.revealed.has-card-note:not(.meaning-visible)::after,
+.spread-card.revealed:not(.free-table-card, .meaning-visible):has(> .card-note-link.has-note)::after {
+  content: "";
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  inset-inline-start: 12%;
+  width: .52rem;
+  height: .75rem;
+  background: var(--accent);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 76%, 0 100%);
+  pointer-events: none;
+}
+.spread-card > .card-note-link { display: none; }
+.spread-card.revealed.meaning-visible > .card-note-link,
+.free-table-card > .card-note-link, .free-board-card > .card-note-link {
+  position: absolute;
+  bottom: 2px;
+  inset-inline-end: 2px;
+  z-index: 6;
+  display: block;
+  max-width: calc(100% - 4px);
+  padding: .17rem .32rem;
+  font-size: .65rem;
+  pointer-events: auto;
+}
+@media (max-width: 480px) {
+  .card-notes-dialog { width: calc(100% - 12px); }
+  .card-notes-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
