@@ -19,7 +19,7 @@
     })();
   </script>
   <script src="js/page-version.js?v=1.5.0"></script>
-  <link rel="stylesheet" href="css/styles.css?v=20261103-grove-merged">
+  <link rel="stylesheet" href="css/styles.css?v=20261123-questions">
   <link rel="stylesheet" href="css/free-board.css?v=20260813-parchment-panels">
   <link rel="stylesheet" href="css/custom-spreads.css?v=20260820-custom-spread-window-final">
   <link rel="stylesheet" href="css/android-shell.css?v=20260813-themes">
@@ -175,6 +175,19 @@
     </details>
 
     <!-- 牌堆：左右滑动浏览，轻点任意一张抽出 -->
+    <div class="reading-question">
+      <button class="reading-question-toggle" type="button" id="readingQuestionToggle" aria-expanded="false" aria-controls="readingQuestionPanel">
+        <span class="question-chevron" aria-hidden="true"></span>
+        <span id="readingQuestionCaption" data-i18n="history.addQuestion">记录问题</span>
+        <span class="reading-question-summary" id="readingQuestionSummary" dir="auto"></span>
+      </button>
+      <div class="reading-question-panel" id="readingQuestionPanel" inert>
+        <div class="reading-question-inner">
+          <label for="readingQuestion" data-i18n="history.optionalQuestion">本次占卜想问什么？（选填）</label>
+          <textarea class="question-input" id="readingQuestion" rows="2" maxlength="2000" dir="auto"></textarea>
+        </div>
+      </div>
+    </div>
     <section class="deck-area">
       <div class="deck-head">
         <h2><span data-i18n="deck.heading">牌堆</span> · <span class="deck-remaining" id="deckRemaining" data-i18n="deck.initialRemaining">剩 78 张</span></h2>
@@ -323,6 +336,16 @@
           aria-live="polite" aria-atomic="true"></p>
 
         <section class="history-list-view" data-view="list" aria-label="占卜历史记录" data-i18n-aria-label="history.listAria">
+          <div class="history-note-tools">
+            <label class="history-search">
+              <span data-i18n="history.search">搜索问题、牌阵或牌名</span>
+              <input id="historySearch" type="search" dir="auto">
+            </label>
+            <div class="history-note-actions">
+              <button class="btn btn-secondary" id="historySelectBtn" type="button" aria-pressed="false">选择记录</button>
+              <button class="btn btn-secondary" id="historyExportSelectedBtn" type="button" hidden disabled>导出 Markdown（0）</button>
+            </div>
+          </div>
           <p class="history-empty" id="historyEmpty" data-i18n="history.empty">暂无保存的占卜记录。</p>
           <ol class="history-list" id="historyList"></ol>
           <div class="history-clear-row">
@@ -334,8 +357,23 @@
           aria-labelledby="historyDetailTitle">
           <div class="history-detail-nav">
             <button class="btn btn-secondary" id="historyBackBtn" type="button" data-i18n="history.back">返回历史列表</button>
+            <button class="btn btn-secondary" id="historyMarkdownBtn" type="button" data-i18n="history.exportNotes">导出 Markdown</button>
           </div>
           <h3 id="historyDetailTitle" data-i18n="history.detailTitle">占卜记录详情</h3>
+          <section class="history-question" aria-labelledby="historyQuestionLabel">
+            <div class="history-question-head">
+              <h4 id="historyQuestionLabel" data-i18n="history.question">占卜问题</h4>
+              <button class="btn-mini" id="historyEditQuestionBtn" type="button">记录问题</button>
+            </div>
+            <p id="historyQuestionText" dir="auto" hidden></p>
+            <div id="historyQuestionEditor" hidden>
+              <textarea id="historyQuestionInput" class="question-input" rows="3" maxlength="2000" aria-labelledby="historyQuestionLabel" dir="auto"></textarea>
+              <div class="history-note-actions">
+                <button class="btn btn-secondary" id="historySaveQuestionBtn" type="button" data-i18n="history.saveQuestion">保存问题</button>
+                <button class="btn-mini" id="historyCancelQuestionBtn" type="button" data-i18n="history.cancel">取消</button>
+              </div>
+            </div>
+          </section>
           <div class="history-detail-body" id="historyDetailBody"></div>
           <div class="history-delete-row">
             <button class="btn history-danger-btn" id="historyDeleteBtn" type="button" data-i18n="history.delete">删除这条记录</button>
@@ -546,7 +584,7 @@
   <script src="js/spreads.js?v=20260727-themed-selects"></script>
   <script src="js/i18n-data-en.js"></script>
   <script src="js/classic/messages.js?v=20261120-153"></script>
-  <script src="js/i18n.js?v=20261120-153"></script>
+  <script src="js/i18n.js?v=20261123-questions"></script>
   <script src="js/theme.js?v=20261120-153"></script>
   <script src="js/announcements.js?v=1"></script>
   <script src="js/menu.js?v=20260731-drawer"></script>
@@ -557,12 +595,13 @@
   <script src="js/custom-spread-ui.js?v=20260820-custom-spread-window-final"></script>
   <script src="js/free-board-model.js?v=20260809-free-board-v1"></script>
   <script src="js/free-board-draft.js?v=20260809-free-board-v1"></script>
-  <script src="js/history-records.js?v=20260809-free-board-v1"></script>
-  <script src="js/history-store.js"></script>
-  <script src="js/history-ui.js?v=20260809-free-board-v1"></script>
+  <script src="js/history-records.js?v=20261123-questions"></script>
+  <script src="js/history-store.js?v=20261123-questions"></script>
+  <script src="js/history-markdown.js"></script>
+  <script src="js/history-ui.js?v=20261123-questions"></script>
   <script src="js/free-board-ui.js?v=20260809-free-board-v1"></script>
   <script src="js/back-handler.js?v=20260731-overlay-back"></script>
-  <script src="js/classic/app.js?v=20261120-153"></script>
+  <script src="js/classic/app.js?v=20261123-questions"></script>
   <script src="js/classic/celestial-sky.js?v=20260813-sun-blank" defer></script>
 </body>
 </html>

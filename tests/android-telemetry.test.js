@@ -42,6 +42,7 @@ function createHarness(bridge) {
     deckType: "tarot",
     spread: [],
     readingReported: false,
+    historyUiController: null,
     freeDrawn: [],
     freeRedo: [],
     freeBoardReadingReported: false,

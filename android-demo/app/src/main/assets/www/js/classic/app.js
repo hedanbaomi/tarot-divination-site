@@ -437,6 +437,7 @@
 
   // Full reset: rebuild pile and clear the spread.
   function resetDeck() {
+    if (historyUiController) historyUiController.resetQuestion();
     if (isFreeform()) {
       if (freeBoardUi && typeof freeBoardUi.reconfigure === "function") {
         freeBoardUi.reconfigure(freeBoardContext());
@@ -1002,6 +1003,7 @@
 
   function notifyFreeBoardReadingCompleted(state, reason) {
     if (!state || !Array.isArray(state.cards)) return;
+    if (historyUiController && (reason === "clear" || reason === "reconfigure")) historyUiController.resetQuestion();
     if (state.cards.length === 0 || (reason === "draw" && state.cards.length === 1)) {
       freeBoardReadingReported = false;
     }
@@ -1557,6 +1559,7 @@
     }
 
     if (newLayoutMode === "freeform") {
+      if (historyUiController) historyUiController.resetQuestion();
       // Entering the board intentionally ends the current preset reading, but
       // preserves deck, Tarot orientation, and Tarot filter selections.
       spread = [];
