@@ -22,7 +22,7 @@
   <link rel="stylesheet" href="css/styles.css?v=20261123-portrait-questions">
   <link rel="stylesheet" href="css/free-board.css?v=20261112-review5">
   <link rel="stylesheet" href="css/custom-spreads.css?v=20261112-review5">
-  <link rel="stylesheet" href="css/redesign.css?v=20261123-portrait">
+  <link rel="stylesheet" href="css/redesign.css?v=20261123-shuffle-hold">
   <link rel="stylesheet" href="css/card-notes.css">
 </head>
 <body>
@@ -71,7 +71,9 @@
         </div>
         <div class="deck-tools">
           <span class="deck-remaining" id="deckRemaining" role="status" aria-live="polite" data-i18n="deck.initialRemaining">剩 78 张</span>
-          <button class="btn-mini" id="shuffleBtn" type="button" data-i18n="deck.shuffle">洗牌</button>
+          <button class="btn-mini" id="shuffleBtn" type="button" data-i18n="deck.shuffle"
+            data-i18n-title="deck.shuffleHold">洗牌</button>
+          <span class="shuffle-hold-hint" id="shuffleHint" data-i18n="deck.shuffleRelease" aria-hidden="true">松手收牌</span>
                     <button class="btn-mini" id="switchArcanaBtn" type="button" style="display:none;" data-i18n="deck.switch">切换牌组</button>
         </div>
       </div>
@@ -667,7 +669,7 @@
   <script src="js/lxxxi-data.js"></script>
   <script src="js/spreads.js?v=20261112-review5"></script>
   <script src="js/i18n-data-en.js"></script>
-  <script src="js/i18n.js?v=20261123-credits"></script>
+  <script src="js/i18n.js?v=20261123-shuffle-hold"></script>
   <script src="js/theme.js?v=20261112-grove-light"></script>
   <script src="js/announcements.js?v=1"></script>
   <script src="js/dialogs.js?v=20261112-review5"></script>
@@ -684,8 +686,8 @@
   <script src="js/history-markdown.js?v=20261123-credits"></script>
   <script src="js/history-ui.js?v=20261123-card-notes"></script>
   <script src="js/free-board-ui.js?v=20261123-card-notes"></script>
-  <script src="js/app.js?v=20261123-card-notes"></script>
-  <script src="js/deck-ring.js?v=20261123-portrait"></script>
+  <script src="js/app.js?v=20261123-shuffle-hold"></script>
+  <script src="js/deck-ring.js?v=20261123-shuffle-hold"></script>
   <div class="spread-popover" id="spreadPopover" hidden role="dialog" aria-modal="false"
     aria-label="牌阵设置" data-i18n-aria-label="spread.settings">
     <div class="spread-popover-head">

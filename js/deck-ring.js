@@ -590,25 +590,71 @@
   window.deckFanRelayout = layout;
 })();
 
-/* ---------- shuffle choreography: scatter → vortex → pile → fan out ---------- */
+/* ---------- shuffle choreography: scatter → riffle → pile → fan out ---------- */
 (function () {
   /* 与上面的扇形同一个张角：那个变量在本 IIFE 作用域外，读共享值 */
   var ARC_SPREAD = window.DivinationDeckArc || 0.82;
   var btn = document.getElementById("shuffleBtn");
   var ring = document.getElementById("deckSpread");
   if (!btn || !ring) return;
-  var running = false;
+
+  var CLONES = 24;
+  var running = false;       /* overlay 在跑 */
+  var holding = false;       /* 手指还按着：一轮接一轮地 riffle */
+  var finishPending = false; /* 已经确认收牌：这一轮 riffle 结束就摊开 */
+  var session = null;
 
   function reduced() {
     return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
+  /* 单次洗牌（键盘、重新洗牌按钮、无障碍点击）：wash 一轮，然后摊开 */
   function playShuffle() {
     if (running) return;
+    if (begin()) finish();
+  }
+
+  /* 摊开的牌收成两摞 → 交错互插成一摞 → 压一下。
+     （原来是绕圈转 1080°，看着像转盘，不像洗牌。） */
+  function halfPoint(s, i) {
+    var side = i % 2 ? 1 : -1;
+    return {
+      x: side * s.cw * 1.22 + (i % 3) * 1.5,
+      y: s.lift - 6 + (i % 6) * 2.4,
+      rot: side * 8 + ((i % 5) - 2) * 1.3
+    };
+  }
+  function crossPoint(s, i) {
+    var side = i % 2 ? 1 : -1;
+    return {
+      x: side * s.cw * 0.42,
+      y: s.lift + side * s.ch * 0.05 + (i % 4) * 3,
+      rot: side * -4
+    };
+  }
+  function pilePoint(s, i) {
+    var a = (i / s.N) * Math.PI * 2;
+    return {
+      x: Math.cos(a) * (8 + (i % 4) * 4),
+      y: s.lift + Math.sin(a) * (4 + (i % 3) * 2) - (i % 5) * 1.4,
+      rot: ((i % 7) - 3) * 1.5
+    };
+  }
+  /* 牌序：把攒起的一摞摊回扇形 */
+  function arcPoint(s, i) {
+    var u = s.N > 1 ? i / (s.N - 1) : 0.5;
+    var a = (u * 180 - 90) * ARC_SPREAD;
+    var rad = a * Math.PI / 180;
+    return { x: Math.sin(rad) * s.rx, y: -Math.cos(rad) * s.ry, rot: a };
+  }
+  function tr(s, p, extra) {
+    return "translate(" + (p.x - s.cw / 2) + "px," + (p.y - s.ch / 2) + "px) rotate(" + p.rot + "deg)" + (extra || "");
+  }
+
+  function measure() {
     var src = ring.querySelector(".deck-card");
     var plane = ring.parentElement;
-    if (!src || !plane) return;
-    var quick = reduced();
+    if (!src || !plane) return null;
     var stage = document.querySelector(".table-stage");
     var cs = stage ? getComputedStyle(stage) : null;
     var W = plane.clientWidth || 640;
@@ -619,29 +665,8 @@
     var cw = src.offsetWidth;
     var ch = src.offsetHeight;
     var sc = getComputedStyle(src);
-    var N = 24;
 
-    running = true;
-    ring.classList.add("is-shuffling");
-    /* watchdog: if anything throws mid-way, never leave the deck hidden */
-    window.setTimeout(function () {
-      if (!running) return;
-      ring.classList.remove("is-shuffling");
-      running = false;
-      var stale = ring.parentElement ? ring.parentElement.querySelector(".shuffle-layer") : null;
-      if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
-    }, 9000);
-
-    var layer = document.createElement("div");
-    layer.className = "shuffle-layer";
-    var orbit = document.createElement("div");
-    orbit.className = "shuffle-orbit";
-    orbit.style.left = W / 2 + "px";
-    orbit.style.top = cy + "px";
-    layer.appendChild(orbit);
-    plane.appendChild(layer);
-
-    /* clones start exactly where the fan's cards stand, so nothing pops */
+    /* 克隆从扇形上牌的实时位置出发，接上时不会跳 */
     var live = ring.querySelectorAll(".deck-card");
     var starts = [];
     for (var j = 0; j < live.length; j++) {
@@ -654,132 +679,239 @@
       });
     }
 
-    function scatter(i) {
-      if (starts.length) return starts[Math.floor((i * starts.length) / N)];
-      var a = ((i * 137) % 360) * Math.PI / 180;
-      var r = W * (0.2 + ((i * 31) % 100) / 460);
-      return { x: Math.cos(a) * r, y: Math.sin(a) * r * 0.4 + 26, rot: ((i * 47) % 84) - 42 };
-    }
+    return {
+      src: src,
+      plane: plane,
+      quick: reduced(),
+      W: W,
+      H: H,
+      rx: rx,
+      ry: ry,
+      cy: cy,
+      cw: cw,
+      ch: ch,
+      sc: sc,
+      N: CLONES,
+      starts: starts,
+      /* 整段动作抬到扇形自己的高度上：收起的牌摞落在弧心，而不是压在牌阵上 */
+      lift: -Math.round(ry * 0.55),
+      layer: null,
+      orbit: null,
+      cards: [],
+      timers: [],
+      watch: 0,
+      beat: 0,
+      idle: false,
+      fanning: false
+    };
+  }
 
-    function arc(i) {
-      var u = N > 1 ? i / (N - 1) : 0.5;
-      var a = (u * 180 - 90) * ARC_SPREAD;
-      var rad = a * Math.PI / 180;
-      return { x: Math.sin(rad) * rx, y: -Math.cos(rad) * ry, rot: a };
-    }
-    function tr(p, extra) {
-      return "translate(" + (p.x - cw / 2) + "px," + (p.y - ch / 2) + "px) rotate(" + p.rot + "deg)" + (extra || "");
-    }
+  function scatter(s, i) {
+    if (s.starts.length) return s.starts[Math.floor((i * s.starts.length) / s.N)];
+    var a = ((i * 137) % 360) * Math.PI / 180;
+    var r = s.W * (0.2 + ((i * 31) % 100) / 460);
+    return { x: Math.cos(a) * r, y: Math.sin(a) * r * 0.4 + 26, rot: ((i * 47) % 84) - 42 };
+  }
 
-    var cards = [];
-    for (var i = 0; i < N; i++) {
-      var c = src.cloneNode(true);
+  function later(s, fn, ms) {
+    var id = window.setTimeout(function () {
+      var at = s.timers.indexOf(id);
+      if (at !== -1) s.timers.splice(at, 1);
+      fn();
+    }, ms);
+    s.timers.push(id);
+    return id;
+  }
+
+  function build() {
+    var s = measure();
+    if (!s) return null;
+    var layer = document.createElement("div");
+    layer.className = "shuffle-layer";
+    var orbit = document.createElement("div");
+    orbit.className = "shuffle-orbit";
+    orbit.style.left = s.W / 2 + "px";
+    orbit.style.top = s.cy + "px";
+    layer.appendChild(orbit);
+    s.plane.appendChild(layer);
+    s.layer = layer;
+    s.orbit = orbit;
+
+    for (var i = 0; i < s.N; i++) {
+      var c = s.src.cloneNode(true);
       c.className = "deck-card shuffle-clone";
       c.removeAttribute("disabled");
       c.removeAttribute("aria-label");
       c.style.cssText =
-        "position:absolute;left:0;top:0;margin:0;width:" + cw + "px;height:" + ch + "px;" +
-        "transform-origin:50% 50%;border-radius:" + sc.borderRadius + ";border:" + sc.border +
-        ";background:" + sc.background + ";opacity:1;";
+        "position:absolute;left:0;top:0;margin:0;width:" + s.cw + "px;height:" + s.ch + "px;" +
+        "transform-origin:50% 50%;border-radius:" + s.sc.borderRadius + ";border:" + s.sc.border +
+        ";background:" + s.sc.background + ";opacity:1;";
       orbit.appendChild(c);
-      c.style.transform = tr(scatter(i));
-      cards.push(c);
+      c.style.transform = tr(s, scatter(s, i));
+      s.cards.push(c);
     }
+    return s;
+  }
 
-    /* 节奏：摊开的牌收成两摞 → 交错互插成一摞 → 压一下 → 重新摊开。
-       （原来是绕圈转 1080°，看着像转盘，不像洗牌。） */
-    var D1 = quick ? 380 : 900;      /* 收两摞、互插、合一 */
-    var D2 = quick ? 280 : 520;      /* 重新摊开 */
-    var fanGap = quick ? 5 : 12;
-    var tSettle = D1 + 30;
-    var tSettleDur = quick ? 90 : 160;
-    var tFan = tSettle + tSettleDur;
+  /* 一轮 riffle：从摊开（或上一摞）收拢、互插、落成一摞 */
+  function cycle(s, fromScatter) {
+    if (!running || s.fanning || s.cancelled) return;
+    s.idle = false;
+    var D = fromScatter ? (s.quick ? 380 : 900) : (s.quick ? 220 : 620);
+    var tail = fromScatter ? (s.quick ? 90 : 160) : (s.quick ? 70 : 120);
+    var press = fromScatter ? 0.94 : 0.97;
 
-    /* 整段动作抬到扇形自己的高度上：收起的牌摞落在弧心，而不是压在牌阵上 */
-    var LIFT = -Math.round(ry * 0.55);
-
-    function halfPoint(i) {
-      var side = i % 2 ? 1 : -1;
-      return {
-        x: side * cw * 1.22 + (i % 3) * 1.5,
-        y: LIFT - 6 + (i % 6) * 2.4,
-        rot: side * 8 + ((i % 5) - 2) * 1.3
-      };
-    }
-    function crossPoint(i) {
-      var side = i % 2 ? 1 : -1;
-      return {
-        x: side * cw * 0.42,
-        y: LIFT + side * ch * 0.05 + (i % 4) * 3,
-        rot: side * -4
-      };
-    }
-    function pile(i) {
-      var a = (i / N) * Math.PI * 2;
-      return {
-        x: Math.cos(a) * (8 + (i % 4) * 4),
-        y: LIFT + Math.sin(a) * (4 + (i % 3) * 2) - (i % 5) * 1.4,
-        rot: ((i % 7) - 3) * 1.5
-      };
-    }
-
-    cards.forEach(function (c, i) {
-      var s = scatter(i);
-      var half = halfPoint(i);
-      var cross = crossPoint(i);
-      var p = pile(i);
-      var oCross = 0.58 + (i % 5) * 0.026;
-      c.animate(
-        [
-          { transform: tr(s), offset: 0, easing: "cubic-bezier(.36,.66,.32,1)" },
-          { transform: tr(half), offset: 0.3, easing: "cubic-bezier(.5,.1,.35,1)" },
-          { transform: tr(cross), offset: oCross, easing: "cubic-bezier(.3,.8,.3,1)" },
-          { transform: tr(p), offset: 0.9 },
-          { transform: tr(p), offset: 1 }
-        ],
-        { duration: D1, fill: "forwards" }
-      );
+    s.cards.forEach(function (c, i) {
+      var p = pilePoint(s, i);
+      var crossAt = 0.58 + (i % 5) * 0.026;
+      var frames = fromScatter ? [
+        { transform: tr(s, scatter(s, i)), offset: 0, easing: "cubic-bezier(.36,.66,.32,1)" },
+        { transform: tr(s, halfPoint(s, i)), offset: 0.3, easing: "cubic-bezier(.5,.1,.35,1)" },
+        { transform: tr(s, crossPoint(s, i)), offset: crossAt, easing: "cubic-bezier(.3,.8,.3,1)" },
+        { transform: tr(s, p), offset: 0.9 },
+        { transform: tr(s, p), offset: 1 }
+      ] : [
+        { transform: tr(s, p), offset: 0 },
+        { transform: tr(s, halfPoint(s, i)), offset: 0.32, easing: "cubic-bezier(.4,.1,.3,1)" },
+        { transform: tr(s, crossPoint(s, i)), offset: 0.64, easing: "cubic-bezier(.3,.8,.3,1)" },
+        { transform: tr(s, p), offset: 1, easing: "cubic-bezier(.3,.8,.3,1)" }
+      ];
+      c.animate(frames, { duration: D, fill: "forwards" });
     });
 
     /* 合成一摞时轻轻压一下，给"整好了"一个手感 */
-    orbit.animate(
+    s.orbit.animate(
       [
         { transform: "scale(1)" },
-        { transform: "scale(1)", offset: 0.82 },
-        { transform: "scale(0.94)", offset: 0.92, easing: "cubic-bezier(.3,.8,.3,1)" },
+        { transform: "scale(1)", offset: 0.8 },
+        { transform: "scale(" + press + ")", offset: 0.92, easing: "cubic-bezier(.3,.8,.3,1)" },
         { transform: "scale(1)" }
       ],
-      { duration: D1 + tSettleDur, delay: 30, fill: "forwards" }
+      { duration: D + tail, fill: "forwards" }
     );
 
-    window.setTimeout(function () {
-      cards.forEach(function (c, i) {
-        c.animate(
-          [
-            { transform: tr(pile(i)) },
-            { transform: tr({ x: pile(i).x * 0.45, y: pile(i).y * 0.6, rot: pile(i).rot * 0.5 }), offset: 0.22 },
-            { transform: tr(arc(i)) }
-          ],
-          {
-            duration: D2,
-            delay: i * fanGap,
-            easing: "cubic-bezier(.2,.86,.3,1)",
-            fill: "forwards"
-          }
-        );
-      });
-    }, tFan);
-
-    var tEnd = tFan + D2 + N * fanGap + 40;
-    window.setTimeout(function () {
-      layer.style.transition = "opacity .18s ease";
-      layer.style.opacity = "0";
-      window.setTimeout(function () {
-        ring.classList.remove("is-shuffling");
-        if (layer.parentNode) layer.parentNode.removeChild(layer);
-        running = false;
-      }, 200);
-    }, tEnd);
+    s.beat = Date.now();
+    later(s, function () { afterCycle(s); }, D + tail);
   }
+
+  function afterCycle(s) {
+    if (!running || session !== s || s.cancelled) return;
+    if (finishPending) { fanOut(s); return; }
+    if (holding) { cycle(s, false); return; }
+    /* 松手了，但确认框还没答：停在牌摞上等 finish / cancel */
+    s.idle = true;
+    s.beat = Date.now();
+  }
+
+  function fanOut(s) {
+    if (!running || s.fanning || s.cancelled) return;
+    s.fanning = true;
+    s.idle = false;
+    var D2 = s.quick ? 280 : 520;
+    var gap = s.quick ? 5 : 12;
+    s.cards.forEach(function (c, i) {
+      var p = pilePoint(s, i);
+      c.animate(
+        [
+          { transform: tr(s, p) },
+          { transform: tr(s, { x: p.x * 0.45, y: p.y * 0.6, rot: p.rot * 0.5 }), offset: 0.22 },
+          { transform: tr(s, arcPoint(s, i)) }
+        ],
+        { duration: D2, delay: i * gap, easing: "cubic-bezier(.2,.86,.3,1)", fill: "forwards" }
+      );
+    });
+    later(s, function () {
+      s.layer.style.transition = "opacity .18s ease";
+      s.layer.style.opacity = "0";
+      later(s, function () { cleanup(s); }, 200);
+    }, D2 + s.N * gap + 40);
+  }
+
+  function cleanup(s) {
+    if (!s) return;
+    s.timers.slice().forEach(function (id) { window.clearTimeout(id); });
+    s.timers.length = 0;
+    if (s.watch) window.clearInterval(s.watch);
+    ring.classList.remove("is-shuffling");
+    if (s.layer && s.layer.parentNode) s.layer.parentNode.removeChild(s.layer);
+    if (session === s) session = null;
+    running = false;
+    holding = false;
+    finishPending = false;
+  }
+
+  function begin() {
+    if (running) {
+      if (session && session.cancelled) {
+        cleanup(session); /* 淡出还没走完就又被按下：从头来一遍 */
+      } else if (session && session.fanning) {
+        return false;
+      } else {
+        holding = true;
+        finishPending = false;
+        return true;
+      }
+    }
+    var s = build();
+    if (!s) return false;
+    session = s;
+    running = true;
+    holding = true;
+    finishPending = false;
+    ring.classList.add("is-shuffling");
+
+    /* 兜底：确认框迟到、手势丢了、动画抛错，都不该让牌堆一直藏着 */
+    s.watch = window.setInterval(function () {
+      if (!running || session !== s || finishPending) return;
+      var idleFor = Date.now() - s.beat;
+      if (!holding && idleFor > 8000) finish();
+      else if (holding && idleFor > 30000) finish();
+    }, 1500);
+
+    cycle(s, true);
+    return true;
+  }
+
+  /* 手指松开：这一轮 riffle 做完就停在牌摞上，等确认结果 */
+  function release() {
+    if (!running) return;
+    holding = false;
+  }
+
+  /* 收牌摊开（新牌序已经由 app 侧 resetDeck 摆好） */
+  function finish() {
+    if (!running) return;
+    holding = false;
+    finishPending = true;
+    if (session && session.idle) fanOut(session);
+  }
+
+  /* 放弃这次洗牌：直接淡出，牌堆原样回来 */
+  function cancel() {
+    if (!running) return;
+    holding = false;
+    finishPending = true;
+    var s = session;
+    if (!s) {
+      running = false;
+      ring.classList.remove("is-shuffling");
+      return;
+    }
+    s.layer.style.transition = "opacity .16s ease";
+    s.layer.style.opacity = "0";
+    /* 正在跑的那一轮 riffle 到点后不要再把牌摊开 */
+    s.cancelled = true;
+    later(s, function () { cleanup(s); }, 180);
+  }
+
+  globalThis.DivinationShuffle = {
+    begin: begin,
+    release: release,
+    finish: finish,
+    cancel: cancel,
+    isRunning: function () { return running; },
+    isHolding: function () { return holding; }
+  };
+
   globalThis.addEventListener("quareia:shuffled", playShuffle);
 })();
