@@ -6,6 +6,7 @@
   // the page-level drawer; a handler must return true only when it closed one.
   function handleBack() {
     var handlers = [
+      global.DivinationCardNotes,
       global.DivinationDialog,
       global.DivinationCustomSelects,
       global.DivinationTelemetryNotice,

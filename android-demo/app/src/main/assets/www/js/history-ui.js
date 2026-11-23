@@ -248,7 +248,7 @@
 
     // The Android host opens the system save picker and calls this callback
     // only after it has written the selected content:// destination.
-    globalThis.__quareiaHistoryExportResult = function (result) {
+    function onHistoryExportResult(result) {
       if (result && result.cancelled) {
         setTranslatedStatus(elements.actionStatus, "history.exportCancelled", null, false);
       } else if (result && result.ok) {
@@ -258,7 +258,7 @@
       } else {
         setTranslatedStatus(elements.actionStatus, "history.exportFailed", null, true);
       }
-    };
+    }
 
     function setStatus(target, message, isError, renderMessage) {
       if (!target) return;
@@ -395,6 +395,10 @@
       cardName.textContent = displayCardName(record, card) + " (" + card.cardNumber + ") · " + orientation + layer;
       item.appendChild(name);
       item.appendChild(cardName);
+      if (globalThis.DivinationCardNotes) {
+        var note = globalThis.DivinationCardNotes.createButton(record.deckType, card.cardId);
+        if (note) item.appendChild(note);
+      }
       return item;
     }
 
@@ -417,6 +421,10 @@
       });
       item.appendChild(name);
       item.appendChild(details);
+      if (card.revealed && globalThis.DivinationCardNotes) {
+        var note = globalThis.DivinationCardNotes.createButton(record.deckType, card.cardId);
+        if (note) item.appendChild(note);
+      }
       return item;
     }
 
@@ -583,9 +591,15 @@
       inner.appendChild(front);
       flipButton.appendChild(inner);
       cardEl.appendChild(flipButton);
+      var note = globalThis.DivinationCardNotes && globalThis.DivinationCardNotes.createButton(record.deckType, card.cardId);
+      if (note) {
+        note.hidden = true;
+        cardEl.appendChild(note);
+      }
 
       function syncFlipAria() {
         var meaningVisible = cardEl.classList.contains("meaning-visible");
+        if (note) note.hidden = !meaningVisible;
         var layerLabel = cardStacking
           ? " · " + (card.layer === "major" ? t("app.layerMajorBase") : t("app.layerMinorTop"))
           : "";
@@ -948,8 +962,10 @@
     function downloadFile(content, fileName, mimeType) {
       var nativeBridge = globalThis.androidHistoryExport;
       if (nativeBridge && typeof nativeBridge.save === "function") {
-        nativeBridge.save(content, fileName);
         setTranslatedStatus(elements.actionStatus, "history.exportChoosing", { fileName: fileName }, false);
+        if (!globalThis.DivinationNativeFileExport.save(content, fileName, onHistoryExportResult)) {
+          setTranslatedStatus(elements.actionStatus, "history.exportBusy", null, true);
+        }
         return;
       }
       var blob = new Blob([content], { type: mimeType + ";charset=utf-8" });
@@ -1028,6 +1044,7 @@
     elements.open.addEventListener("click", openDialog);
     elements.close.addEventListener("click", closeDialog);
     elements.dialog.addEventListener("keydown", function (event) {
+      if (globalThis.DivinationCardNotes && globalThis.DivinationCardNotes.isOpen()) return;
       if (event.key === "Escape" && typeof elements.dialog.close !== "function") {
         event.preventDefault();
         closeDialog();

@@ -172,8 +172,8 @@ test("Free Board history details show order only and keep spatial rendering dorm
 
 test("Android history export uses the system save picker and reports completion", function () {
   assert.match(androidHistoryUi, /androidHistoryExport/);
-  assert.match(androidHistoryUi, /nativeBridge\.save\(content, fileName\)/);
-  assert.match(androidHistoryUi, /__quareiaHistoryExportResult/);
+  assert.match(androidHistoryUi, /DivinationNativeFileExport\.save\(content, fileName, onHistoryExportResult\)/);
+
   assert.match(androidHistoryUi, /history\.exportChoosing/);
   assert.match(androidHistoryUi, /history\.fileSaved/);
   assert.match(androidMainActivity, /ActivityResultContracts\.CreateDocument\("application\/json"\)/);

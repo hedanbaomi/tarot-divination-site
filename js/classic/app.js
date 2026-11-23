@@ -762,6 +762,17 @@
     flipButton.appendChild(inner);
     cardEl.appendChild(flipButton);
 
+    function syncNoteButton() {
+      var note = cardEl.querySelector(":scope > .card-note-link");
+      if (entry.revealed && !note && globalThis.DivinationCardNotes) {
+        note = globalThis.DivinationCardNotes.createButton(card.deck || deckType, card.id);
+        if (note) cardEl.appendChild(note);
+      }
+      if (note) note.hidden = !entry.revealed || !entry.meaningVisible;
+    }
+    cardEl._syncNoteButton = syncNoteButton;
+    syncNoteButton();
+
     var removeBtn = document.createElement("button");
     removeBtn.className = "remove-btn";
     removeBtn.type = "button";
@@ -782,6 +793,7 @@
       }
       entry.meaningVisible = !entry.meaningVisible;
       cardEl.classList.toggle("meaning-visible", entry.meaningVisible);
+      syncNoteButton();
       updateSpreadCardAria(cardEl, entry, position);
     });
 
@@ -939,6 +951,7 @@
       // the class here triggers the 3D flip transition directly.
       cardEl.classList.remove("is-new");
       cardEl.classList.add("revealed");
+      if (cardEl._syncNoteButton) cardEl._syncNoteButton();
       var position = selectedSpread().positions[entry.slotIndex];
       updateSpreadCardAria(cardEl, entry, position);
     }
@@ -1123,6 +1136,10 @@
     header.appendChild(posEl);
     header.appendChild(nameEl);
     header.appendChild(orientEl);
+    if (entry.revealed && globalThis.DivinationCardNotes) {
+      var note = globalThis.DivinationCardNotes.createButton(card.deck || deckType, card.id);
+      if (note) header.appendChild(note);
+    }
 
     if (card.suit) {
       var suitEl = document.createElement("span");

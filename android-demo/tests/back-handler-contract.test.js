@@ -47,3 +47,24 @@ test("unified back contract returns false when no overlay is open", function () 
   vm.runInNewContext(source, context, { filename: "back-handler.js" });
   assert.equal(context.DivinationUiBack.handleBack(), false);
 });
+
+test("notes opened from history or a card overlay consume the first system back", () => {
+  for (const underlying of ["DivinationHistoryUi", "DivinationCardOverlays", "DivinationMenu"]) {
+    const calls = [];
+    let noteOpen = true;
+    const context = {
+      DivinationCardNotes: { handleBack() {
+        calls.push("notes");
+        if (!noteOpen) return false;
+        noteOpen = false;
+        return true;
+      }},
+      [underlying]: { handleBack() { calls.push(underlying); return true; } }
+    };
+    vm.runInNewContext(source, context);
+    assert.equal(context.DivinationUiBack.handleBack(), true);
+    assert.deepEqual(calls, ["notes"]);
+    assert.equal(context.DivinationUiBack.handleBack(), true);
+    assert.deepEqual(calls, ["notes", "notes", underlying]);
+  }
+});
