@@ -72,6 +72,45 @@ function buildFreeformInput(cards, overrides) {
   }, overrides || {});
 }
 
+test("questions are normalized, bounded and round-trip across backup versions", function () {
+  var spread = spreads.getTarotSpread("three-card-horizontal");
+  var input = buildInput(spread, [
+    entry(0, card("major-00", "00", "愚者")),
+    entry(1, card("major-01", "01", "魔法师")),
+    entry(2, card("major-02", "02", "女祭司"))
+  ], { question: "  第一行\r\n第二行\r第三行  " });
+  var v1 = history.buildReadingRecord(input);
+  var v2Preset = history.buildPresetRecord(input);
+  var freeInput = buildFreeformInput([freeformCard("major-00", 0)], { question: input.question });
+  var v2Free = history.buildFreeformLayoutRecord(freeInput);
+  var v3Free = history.buildFreeformRecord(freeInput);
+  [v1, v2Preset, v2Free, v3Free].forEach(function (record) {
+    assert.equal(record.question, "第一行\n第二行\n第三行");
+    assert.deepEqual(history.parseImportJson(history.serializeExport([record])).records, [record]);
+    var oldRecord = structuredClone(record);
+    delete oldRecord.question;
+    assert.deepEqual(history.parseImportJson(history.serializeExport([oldRecord])).records, [oldRecord]);
+    var invalid = structuredClone(record);
+    invalid.notes = "not allowed";
+    assert.throws(function () { history.validateRecord(invalid); }, /unexpected field notes/);
+    invalid = structuredClone(record);
+    invalid.question = "  untrimmed  ";
+    assert.throws(function () { history.validateRecord(invalid); }, /normalized/);
+    invalid.question = " ";
+    assert.throws(function () { history.validateRecord(invalid); }, /normalized/);
+  });
+  assert.equal(history.MAX_QUESTION_LENGTH, 2000);
+  assert.equal(history.normalizeQuestion(" \r\n "), "");
+  assert.equal(history.normalizeQuestion("😀".repeat(1000)).length, 2000);
+  assert.throws(function () { history.normalizeQuestion("😀".repeat(1001)); }, /2000/);
+  assert.throws(function () { history.normalizeQuestion({}); }, /string/);
+  assert.equal(Object.hasOwn(history.buildReadingRecord(Object.assign({}, input, { question: "  " })), "question"), false);
+  assert.equal(history.buildPresetRecord(v1).question, v1.question);
+  var changed = structuredClone(v1);
+  changed.question = "另一个问题";
+  assert.equal(history.recordsEquivalent(v1, changed), false);
+});
+
 test("builds a complete immutable snapshot for a normal spread", function () {
   var spread = spreads.getTarotSpread("three-card-horizontal");
   var record = history.buildReadingRecord(buildInput(spread, [
@@ -505,8 +544,8 @@ test("accepts a strict v2 preset and chooses a v2 envelope", function () {
   assert.throws(function () { history.validateRecord(badLayout); }, /layoutMode/);
 
   var extra = JSON.parse(JSON.stringify(preset));
-  extra.question = "do not persist";
-  assert.throws(function () { history.validateRecord(extra); }, /unexpected field question/);
+  extra.notes = "do not persist";
+  assert.throws(function () { history.validateRecord(extra); }, /unexpected field notes/);
 });
 
 test("exports and imports a mixed v1/v2/v3 history collection", function () {

@@ -471,6 +471,7 @@
 
   // Full reset: rebuild pile and clear the spread.
   function resetDeck() {
+    if (historyUiController) historyUiController.resetQuestion();
     freeDrawn.length = 0;
     freeRedo.length = 0;
     freeBoardReadingReported = false;
@@ -2506,6 +2507,7 @@
       return;
     }
 
+    if (historyUiController) historyUiController.resetQuestion();
     if (restoreFreeformDraft(true) >= 0) {
       spread = [];
       currentPhase = "major";

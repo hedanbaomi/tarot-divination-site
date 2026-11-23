@@ -15,6 +15,7 @@
   var FORMAT_VERSION_V3 = 3;
   var MAX_RECORDS = 5000;
   var MAX_CARDS = 100;
+  var MAX_QUESTION_LENGTH = 2000;
   var MAX_IMPORT_BYTES = 5 * 1024 * 1024;
   var MAX_WORLD_COORDINATE = 1000000;
   var MAX_BOARD_ROTATION = 360;
@@ -161,6 +162,30 @@
     }
   }
 
+  function normalizeQuestion(value) {
+    if (value == null) return "";
+    if (typeof value !== "string") fail("question", "must be a string");
+    var normalized = value.replace(/\r\n?/g, "\n").trim();
+    if (normalized.length > MAX_QUESTION_LENGTH) {
+      fail("question", "must not exceed " + MAX_QUESTION_LENGTH + " characters");
+    }
+    return normalized;
+  }
+
+  function setQuestion(record, value) {
+    var question = normalizeQuestion(value);
+    if (question) record.question = question;
+    else delete record.question;
+  }
+
+  function validateQuestion(record) {
+    if (!Object.prototype.hasOwnProperty.call(record, "question")) return;
+    var question = normalizeQuestion(record.question);
+    if (!question || question !== record.question) {
+      fail("record.question", "must be non-empty and normalized");
+    }
+  }
+
   function assertInteger(value, path, min, max) {
     if (!Number.isInteger(value) || value < min || value > max) {
       fail(path, "must be an integer between " + min + " and " + max);
@@ -263,6 +288,7 @@
       })
     };
 
+    setQuestion(record, input.question);
     validateV1Record(record);
     return record;
   }
@@ -295,6 +321,7 @@
       overviewMethod: v1Record.overviewMethod,
       cards: v1Record.cards
     };
+    setQuestion(record, v1Record.question);
     validateRecord(record);
     return record;
   }
@@ -386,6 +413,7 @@
       overviewMethod: input.overviewMethod,
       cards: cards
     };
+    setQuestion(record, input.question);
     validateRecord(record);
     return record;
   }
@@ -432,6 +460,7 @@
       overviewMethod: input.overviewMethod,
       cards: cards
     };
+    setQuestion(record, input.question);
     validateRecord(record);
     return record;
   }
@@ -495,7 +524,8 @@
 
   function validateV1Record(record) {
     assertPlainObject(record, "record");
-    assertOnlyKeys(record, RECORD_KEYS, "record");
+    validateQuestion(record);
+    assertOnlyKeys(record, RECORD_KEYS.concat(["question"]), "record");
     RECORD_KEYS.forEach(function (key) {
       if (!Object.prototype.hasOwnProperty.call(record, key)) fail("record", "missing field " + key);
     });
@@ -680,7 +710,8 @@
 
   function validateFreeformRecord(record) {
     assertPlainObject(record, "record");
-    assertOnlyKeys(record, FREEFORM_RECORD_KEYS, "record");
+    validateQuestion(record);
+    assertOnlyKeys(record, FREEFORM_RECORD_KEYS.concat(["question"]), "record");
     FREEFORM_RECORD_KEYS.forEach(function (key) {
       if (!Object.prototype.hasOwnProperty.call(record, key)) fail("record", "missing field " + key);
     });
@@ -769,7 +800,8 @@
 
   function validateOrderOnlyFreeformRecord(record) {
     assertPlainObject(record, "record");
-    assertOnlyKeys(record, ORDER_ONLY_FREEFORM_RECORD_KEYS, "record");
+    validateQuestion(record);
+    assertOnlyKeys(record, ORDER_ONLY_FREEFORM_RECORD_KEYS.concat(["question"]), "record");
     ORDER_ONLY_FREEFORM_RECORD_KEYS.forEach(function (key) {
       if (!Object.prototype.hasOwnProperty.call(record, key)) fail("record", "missing field " + key);
     });
@@ -836,7 +868,8 @@
 
   function validateV2PresetRecord(record) {
     assertPlainObject(record, "record");
-    assertOnlyKeys(record, V2_PRESET_RECORD_KEYS, "record");
+    validateQuestion(record);
+    assertOnlyKeys(record, V2_PRESET_RECORD_KEYS.concat(["question"]), "record");
     V2_PRESET_RECORD_KEYS.forEach(function (key) {
       if (!Object.prototype.hasOwnProperty.call(record, key)) fail("record", "missing field " + key);
     });
@@ -895,6 +928,7 @@
         deckType: record.deckType,
         deckMode: record.deckMode,
         deckName: record.deckName,
+        question: record.question,
         spreadId: record.spreadId,
         spreadName: record.spreadName,
         positionCount: record.positionCount,
@@ -911,6 +945,7 @@
         deckType: record.deckType,
         deckMode: record.deckMode,
         deckName: record.deckName,
+        question: record.question,
         orientationMode: record.orientationMode,
         filterMode: record.filterMode,
         overviewMethod: record.overviewMethod,
@@ -924,6 +959,7 @@
         deckType: record.deckType,
         deckMode: record.deckMode,
         deckName: record.deckName,
+        question: record.question,
         orientationMode: record.orientationMode,
         filterMode: record.filterMode,
         overviewMethod: record.overviewMethod,
@@ -935,6 +971,7 @@
       deckType: record.deckType,
       deckMode: record.deckMode,
       deckName: record.deckName,
+      question: record.question,
       spreadId: record.spreadId,
       spreadName: record.spreadName,
       positionCount: record.positionCount,
@@ -1056,6 +1093,8 @@
     FORMAT_VERSION_V3: FORMAT_VERSION_V3,
     MAX_RECORDS: MAX_RECORDS,
     MAX_CARDS: MAX_CARDS,
+    MAX_QUESTION_LENGTH: MAX_QUESTION_LENGTH,
+    normalizeQuestion: normalizeQuestion,
     MAX_IMPORT_BYTES: MAX_IMPORT_BYTES,
     buildReadingRecord: buildReadingRecord,
     buildPresetRecord: buildPresetRecord,

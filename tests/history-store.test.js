@@ -361,3 +361,33 @@ test("importRecords validates atomically and remaps duplicate IDs", async functi
   await assert.rejects(store.importRecords([makeRecord("valid", "2026-07-23T00:00:00.000Z", "Valid"), invalid]));
   assert.equal((await store.listRecords()).length, 3);
 });
+
+test("question updates preserve the record and distinct questions are not duplicates", async function () {
+  var store = require("../js/history-store.js").createStore({
+    indexedDB: createFakeIndexedDB(),
+    dbName: "questions"
+  });
+  var first = makeRecord("one", "2026-07-21T00:00:00.000Z", "Same");
+  await store.saveRecord(first);
+  var updated = await store.updateQuestion("one", "  第一行\r\n第二行  ");
+  assert.deepEqual(updated, Object.assign({}, first, { question: "第一行\n第二行" }));
+  assert.deepEqual(await store.getRecord("one"), updated);
+
+  var candidate = structuredClone(first);
+  candidate.id = "two";
+  candidate.createdAt = "2026-07-21T00:00:05.000Z";
+  candidate.question = "另一个问题";
+  assert.equal((await store.saveRecord(candidate)).saved, true);
+  var duplicate = structuredClone(candidate);
+  duplicate.id = "three";
+  assert.equal((await store.saveRecord(duplicate)).duplicate, true);
+
+  await assert.rejects(store.updateQuestion("one", "x".repeat(2001)), /2000/);
+  await assert.rejects(store.updateQuestion("one", 123), /string/);
+  assert.deepEqual(await store.getRecord("one"), updated);
+  assert.equal(await store.updateQuestion("missing", "question"), null);
+  await assert.rejects(store.updateQuestion("", "question"), /id/);
+  var cleared = await store.updateQuestion("one", " \r\n ");
+  assert.deepEqual(cleared, first);
+  assert.deepEqual(await store.getRecord("one"), first);
+});

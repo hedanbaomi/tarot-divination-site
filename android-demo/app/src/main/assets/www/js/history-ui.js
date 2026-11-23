@@ -76,15 +76,39 @@
     return localized(position, "name") || card.positionName;
   }
 
+  function sourceForCard(record, card) {
+    return currentDeck(record).find(function (item) { return item.id === card.cardId; });
+  }
+
   function displayCardName(record, card) {
-    var sourceCard = currentDeck(record).filter(function (item) {
-      return item.id === card.cardId;
-    })[0];
-    return localized(sourceCard, "name") || card.cardName;
+    return localized(sourceForCard(record, card), "name") || card.cardName;
+  }
+
+  function getCardInterpretation(record, card, sourceCard) {
+    if (!sourceCard) return { keywords: [], meaning: "" };
+    var showReversed = record.orientationMode === "mixed" && card.orientation === "reversed";
+    return {
+      keywords: localized(sourceCard, showReversed ? "reversedKeywords" : "uprightKeywords") || [],
+      meaning: localized(sourceCard, showReversed ? "reversedMeaning" : "uprightMeaning") || ""
+    };
   }
 
   function displayDeckName(record) {
     return t("deck.name." + record.deckType) || record.deckName;
+  }
+
+  function formatMarkdown(records, resolveSpread) {
+    return globalThis.DivinationHistoryMarkdown.format(records, {
+      t: t,
+      formatTime: formatTime,
+      deckName: displayDeckName,
+      spreadName: function (record) { return displaySpreadName(record, resolveSpread); },
+      positionName: function (record, card) { return displayPositionName(record, card, resolveSpread); },
+      cardName: displayCardName,
+      interpretation: function (record, card) {
+        return getCardInterpretation(record, card, sourceForCard(record, card));
+      }
+    });
   }
 
   function byId(id) {
@@ -181,8 +205,28 @@
     var selectedRecordId = null;
     var selectedRecord = null;
     var restoreFocusTo = null;
+    var allRecords = [];
+    var selecting = false;
+    var selectedIds = new Set();
+    var questionRevision = 0;
+    var listRevision = 0;
 
     var elements = {
+      question: byId("readingQuestion"),
+      questionToggle: byId("readingQuestionToggle"),
+      questionCaption: byId("readingQuestionCaption"),
+      questionPanel: byId("readingQuestionPanel"),
+      summary: byId("readingQuestionSummary"),
+      search: byId("historySearch"),
+      select: byId("historySelectBtn"),
+      exportSelected: byId("historyExportSelectedBtn"),
+      markdown: byId("historyMarkdownBtn"),
+      questionText: byId("historyQuestionText"),
+      edit: byId("historyEditQuestionBtn"),
+      editor: byId("historyQuestionEditor"),
+      editInput: byId("historyQuestionInput"),
+      saveQuestion: byId("historySaveQuestionBtn"),
+      cancelQuestion: byId("historyCancelQuestionBtn"),
       open: byId("historyOpenBtn"),
       saveStatus: byId("historySaveStatus"),
       dialog: byId("historyDialog"),
@@ -208,7 +252,7 @@
       if (result && result.cancelled) {
         setTranslatedStatus(elements.actionStatus, "history.exportCancelled", null, false);
       } else if (result && result.ok) {
-        setTranslatedStatus(elements.actionStatus, "history.exportedTo", {
+        setTranslatedStatus(elements.actionStatus, "history.fileSaved", {
           fileName: result.fileName || "tarot-history.json"
         }, false);
       } else {
@@ -241,7 +285,7 @@
         elements.importLabel.setAttribute("aria-disabled", "true");
         elements.importLabel.classList.add("is-disabled");
       }
-      [elements.exportButton, elements.clear, elements.filter].forEach(function (element) {
+      [elements.exportButton, elements.clear, elements.filter, elements.select, elements.search].forEach(function (element) {
         if (element) element.disabled = true;
       });
       if (readingComplete) {
@@ -263,18 +307,55 @@
       if (elements.deleteButton) elements.deleteButton.hidden = true;
     }
 
-  function renderList(records) {
+    function updateSelectionActions() {
+      elements.select.setAttribute("aria-pressed", String(selecting));
+      elements.select.textContent = t(selecting ? "history.cancelSelection" : "history.selectReadings");
+      elements.select.disabled = !allRecords.length;
+      elements.exportSelected.hidden = !selecting;
+      elements.exportSelected.disabled = !selectedIds.size;
+      elements.exportSelected.textContent = t("history.exportSelected", { count: selectedIds.size });
+    }
+
+    function matchesSearch(record, query) {
+      if (!query) return true;
+      function contains(value) {
+        return value && value.toLocaleLowerCase().includes(query);
+      }
+      return contains(record.question) || contains(displaySpreadName(record, resolveSpread)) ||
+        contains(displayDeckName(record)) || record.cards.some(function (card) {
+          return contains(displayCardName(record, card)) ||
+            contains(displayPositionName(record, card, resolveSpread));
+        });
+    }
+
+    function renderList() {
+      var deck = elements.filter.value;
+      var query = elements.search.value.trim().toLocaleLowerCase();
+      var records = allRecords.filter(function (record) {
+        return (!deck || deck === "all" || deck === record.deckType) && matchesSearch(record, query);
+      });
+      updateSelectionActions();
       showListView();
       elements.list.replaceChildren();
       elements.empty.hidden = records.length !== 0;
+      elements.empty.textContent = t(allRecords.length ? "history.noMatches" : "history.empty");
       records.forEach(function (record) {
         var item = document.createElement("li");
         item.className = "history-list-item";
-        var openButton = button("", "history-record-open");
-        openButton.setAttribute("aria-label", t("history.viewAria", {
-          spread: displaySpreadName(record, resolveSpread),
-          time: formatTime(record.createdAt)
-        }));
+        var openButton = selecting ? document.createElement("label") : button("", "history-record-open");
+        openButton.className = "history-record-open";
+        if (selecting) {
+          openButton.classList.add("history-choice");
+          var checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = selectedIds.has(record.id);
+          checkbox.addEventListener("change", function () {
+            if (checkbox.checked) selectedIds.add(record.id);
+            else selectedIds.delete(record.id);
+            updateSelectionActions();
+          });
+          openButton.appendChild(checkbox);
+        }
 
         var heading = document.createElement("span");
         heading.className = "history-record-title";
@@ -285,11 +366,16 @@
           displayDeckName(record) + " · " +
           t("history.cards", { count: record.cards.length });
         openButton.appendChild(heading);
+        if (record.question) {
+          openButton.appendChild(textElement("span", "history-question-preview", record.question));
+        }
         openButton.appendChild(meta);
-        openButton.addEventListener("click", function () {
-          actualLayoutOpen = false;
-          showDetail(record);
-        });
+        if (!selecting) {
+          openButton.addEventListener("click", function () {
+            actualLayoutOpen = false;
+            showDetail(record);
+          });
+        }
         item.appendChild(openButton);
         elements.list.appendChild(item);
       });
@@ -403,15 +489,6 @@
       return element;
     }
 
-    function getCardInterpretation(record, card, sourceCard) {
-      if (!sourceCard) return { keywords: [], meaning: "" };
-      var showReversed = record.orientationMode === "mixed" && card.orientation === "reversed";
-      return {
-        keywords: localized(sourceCard, showReversed ? "reversedKeywords" : "uprightKeywords") || [],
-        meaning: localized(sourceCard, showReversed ? "reversedMeaning" : "uprightMeaning") || ""
-      };
-    }
-
     function renderActualSpreadCard(record, card, spread, boardStacking) {
       var position = spread.positions[card.slotIndex];
       var posNumber = position && position.number ? position.number : card.positionNumber;
@@ -421,9 +498,7 @@
         ? t("history.orientation.reversed")
         : t("history.orientation.upright");
       var cardStacking = Boolean(boardStacking && card.layer);
-      var sourceCard = currentDeck(record).filter(function (item) {
-        return item.id === card.cardId;
-      })[0] || null;
+      var sourceCard = sourceForCard(record, card);
       var interpretation = getCardInterpretation(record, card, sourceCard);
 
       var cardEl = document.createElement("div");
@@ -573,8 +648,43 @@
       return section;
     }
 
+    function renderQuestion(record, editing) {
+      elements.questionText.textContent = record.question || "";
+      elements.questionText.hidden = editing || !record.question;
+      elements.edit.textContent = t(record.question ? "history.editQuestion" : "history.addQuestion");
+      elements.edit.hidden = editing;
+      elements.editor.hidden = !editing;
+      elements.markdown.disabled = editing;
+    }
+
+    function finishQuestionEdit() {
+      renderQuestion(selectedRecord, false);
+      elements.edit.focus();
+    }
+
+    async function saveQuestionEdit() {
+      var id = selectedRecordId;
+      if (!id || elements.saveQuestion.disabled) return;
+      elements.saveQuestion.disabled = true;
+      try {
+        var updated = await store.updateQuestion(id, elements.editInput.value);
+        if (!updated) throw new Error("Reading no longer exists");
+        if (selectedRecordId !== id) return;
+        selectedRecord = updated;
+        finishQuestionEdit();
+        setTranslatedStatus(elements.actionStatus, "history.questionSaved", null, false);
+      } catch (_error) {
+        if (selectedRecordId === id) setTranslatedStatus(elements.actionStatus, "history.questionFailed", null, true);
+      } finally {
+        elements.saveQuestion.disabled = false;
+      }
+    }
+
     function showDetail(record) {
+      var editing = selectedRecordId === record.id && !elements.editor.hidden;
+      listRevision++;
       selectedRecordId = record.id;
+      renderQuestion(record, editing);
       selectedRecord = record;
       elements.list.hidden = true;
       elements.empty.hidden = true;
@@ -673,14 +783,19 @@
     }
 
     async function refreshList() {
-      if (!available) {
+      var revision = ++listRevision;
+      if (!available && !(await storeReady)) {
         elements.list.replaceChildren();
         elements.empty.hidden = false;
         return;
       }
       try {
-        var records = await store.listRecords(elements.filter.value || "all");
-        renderList(records);
+        var records = await store.listRecords("all");
+        if (revision !== listRevision) return;
+        allRecords = records;
+        var liveIds = new Set(records.map(function (record) { return record.id; }));
+        selectedIds.forEach(function (id) { if (!liveIds.has(id)) selectedIds.delete(id); });
+        renderList();
       } catch (_error) {
         setUnavailable();
       }
@@ -688,6 +803,9 @@
 
     function openDialog() {
       restoreFocusTo = document.activeElement;
+      selecting = false;
+      selectedIds.clear();
+      elements.search.value = "";
       showListView();
       setStatus(elements.actionStatus, "", false);
       if (typeof elements.dialog.showModal === "function") {
@@ -713,27 +831,55 @@
       return true;
     }
 
+    function setQuestionExpanded(expanded) {
+      elements.questionToggle.setAttribute("aria-expanded", String(expanded));
+      elements.questionPanel.inert = !expanded;
+      if (expanded) elements.question.focus();
+    }
+
+    function renderQuestionSummary() {
+      var summary = elements.question.value.trim();
+      elements.summary.textContent = summary;
+      elements.questionCaption.textContent = t(summary ? "history.question" : "history.addQuestion");
+    }
+
+    function resetQuestion() {
+      questionRevision++;
+      setStatus(elements.saveStatus, "", false);
+      elements.question.value = "";
+      renderQuestionSummary();
+      setQuestionExpanded(false);
+    }
+
     function saveRecord(record, saveOptions) {
       saveOptions = saveOptions || {};
+      // Capture the question before queuing. A later save or reset may belong to a different reading.
+      var revision = questionRevision;
+      var draftQuestion = elements.question.value;
       var isFreeBoard = saveOptions.kind === "freeform" || record && record.layoutMode === "freeform";
       var savingKey = isFreeBoard ? "history.savingFreeBoard" : "history.saving";
       var savedKey = isFreeBoard ? "history.savedFreeBoard" : "history.saved";
       var duplicateKey = isFreeBoard ? "history.duplicateFreeBoard" : "history.duplicate";
-      var failedKey = isFreeBoard ? "history.saveSnapshotError" : "history.saveSnapshotError";
+      var failedKey = "history.saveSnapshotError";
       setTranslatedStatus(elements.saveStatus, savingKey, null, false);
       return enqueueSave(async function () {
-        setTranslatedStatus(elements.saveStatus, savingKey, null, false);
         var ready = available || await storeReady;
         if (!ready) {
-          setTranslatedStatus(elements.saveStatus, "history.saveUnavailable", null, true);
+          if (revision === questionRevision) setTranslatedStatus(elements.saveStatus, "history.saveUnavailable", null, true);
           return null;
         }
         try {
+          var question = recordsApi.normalizeQuestion(draftQuestion);
+          if (question) record.question = question;
           var result = await store.saveRecord(record);
-          setTranslatedStatus(elements.saveStatus, result.duplicate ? duplicateKey : savedKey, null, false);
+          if (revision === questionRevision) {
+            if (elements.question.value === draftQuestion) resetQuestion();
+            setTranslatedStatus(elements.saveStatus, result.duplicate ? duplicateKey : savedKey, null, false);
+          }
+          if (elements.dialog.open && !selectedRecordId) await refreshList();
           return result;
         } catch (_error) {
-          setTranslatedStatus(elements.saveStatus, failedKey, null, true);
+          if (revision === questionRevision) setTranslatedStatus(elements.saveStatus, failedKey, null, true);
           return null;
         }
       });
@@ -799,30 +945,44 @@
       });
     }
 
+    function downloadFile(content, fileName, mimeType) {
+      var nativeBridge = globalThis.androidHistoryExport;
+      if (nativeBridge && typeof nativeBridge.save === "function") {
+        nativeBridge.save(content, fileName);
+        setTranslatedStatus(elements.actionStatus, "history.exportChoosing", { fileName: fileName }, false);
+        return;
+      }
+      var blob = new Blob([content], { type: mimeType + ";charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+      setTranslatedStatus(elements.actionStatus, "history.fileDownloaded", { fileName: fileName }, false);
+    }
+
+    function exportMarkdown(records) {
+      if (!records.length) return;
+      try {
+        var content = formatMarkdown(records, resolveSpread);
+        var stamp = records.length === 1 ? records[0].createdAt : new Date().toISOString();
+        var fileName = (records.length === 1 ? "reading-" : "readings-") +
+          new Date(stamp).toISOString().replace(/[:.]/g, "-") + ".md";
+        downloadFile(content, fileName, "text/markdown");
+      } catch (_error) {
+        setTranslatedStatus(elements.actionStatus, "history.exportFailed", null, true);
+      }
+    }
+
     async function exportAll() {
       if (!available) return;
       try {
         var records = await store.listRecords("all");
-        var json = recordsApi.serializeExport(records);
         var fileName = "tarot-history-" + new Date().toISOString().slice(0, 10) + ".json";
-        var nativeBridge = globalThis.androidHistoryExport;
-        if (nativeBridge && typeof nativeBridge.save === "function") {
-          nativeBridge.save(json, fileName);
-          setTranslatedStatus(elements.actionStatus, "history.exportChoosing", {
-            fileName: fileName
-          }, false);
-          return;
-        }
-        var blob = new Blob([json], { type: "application/json;charset=utf-8" });
-        var url = URL.createObjectURL(blob);
-        var link = document.createElement("a");
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(function () { URL.revokeObjectURL(url); }, 0);
-        setTranslatedStatus(elements.actionStatus, "history.exported", { fileName: fileName }, false);
+        downloadFile(recordsApi.serializeExport(records), fileName, "application/json");
       } catch (_error) {
         setTranslatedStatus(elements.actionStatus, "history.exportFailed", null, true);
       }
@@ -855,6 +1015,7 @@
     }
 
     function refreshLanguage() {
+      renderQuestionSummary();
       refreshStatus(elements.saveStatus);
       refreshStatus(elements.actionStatus);
       if (selectedRecord) {
@@ -874,8 +1035,8 @@
       }
       if (event.key !== "Tab" || typeof elements.dialog.showModal === "function") return;
       var focusable = Array.prototype.slice.call(elements.dialog.querySelectorAll(
-        "button:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex='-1'])"
-      )).filter(function (element) { return !element.hidden; });
+        "button:not([disabled]), select:not([disabled]), textarea, input:not([tabindex='-1']), [href], [tabindex]:not([tabindex='-1'])"
+      )).filter(function (element) { return element.getClientRects().length > 0; });
       if (focusable.length === 0) return;
       var first = focusable[0];
       var last = focusable[focusable.length - 1];
@@ -890,7 +1051,30 @@
     elements.dialog.addEventListener("close", function () {
       if (restoreFocusTo && typeof restoreFocusTo.focus === "function") restoreFocusTo.focus();
     });
-    elements.filter.addEventListener("change", refreshList);
+    elements.questionToggle.addEventListener("click", function () {
+      setQuestionExpanded(elements.questionToggle.getAttribute("aria-expanded") !== "true");
+    });
+    elements.question.addEventListener("input", renderQuestionSummary);
+    elements.edit.addEventListener("click", function () {
+      elements.editInput.value = selectedRecord.question || "";
+      renderQuestion(selectedRecord, true);
+      elements.editInput.focus();
+    });
+    elements.cancelQuestion.addEventListener("click", finishQuestionEdit);
+    elements.saveQuestion.addEventListener("click", saveQuestionEdit);
+    elements.filter.addEventListener("change", renderList);
+    elements.search.addEventListener("input", renderList);
+    elements.select.addEventListener("click", function () {
+      selecting = !selecting;
+      selectedIds.clear();
+      renderList();
+    });
+    elements.exportSelected.addEventListener("click", function () {
+      exportMarkdown(allRecords.filter(function (record) { return selectedIds.has(record.id); }));
+    });
+    elements.markdown.addEventListener("click", function () {
+      if (selectedRecord) exportMarkdown([selectedRecord]);
+    });
     elements.back.addEventListener("click", function () {
       refreshList().then(function () { elements.filter.focus(); });
     });
@@ -919,6 +1103,7 @@
       });
 
     var controller = {
+      resetQuestion: resetQuestion,
       updateSaveAvailability: updateSaveAvailability,
       saveCompletedReading: saveCurrentReading,
       saveFreeformReading: saveFreeformReading,
@@ -933,6 +1118,7 @@
 
   return {
     init: init,
+    formatMarkdown: formatMarkdown,
     createSerialTaskQueue: createSerialTaskQueue,
     calculateFreeformPreviewLayout: calculateFreeformPreviewLayout,
     canRenderActualSpread: canRenderActualSpread,
