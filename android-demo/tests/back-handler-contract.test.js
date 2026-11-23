@@ -68,3 +68,22 @@ test("notes opened from history or a card overlay consume the first system back"
     assert.deepEqual(calls, ["notes", "notes", underlying]);
   }
 });
+
+test("an image preview opened from a history entry closes before the history panel", () => {
+  const calls = [];
+  let previewOpen = true;
+  const context = {
+    DivinationReadingImageUi: { handleBack() {
+      calls.push("image");
+      if (!previewOpen) return false;
+      previewOpen = false;
+      return true;
+    }},
+    DivinationHistoryUi: { handleBack() { calls.push("history"); return true; } }
+  };
+  vm.runInNewContext(source, context);
+  assert.equal(context.DivinationUiBack.handleBack(), true);
+  assert.deepEqual(calls, ["image"]);
+  assert.equal(context.DivinationUiBack.handleBack(), true);
+  assert.deepEqual(calls, ["image", "image", "history"]);
+});

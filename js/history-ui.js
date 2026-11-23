@@ -109,6 +109,49 @@
     });
   }
 
+  // Only bundled deck entries supply media URLs. Imported snapshots supply
+  // names and geometry when a definition is no longer installed.
+  function imageModel(record, resolveSpread) {
+    var spread = currentSpread(record, resolveSpread);
+    var freeform = record.layoutMode === "freeform";
+    var credit = globalThis.DivinationHistoryMarkdown.deckCredit(record.deckType, t)
+      .replace(/\[([^\]]+)\]\((https:[^)]+)\)/g, "$1 ($2)");
+    var artCredit = record.deckType === "tarot" ? t("image.tarotArt") : t("attribution." + record.deckType + "Rights");
+    var cards = record.cards.slice().sort(function (a, b) {
+      if (freeform) return a.drawOrder - b.drawOrder;
+      return a.slotIndex - b.slotIndex || (a.layer === "minor") - (b.layer === "minor");
+    }).map(function (card) {
+      var hidden = freeform && card.revealed === false;
+      var source = hidden ? null : sourceForCard(record, card);
+      var pos = spread && spread.positions[card.slotIndex];
+      return {
+        number: freeform ? card.drawOrder : card.positionNumber,
+        positionName: freeform ? "" : localized(pos, "name") || card.positionName,
+        name: hidden ? t("history.freeBoardHidden") : localized(source, "name") || card.cardName,
+        hidden: hidden,
+        image: source && source.image || "",
+        orientation: hidden ? "upright" : card.orientation,
+        orientationLabel: hidden ? "" : t("orientation." + card.orientation),
+        realmLabel: localized(source && source.realm, "name"),
+        realmBorder: source && source.realm ? source.realm.border : "",
+        layer: card.layer || null,
+        layerLabel: card.layer ? t("history.layer." + card.layer).replace(/^\s*[·•]\s*/, "") : "",
+        column: pos && pos.column, row: pos && pos.row,
+        columnSpan: pos && pos.columnSpan, rowSpan: pos && pos.rowSpan,
+        offsetX: pos && pos.offsetX, offsetY: pos && pos.offsetY, rotation: pos && pos.rotation,
+        x: card.x, y: card.y, z: card.z, boardRotation: card.boardRotation
+      };
+    });
+    return {
+      title: displaySpreadName(record, resolveSpread), deckName: displayDeckName(record),
+      date: formatTime(record.createdAt), question: record.question || "", freeform: freeform,
+      columns: spread && spread.columns, rows: spread && spread.rows, cards: cards,
+      labels: { hidden: t("history.freeBoardHidden"), question: t("history.question"), index: t("image.positions"), sources: t("history.sourcesAndCredits") },
+      credit: [credit, artCredit, t("image.unofficial")].join("\n"),
+      projectUrl: "https://github.com/hedanbaomi/tarot-divination-site", officialUrl: "https://www.quareia.com"
+    };
+  }
+
   function byId(id) {
     return document.getElementById(id);
   }
@@ -207,6 +250,8 @@
     var selecting = false;
     var selectedIds = new Set();
     var questionRevision = 0;
+    var tableRecord = null;
+    var useSavedQuestion = false;
     var listRevision = 0;
 
     var elements = {
@@ -219,6 +264,7 @@
       select: byId("historySelectBtn"),
       exportSelected: byId("historyExportSelectedBtn"),
       markdown: byId("historyMarkdownBtn"),
+      image: byId("historyImageBtn"),
       questionText: byId("historyQuestionText"),
       edit: byId("historyEditQuestionBtn"),
       editor: byId("historyQuestionEditor"),
@@ -675,6 +721,7 @@
       elements.edit.hidden = editing;
       elements.editor.hidden = !editing;
       elements.markdown.disabled = editing;
+      if (elements.image) elements.image.disabled = editing;
     }
 
     function finishQuestionEdit() {
@@ -858,6 +905,8 @@
     }
 
     function resetQuestion() {
+      tableRecord = null;
+      useSavedQuestion = false;
       questionRevision++;
       setStatus(elements.saveStatus, "", false);
       elements.question.value = "";
@@ -870,6 +919,8 @@
       // Capture the question before queuing. A later save or reset may belong to a different reading.
       var revision = questionRevision;
       var draftQuestion = elements.question.value;
+      tableRecord = record;
+      useSavedQuestion = false;
       var isFreeBoard = saveOptions.kind === "freeform" || record && record.layoutMode === "freeform";
       var savingKey = isFreeBoard ? "history.savingFreeBoard" : "history.saving";
       var savedKey = isFreeBoard ? "history.savedFreeBoard" : "history.saved";
@@ -886,8 +937,12 @@
           var question = recordsApi.normalizeQuestion(draftQuestion);
           if (question) record.question = question;
           var result = await store.saveRecord(record);
-          if (revision === questionRevision) {
-            if (elements.question.value === draftQuestion) resetQuestion();
+          if (revision === questionRevision && tableRecord === record) {
+            if (elements.question.value === draftQuestion) {
+              resetQuestion();
+              tableRecord = record;
+              useSavedQuestion = true;
+            }
             setTranslatedStatus(elements.saveStatus, result.duplicate ? duplicateKey : savedKey, null, false);
           }
           if (elements.dialog.open && !selectedRecordId) await refreshList();
@@ -981,6 +1036,29 @@
       setTranslatedStatus(elements.actionStatus, "history.fileDownloaded", { fileName: fileName }, false);
     }
 
+    function openImage(record, freeCardWidth) {
+      var model = imageModel(record, resolveSpread);
+      model.freeCardWidth = freeCardWidth;
+      globalThis.DivinationReadingImageUi.open(model, record.createdAt);
+    }
+
+    function exportTableImage(record, freeCardWidth) {
+      var question = recordsApi.normalizeQuestion(elements.question.value);
+      var sameReading = tableRecord && tableRecord.deckType === record.deckType &&
+        tableRecord.spreadId === record.spreadId && tableRecord.cards.length === record.cards.length &&
+        tableRecord.cards.every(function (card, i) {
+          var other = record.cards[i];
+          return card.cardId === other.cardId && card.orientation === other.orientation &&
+            card.slotIndex === other.slotIndex && card.layer === other.layer && card.drawOrder === other.drawOrder;
+        });
+      if (sameReading) {
+        record.createdAt = tableRecord.createdAt;
+        if (!question && useSavedQuestion) question = tableRecord.question;
+      }
+      record.question = question || "";
+      openImage(record, freeCardWidth);
+    }
+
     function exportMarkdown(records) {
       if (!records.length) return;
       try {
@@ -1072,7 +1150,10 @@
     elements.questionToggle.addEventListener("click", function () {
       setQuestionExpanded(elements.questionToggle.getAttribute("aria-expanded") !== "true");
     });
-    elements.question.addEventListener("input", renderQuestionSummary);
+    elements.question.addEventListener("input", function () {
+      useSavedQuestion = false;
+      renderQuestionSummary();
+    });
     elements.edit.addEventListener("click", function () {
       elements.editInput.value = selectedRecord.question || "";
       renderQuestion(selectedRecord, true);
@@ -1089,6 +1170,9 @@
     });
     elements.exportSelected.addEventListener("click", function () {
       exportMarkdown(allRecords.filter(function (record) { return selectedIds.has(record.id); }));
+    });
+    if (elements.image) elements.image.addEventListener("click", function () {
+      if (selectedRecord) openImage(selectedRecord);
     });
     elements.markdown.addEventListener("click", function () {
       if (selectedRecord) exportMarkdown([selectedRecord]);
@@ -1124,6 +1208,7 @@
       resetQuestion: resetQuestion,
       updateSaveAvailability: updateSaveAvailability,
       saveCompletedReading: saveCurrentReading,
+      exportTableImage: exportTableImage,
       saveFreeformReading: saveFreeformReading,
       saveRecord: saveRecord,
       refresh: refreshList,
@@ -1134,6 +1219,7 @@
   return {
     init: init,
     formatMarkdown: formatMarkdown,
+    imageModel: imageModel,
     createSerialTaskQueue: createSerialTaskQueue,
     calculateFreeformPreviewLayout: calculateFreeformPreviewLayout,
     canRenderActualSpread: canRenderActualSpread

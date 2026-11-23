@@ -177,7 +177,7 @@ test("Android history export uses the system save picker and reports completion"
   assert.match(androidHistoryUi, /history\.exportChoosing/);
   assert.match(androidHistoryUi, /history\.fileSaved/);
   assert.match(androidMainActivity, /ActivityResultContracts\.CreateDocument\("application\/json"\)/);
-  assert.match(androidMainActivity, /contentResolver\.openOutputStream\(uri, "w"\)/);
+  assert.match(androidMainActivity, /resolver\.openOutputStream\(uri, "w"\)/);
   assert.match(androidMainActivity, /OpenableColumns\.DISPLAY_NAME/);
   assert.equal(typeof historyUiApi.canRenderActualSpread, "function");
 

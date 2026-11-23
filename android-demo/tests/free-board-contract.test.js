@@ -45,7 +45,7 @@ test("classic Android bundle exposes Free Board in the platform-preserving load 
   assert.ok(html.indexOf("js/history-ui.js") < html.indexOf("js/free-board-ui.js"));
   assert.ok(html.indexOf("js/free-board-ui.js") < html.indexOf("js/classic/app.js"));
   assert.match(html, /js\/announcements\.js\?v=1/);
-  assert.match(html, /js\/back-handler\.js\?v=20261123-card-notes/);
+  assert.match(html, /js\/back-handler\.js\?v=20261123-image-export/);
   assert.match(app, /function freeBoardCardsForDeck\(type, filter\)/);
   assert.match(app, /cards: shuffle\(freeBoardCardsForDeck\(deckType, filter\)\)/);
   assert.match(app, /getLxxxiBackImage/);

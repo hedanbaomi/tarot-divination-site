@@ -24,6 +24,10 @@
     return a.slotIndex - b.slotIndex || (a.layer === "minor") - (b.layer === "minor");
   }
 
+  function deckCredit(deck, t) {
+    return t("history.credit." + deck, { url: guidebooks[deck] });
+  }
+
   function format(records, display) {
     var t = display.t;
     var lines = ["# " + t("history.notesTitle")];
@@ -72,11 +76,11 @@
       lines.push("", "## " + t("history.sourcesAndCredits"), "");
       citedDecks.forEach(function (deck) {
         lines.push("- **" + t("deck.name." + deck) + "** — " +
-          t("history.credit." + deck, { url: guidebooks[deck] }));
+          deckCredit(deck, t));
       });
     }
     return lines.join("\n") + "\n";
   }
 
-  return { format: format };
+  return { format: format, deckCredit: deckCredit };
 });

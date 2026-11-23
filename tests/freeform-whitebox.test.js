@@ -261,9 +261,12 @@ test("bulk and individual reveals save the same validated Tarot reading exactly 
       freeDrawn: drawn, localizedCardName: function (c) { return c.name; },
       cardById: function (id) { return cards.find(function (c) { return c.id === id; }); }
     });
-    var save = instantiate("saveFreeformHistory", {
+    var historyInput = instantiate("freeformHistoryInput", {
       freeformHistoryCards: historyCards, deckType: "tarot", mode: "mixed", arcanaFilter: "mixed",
-      freeBoardDeckName: function () { return "Tarot"; },
+      freeBoardDeckName: function () { return "Tarot"; }
+    });
+    var save = instantiate("saveFreeformHistory", {
+      freeformHistoryInput: historyInput,
       historyUiController: { saveFreeformReading: function (input) { saved.push(records.buildFreeformLayoutRecord(input)); } }
     });
     var faces = [];
