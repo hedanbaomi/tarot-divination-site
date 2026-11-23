@@ -506,3 +506,28 @@ test("queued autosaves capture the original question and preserve a newer board 
     globalThis.document = previousDocument;
   }
 });
+
+test("History Actual Layout stays contained, centered, and flippable on Web and Android", function () {
+  var surfaces = [
+    {
+      label: "web",
+      styles: fs.readFileSync(path.join(root, "css", "styles.css"), "utf8"),
+      redesign: fs.readFileSync(path.join(root, "css", "redesign.css"), "utf8")
+    },
+    {
+      label: "android",
+      styles: fs.readFileSync(path.join(root, "android-demo/app/src/main/assets/www/css/styles.css"), "utf8"),
+      redesign: fs.readFileSync(path.join(root, "android-demo/app/src/main/assets/www/css/redesign.css"), "utf8")
+    }
+  ];
+
+  surfaces.forEach(function (entry) {
+    assert.match(entry.styles, /\.history-detail-body\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/, entry.label + " styles.css bounds history detail grid");
+    assert.match(entry.styles, /\.history-actual-layout\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?overflow:\s*hidden;/, entry.label + " styles.css contains history actual layout");
+    assert.match(entry.styles, /\.history-spread-grid:not\(\.custom-spread-layout\)\s*\{[\s\S]*?justify-content:\s*center;/, entry.label + " styles.css centers history spread grid");
+    assert.match(entry.redesign, /html\.ui2 \.table-center \.spread-board-scroll\s*\{[\s\S]*?margin:\s*-10px 0 -2px;/, entry.label + " redesign.css keeps live spread scroll symmetric");
+    assert.match(entry.redesign, /html\.ui2 \.history-spread-grid:not\(\.custom-spread-layout\)\s*\{[\s\S]*?justify-content:\s*center;/, entry.label + " redesign.css centers history spread grid");
+    assert.match(entry.redesign, /html\.ui2 \.history-spread-card\.revealed\.meaning-visible \.spread-card-inner\s*\{\s*transform:\s*rotateY\(360deg\);/, entry.label + " redesign.css allows history card flip to meaning");
+    assert.match(entry.redesign, /html\.ui2 \.history-spread-card\.meaning-visible \.spread-card-meaning\s*\{\s*display:\s*flex !important;/, entry.label + " redesign.css displays flipped history card meaning");
+  });
+});

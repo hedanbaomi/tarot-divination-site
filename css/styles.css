@@ -2742,7 +2742,11 @@ body.choice-open { overflow: hidden; }
 }
 .history-detail-body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
+}
+.history-detail-body > * {
+  min-width: 0;
 }
 .history-detail-body > h3,
 .history-positions-head > h3 {
@@ -2797,9 +2801,10 @@ body.choice-open { overflow: hidden; }
 
 .history-positions-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px 10px;
   margin-top: 4px;
 }
 .history-positions-head > h3 {
@@ -2817,6 +2822,9 @@ body.choice-open { overflow: hidden; }
   background: rgba(var(--accent-rgb), 0.16);
 }
 .history-actual-layout {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 12px 10px 8px;
   background: var(--bg-card);
   border: 1px solid rgba(var(--accent-rgb), 0.22);
@@ -2830,7 +2838,16 @@ body.choice-open { overflow: hidden; }
   text-align: center;
 }
 .history-spread-board-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 28px 18px 34px;
+}
+.history-spread-grid:not(.custom-spread-layout) {
+  width: max-content;
+  min-width: 100%;
+  justify-content: center;
+  margin: 0 auto;
 }
 .history-spread-pos-badge {
   position: absolute;
@@ -3008,6 +3025,7 @@ body.choice-open { overflow: hidden; }
   .history-clear-row .btn,
   .history-delete-row .btn,
   .history-detail-nav .btn { width: 100%; }
+  .history-spread-board-scroll { padding: 28px 12px 34px; }
 }
 
 @supports selector(:has(*)) {
