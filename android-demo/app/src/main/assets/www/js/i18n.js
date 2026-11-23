@@ -175,6 +175,8 @@
       "deck.heading": "牌堆",
       "deck.initialRemaining": "剩 78 张",
       "deck.shuffle": "洗牌",
+      "deck.shuffleHold": "按住不放持续洗牌，准备好后松手",
+      "deck.shuffleRelease": "松手收牌",
       "deck.initialCta": "轻点环绕四周的任意一张牌，把它抽进中央牌阵",
       "deck.initialAria": "环形牌堆，轻点任意一张抽牌",
       "deck.switch": "切换牌组",
@@ -857,6 +859,8 @@
       "deck.heading": "Deck",
       "deck.initialRemaining": "78 remaining",
       "deck.shuffle": "Shuffle",
+      "deck.shuffleHold": "Hold to keep shuffling; release when ready",
+      "deck.shuffleRelease": "Release to collect",
       "deck.initialCta": "Tap any card in the ring to draw it into the spread",
       "deck.initialAria": "Circular card deck. Tap a card to draw.",
       "deck.switch": "Switch card pool",
@@ -1458,6 +1462,9 @@
     });
     var toggleValue = document.getElementById("languageToggleValue");
     if (toggleValue) toggleValue.textContent = t("language.switch");
+    Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-title]"), function (element) {
+      element.setAttribute("title", t(element.getAttribute("data-i18n-title")));
+    });
     var toggle = document.getElementById("languageToggle");
     if (toggle) {
       toggle.setAttribute("aria-label", t("language.switchLabel"));

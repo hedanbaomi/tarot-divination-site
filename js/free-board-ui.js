@@ -801,15 +801,17 @@
 
     function shuffleBoard() {
       if (!stateController || !context) return Promise.resolve(false);
+      var original = stateController;
+      var order = shuffled(context.cards);
       var proceed = requestConfirm(t("confirm.freeBoardShuffle"), "confirm.title");
       return proceed.then(function (accepted) {
-        if (!accepted) return false;
+        if (!accepted || stateController !== original) return false;
         var next = normalizedContext({
           deckType: context.deckType,
           deckName: context.deckName,
           mode: context.mode,
           filterMode: context.filterMode,
-          cards: shuffled(context.cards),
+          cards: order,
           allDecks: context.allDecks
         });
         reconfigure(next);
@@ -1098,7 +1100,13 @@
       if (elements.redo) elements.redo.addEventListener("click", function () { mutate("redo", [], "redo"); });
       if (elements.revealAll) elements.revealAll.addEventListener("click", revealAll);
       if (elements.resetView) elements.resetView.addEventListener("click", resetView);
-      if (elements.shuffle) elements.shuffle.addEventListener("click", shuffleBoard);
+      if (elements.shuffle && root.DivinationShuffleGesture) {
+        root.DivinationShuffleGesture.bind(elements.shuffle, function () {
+          return root.DivinationFreeBoardShuffle;
+        }, shuffleBoard);
+      } else if (elements.shuffle) {
+        elements.shuffle.addEventListener("click", shuffleBoard);
+      }
       if (elements.discard) elements.discard.addEventListener("click", discardDraft);
       if (root && typeof root.addEventListener === "function") {
         root.addEventListener("quareia:mediaready", refreshMedia);

@@ -223,12 +223,15 @@
     return freeBoardCardsForDeck(deckType, deckType === "tarot" ? arcanaFilter : "not-applicable");
   }
 
-  function buildPile() {
-    if (isFreeform()) {
-      pile = shuffle(freeformDeckCards());
-      return;
+  function buildPile(order) {
+    var eligible = isFreeform() ? freeformDeckCards() : activeDeckCards();
+    if (order) {
+      var allowed = new Set(eligible);
+      pile = order.filter(function (card) { return allowed.has(card); });
+    } else {
+      pile = shuffle(eligible);
     }
-    pile = shuffle(activeDeckCards());
+    if (isFreeform()) return;
     if (isOverviewStacking()) {
       pile = getAvailableOverviewStackingCards(pile, spread, currentPhase);
     } else if (currentPositionDrawRule()) {
@@ -470,7 +473,7 @@
   }
 
   // Full reset: rebuild pile and clear the spread.
-  function resetDeck() {
+  function resetDeck(order) {
     if (historyUiController) historyUiController.resetQuestion();
     freeDrawn.length = 0;
     freeRedo.length = 0;
@@ -478,7 +481,7 @@
     if (isFreeform()) {
       /* freeform keeps the deck on the table: a reshuffle means a freshly
          built (and shuffled) pile, not just putting the drawn cards back */
-      buildPile();
+      buildPile(order);
       renderFreeformFan();
       scheduleFreeformDraft();
       return;
@@ -486,7 +489,7 @@
     currentPhase = "major";
     spread = [];
     readingReported = false;
-    buildPile();
+    buildPile(order);
     renderSpreadCards();
     renderDeckSpread();
     renderSpreadMeta();
@@ -2488,83 +2491,14 @@
     el.positionGuide.open = true;
   }
 
-  /* ---------- 洗牌手势：按住多久洗多久，松手停手 ---------- */
-  var shuffleHold = { pointerId: null, suppressClickUntil: 0 };
-
-  function shuffleVisual() {
-    return globalThis.DivinationShuffle || null;
-  }
-
-  async function confirmShuffleIfNeeded() {
-    /* ask first only when cards are already laid out on the table */
-    if (isFreeform() && !freeDrawn.length) return true;
-    return await confirmIfSpread(t("confirm.shuffle"), t("confirm.keep"));
-  }
-
-  function dispatchShuffled() {
-    window.requestAnimationFrame(function () {
-      globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
-    });
-  }
-
   async function handleShuffle() {
-    if (shuffleHold.pointerId !== null) return; /* 手势还没收尾，交给它 */
-    if (!(await confirmShuffleIfNeeded())) return;
-    resetDeck();
-    dispatchShuffled();
-  }
-
-  /* 松手：手已经把牌洗好了，这里只问确认，然后让动画收牌摊开 */
-  function settleShuffleHold() {
-    var visual = shuffleVisual();
-    var animated = !!(visual && typeof visual.isRunning === "function" && visual.isRunning());
-    if (!animated) {
-      handleShuffle();
-      return;
-    }
-    confirmShuffleIfNeeded().then(function (allowed) {
-      if (shuffleHold.pointerId !== null) return; /* 又按下了，让新一轮自己收尾 */
-      if (!allowed) {
-        if (visual.cancel) visual.cancel();
-        return;
-      }
-      resetDeck();
-      if (visual.finish) visual.finish();
-    });
-  }
-
-  function beginShuffleHold(event) {
-    if (!event || (event.pointerType === "mouse" && event.button !== 0)) return;
-    if (shuffleHold.pointerId !== null) return;
-    var visual = shuffleVisual();
-    if (!visual || typeof visual.begin !== "function") return;
-    shuffleHold.pointerId = event.pointerId;
-    el.shuffleBtn.classList.add("is-holding");
-    if (el.shuffleBtn.setPointerCapture) {
-      try { el.shuffleBtn.setPointerCapture(event.pointerId); } catch (_error) {}
-    }
-    visual.begin();
-  }
-
-  function endShuffleHold(event) {
-    if (shuffleHold.pointerId === null) return;
-    if (event && event.pointerId !== undefined && event.pointerId !== shuffleHold.pointerId) return;
-    var released = shuffleHold.pointerId;
-    shuffleHold.pointerId = null;
-    shuffleHold.suppressClickUntil = Date.now() + 700;
-    el.shuffleBtn.classList.remove("is-holding");
-    if (el.shuffleBtn.releasePointerCapture) {
-      try { el.shuffleBtn.releasePointerCapture(released); } catch (_error) {}
-    }
-    var visual = shuffleVisual();
-    if (visual && typeof visual.release === "function") visual.release();
-    settleShuffleHold();
-  }
-
-  function handleShuffleClick(event) {
-    /* 按住松手后浏览器还会补一个合成 click（detail 非 0），吞掉它 */
-    if (event.detail !== 0 && Date.now() < shuffleHold.suppressClickUntil) return;
-    handleShuffle();
+    // Freeze the order on release. Keeping the reading discards this candidate.
+    var order = shuffle(allDecksForFreeBoard()[deckType]);
+    var needsConfirmation = !isFreeform() || freeDrawn.length > 0;
+    if (needsConfirmation && !(await confirmIfSpread(t("confirm.shuffle"), t("confirm.keep")))) return false;
+    resetDeck(order);
+    globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
+    return true;
   }
 
   function leaveFreeform(park) {
@@ -2733,21 +2667,16 @@
     el.arcanaFilter.addEventListener("change", handleArcanaChange);
     el.overviewMethod.addEventListener("change", handleOverviewMethodChange);
     el.spreadSelect.addEventListener("change", handleSpreadChange);
-    el.shuffleBtn.addEventListener("click", handleShuffleClick);
-    el.shuffleBtn.addEventListener("pointerdown", beginShuffleHold);
-    el.shuffleBtn.addEventListener("pointerup", endShuffleHold);
-    el.shuffleBtn.addEventListener("pointercancel", endShuffleHold);
-    el.shuffleBtn.addEventListener("contextmenu", function (event) {
-      /* 长按在触屏上会弹菜单：按住洗牌期间别让菜单打断手势 */
-      if (shuffleHold.pointerId !== null) event.preventDefault();
-    });
+    var shuffleOnce = globalThis.DivinationShuffleGesture.bind(el.shuffleBtn, function () {
+      return globalThis.DivinationShuffle;
+    }, handleShuffle);
     var freeUndoBtn = document.getElementById("freeUndoBtn");
     if (freeUndoBtn) freeUndoBtn.addEventListener("click", undoFreeDraw);
     var freeRedoBtn = document.getElementById("freeRedoBtn");
     if (freeRedoBtn) freeRedoBtn.addEventListener("click", redoFreeDraw);
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);
-    if (el.clearBtn) el.clearBtn.addEventListener("click", handleShuffle);
+    if (el.clearBtn) el.clearBtn.addEventListener("click", shuffleOnce);
     globalThis.addEventListener("quareia:languagechange", handleLanguageChange);
     if (globalThis.DivinationHistoryUi &&
         globalThis.DivinationHistoryStore &&

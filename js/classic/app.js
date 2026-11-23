@@ -212,8 +212,14 @@
     return getDeckByArcanaFilter(arcanaFilter, currentPhase);
   }
 
-  function buildPile() {
-    pile = shuffle(activeDeckCards());
+  function buildPile(order) {
+    var eligible = activeDeckCards();
+    if (order) {
+      var allowed = new Set(eligible);
+      pile = order.filter(function (card) { return allowed.has(card); });
+    } else {
+      pile = shuffle(eligible);
+    }
     if (isOverviewStacking()) {
       pile = getAvailableOverviewStackingCards(pile, spread, currentPhase);
     } else if (currentPositionDrawRule()) {
@@ -437,7 +443,7 @@
   }
 
   // Full reset: rebuild pile and clear the spread.
-  function resetDeck() {
+  function resetDeck(order) {
     if (historyUiController) historyUiController.resetQuestion();
     if (isFreeform()) {
       if (freeBoardUi && typeof freeBoardUi.reconfigure === "function") {
@@ -448,7 +454,7 @@
     currentPhase = "major";
     spread = [];
     readingReported = false;
-    buildPile();
+    buildPile(order);
     renderSpreadCards();
     renderDeckSpread();
     renderSpreadMeta();
@@ -1548,25 +1554,13 @@
   }
 
   async function handleShuffle() {
-    if (isFreeform()) {
-      if (!(await confirmIfSpread(t("confirm.shuffle")))) return;
-      if (freeBoardUi && typeof freeBoardUi.getContext === "function") {
-        var boardContext = freeBoardUi.getContext();
-        if (boardContext) {
-          freeBoardUi.reconfigure({
-            deckType: boardContext.deckType,
-            deckName: boardContext.deckName,
-            mode: boardContext.mode,
-            filterMode: boardContext.filterMode,
-            cards: shuffle(boardContext.cards),
-            allDecks: boardContext.allDecks
-          });
-        }
-      }
-      return;
-    }
-    if (!(await confirmIfSpread(t("confirm.shuffle")))) return;
-    resetDeck();
+    if (isFreeform()) return freeBoardUi && freeBoardUi.shuffle();
+    // Freeze the order on release. Keeping the reading discards this candidate.
+    var order = shuffle(allDecksForFreeBoard()[deckType]);
+    if (!(await confirmIfSpread(t("confirm.shuffle")))) return false;
+    resetDeck(order);
+    globalThis.dispatchEvent(new CustomEvent("quareia:shuffled"));
+    return true;
   }
 
   async function handleLayoutModeChange() {
@@ -1692,10 +1686,12 @@
     el.arcanaFilter.addEventListener("change", handleArcanaChange);
     el.overviewMethod.addEventListener("change", handleOverviewMethodChange);
     el.spreadSelect.addEventListener("change", handleSpreadChange);
-    el.shuffleBtn.addEventListener("click", handleShuffle);
+    var shuffleOnce = globalThis.DivinationShuffleGesture.bind(el.shuffleBtn, function () {
+      return globalThis.DivinationShuffle;
+    }, handleShuffle);
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);
-    el.clearBtn.addEventListener("click", handleShuffle);
+    el.clearBtn.addEventListener("click", shuffleOnce);
     globalThis.addEventListener("quareia:languagechange", handleLanguageChange);
     if (globalThis.DivinationHistoryUi &&
         globalThis.DivinationHistoryStore &&

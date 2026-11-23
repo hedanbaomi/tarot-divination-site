@@ -1,0 +1,75 @@
+/* The row stays in flow while its decorative copy shuffles above it. */
+.shuffle-row {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.shuffle-row .shuffle-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.shuffle-row .shuffle-orbit { position: absolute; }
+.shuffle-row .is-shuffling { visibility: hidden; }
+.shuffle-row .shuffle-clone { pointer-events: none; }
+
+#shuffleBtn, #freeBoardShuffleBtn {
+  display: inline-grid;
+  place-items: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#shuffleBtn:active, #freeBoardShuffleBtn:active { transform: none; }
+
+#shuffleBtn.is-holding, #freeBoardShuffleBtn.is-holding {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Both labels occupy one cell so pressing never changes the toolbar width. */
+#shuffleBtn > span, #freeBoardShuffleBtn > span { grid-area: 1 / 1; }
+.shuffle-release, .is-holding > span:first-child { visibility: hidden; }
+.is-holding > .shuffle-release { visibility: visible; }
+
+/* On a small Free Board the pile can sit below the fold. Echo the two packs
+   in the held button itself, without moving any neighbouring controls. */
+#freeBoardShuffleBtn .shuffle-release {
+  position: relative;
+  padding-inline-start: 1.25em;
+}
+#freeBoardShuffleBtn .shuffle-release::before,
+#freeBoardShuffleBtn .shuffle-release::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0.25em;
+  width: 0.48em;
+  height: 0.72em;
+  margin-top: -0.4em;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  background: var(--bg-card);
+}
+#freeBoardShuffleBtn .shuffle-release::before { --split: -0.24em; --tilt: -12deg; }
+#freeBoardShuffleBtn .shuffle-release::after { --split: 0.24em; --tilt: 12deg; }
+#freeBoardShuffleBtn.is-holding .shuffle-release::before,
+#freeBoardShuffleBtn.is-holding .shuffle-release::after {
+  animation: classic-riffle-mark 960ms ease-in-out infinite;
+}
+@keyframes classic-riffle-mark {
+  0%, 90%, 100% { transform: translateX(0) rotate(0); }
+  35% { transform: translateX(var(--split)) rotate(var(--tilt)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #freeBoardShuffleBtn.is-holding .shuffle-release::before,
+  #freeBoardShuffleBtn.is-holding .shuffle-release::after {
+    animation: none;
+    transform: translateX(var(--split));
+  }
+}

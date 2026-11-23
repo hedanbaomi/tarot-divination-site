@@ -35,7 +35,7 @@ test("the free board builds its own full pool and keeps a restored draft in orde
   var app = read("js/app.js");
   assert.match(app, /function freeformDeckCards\(\)/);
   assert.match(app, /if \(isFreeform\(\)\) \{/);
-  assert.match(app, /pile = shuffle\(freeformDeckCards\(\)\)/);
+  assert.match(app, /var eligible = isFreeform\(\) \? freeformDeckCards\(\) : activeDeckCards\(\);/);
   assert.match(app, /function shuffle\(deck\)[\s\S]*Math\.floor\(Math\.random\(\) \* \(i \+ 1\)\)/);
   assert.match(app, /function restoreFreeformDraft\(resumeParked\)/);
   assert.match(app, /removeAllDrawnCardsFromPile|remainingPile/);

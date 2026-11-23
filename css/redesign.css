@@ -2527,6 +2527,7 @@ html.ui2 #shuffleBtn {
   user-select: none;
   -webkit-touch-callout: none;
 }
+html.ui2 #shuffleBtn:active { transform: none; }
 html.ui2 #shuffleBtn.is-holding {
   border-color: var(--accent-border);
   background: var(--accent-soft);
@@ -2551,8 +2552,10 @@ html.ui2 #shuffleBtn.is-holding + .shuffle-hold-hint {
   transform: translateY(0);
 }
 
-
-
+@media (prefers-reduced-motion: reduce) {
+  html.ui2 .shuffle-hold-hint,
+  html.ui2 #shuffleBtn { transition: none; transform: none; }
+}
 
 /* position guide rows: no boxes, just type */
 html.ui2 .position-guide ol li {

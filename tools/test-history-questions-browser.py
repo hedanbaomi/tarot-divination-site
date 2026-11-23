@@ -74,10 +74,9 @@ def scenario(context, base, android, classic, locale, width):
     expect(q).to_have_value('')
     expect(toggle).to_have_attribute('aria-expanded', 'false')
 
-    if not classic:
-        ring = page.locator('.deck-ring.is-shuffling')
-        ring.wait_for(state='attached')
-        ring.wait_for(state='detached', timeout=12000)
+    shuffling = page.locator("#deckSpread.is-shuffling")
+    shuffling.wait_for(state="attached")
+    shuffling.wait_for(state="detached", timeout=12000)
     for _ in range(3):
         page.locator('#deckSpread .deck-card').first.press('Enter')
     page.locator('#revealBtn').click()

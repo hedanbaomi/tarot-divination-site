@@ -29,7 +29,7 @@ function extractFunction(startMarker, endMarker) {
 }
 
 const resetDeck = extractFunction(
-  "  function resetDeck()",
+  "  function resetDeck(",
   "  function getOrientationLabel"
 );
 const notifyReadingCompleted = extractFunction(
