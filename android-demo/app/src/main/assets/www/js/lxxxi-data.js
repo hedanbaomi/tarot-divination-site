@@ -606,7 +606,24 @@ const lxxxiDeck = [
   },
 ];
 
+// Chapter groupings follow the guide. The printed edge can differ from the
+// chapter: Abyss has a black edge, and two cards bridge realms in two colours.
+const lxxxiRealmGroups = [
+  { last: 4, border: "divine", name: "神圣领域", nameEn: "Divine Realm" },
+  { last: 26, border: "inner", name: "内在领域", nameEn: "Inner Realm" },
+  { last: 77, border: "physical", name: "物质领域", nameEn: "Physical Realm" },
+  { last: 81, border: "underworld", name: "死亡与地下世界领域", nameEn: "Death and the Underworld" }
+];
+const lxxxiSpecialRealms = {
+  5: { border: "underworld", name: "内在领域（地下世界黑框）", nameEn: "Inner Realm (black Underworld border)" },
+  6: { border: "inner-underworld", name: "内在领域 / 死亡与地下世界", nameEn: "Inner Realm / Death and the Underworld" },
+  22: { border: "inner-physical", name: "内在领域 / 物质领域", nameEn: "Inner Realm / Physical Realm" }
+};
+
 lxxxiDeck.forEach(function (card) {
+  card.realm = lxxxiSpecialRealms[card.number] || lxxxiRealmGroups.find(function (group) {
+    return card.number <= group.last;
+  });
   card.id = "lxxxi-" + (card.number < 10 ? "0" + card.number : String(card.number));
   card.deck = "lxxxi";
   card.arcana = "lxxxi";

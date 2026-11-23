@@ -51,3 +51,23 @@ test("LXXXI card names use simplified Chinese", function () {
   assert.equal(byNumber[80].name, "死亡");
   assert.equal(byNumber[81].name, "毁灭");
 });
+
+test("all 81 printed borders agree on Web and Android, including Abyss and both bridge cards", function () {
+  var android = require("../android-demo/app/src/main/assets/www/js/lxxxi-data.js");
+  var expected = [
+    ...Array(4).fill("divine"), "underworld", "inner-underworld",
+    ...Array(15).fill("inner"), "inner-physical", ...Array(4).fill("inner"),
+    ...Array(51).fill("physical"), ...Array(4).fill("underworld")
+  ];
+  [deck, android].forEach(function (bundle) {
+    var cards = bundle.lxxxiDeckFull.slice().sort(function (a, b) { return a.number - b.number; });
+    assert.deepEqual(cards.map(function (card) { return card.realm.border; }), expected);
+    cards.forEach(function (card) {
+      assert.match(card.realm.name, /[一-龥]/);
+      assert.match(card.realm.nameEn, /[A-Za-z]/);
+    });
+    assert.match(cards[4].realm.nameEn, /Inner Realm.*black Underworld border/);
+    assert.match(cards[5].realm.nameEn, /Inner Realm.*Underworld/);
+    assert.match(cards[21].realm.nameEn, /Inner Realm.*Physical Realm/);
+  });
+});

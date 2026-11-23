@@ -623,6 +623,8 @@
   function updateSpreadCardAria(cardEl, entry, position) {
     var flipButton = cardEl && cardEl.querySelector(".spread-card-flip");
     if (!flipButton) return;
+    var realm = entry.revealed && entry.card.realm;
+    if (realm) cardEl.setAttribute("data-lxxxi-border", realm.border);
     var layer = isOverviewStacking()
       ? " · " + (entry.layer === "major" ? t("app.layerMajorBase") : t("app.layerMinorTop"))
       : "";
@@ -634,7 +636,7 @@
         layer: layer,
         card: localizedCardName(entry.card),
         orientation: getOrientationLabel(entry.orientation)
-      })
+      }) + (realm ? " · " + localized(realm, "name") : "")
     );
     flipButton.setAttribute(
       "aria-pressed",
@@ -716,7 +718,7 @@
     meaningPanel.className = "spread-card-meaning";
     var meaningKicker = document.createElement("span");
     meaningKicker.className = "spread-card-meaning-kicker";
-    meaningKicker.textContent = t("app.meaningTitle");
+    meaningKicker.textContent = localized(card.realm, "name") || t("app.meaningTitle");
     var meaningName = document.createElement("strong");
     meaningName.className = "spread-card-meaning-name";
     meaningName.textContent = localizedCardName(card);
@@ -1114,6 +1116,7 @@
       var resultImg = createCardImage(card, "result-card-image", entry.orientation);
       if (card.deck === "mystagogus") resultImg.classList.add("result-card-image-m");
       if (card.deck === "lxxxi") resultImg.classList.add("result-card-image-lxxxi");
+      if (card.realm) resultImg.setAttribute("data-lxxxi-border", card.realm.border);
       resultCard.appendChild(resultImg);
     }
 
@@ -1140,6 +1143,12 @@
     header.appendChild(posEl);
     header.appendChild(nameEl);
     header.appendChild(orientEl);
+    if (card.realm) {
+      var realmLabel = document.createElement("span");
+      realmLabel.className = "result-suit";
+      realmLabel.textContent = localized(card.realm, "name");
+      header.appendChild(realmLabel);
+    }
     if (entry.revealed && globalThis.DivinationCardNotes) {
       var note = globalThis.DivinationCardNotes.createButton(card.deck || deckType, card.id);
       if (note) header.appendChild(note);

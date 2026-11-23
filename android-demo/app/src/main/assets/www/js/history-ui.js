@@ -392,7 +392,10 @@
         : t("history.orientation.upright");
       var layer = card.layer === "major" ? t("history.layer.major") :
         card.layer === "minor" ? t("history.layer.minor") : "";
-      cardName.textContent = displayCardName(record, card) + " (" + card.cardNumber + ") · " + orientation + layer;
+      var source = sourceForCard(record, card);
+      var realm = source && localized(source.realm, "name");
+      cardName.textContent = displayCardName(record, card) + " (" + card.cardNumber + ") · " + orientation + layer +
+        (realm ? " · " + realm : "");
       item.appendChild(name);
       item.appendChild(cardName);
       if (globalThis.DivinationCardNotes) {
@@ -415,10 +418,12 @@
         ? t("history.freeBoardRevealed", { orientation: orientation })
         : t("history.freeBoardHidden");
       var details = document.createElement("p");
+      var source = card.revealed && sourceForCard(record, card);
+      var realm = source && localized(source.realm, "name");
       details.textContent = t("history.freeBoardCardState", {
         card: displayCardName(record, card),
         state: state
-      });
+      }) + (realm ? " · " + realm : "");
       item.appendChild(name);
       item.appendChild(details);
       if (card.revealed && globalThis.DivinationCardNotes) {
@@ -515,6 +520,9 @@
       cardEl.setAttribute("role", "listitem");
       cardEl.setAttribute("data-slot-index", String(card.slotIndex));
       if (cardStacking) cardEl.setAttribute("data-layer", card.layer);
+      var realm = sourceCard && sourceCard.realm;
+      if (realm) cardEl.setAttribute("data-lxxxi-border", realm.border);
+      var realmLabel = localized(realm, "name");
       cardEl.style.gridColumn = position.column + " / span " + (position.columnSpan || 1);
       cardEl.style.gridRow = position.row + " / span " + (position.rowSpan || 1);
       cardEl.style.setProperty(
@@ -542,7 +550,7 @@
       var meaningPanel = document.createElement("div");
       meaningPanel.className = "spread-card-meaning";
       meaningPanel.appendChild(
-        textElement("span", "spread-card-meaning-kicker", posNumber + ". " + posName + " · " + t("app.meaningTitle"))
+        textElement("span", "spread-card-meaning-kicker", posNumber + ". " + posName + " · " + (realmLabel || t("app.meaningTitle")))
       );
       meaningPanel.appendChild(textElement("strong", "spread-card-meaning-name", cardName));
       if (interpretation.keywords.length) {
@@ -611,7 +619,7 @@
             layer: layerLabel,
             card: cardName,
             orientation: orientationLabel
-          })
+          }) + (realmLabel ? " · " + realmLabel : "")
         );
         flipButton.setAttribute("aria-pressed", String(meaningVisible));
       }

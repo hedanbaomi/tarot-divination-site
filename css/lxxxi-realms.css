@@ -1,0 +1,33 @@
+/* Representative colours sampled from the printed title bands. Keep these
+   independent of the UI theme; the fine neutral keyline separates the dark
+   edges from the table on both light and dark backgrounds. */
+:root {
+  --lxxxi-divine: #694a4a;
+  --lxxxi-inner: #474e63;
+  --lxxxi-physical: #4b5f4f;
+  --lxxxi-underworld: #494a49;
+}
+
+[data-lxxxi-border="divine"] { --realm-edge: var(--lxxxi-divine); }
+[data-lxxxi-border="inner"] { --realm-edge: var(--lxxxi-inner); }
+[data-lxxxi-border="physical"] { --realm-edge: var(--lxxxi-physical); }
+[data-lxxxi-border="underworld"] { --realm-edge: var(--lxxxi-underworld); }
+
+[data-lxxxi-border="inner-underworld"] {
+  --realm-band: linear-gradient(to right, var(--lxxxi-inner) 50%, var(--lxxxi-underworld) 50%);
+}
+[data-lxxxi-border="inner-physical"] {
+  --realm-band: linear-gradient(to bottom, var(--lxxxi-inner) 50%, var(--lxxxi-physical) 50%);
+}
+
+.spread-card[data-lxxxi-border] .spread-card-front,
+.spread-card.meaning-visible[data-lxxxi-border] .spread-card-back,
+.free-board-card[data-lxxxi-border],
+img.result-card-image[data-lxxxi-border] {
+  border: 4px solid transparent;
+  background:
+    linear-gradient(var(--neutral-contain), var(--neutral-contain)) padding-box,
+    var(--realm-band, linear-gradient(var(--realm-edge), var(--realm-edge))) border-box;
+  outline: 1px solid rgba(194, 190, 181, 0.65);
+  outline-offset: -1px;
+}
