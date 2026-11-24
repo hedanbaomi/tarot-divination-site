@@ -32,3 +32,24 @@ test("every Mystagogus card image file exists", function () {
   });
   assert.ok(fs.existsSync(path.join(root, "assets/cards/m/m-back.jpeg")), "m-back");
 });
+
+test("Mystagogus cards carry the 7 official guidebook chapters on Web and Android", function () {
+  var android = require("../android-demo/app/src/main/assets/www/js/mystagogus-data.js");
+  var expectedIds = [
+    ...Array(4).fill("core-fate"),
+    ...Array(13).fill("magical-path-1"),
+    ...Array(14).fill("magical-path-2"),
+    ...Array(17).fill("structures"),
+    ...Array(11).fill("beings"),
+    ...Array(9).fill("dynamics-1"),
+    ...Array(10).fill("dynamics-2")
+  ];
+  [deck, android].forEach(function (bundle) {
+    var cards = bundle.mystagogusDeckFull.slice().sort(function (a, b) { return a.number - b.number; });
+    assert.deepEqual(cards.map(function (card) { return card.chapter.id; }), expectedIds);
+    cards.forEach(function (card) {
+      assert.match(card.chapter.name, /[一-龥]/);
+      assert.match(card.chapter.nameEn, /^[IVX]+ · [A-Za-z]/);
+    });
+  });
+});

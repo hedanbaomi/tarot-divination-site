@@ -6,8 +6,10 @@
   "use strict";
 
   var fallbackI18n = null;
+  var fallbackStats = null;
   if (typeof require === "function") {
     fallbackI18n = require("./i18n.js");
+    fallbackStats = require("./history-stats.js");
   }
 
   function i18n() {
@@ -236,6 +238,7 @@
     options = options || {};
     var store = options.store;
     var recordsApi = options.recordsApi || globalThis.DivinationHistoryRecords;
+    var statsApi = options.statsApi || globalThis.DivinationHistoryStats || fallbackStats;
     var createSnapshot = options.createSnapshot;
     var resolveSpread = options.resolveSpread;
     var actualLayoutOpen = false;
@@ -253,6 +256,12 @@
     var tableRecord = null;
     var useSavedQuestion = false;
     var listRevision = 0;
+    var activeTab = "list";
+    var statsDeck = null;
+    var statsDeckUserPicked = false;
+    var statsPeriod = "all";
+    var statsCategoryId = null;
+    var statsExpanded = false;
 
     var elements = {
       question: byId("readingQuestion"),
@@ -260,6 +269,15 @@
       questionCaption: byId("readingQuestionCaption"),
       questionPanel: byId("readingQuestionPanel"),
       summary: byId("readingQuestionSummary"),
+      tabs: byId("historyTabs"),
+      tabList: byId("historyTabList"),
+      tabStats: byId("historyTabStats"),
+      toolbar: byId("historyToolbar"),
+      listView: byId("historyListView"),
+      statsView: byId("historyStatsView"),
+      statsDecks: byId("historyStatsDecks"),
+      statsPeriods: byId("historyStatsPeriods"),
+      statsBody: byId("historyStatsBody"),
       search: byId("historySearch"),
       select: byId("historySelectBtn"),
       exportSelected: byId("historyExportSelectedBtn"),
@@ -329,7 +347,7 @@
         elements.importLabel.setAttribute("aria-disabled", "true");
         elements.importLabel.classList.add("is-disabled");
       }
-      [elements.exportButton, elements.clear, elements.filter, elements.select, elements.search].forEach(function (element) {
+      [elements.exportButton, elements.clear, elements.filter, elements.select, elements.search, elements.tabStats].forEach(function (element) {
         if (element) element.disabled = true;
       });
       if (readingComplete) {
@@ -340,7 +358,25 @@
       setTranslatedStatus(elements.actionStatus, "history.unavailable", null, true);
     }
 
+    function syncDialogViews() {
+      var inDetail = Boolean(selectedRecordId);
+      var inStats = !inDetail && activeTab === "stats" && Boolean(elements.statsView);
+      if (elements.tabs) elements.tabs.hidden = inDetail;
+      if (elements.toolbar) elements.toolbar.hidden = inDetail || inStats;
+      if (elements.listView) elements.listView.hidden = inDetail || inStats;
+      if (elements.statsView) elements.statsView.hidden = !inStats;
+      if (elements.tabList) {
+        elements.tabList.classList.toggle("is-active", !inStats);
+        elements.tabList.setAttribute("aria-selected", String(!inStats));
+      }
+      if (elements.tabStats) {
+        elements.tabStats.classList.toggle("is-active", inStats);
+        elements.tabStats.setAttribute("aria-selected", String(inStats));
+      }
+    }
+
     function showListView() {
+      activeTab = "list";
       actualLayoutOpen = false;
       selectedRecordId = null;
       selectedRecord = null;
@@ -349,6 +385,333 @@
       if (elements.detail) elements.detail.hidden = true;
       if (elements.back) elements.back.hidden = true;
       if (elements.deleteButton) elements.deleteButton.hidden = true;
+      syncDialogViews();
+    }
+
+    function formatPercent(ratio) {
+      if (!ratio || ratio <= 0) return "0";
+      var pct = ratio * 100;
+      if (pct < 1) return pct.toFixed(1);
+      return String(Math.round(pct));
+    }
+
+    function preferredStatsDeck() {
+      if (elements.filter && elements.filter.value) {
+        return elements.filter.value;
+      }
+      return "all";
+    }
+
+    function syncStatsControls() {
+      if (elements.statsDecks) {
+        Array.prototype.forEach.call(elements.statsDecks.querySelectorAll("[data-stats-deck]"), function (btn) {
+          var active = btn.getAttribute("data-stats-deck") === statsDeck;
+          btn.classList.toggle("is-active", active);
+          btn.setAttribute("aria-pressed", String(active));
+        });
+      }
+      if (elements.statsPeriods) {
+        Array.prototype.forEach.call(elements.statsPeriods.querySelectorAll("[data-stats-period]"), function (btn) {
+          var active = btn.getAttribute("data-stats-period") === statsPeriod;
+          btn.classList.toggle("is-active", active);
+          btn.setAttribute("aria-pressed", String(active));
+        });
+      }
+    }
+
+    function createStatsKpi(label, value) {
+      var card = document.createElement("div");
+      card.className = "history-stats-kpi";
+      card.appendChild(textElement("span", "history-stats-kpi-label", label));
+      card.appendChild(textElement("strong", "history-stats-kpi-value", value));
+      return card;
+    }
+
+    function renderStats() {
+      if (!elements.statsBody || !statsApi) return;
+      if (!statsDeck || !statsDeckUserPicked) {
+        statsDeck = statsApi.pickDefaultDeck(allRecords, preferredStatsDeck());
+      }
+      syncStatsControls();
+      syncDialogViews();
+
+      var summary = statsApi.summarize(allRecords, {
+        deckType: statsDeck,
+        period: statsPeriod
+      });
+      var categoryById = new Map();
+      summary.categories.forEach(function (cat) { categoryById.set(cat.id, cat); });
+      if (statsCategoryId && !categoryById.has(statsCategoryId)) statsCategoryId = null;
+
+      elements.statsBody.replaceChildren();
+
+      if (summary.totalDraws === 0) {
+        elements.statsBody.appendChild(textElement(
+          "p",
+          "history-stats-empty",
+          t(summary.deckType === "all" ? "history.stats.emptyAll" : "history.stats.empty")
+        ));
+        return;
+      }
+
+      var kpis = document.createElement("div");
+      kpis.className = "history-stats-kpis";
+      kpis.appendChild(createStatsKpi(t("history.stats.readings"), String(summary.readingCount)));
+      kpis.appendChild(createStatsKpi(t("history.stats.draws"), String(summary.totalDraws)));
+      kpis.appendChild(createStatsKpi(t("history.stats.unique"), summary.uniqueCards + " / " + summary.deckSize));
+      elements.statsBody.appendChild(kpis);
+
+      if (summary.arcana) {
+        var arcanaCard = document.createElement("section");
+        arcanaCard.className = "history-stats-section history-stats-arcana";
+        arcanaCard.appendChild(textElement("h3", "history-stats-heading", t("history.stats.arcanaTitle")));
+
+        var majorPct = summary.arcana.major.share * 100;
+        var minorPct = summary.arcana.minor.share * 100;
+        var bar = document.createElement("div");
+        bar.className = "history-stats-arcana-bar";
+        bar.setAttribute("aria-hidden", "true");
+        var majorSeg = document.createElement("span");
+        majorSeg.className = "history-stats-arcana-major";
+        majorSeg.style.width = majorPct.toFixed(1) + "%";
+        var minorSeg = document.createElement("span");
+        minorSeg.className = "history-stats-arcana-minor";
+        minorSeg.style.width = minorPct.toFixed(1) + "%";
+        bar.appendChild(majorSeg);
+        bar.appendChild(minorSeg);
+        arcanaCard.appendChild(bar);
+
+        var legend = document.createElement("div");
+        legend.className = "history-stats-arcana-legend";
+        var majorItem = document.createElement("span");
+        majorItem.className = "history-stats-arcana-item";
+        majorItem.appendChild(textElement("span", "history-stats-swatch history-stats-swatch-major", ""));
+        majorItem.appendChild(textElement("span", "", t("history.stats.major") + " · " +
+          t("history.stats.countAndPct", {
+            count: summary.arcana.major.count,
+            pct: formatPercent(summary.arcana.major.share)
+          })));
+        var minorItem = document.createElement("span");
+        minorItem.className = "history-stats-arcana-item";
+        minorItem.appendChild(textElement("span", "history-stats-swatch history-stats-swatch-minor", ""));
+        minorItem.appendChild(textElement("span", "", t("history.stats.minor") + " · " +
+          t("history.stats.countAndPct", {
+            count: summary.arcana.minor.count,
+            pct: formatPercent(summary.arcana.minor.share)
+          })));
+        legend.appendChild(majorItem);
+        legend.appendChild(minorItem);
+        arcanaCard.appendChild(legend);
+
+        if (summary.orientation && summary.orientation.hasReversed) {
+          arcanaCard.appendChild(textElement(
+            "p",
+            "history-stats-subline",
+            t("history.stats.orientationSummary", {
+              upright: summary.orientation.upright.count,
+              uprightPct: formatPercent(summary.orientation.upright.share),
+              reversed: summary.orientation.reversed.count,
+              reversedPct: formatPercent(summary.orientation.reversed.share)
+            })
+          ));
+        }
+        elements.statsBody.appendChild(arcanaCard);
+      }
+
+      var catSection = document.createElement("section");
+      catSection.className = "history-stats-section";
+      catSection.appendChild(textElement(
+        "h3",
+        "history-stats-heading",
+        t(summary.deckType === "all" ? "history.stats.decksTitle" : "history.stats.categoriesTitle")
+      ));
+      catSection.appendChild(textElement("p", "history-stats-hint", t("history.stats.hint." + summary.deckType)));
+
+      var catList = document.createElement("div");
+      catList.className = "history-stats-categories";
+      summary.categories.forEach(function (cat) {
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "history-stats-cat-row";
+        row.setAttribute("data-stats-category", cat.id);
+        var selected = statsCategoryId === cat.id;
+        row.classList.toggle("is-selected", selected);
+        row.setAttribute("aria-pressed", String(selected));
+
+        var head = document.createElement("div");
+        head.className = "history-stats-cat-head";
+        var labelWrap = document.createElement("span");
+        labelWrap.className = "history-stats-cat-name";
+        if (cat.swatch) {
+          var swatch = document.createElement("span");
+          swatch.className = "history-stats-swatch";
+          swatch.setAttribute("data-stats-swatch", cat.swatch);
+          swatch.setAttribute("aria-hidden", "true");
+          labelWrap.appendChild(swatch);
+        }
+        labelWrap.appendChild(textElement("span", "", localized(cat, "name")));
+
+        var metricWrap = document.createElement("span");
+        metricWrap.className = "history-stats-cat-metrics";
+        metricWrap.appendChild(textElement("strong", "", t("history.stats.countAndPct", {
+          count: cat.count,
+          pct: formatPercent(cat.share)
+        })));
+        if (summary.deckType !== "all") {
+          metricWrap.appendChild(textElement("span", "history-stats-baseline", t("history.stats.deckBaseline", {
+            pct: formatPercent(cat.expectedShare)
+          })));
+        }
+        head.appendChild(labelWrap);
+        head.appendChild(metricWrap);
+        row.appendChild(head);
+
+        var track = document.createElement("div");
+        track.className = "history-stats-bar-track";
+        track.setAttribute("aria-hidden", "true");
+        var fill = document.createElement("span");
+        fill.className = "history-stats-bar-fill";
+        if (cat.swatch) fill.setAttribute("data-stats-swatch", cat.swatch);
+        fill.style.width = (cat.share * 100).toFixed(1) + "%";
+        track.appendChild(fill);
+        if (summary.deckType !== "all") {
+          var baseline = document.createElement("span");
+          baseline.className = "history-stats-bar-baseline";
+          baseline.style.left = (cat.expectedShare * 100).toFixed(1) + "%";
+          track.appendChild(baseline);
+        }
+        row.appendChild(track);
+
+        row.addEventListener("click", function () {
+          statsCategoryId = statsCategoryId === cat.id ? null : cat.id;
+          statsExpanded = false;
+          renderStats();
+        });
+        catList.appendChild(row);
+      });
+      catSection.appendChild(catList);
+      elements.statsBody.appendChild(catSection);
+
+      var cardsSection = document.createElement("section");
+      cardsSection.className = "history-stats-section";
+      var cardsHead = document.createElement("div");
+      cardsHead.className = "history-stats-cards-head";
+      cardsHead.appendChild(textElement("h3", "history-stats-heading", t("history.stats.topCardsTitle")));
+      if (statsCategoryId && categoryById.has(statsCategoryId)) {
+        var filterWrap = document.createElement("div");
+        filterWrap.className = "history-stats-filter-tag";
+        filterWrap.appendChild(textElement("span", "", t("history.stats.filterActive", {
+          category: localized(categoryById.get(statsCategoryId), "name")
+        })));
+        var clearFilterBtn = button(t("history.stats.clearFilter"), "btn-mini");
+        clearFilterBtn.addEventListener("click", function () {
+          statsCategoryId = null;
+          statsExpanded = false;
+          renderStats();
+        });
+        filterWrap.appendChild(clearFilterBtn);
+        cardsHead.appendChild(filterWrap);
+      }
+      cardsSection.appendChild(cardsHead);
+
+      var filteredCards = statsCategoryId
+        ? summary.cards.filter(function (entry) { return entry.categoryId === statsCategoryId; })
+        : summary.cards;
+
+      if (!filteredCards.length) {
+        cardsSection.appendChild(textElement("p", "history-stats-empty", t("history.stats.noCardsInCategory")));
+      } else {
+        var topLimit = 10;
+        var visibleCards = statsExpanded ? filteredCards : filteredCards.slice(0, topLimit);
+        var cardList = document.createElement("ol");
+        cardList.className = "history-stats-cards";
+
+        visibleCards.forEach(function (entry, index) {
+          var item = document.createElement("li");
+          item.className = "history-stats-card-row";
+          item.appendChild(textElement("span", "history-stats-rank", "#" + (index + 1)));
+
+          var info = document.createElement("div");
+          info.className = "history-stats-card-info";
+          var cardTitle = (entry.sourceCard && localized(entry.sourceCard, "name")) || entry.fallbackName;
+          info.appendChild(textElement("strong", "history-stats-card-name", cardTitle));
+
+          var meta = document.createElement("span");
+          meta.className = "history-stats-card-meta";
+          var realmBorder = entry.sourceCard && entry.sourceCard.realm && entry.sourceCard.realm.border;
+          if (realmBorder) {
+            var realmDot = document.createElement("span");
+            realmDot.className = "history-stats-swatch";
+            realmDot.setAttribute("data-stats-swatch", realmBorder);
+            realmDot.setAttribute("aria-hidden", "true");
+            meta.appendChild(realmDot);
+          }
+          var badgeParts = [];
+          if (summary.deckType === "all") {
+            badgeParts.push(t("deck.name." + entry.deckType));
+          }
+          var detailCategory = entry.sourceCard && entry.sourceCard.realm
+            ? localized(entry.sourceCard.realm, "name")
+            : localized(
+              summary.deckType === "all"
+                ? statsApi.getCategoryInfo(entry.deckType, entry.subCategoryId)
+                : categoryById.get(entry.categoryId),
+              "name"
+            );
+          if (detailCategory) badgeParts.push(detailCategory);
+          if (entry.deckType === "tarot" && entry.reversedCount > 0) {
+            badgeParts.push(t("history.stats.uprightReversed", {
+              upright: entry.uprightCount,
+              reversed: entry.reversedCount
+            }));
+          }
+          meta.appendChild(textElement("span", "", badgeParts.join(" · ")));
+          info.appendChild(meta);
+          item.appendChild(info);
+
+          var side = document.createElement("div");
+          side.className = "history-stats-card-side";
+          side.appendChild(textElement("span", "history-stats-card-count", t("history.stats.countAndPct", {
+            count: entry.count,
+            pct: formatPercent(entry.share)
+          })));
+          if (globalThis.DivinationCardNotes && typeof globalThis.DivinationCardNotes.createButton === "function") {
+            var noteBtn = globalThis.DivinationCardNotes.createButton(entry.deckType, entry.cardId);
+            if (noteBtn) side.appendChild(noteBtn);
+          }
+          item.appendChild(side);
+          cardList.appendChild(item);
+        });
+        cardsSection.appendChild(cardList);
+
+        if (filteredCards.length > topLimit) {
+          var toggleBtn = button(
+            statsExpanded
+              ? t("history.stats.showTop", { count: topLimit })
+              : t("history.stats.showAll", { count: filteredCards.length }),
+            "btn btn-secondary history-stats-more-btn"
+          );
+          toggleBtn.addEventListener("click", function () {
+            statsExpanded = !statsExpanded;
+            renderStats();
+          });
+          cardsSection.appendChild(toggleBtn);
+        }
+      }
+      elements.statsBody.appendChild(cardsSection);
+    }
+
+    function showStatsView() {
+      activeTab = "stats";
+      selecting = false;
+      selectedIds.clear();
+      actualLayoutOpen = false;
+      selectedRecordId = null;
+      selectedRecord = null;
+      if (elements.detail) elements.detail.hidden = true;
+      if (elements.back) elements.back.hidden = true;
+      if (elements.deleteButton) elements.deleteButton.hidden = true;
+      renderStats();
     }
 
     function updateSelectionActions() {
@@ -753,6 +1116,7 @@
       selectedRecordId = record.id;
       renderQuestion(record, editing);
       selectedRecord = record;
+      syncDialogViews();
       elements.list.hidden = true;
       elements.empty.hidden = true;
       elements.detail.hidden = false;
@@ -862,7 +1226,11 @@
         allRecords = records;
         var liveIds = new Set(records.map(function (record) { return record.id; }));
         selectedIds.forEach(function (id) { if (!liveIds.has(id)) selectedIds.delete(id); });
-        renderList();
+        if (activeTab === "stats" && !selectedRecordId) {
+          renderStats();
+        } else {
+          renderList();
+        }
       } catch (_error) {
         setUnavailable();
       }
@@ -873,6 +1241,11 @@
       selecting = false;
       selectedIds.clear();
       elements.search.value = "";
+      statsDeck = null;
+      statsDeckUserPicked = false;
+      statsPeriod = "all";
+      statsCategoryId = null;
+      statsExpanded = false;
       showListView();
       setStatus(elements.actionStatus, "", false);
       if (typeof elements.dialog.showModal === "function") {
@@ -1117,6 +1490,10 @@
         showDetail(selectedRecord);
         return Promise.resolve();
       }
+      if (activeTab === "stats" && elements.statsView) {
+        renderStats();
+        return Promise.resolve();
+      }
       return refreshList();
     }
 
@@ -1161,6 +1538,56 @@
     });
     elements.cancelQuestion.addEventListener("click", finishQuestionEdit);
     elements.saveQuestion.addEventListener("click", saveQuestionEdit);
+    if (elements.tabList) {
+      elements.tabList.addEventListener("click", function () {
+        if (activeTab === "list") return;
+        renderList();
+      });
+    }
+    if (elements.tabStats) {
+      elements.tabStats.addEventListener("click", function () {
+        if (!available) return;
+        showStatsView();
+      });
+    }
+    if (elements.tabs) {
+      elements.tabs.addEventListener("keydown", function (event) {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        if (!elements.tabList || !elements.tabStats || elements.tabStats.disabled) return;
+        event.preventDefault();
+        if (activeTab === "list") {
+          showStatsView();
+          elements.tabStats.focus();
+        } else {
+          renderList();
+          elements.tabList.focus();
+        }
+      });
+    }
+    if (elements.statsDecks) {
+      elements.statsDecks.addEventListener("click", function (event) {
+        var btn = event.target && event.target.closest ? event.target.closest("[data-stats-deck]") : null;
+        if (!btn) return;
+        var nextDeck = btn.getAttribute("data-stats-deck");
+        if (!nextDeck || nextDeck === statsDeck) return;
+        statsDeck = nextDeck;
+        statsDeckUserPicked = true;
+        statsCategoryId = null;
+        statsExpanded = false;
+        renderStats();
+      });
+    }
+    if (elements.statsPeriods) {
+      elements.statsPeriods.addEventListener("click", function (event) {
+        var btn = event.target && event.target.closest ? event.target.closest("[data-stats-period]") : null;
+        if (!btn) return;
+        var nextPeriod = btn.getAttribute("data-stats-period");
+        if (!nextPeriod || nextPeriod === statsPeriod) return;
+        statsPeriod = nextPeriod;
+        statsExpanded = false;
+        renderStats();
+      });
+    }
     elements.filter.addEventListener("change", renderList);
     elements.search.addEventListener("input", renderList);
     elements.select.addEventListener("click", function () {

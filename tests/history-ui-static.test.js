@@ -44,13 +44,14 @@ test("history edits only a reading-level question and retains the JSON backup co
         assert.ok(source.match(new RegExp('<textarea[^>]+id="' + id + '"[^>]*>'))[0].includes('maxlength="' + limit + '"'));
       }
       assert.ok(source.indexOf("js/history-markdown.js") < source.indexOf("js/history-ui.js"));
+      assert.ok(source.indexOf("js/history-stats.js") < source.indexOf("js/history-ui.js"));
     }
   }
 });
 
 test("question editors and exports have no network or telemetry side effects", function () {
   for (const assets of ["", "android-demo/app/src/main/assets/www"]) {
-    for (const name of ["history-ui", "history-markdown", "history-store", "history-records"]) {
+    for (const name of ["history-ui", "history-markdown", "history-stats", "history-store", "history-records"]) {
       const source = fs.readFileSync(path.join(root, assets, "js", name + ".js"), "utf8");
       assert.doesNotMatch(source, /\b(?:fetch|sendBeacon|XMLHttpRequest|alert|confirm|prompt)\s*\(|\binnerHTML\b|DivinationWebTelemetry|androidTelemetry/);
     }
