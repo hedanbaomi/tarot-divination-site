@@ -147,8 +147,8 @@ android {
         applicationId = "com.quareia.divination"
         minSdk = 24
         targetSdk = 36
-        versionCode = 16
-        versionName = "1.5.5"
+        versionCode = 17
+        versionName = "1.5.6"
     }
 
     signingConfigs {
