@@ -28,8 +28,9 @@ test("website and Android expose the same custom-spread designer and import work
     assert.match(html, /js\/custom-spreads\.js/);
     assert.match(html, /js\/custom-spread-ui\.js/);
     assert.match(html, /css\/custom-spreads\.css/);
-    assert.equal((html.match(/role="tab"/g) || []).length, 3);
-    assert.equal((html.match(/role="tabpanel"/g) || []).length, 3);
+    var dialog = html.match(/<dialog class="custom-spread-dialog"[\s\S]+?<\/dialog>/)[0];
+    assert.equal((dialog.match(/role="tab"/g) || []).length, 3);
+    assert.equal((dialog.match(/role="tabpanel"/g) || []).length, 3);
     assert.match(html, /id="customSpreadLibraryTab"[\s\S]*aria-controls="customSpreadLibraryPanel"/);
     assert.match(html, /id="customSpreadDesignerTab"[\s\S]*aria-controls="customSpreadDesigner"/);
     assert.match(html, /id="customSpreadImportTab"[\s\S]*aria-controls="customSpreadImportPanel"/);

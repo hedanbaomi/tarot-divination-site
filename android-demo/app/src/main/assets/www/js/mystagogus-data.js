@@ -715,7 +715,21 @@ const mystagogusDeck = [
   }
 ];
 
+// Official chapter groupings from Josephine McCarthy's Mystagogus guidebook.
+const mystagogusChapterGroups = [
+  { last: 4, id: "core-fate", roman: "I", name: "第一章 · 核心命运力量", nameEn: "I · The Core Fate Powers" },
+  { last: 17, id: "magical-path-1", roman: "II", name: "第二章 · 魔法之路 I", nameEn: "II · The Magical Path" },
+  { last: 31, id: "magical-path-2", roman: "III", name: "第三章 · 魔法之路 II", nameEn: "III · The Magical Path II" },
+  { last: 48, id: "structures", roman: "IV", name: "第四章 · 结构与场域", nameEn: "IV · Structures" },
+  { last: 59, id: "beings", roman: "V", name: "第五章 · 存在与灵体", nameEn: "V · Beings" },
+  { last: 68, id: "dynamics-1", roman: "VI", name: "第六章 · 动力与力量 I", nameEn: "VI · Dynamics and Powers" },
+  { last: 78, id: "dynamics-2", roman: "VII", name: "第七章 · 动力与力量 II", nameEn: "VII · Dynamics and Powers II" }
+];
+
 mystagogusDeck.forEach(function (card) {
+  card.chapter = mystagogusChapterGroups.find(function (group) {
+    return card.number <= group.last;
+  });
   card.id = "m-" + (card.number < 10 ? "0" + card.number : String(card.number));
   card.deck = "mystagogus";
   card.arcana = "mystagogus";
@@ -729,6 +743,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     mystagogusDeck: mystagogusDeck,
     mystagogusDeckFull: mystagogusDeckFull,
+    mystagogusChapterGroups: mystagogusChapterGroups,
     mystagogusSource: mystagogusSource,
     getMystagogusImagePath: getMystagogusImagePath
   };
