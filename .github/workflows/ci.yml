@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-and-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Public tests use only built-in modules. Cache compiled JS across runs.
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/node-compile-cache
+          key: node22-${{ runner.os }}-${{ hashFiles('js/**/*.js', 'tests/*.js', 'android-demo/tests/*.js', 'scripts/*.mjs') }}
+          restore-keys: node22-${{ runner.os }}-
+      - run: node --test tests/*.test.js android-demo/tests/*.test.js
+        env:
+          NODE_COMPILE_CACHE: ${{ runner.temp }}/node-compile-cache
+      - run: node scripts/check-asset-versions.mjs
+
+  android-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew :app:testDebugUnitTest :app:lintDebug
+        working-directory: android-demo

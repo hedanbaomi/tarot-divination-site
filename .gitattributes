@@ -1,0 +1,4 @@
+# Keep the Gradle wrapper executable on Unix runners regardless of Windows commits.
+/android-demo/gradlew text eol=lf
+# The existing index mixes LF and CRLF. Keep both when refreshing URLs.
+/index.html -text whitespace=trailing-space,space-before-tab,cr-at-eol

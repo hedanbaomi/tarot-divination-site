@@ -16,7 +16,7 @@
 
 https://hedanbaomi.github.io/tarot-divination-site/
 
-核心占卜体验为静态前端，任何现代浏览器都可以直接打开；公告列表会向项目的 Cloudflare Worker 发起不含设备标识的只读请求，网络失败不影响占卜。
+核心占卜体验为静态前端。公告、可关闭的匿名使用统计和 Cloudflare Web Analytics 需要网络；AI 对话需要连接你配置的模型服务。
 
 ## 界面改版（2026-11）
 
@@ -54,7 +54,7 @@ https://hedanbaomi.github.io/tarot-divination-site/
 - 网页会在当前浏览器记住最后打开的牌阵与牌组，刷新、关闭后重新打开，或切换新旧版页面均可恢复；自定义牌阵会保留最后使用的那一个，清除网站数据后恢复默认。
 - 塔罗：大阿卡那、小阿卡那、混合、先大后小 / 先小后大筛选
 - 塔罗支持全正位或正逆位混合模式；M 牌与 LXXXI 魔法牌固定全正位（「正逆位混合」选项在非塔罗牌组下自动禁用）
-- 牌堆铺开成一排，左右滑动浏览，轻点任意一张牌抽出（可自由挑选，不只是最上面一张）
+- 新版牌堆围绕牌阵呈扇形，旧版为横向牌堆；均可浏览并轻点任意一张牌抽出，也可长按洗牌。
 - 抽到的牌自动排列成牌阵，无需拖拽
 - 塔罗可预先选择 16 种牌阵：第六章收录的 14 种布局，以及额外的横向三张牌阵和四季牌阵
 - 四季牌阵按权杖、圣杯、宝剑、星币、大阿卡那依次提供五个独立牌池，确保每个牌位只能抽到符合限制的牌
@@ -69,6 +69,14 @@ https://hedanbaomi.github.io/tarot-divination-site/
 - 移动端优先：大号点击区域、单手可用、适配刘海屏安全区
 - 开牌后展示关键词与解读（M 牌关键词译自英文索引；LXXXI 牌意译自繁体中文版说明书）
 - 点击「开牌解读」后，可直接轻点牌阵中的任意牌，在牌面与牌意之间翻转，无需滚动到下方结果区
+
+## v1.5.6 的解牌与记录功能
+
+- **AI 辅助解牌**。在 [AI 工作台](ai.html) 填入自己的 API Key，设备即可直连 OpenAI 兼容接口、Anthropic 或 Gemini 等服务。你可以带着内置牌义和预设牌阵的位置说明提问，分别保存多段对话，导入或导出会话 JSON，也可导出 Markdown 阅读。工作台在本机保存密钥和聊天记录。发送消息时，工作台用你的密钥向所选服务商验证身份，并把问题及相关对话和牌阵上下文发给该服务商。开启匿名用量统计后，项目后台可统计模型、Token 用量和请求次数，问题、回答、服务地址和密钥不在上报内容中。
+- **本地卡牌笔记**。三套牌中的每张牌都有独立笔记。可按牌名或笔记内容搜索，筛选写过笔记的牌，再用独立的 JSON 文件备份和恢复。清空占卜历史会保留笔记。
+- **占卜问题与导出**。可以在抽牌前写下问题，也可以在历史详情中补写或修改，再按问题搜索记录。单条记录或多选的合集均可导出 Markdown。导出高清牌阵图时，可预览当前主题或浅色羊皮纸笔记版。图片底部附有来源署名、项目地址和 Quareia 官网水印。
+- **抽牌统计**。历史中心分为「占卜记录」和「抽牌统计」两个标签页。可合并查看全部 237 张牌，也可按牌组查看塔罗大小阿卡那与四花色、Mystagogus 官方七章、LXXXI 四大领域的分布。图中可对照牌库基准占比，时间范围可选全部、近 30、90 或 365 天。点击高频牌可直接打开该牌的笔记。
+- **领域边框**。LXXXI 用红、蓝、绿、黑表示四大领域，跨领域牌采用双色边框。在深暗主题下，色带内外各有一条细线，黑边也能从牌面和桌面中分辨出来。
 
 ## 本地打开
 
@@ -88,31 +96,44 @@ M 牌提供 Mystagogus 布局（18 张）。LXXXI 魔法牌提供说明书第十
 
 ```text
 .
-├── README.md
-├── README.en.md
-├── index.html
+├── index.html / classic.html / ai.html   # 新版牌桌、经典版与 AI 工作台
 ├── css/
-│   └── styles.css
+│   ├── styles.css / redesign.css          # 基础样式与新版主题
+│   └── ai-chat.css / card-notes.css / reading-image.css 等
 ├── js/
-│   ├── app.js
-│   ├── i18n.js
-│   ├── i18n-data-en.js
-│   ├── spreads.js
-│   ├── history-records.js
-│   ├── history-store.js
-│   ├── history-ui.js
-│   ├── celestial-sky.js
-│   ├── tarot-data.js
-│   ├── mystagogus-data.js
-│   └── lxxxi-data.js
-├── assets/
-│   ├── cards/          # 塔罗牌面与第三方素材来源说明
-│   │   ├── m/          # Mystagogus 牌面 m-01…m-78 与 m-back
-│   │   └── LXXXI_SOURCE.md
-│   └── icons/
-├── android-demo/       # Android 离线版（源码与构建说明）
-├── backend/            # Android 应用的可选配套 API 服务（本地开发用）
-└── telemetry-worker/   # 匿名使用统计的 Cloudflare Worker
+│   ├── app.js / classic/      # 新版与旧版页面
+│   ├── ai-*.js                # AI 配置、上下文、会话与界面
+│   ├── card-notes*.js         # 卡牌笔记与本地存储
+│   ├── history-*.js           # 历史记录、统计和 Markdown 导出
+│   ├── reading-image*.js      # 牌阵图片生成与界面
+│   ├── custom-spread*.js / free-board-*.js
+│   ├── deck-*.js / shuffle-gesture.js / theme.js
+│   ├── spreads.js / *-data.js # 牌阵和牌组数据
+│   └── i18n*.js               # 中英文界面
+├── assets/                    # 牌面、图标及来源说明
+├── tests/                     # 牌组、历史、AI、主题与缓存戳单元测试
+├── tools/                     # test-*-browser.py 浏览器验收及公告同步工具
+├── scripts/check-asset-versions.mjs
+├── android-demo/              # Android 应用、测试和构建说明
+├── backend/                   # 可选配套 API 服务
+└── telemetry-worker/          # 匿名使用统计 Worker
+```
+
+## 开发检查
+
+推送到 `main` 或提交面向 `main` 的 PR 时，CI 会并行检查 Web 和 Android。在仓库根目录使用 Node 22 运行以下命令。修改 `js/` 或 `css/` 后，用 `--fix` 按文件内容刷新三个 Web 页面的缓存戳。
+
+```bash
+node --test tests/*.test.js android-demo/tests/*.test.js
+node scripts/check-asset-versions.mjs
+# 需要更新资源版本引用时
+node scripts/check-asset-versions.mjs --fix
+```
+
+Android 单元测试与 lint：
+
+```bash
+cd android-demo && ./gradlew :app:testDebugUnitTest :app:lintDebug
 ```
 
 ## 说明

@@ -13,7 +13,11 @@
 
   var moon = document.querySelector(".sky-moon");
   if (!moon) return;
-  if (!window.PointerEvent) return;   // 老浏览器优雅降级为静态天体
+  if (!window.PointerEvent) {
+    setFace(defaultFace());
+    window.addEventListener("quareia:themechange", function () { setFace(defaultFace()); });
+    return;
+  }
 
   var reduceMQ = window.matchMedia("(prefers-reduced-motion: reduce)");
   var rm = reduceMQ.matches;
@@ -72,6 +76,18 @@
     return moon.getAttribute("data-face") || defaultFace();
   }
   function setFace(state) {
+    var theme = document.documentElement.getAttribute("data-theme");
+    var selector;
+    if (theme === "parchment") {
+      selector = state === "hidden" || state === "sleeping" ? ".sky-sun-blank" : ".sky-sun";
+    } else if (state === "waking" || state === "shown") {
+      var face = "celestial";
+      if (theme === "ember") face = "ember";
+      if (theme === "grove" || theme === "grove-light") face = "grove";
+      selector = '[data-theme-face="' + face + '"]';
+    }
+    var art = selector && moon.querySelector(selector);
+    if (art && !art.hasAttribute("src")) art.src = art.getAttribute("data-src");
     moon.setAttribute("data-face", state);
   }
   function resetFace() {

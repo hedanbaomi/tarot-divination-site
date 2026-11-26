@@ -423,7 +423,7 @@ function assertAiHtmlContract(label, html) {
   assert.ok(html.includes('data-i18n="ai.deckTarot"'), `${label} ai.html tarot option missing data-i18n`);
   assert.ok(/<footer class="ai-composer">[\s\S]*id="aiPromptInput"[\s\S]*id="aiDisclaimer"[^>]*data-i18n="ai.disclaimer"[\s\S]*<\/footer>/.test(html), `${label} disclaimer must be visible below the composer and localized`);
   assert.ok(/id="aiDisclaimer"[\s\S]*<details class="ai-medical-notice" id="aiMedicalNotice">[\s\S]*data-i18n="ai.medicalNoticeTitle"[\s\S]*data-i18n="ai.medicalNoticeBody"[\s\S]*<\/details>[\s\S]*<\/footer>/.test(html), `${label} medical notice must be an independently labeled, initially collapsed footer element`);
-  assert.ok(html.includes('src="js/custom-selects.js"'), `${label} ai.html must load js/custom-selects.js to replace native <select> UI`);
+  assert.match(html, /src="js\/custom-selects\.js(?:\?v=[0-9a-f]{8})?"/, `${label} ai.html must load js/custom-selects.js to replace native <select> UI`);
   assert.match(html, /src="js\/ai-skills\.js(\?[^"]*)?"/, `${label} ai.html must load js/ai-skills.js before js/ai-context.js`);
   assert.match(html, /src="js\/ai-persona\.js(\?[^"]*)?"/, `${label} ai.html must load js/ai-persona.js (the built-in persona)`);
   assert.ok(/<label[^>]+for="aiPickerDeckFilter"/i.test(html), `${label} ai.html must bind an explicit <label for="aiPickerDeckFilter">`);
@@ -451,7 +451,7 @@ test("web ai.html, css, theme.js, entry pages, and i18n satisfy structure, contr
   assertAiHtmlContract("web", webHtml);
   assert.ok(webHtml.includes('id="aiThemeBtn"'), "Web ai.html must expose #aiThemeBtn");
   assert.ok(webHtml.includes('id="aiThemePopover"'), "Web ai.html must expose #aiThemePopover");
-  assert.ok(webHtml.includes('src="js/web-analytics.js"'), "Web ai.html must include web-analytics.js");
+  assert.match(webHtml, /src="js\/web-analytics\.js\?v=[0-9a-f]{8}"/, "Web ai.html must include web-analytics.js");
 
   assert.ok(/\.ai-markdown\s+a\b/.test(webCss), "css/ai-chat.css must style .ai-markdown links for accessible contrast");
   assert.ok(webCss.includes(".ai-clear-config-btn"), "css/ai-chat.css must style .ai-clear-config-btn");

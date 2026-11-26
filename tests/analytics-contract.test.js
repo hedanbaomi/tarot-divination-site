@@ -67,7 +67,7 @@ function runAnalytics(location) {
 
 test("the root page loads the guarded analytics module without an inline beacon", function () {
   assert.equal(/static\.cloudflareinsights\.com\/beacon\.min\.js/.test(html), false);
-  assert.match(html, /<script src="js\/web-analytics\.js"><\/script>/);
+  assert.match(html, /<script src="js\/web-analytics\.js\?v=[0-9a-f]{8}"><\/script>/);
   assert.equal((html.match(/js\/web-analytics\.js/g) || []).length, 1);
   assert.equal(/\beval\s*\(/.test(webAnalytics), false, "analytics module must not use eval");
   assert.equal(/document\.write\s*\(/.test(webAnalytics), false, "analytics module must not use document.write");
@@ -116,12 +116,11 @@ test("Android assets do not load the web analytics module or beacon", function (
   assert.equal(/static\.cloudflareinsights\.com\/beacon\.min\.js/.test(androidHtml), false);
 });
 
-test("announcements.js?v=1 remains unchanged on the root and Android asset pages", function () {
-  var announcementScript = '<script src="js/announcements.js?v=1"></script>';
-  assert.equal((html.match(/js\/announcements\.js\?v=1/g) || []).length, 1);
-  assert.equal((androidHtml.match(/js\/announcements\.js\?v=1/g) || []).length, 1);
-  assert.ok(html.indexOf(announcementScript) !== -1);
-  assert.ok(androidHtml.indexOf(announcementScript) !== -1);
+test("web and Android each load their own versioned announcement script once", function () {
+  assert.equal((html.match(/js\/announcements\.js/g) || []).length, 1);
+  assert.match(html, /<script src="js\/announcements\.js\?v=[0-9a-f]{8}"><\/script>/);
+  assert.equal((androidHtml.match(/js\/announcements\.js/g) || []).length, 1);
+  assert.match(androidHtml, /<script src="js\/announcements\.js\?v=1"><\/script>/);
 });
 
 test("the bilingual privacy notice is present in the footer attribution area", function () {
