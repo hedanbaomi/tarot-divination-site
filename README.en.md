@@ -16,7 +16,7 @@ Open:
 
 https://hedanbaomi.github.io/tarot-divination-site/
 
-The core reading experience is a static frontend that runs in any modern browser. The announcements list makes an identifier-free, read-only request to the project's Cloudflare Worker; network failure never blocks a reading.
+The core reading experience is a static frontend. Announcements, optional anonymous usage statistics, and Cloudflare Web Analytics require a network connection; AI chat connects to the model provider you configure.
 
 ## Android App
 
@@ -30,6 +30,14 @@ This project also provides a free offline Android version (`android-demo/`), wra
 
 Build and release instructions live in [`android-demo/README.en.md`](android-demo/README.en.md). The repository contains the full application source code, excluding the LXXXI card decryption implementation and key material (see `.gitignore` and the "Open-Source Boundary" section in android-demo); the complete card functionality is provided only by the official APK.
 
+## iPhone / iPad (self-signed IPA)
+
+If an IPA is available in Releases, you can sign and install it with your own Apple account. The [iPhone / iPad sideloading guide](docs/ios-sideloading.md) covers SideStore, AltStore Classic, and Sideloadly, including the seven-day renewal period for free accounts.
+
+## Interface refresh (2026-11)
+
+The redesigned card table uses a fan-shaped deck around the spread, with settings in the top bar and eight themes. Custom spreads and a free board are available from spread settings. The classic horizontal deck remains available through the page-version setting; both versions share local reading history. See the [interface refresh notes](docs/ui-refresh.md).
+
 ## Features
 
 - **Three decks**: 78-card Tarot, 78-card Mystagogus, and 81-card LXXXI, selectable in the reading settings.
@@ -38,7 +46,7 @@ Build and release instructions live in [`android-demo/README.en.md`](android-dem
 - The website remembers the last opened spread and deck in this browser across refreshes, closing and reopening, and switching between page versions. The last used custom spread is also retained. Clearing site data restores the defaults.
 - Tarot filters: all cards, Major Arcana only, Minor Arcana only, Major then Minor, or Minor then Major.
 - Tarot supports upright-only and mixed upright/reversed readings. Mystagogus and LXXXI are upright-only, and the mixed-orientation option is disabled automatically for them.
-- The deck is displayed as a horizontally scrollable row. Tap any card you want instead of being limited to the top card.
+- The redesigned deck fans around the spread; the classic page uses a horizontal row. Browse and tap any card to draw it, or hold to shuffle.
 - Drawn cards move automatically into fixed spread positions with no dragging required.
 - Tarot includes 16 selectable layouts: the 14 layouts from Chapter 6, plus the horizontal three-card spread and the Four Seasons Spread.
 - The Four Seasons Spread presents five separate eligible pools in sequence: Wands, Cups, Swords, Pentacles, and Major Arcana.
@@ -53,6 +61,14 @@ Build and release instructions live in [`android-demo/README.en.md`](android-dem
 - Mobile-first interaction with large touch targets, one-handed controls, and safe-area support for notched screens.
 - Revealed readings show keywords and concise interpretations based on the sources described below.
 - After **Reveal & Interpret**, tap any card in the spread to flip between its artwork and meaning without scrolling to the results section.
+
+## Readings and records in v1.5.6
+
+- **AI-assisted readings.** Open the [AI workbench](ai.html) and supply your own API key to connect directly to OpenAI-compatible, Anthropic or Gemini providers. Use the built-in card meanings and preset spread positions as context. Keep separate conversations, back them up and restore them as JSON, or export them as Markdown. Keys and chats stay on your device. When you send a message, the provider receives your question and the relevant conversation and spread context. Optional anonymous usage statistics report the model, token usage and request counts. They exclude keys, endpoints, questions and answers.
+- **Local card notes.** Each card in all three decks has its own note. Search by card name or note text, filter to cards with notes and use a separate JSON file for backup and restore. Clearing reading history preserves these notes.
+- **Questions and exports.** Enter a question before drawing or add or edit it later in the reading details. You can then find the reading by its question. Export one reading or a selection as a Markdown collection. For a high-resolution image, preview the spread in the current theme or on light parchment. The footer credits the source and includes the project and official Quareia addresses as a watermark.
+- **Draw statistics.** The history centre has separate tabs for records and statistics. View all 237 cards together or examine a deck by category: Tarot Major and Minor Arcana and the four suits, the seven official Mystagogus chapters, or the four LXXXI realms. Compare the observed distribution with each category’s share of the deck over the last 30, 90 or 365 days, or over all time. Select a frequently drawn card to open its notes.
+- **Realm borders.** Red, blue, green and black identify the LXXXI realms. Cards spanning two realms use both colours. In dark themes, two fine lines frame the colour band so a black border stays visible against the artwork and the table.
 
 ## Run Locally
 
@@ -72,31 +88,44 @@ Mystagogus provides its 18-card signature layout. LXXXI provides four Chapter 10
 
 ```text
 .
-├── README.md
-├── README.en.md
-├── index.html
+├── index.html / classic.html / ai.html   # Redesigned table, classic table and AI workbench
 ├── css/
-│   └── styles.css
+│   ├── styles.css / redesign.css          # Base styles and redesigned themes
+│   └── ai-chat.css / card-notes.css / reading-image.css …
 ├── js/
-│   ├── app.js
-│   ├── i18n.js
-│   ├── i18n-data-en.js
-│   ├── spreads.js
-│   ├── history-records.js
-│   ├── history-store.js
-│   ├── history-ui.js
-│   ├── celestial-sky.js
-│   ├── tarot-data.js
-│   ├── mystagogus-data.js
-│   └── lxxxi-data.js
-├── assets/
-│   ├── cards/          # Card artwork and third-party source notices
-│   │   ├── m/          # Mystagogus faces m-01…m-78 and m-back
-│   │   └── LXXXI_SOURCE.md
-│   └── icons/
-├── android-demo/       # Offline Android app (source and build instructions)
-├── backend/            # Optional companion API service for the app (local development)
-└── telemetry-worker/   # Cloudflare Worker for anonymous usage statistics
+│   ├── app.js / classic/      # Redesigned and classic pages
+│   ├── ai-*.js                # AI configuration, context, sessions and UI
+│   ├── card-notes*.js         # Card notes and local storage
+│   ├── history-*.js           # History, statistics and Markdown export
+│   ├── reading-image*.js      # Spread image rendering and UI
+│   ├── custom-spread*.js / free-board-*.js
+│   ├── deck-*.js / shuffle-gesture.js / theme.js
+│   ├── spreads.js / *-data.js # Spread and deck data
+│   └── i18n*.js               # Chinese and English interface
+├── assets/                    # Card artwork, icons and source notices
+├── tests/                     # Deck, history, AI, theme and cache-version tests
+├── tools/                     # test-*-browser.py scenarios and announcement sync
+├── scripts/check-asset-versions.mjs
+├── android-demo/              # Android app, tests and build instructions
+├── backend/                   # Optional companion API service
+└── telemetry-worker/          # Anonymous usage statistics Worker
+```
+
+## Development Checks
+
+CI runs the web and Android checks in parallel on pushes to `main` and pull requests targeting `main`. Run the following commands from the repository root with Node 22. After editing `js/` or `css/`, use `--fix` to refresh the content hashes in all three web pages.
+
+```bash
+node --test tests/*.test.js android-demo/tests/*.test.js
+node scripts/check-asset-versions.mjs
+# Update asset version references when needed
+node scripts/check-asset-versions.mjs --fix
+```
+
+Run Android unit tests and lint:
+
+```bash
+cd android-demo && ./gradlew :app:testDebugUnitTest :app:lintDebug
 ```
 
 ## Content and Source Notes

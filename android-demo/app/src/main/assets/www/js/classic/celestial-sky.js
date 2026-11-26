@@ -4,7 +4,7 @@
    - 按住拖动：移动天体并带动旋转（横向位移映射为转角）
    - 松手：惯性滑行 + 自转角速度，摩擦力衰减，边缘轻弹，随后恢复 idle
    - 主题切换只换外观，物理与月亮相同
-   - 轻点十次/一分钟：月亮刻纹五官淡入再睁眼；羊皮纸太阳闭眼并淡出到无脸底图
+   - 长按五秒或一分钟内轻点十次：月亮刻纹五官淡入再睁眼；羊皮纸太阳闭眼并淡出到无脸底图
    - rAF 驱动、passive 监听、仅 transform；touch-action:none 由 CSS 保证
    - prefers-reduced-motion：关闭自转/浮动/惯性，仅保留直接拖动；脸状态无动画
    ========================================================================== */
@@ -13,7 +13,11 @@
 
   var moon = document.querySelector(".sky-moon");
   if (!moon) return;
-  if (!window.PointerEvent) return;   // 老浏览器优雅降级为静态天体
+  if (!window.PointerEvent) {
+    setFace(defaultFace());
+    window.addEventListener("quareia:themechange", function () { setFace(defaultFace()); });
+    return;
+  }
 
   var reduceMQ = window.matchMedia("(prefers-reduced-motion: reduce)");
   var rm = reduceMQ.matches;
@@ -31,6 +35,9 @@
   var V_CAP = 2.2;               // 松手速度上限 px/ms
   var TAP_SLOP = 12;             // 超过则视为拖动，不计入轻点彩蛋
   var TAP_MS = 500;
+  var LONG_MS = 5000;
+  var LONG_SLOP = 22;
+  var holdTimer = 0;
   var TAP_WINDOW = 60000;
   var TAP_NEED = 10;
   var FACE_WAKE_MS = 900;        // 与 CSS 淡入对齐后再睁眼
@@ -70,9 +77,25 @@
     return moon.getAttribute("data-face") || defaultFace();
   }
   function setFace(state) {
+    var theme = document.documentElement.getAttribute("data-theme");
+    var selector;
+    if (theme === "parchment") {
+      selector = state === "hidden" || state === "sleeping" ? ".sky-sun-blank" : ".sky-sun";
+    } else if (state === "waking" || state === "shown") {
+      var face = "celestial";
+      if (theme === "ember") face = "ember";
+      if (theme === "grove" || theme === "grove-light") face = "grove";
+      selector = '[data-theme-face="' + face + '"]';
+    }
+    var art = selector && moon.querySelector(selector);
+    if (art && !art.hasAttribute("src")) art.src = art.getAttribute("data-src");
     moon.setAttribute("data-face", state);
   }
+  function cancelHold() {
+    clearTimeout(holdTimer);
+  }
   function resetFace() {
+    cancelHold();
     if (faceTimer) {
       clearTimeout(faceTimer);
       faceTimer = 0;
@@ -157,6 +180,12 @@
     maxDist = 0;
     vx = 0;
     vy = 0;
+    cancelHold();
+    holdTimer = setTimeout(function () {
+      taps = [];
+      if (faceState() === "shown") sleepFace();
+      else if (faceState() === "hidden") wakeFace();
+    }, LONG_MS);
     if (moon.setPointerCapture && e.pointerId != null) {
       try { moon.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
     }
@@ -174,6 +203,7 @@
     }
     angle += (e.clientX - lastMX) * SPIN_PER_PX;
     maxDist = Math.max(maxDist, Math.hypot(e.clientX - startPX, e.clientY - startPY));
+    if (maxDist >= LONG_SLOP) cancelHold();
     lastMX = e.clientX;
     lastMY = e.clientY;
     lastMoveT = now;
@@ -181,6 +211,7 @@
   }
 
   function onUp() {
+    cancelHold();
     if (!dragging) return;
     dragging = false;
     moon.classList.remove("dragging");
@@ -199,6 +230,7 @@
   moon.addEventListener("pointerup", onUp, { passive: true });
   moon.addEventListener("pointercancel", onUp, { passive: true });
   moon.addEventListener("lostpointercapture", onUp, { passive: true });
+  moon.addEventListener("contextmenu", function (e) { e.preventDefault(); });
 
   window.addEventListener("resize", function () {
     measure();

@@ -151,15 +151,37 @@ test("parchment settings chrome uses light tokens instead of night indigo", func
   assert.doesNotMatch(css, /\.choice-option\s*\{[^}]*background:\s*rgba\(24, 28, 55/);
 });
 
-test("moon and sun share a ten-tap face easter egg with wake and sleep animation", function () {
+test("all four layouts defer five size-limited WebP images and ship matching art", function () {
+  const android = path.join(root, "android-demo/app/src/main/assets/www");
+  const names = ["parchment-sun", "parchment-sun-blank", "sky-face-celestial", "sky-face-ember", "sky-face-grove"];
+  for (const name of names) {
+    const url = "assets/icons/" + name + ".webp";
+    const image = fs.readFileSync(path.join(root, url));
+    assert.equal(image.toString("ascii", 8, 12), "WEBP", name);
+    assert.ok(image.length < 50 * 1024, name);
+    assert.deepEqual(fs.readFileSync(path.join(android, url)), image, name);
+  }
+  for (const site of [root, android]) {
+    for (const page of ["index.html", "classic.html"]) {
+      const source = fs.readFileSync(path.join(site, page), "utf8");
+      const tags = source.match(/<img\s[^>]*class="(?:sky-sun(?:-blank)?|sky-face-art)"[^>]*>/g);
+      assert.equal(tags.length, names.length, page);
+      const urls = tags.map(tag => {
+        assert.doesNotMatch(tag, /\ssrc\s*=/i);
+        return tag.match(/\sdata-src="([^"]+)"/)[1];
+      });
+      assert.deepEqual(urls.sort(), names.map(name => "assets/icons/" + name + ".webp").sort());
+    }
+  }
+});
+
+test("moon and sun share a five-second hold face easter egg with wake and sleep animation", function () {
   var sky = fs.readFileSync(path.join(root, "js", "celestial-sky.js"), "utf8");
-  var icons = path.join(root, "assets", "icons");
   assert.match(html, /class="sky-face"/);
   assert.match(html, /class="sky-eyelid sky-eyelid-l"/);
   assert.match(html, /celestial-sky\.js\?v=/);
   THEMES.filter(function (id) { return id !== "parchment"; }).forEach(function (id) {
     assert.match(html, new RegExp('data-theme-face="' + id + '"'));
-    assert.ok(fs.existsSync(path.join(icons, "sky-face-" + id + ".png")));
   });
   assert.doesNotMatch(html, /data-theme-face="parchment"|sky-face-parchment\.png/);
   assert.match(sky, /var LONG_MS = 5000/);
@@ -177,9 +199,7 @@ test("moon and sun share a ten-tap face easter egg with wake and sleep animation
   assert.match(css, /\.sky-face-art\s*\{[^}]*mix-blend-mode:\s*multiply/);
   assert.match(css, /\[data-face="shown"\] \.sky-eyelid[\s\S]*scaleY\(0\.08\)/);
   assert.match(html, /class="sky-sun-blank"/);
-  assert.match(html, /src="assets\/icons\/parchment-sun-blank\.png"/);
-  assert.ok(fs.existsSync(path.join(icons, "parchment-sun-blank.png")));
-  assert.ok(fs.existsSync(path.join(icons, "parchment-sun.png")));
+  assert.match(html, /\sdata-src="assets\/icons\/parchment-sun-blank\.webp"/);
   assert.match(css, /html\[data-theme="parchment"\] \.sky-sun-blank/);
   assert.match(css, /\[data-face="hidden"\] \.sky-sun/);
   assert.doesNotMatch(css, /sky-face-veil/);
@@ -192,8 +212,8 @@ test("moon and sun share a ten-tap face easter egg with wake and sleep animation
 test("parchment sun uses the painted disk and keeps the same physics as the moon", function () {
   var sky = fs.readFileSync(path.join(root, "js", "celestial-sky.js"), "utf8");
   assert.match(html, /class="sky-sun"/);
-  assert.match(html, /src="assets\/icons\/parchment-sun\.png"/);
-  assert.match(html, /src="assets\/icons\/parchment-sun-blank\.png"/);
+  assert.match(html, /\sdata-src="assets\/icons\/parchment-sun\.webp"/);
+  assert.match(html, /\sdata-src="assets\/icons\/parchment-sun-blank\.webp"/);
   assert.match(css, /html\[data-theme="parchment"\] \.sky-sun/);
   assert.match(css, /html\[data-theme="parchment"\] \.sky-moon::before/);
   assert.match(css, /transform: rotate\(var\(--spin/);

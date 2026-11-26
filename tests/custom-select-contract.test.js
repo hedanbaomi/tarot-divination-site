@@ -29,7 +29,7 @@ test("website replaces every native select surface with the themed card picker",
   });
 
   assert.match(html, /id="choiceDialog"/);
-  assert.match(html, /src="js\/custom-selects\.js\?v=20260820-custom-spread-window-final"/);
+  assert.match(html, /src="js\/custom-selects\.js\?v=[0-9a-f]{8}"/);
   assert.match(css, /\.custom-select-native\s*\{\s*display:\s*none\s*!important/);
   assert.match(css, /\.themed-select-trigger/);
   assert.match(css, /\.choice-option\.selected/);

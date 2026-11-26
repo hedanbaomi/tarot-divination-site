@@ -149,7 +149,7 @@ test("Android parchment reading and history panels use theme tokens, not night n
   assert.match(parchment, /--neutral-dark:\s*#f3e6c8/);
   assert.match(freeBoard, /\.history-free-board-preview\s*\{[^}]*background:\s*var\(--panel-bg\)/);
   assert.match(html, /class="sky-sun-blank"/);
-  assert.match(html, /src="assets\/icons\/parchment-sun-blank\.png"/);
+  assert.match(html, /\sdata-src="assets\/icons\/parchment-sun-blank\.webp"/);
   assert.match(html, /data-theme-face="celestial"/);
   assert.match(html, /celestial-sky\.js\?v=[^"]+/);
 });
