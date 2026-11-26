@@ -134,7 +134,11 @@ for (const page of pages) {
     if (!asset) continue;
     const line = html.slice(0, tag.start).split('\n').length;
     let expected;
-    try { expected = createHash('sha256').update(readFileSync(asset)).digest('hex').slice(0, 8); }
+    // Normalize CRLF to LF before hashing so Windows and Linux checkouts agree.
+    try {
+      const content = readFileSync(asset, 'utf8').replace(/\r\n/g, '\n');
+      expected = createHash('sha256').update(content, 'utf8').digest('hex').slice(0, 8);
+    }
     catch (error) { console.error(`${page}:${line}: cannot read asset ${attr.value}: ${error.message}`); problems++; continue; }
     const version = withVersion(attr.value, expected);
     if (version.current.length === 1 && version.current[0] === expected) continue;

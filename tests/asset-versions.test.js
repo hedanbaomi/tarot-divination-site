@@ -10,7 +10,7 @@ const test = require("node:test");
 
 const root = path.join(__dirname, "..");
 const checker = path.join(root, "scripts", "check-asset-versions.mjs");
-const digest = data => createHash("sha256").update(data).digest("hex").slice(0, 8);
+const digest = data => createHash("sha256").update(String(data).replace(/\r\n/g, "\n"), "utf8").digest("hex").slice(0, 8);
 const run = (...args) => spawnSync(process.execPath, [checker, ...args], { encoding: "utf8" });
 
 function fixture(t) {
@@ -75,6 +75,16 @@ test("fixture: missing assets fail even with --fix and duplicate versions are re
   assert.equal(result.status, 1);
   assert.match(result.stderr, /cannot read asset js\/absent\.js/);
   assert.equal(fs.readFileSync(page, "utf8"), `<script src="js/app.js?v=${digest("const x = 1;\r\n")}&x=1#p"></script>\n<script src="js/absent.js"></script>\n`);
+});
+
+test("fixture: CRLF and LF line endings produce the same content hash", t => {
+  const dir = fixture(t);
+  const expected = digest("const x = 1;\n");
+  const page = path.join(dir, "index.html");
+  fs.writeFileSync(page, `<script src="js/app.js?v=${expected}"></script>\n`);
+  assert.equal(run("--root", dir).status, 0);
+  fs.writeFileSync(path.join(dir, "js", "app.js"), "const x = 1;\n");
+  assert.equal(run("--root", dir).status, 0);
 });
 
 test("repository pages reference existing assets with their current content hashes", () => {
