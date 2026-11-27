@@ -922,7 +922,7 @@ html.ui2 .results-list {
   gap: 0;
 }
 html.ui2 .result-card {
-  grid-template-columns: 84px 1fr;
+  grid-template-columns: 84px minmax(0, 1fr);
   column-gap: 22px;
   margin: 0;
   padding: 24px 0;
@@ -954,6 +954,10 @@ html.ui2 .result-pos {
   font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  white-space: normal;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 html.ui2 .result-name {
   font-family: var(--font-display);
@@ -1489,11 +1493,11 @@ html.ui2 .free-board-save-status {
     padding-bottom: 0;
   }
   html.ui2 .footer-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 36px;
   }
   html.ui2 .settings-body {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 20px;
   }
 }
@@ -1519,7 +1523,7 @@ html.ui2 .free-board-save-status {
     width: 74px;
   }
   html.ui2 .result-card {
-    grid-template-columns: 64px 1fr;
+    grid-template-columns: 64px minmax(0, 1fr);
     column-gap: 16px;
     padding: 20px 0;
   }
@@ -1892,7 +1896,7 @@ html.ui2 .table-plane::after {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: calc(var(--ring-rx) * 2.1);
+  width: min(100%, calc(var(--ring-rx) * 2.1));
   height: calc(var(--ring-ry) * 2.1);
   transform: translate(-50%, -50%);
   border-radius: 50%;
