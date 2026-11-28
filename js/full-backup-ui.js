@@ -15,6 +15,8 @@
   var FAILURE_CODE_I18N_KEYS = {
     history_dependency_failed: "fullBackup.failure.historyDependencyFailed",
     history_dependency_required: "fullBackup.failure.historyDependencyRequired",
+    history_check_failed: "fullBackup.failure.historyCheckFailed",
+    history_conflict_unresolved: "fullBackup.failure.historyConflictUnresolved",
     preferences_persist_failed: "fullBackup.failure.preferencesPersistFailed"
   };
 

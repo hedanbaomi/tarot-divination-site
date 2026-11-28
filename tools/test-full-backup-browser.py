@@ -592,6 +592,12 @@ def run_scenario(pw, base_url, android, classic, width):
             # 5) Real two-tab concurrent restore of ID-conflicting backup produces zero duplicates.
             verify_second_pass_regressions(page, context, url, android, classic, label, exported_json, file_name)
 
+            # Final PR #52 edge-case regressions (#26/#27):
+            # 1) Deleted-history aiChats collision detaches safely & preserves backup snapshot;
+            # 2) historyStore read failure blocks aiChats-only restore (history_check_failed);
+            # 3) Deleting original colliding local reading then re-restoring reuses reading-remap-* without duplicating.
+            verify_final_edge_cases(page, android, classic, label)
+
             assert not page_errors, (label, page_errors)
             assert not console_errors, (label, console_errors)
             assert not external_requests, (label, external_requests)
@@ -1377,6 +1383,321 @@ def verify_second_pass_regressions(page, context, url, android, classic, label, 
         }, (label, race_after)
     finally:
         page2.close()
+
+
+def verify_final_edge_cases(page, android, classic, label):
+    # 1) Deleted-history aiChats collision detaches safely (shows backup's major-00 snapshot, NOT local major-05)
+    # 2) historyStore read failure blocks aiChats-only restore with history_check_failed
+    detached_json = page.evaluate(
+        """async () => {
+            const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+            await hStore.clearRecords();
+            const aStore = DivinationAiChatStore.createStore();
+            await aStore.clearConversations();
+
+            // Export ONLY aiChats referencing reading "deleted-shared-1" (with major-00 snapshot), NO history section!
+            await aStore.createConversation({
+                id: "chat-detached-1",
+                title: "已删历史碰撞分离测试",
+                createdAt: 1795842500000,
+                updatedAt: 1795842560000,
+                archived: false,
+                pinned: false,
+                skillMode: "auto",
+                readingIds: ["deleted-shared-1"],
+                readingSnapshots: [{
+                    id: "deleted-shared-1",
+                    layoutMode: "preset",
+                    deckType: "tarot",
+                    spreadId: "three-card-horizontal",
+                    spreadName: "三张牌阵",
+                    positionCount: 3,
+                    orientationMode: "mixed",
+                    filterMode: "mixed",
+                    overviewMethod: "not-applicable",
+                    createdAt: 1795842500000,
+                    question: "备份已删历史：愚者",
+                    cards: [{
+                        slotIndex: 0,
+                        positionNumber: 1,
+                        positionName: "过去",
+                        cardId: tarotDeckFull[0].id,
+                        cardName: tarotDeckFull[0].name,
+                        orientation: "upright"
+                    }]
+                }],
+                messages: [
+                    { id: "mdet-1", role: "user", content: "解读愚者", createdAt: 1795842500000 },
+                    { id: "mdet-2", role: "assistant", content: "愚者代表全新起点。", createdAt: 1795842550000, interpretedReadingIds: ["deleted-shared-1"] }
+                ]
+            });
+
+            const exported = await DivinationFullBackup.collectBackup({
+                historyStore: null,
+                historyRecords: DivinationHistoryRecords,
+                cardNotesStore: null,
+                customSpreadsLibrary: null,
+                aiChatStore: aStore,
+                aiChatStoreApi: DivinationAiChatStore,
+                themeApi: null,
+                i18nApi: null
+            });
+
+            // Now target device has a DIFFERENT local reading at id "deleted-shared-1" (major-05) and 0 chats.
+            await aStore.clearConversations();
+            const localRec = DivinationHistoryRecords.buildReadingRecord({
+                id: "deleted-shared-1",
+                createdAt: "2026-11-23T08:00:00.000Z",
+                deckType: "tarot",
+                deckMode: "tarot",
+                deckName: "RWS 塔罗",
+                spreadId: "three-card-horizontal",
+                spreadName: "三张牌阵",
+                orientationMode: "mixed",
+                filterMode: "mixed",
+                overviewMethod: "not-applicable",
+                question: "本地不同历史：教皇",
+                positions: [
+                    { number: 1, name: "过去", nameEn: "Past" },
+                    { number: 2, name: "现在", nameEn: "Present" },
+                    { number: 3, name: "未来", nameEn: "Future" }
+                ],
+                entries: [
+                    { slotIndex: 0, orientation: "upright", layer: null, card: tarotDeckFull[5] },
+                    { slotIndex: 1, orientation: "upright", layer: null, card: tarotDeckFull[6] },
+                    { slotIndex: 2, orientation: "upright", layer: null, card: tarotDeckFull[7] }
+                ]
+            });
+            await hStore.saveRecord(localRec);
+            return exported.json;
+        }"""
+    )
+
+    open_backup_dialog(page, android, classic)
+
+    # First verify historyStore read failure blocks aiChats-only restore fail-closed with history_check_failed!
+    page.evaluate(
+        """() => {
+            window.__origHistoryCreateStore = DivinationHistoryStore.createStore;
+            DivinationHistoryStore.createStore = () => ({
+                async listRecords() { throw new Error("Simulated history read failure"); },
+                async mergeBackupRecords() { throw new Error("Simulated history read failure"); }
+            });
+        }"""
+    )
+    page.locator("#fullBackupImportInput").set_input_files({
+        "name": "detached-aichats.json",
+        "mimeType": "application/json",
+        "buffer": detached_json.encode("utf-8"),
+    })
+    expect(page.locator("#fullBackupPreview")).to_be_visible()
+    page.locator("#fullBackupConfirmBtn").click()
+    expect(page.locator("#fullBackupStatus")).to_have_class(re.compile(r"\bis-error\b"))
+    expect(page.locator("#fullBackupStatus")).not_to_have_class(re.compile(r"\bis-success\b"))
+    expect(page.locator("#fullBackupPreview")).to_be_visible()
+    expect(page.locator('#fullBackupSummaryList [data-backup-failure-code="history_check_failed"]')).to_have_count(1)
+    assert page.evaluate("async () => (await DivinationAiChatStore.createStore().listConversations({ archived: 'all' })).length") == 0, label
+
+    # Restore real historyStore and click Confirm directly -> aiChats detaches safely from local major-05!
+    page.evaluate("() => { DivinationHistoryStore.createStore = window.__origHistoryCreateStore; }")
+    page.locator("#fullBackupConfirmBtn").click()
+    expect(page.locator("#fullBackupStatus")).to_have_class(re.compile(r"\bis-success\b"))
+    expect(page.locator("#fullBackupPreview")).to_be_hidden()
+
+    detached_after = page.evaluate(
+        """async () => {
+            const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+            const aStore = DivinationAiChatStore.createStore();
+            const records = await hStore.listRecords("all");
+            const chats = await aStore.listConversations({ archived: "all" });
+            const chat = chats.find(c => c.id === "chat-detached-1");
+            const snap = chat && chat.readingSnapshots && chat.readingSnapshots[0];
+            return {
+                localIds: records.map(r => r.id),
+                localCard0: records[0] && records[0].cards && records[0].cards[0] && records[0].cards[0].cardId,
+                chatReadingIds: chat && chat.readingIds,
+                snapshotId: snap && snap.id,
+                snapshotCard0: snap && snap.cards && snap.cards[0] && snap.cards[0].cardId,
+                interpretedIds: chat && chat.messages && chat.messages[1] && chat.messages[1].interpretedReadingIds
+            };
+        }"""
+    )
+    assert detached_after["localIds"] == ["deleted-shared-1"], (label, detached_after)
+    assert detached_after["localCard0"] == "major-05", (label, detached_after)
+    detached_id = detached_after["chatReadingIds"][0]
+    assert detached_id and detached_id != "deleted-shared-1", (label, detached_after)
+    assert detached_after["chatReadingIds"] == [detached_id], (label, detached_after)
+    assert detached_after["snapshotId"] == detached_id, (label, detached_after)
+    assert detached_after["snapshotCard0"] == "major-00", (label, detached_after)
+    assert detached_after["interpretedIds"] == [detached_id], (label, detached_after)
+
+    # 3) Delete original colliding local reading after remap, then re-restore history + aiChats -> reuses reading-remap-* with ZERO duplicates!
+    del_remap_json = page.evaluate(
+        """async () => {
+            const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+            await hStore.clearRecords();
+            const aStore = DivinationAiChatStore.createStore();
+            await aStore.clearConversations();
+
+            const backupRec = DivinationHistoryRecords.buildReadingRecord({
+                id: "shared-del-1",
+                createdAt: "2026-11-28T09:00:00.000Z",
+                deckType: "tarot",
+                deckMode: "tarot",
+                deckName: "RWS 塔罗",
+                spreadId: "three-card-horizontal",
+                spreadName: "三张牌阵",
+                orientationMode: "mixed",
+                filterMode: "mixed",
+                overviewMethod: "not-applicable",
+                question: "删原记录后复用重映射",
+                positions: [
+                    { number: 1, name: "过去", nameEn: "Past" },
+                    { number: 2, name: "现在", nameEn: "Present" },
+                    { number: 3, name: "未来", nameEn: "Future" }
+                ],
+                entries: [
+                    { slotIndex: 0, orientation: "upright", layer: null, card: tarotDeckFull[0] },
+                    { slotIndex: 1, orientation: "upright", layer: null, card: tarotDeckFull[1] },
+                    { slotIndex: 2, orientation: "upright", layer: null, card: tarotDeckFull[2] }
+                ]
+            });
+            await hStore.saveRecord(backupRec);
+            await aStore.createConversation({
+                id: "chat-del-1",
+                title: "复用重映射对话",
+                createdAt: 1795842600000,
+                updatedAt: 1795842660000,
+                archived: false,
+                pinned: false,
+                skillMode: "auto",
+                readingIds: ["shared-del-1"],
+                readingSnapshots: [{
+                    id: "shared-del-1",
+                    layoutMode: "preset",
+                    deckType: "tarot",
+                    spreadId: "three-card-horizontal",
+                    spreadName: "三张牌阵",
+                    positionCount: 3,
+                    orientationMode: "mixed",
+                    filterMode: "mixed",
+                    overviewMethod: "not-applicable",
+                    createdAt: 1795842600000,
+                    question: "删原记录后复用重映射",
+                    cards: [{
+                        slotIndex: 0,
+                        positionNumber: 1,
+                        positionName: "过去",
+                        cardId: tarotDeckFull[0].id,
+                        cardName: tarotDeckFull[0].name,
+                        orientation: "upright"
+                    }]
+                }],
+                messages: [
+                    { id: "mdel-1", role: "user", content: "提问", createdAt: 1795842600000 },
+                    { id: "mdel-2", role: "assistant", content: "回答", createdAt: 1795842650000, interpretedReadingIds: ["shared-del-1"] }
+                ]
+            });
+
+            const exported = await DivinationFullBackup.collectBackup({
+                historyStore: hStore,
+                historyRecords: DivinationHistoryRecords,
+                cardNotesStore: null,
+                customSpreadsLibrary: null,
+                aiChatStore: aStore,
+                aiChatStoreApi: DivinationAiChatStore,
+                themeApi: null,
+                i18nApi: null
+            });
+
+            // Seed colliding local reading at "shared-del-1" (major-05)
+            await hStore.clearRecords();
+            await aStore.clearConversations();
+            const localRec = DivinationHistoryRecords.buildReadingRecord({
+                id: "shared-del-1",
+                createdAt: "2026-11-24T09:00:00.000Z",
+                deckType: "tarot",
+                deckMode: "tarot",
+                deckName: "RWS 塔罗",
+                spreadId: "three-card-horizontal",
+                spreadName: "三张牌阵",
+                orientationMode: "mixed",
+                filterMode: "mixed",
+                overviewMethod: "not-applicable",
+                question: "稍后将被删除的本地记录",
+                positions: [
+                    { number: 1, name: "过去", nameEn: "Past" },
+                    { number: 2, name: "现在", nameEn: "Present" },
+                    { number: 3, name: "未来", nameEn: "Future" }
+                ],
+                entries: [
+                    { slotIndex: 0, orientation: "upright", layer: null, card: tarotDeckFull[5] },
+                    { slotIndex: 1, orientation: "upright", layer: null, card: tarotDeckFull[6] },
+                    { slotIndex: 2, orientation: "upright", layer: null, card: tarotDeckFull[7] }
+                ]
+            });
+            await hStore.saveRecord(localRec);
+            return exported.json;
+        }"""
+    )
+
+    # Restore #1: remaps backup "shared-del-1" -> reading-remap-*
+    page.locator("#fullBackupImportInput").set_input_files({
+        "name": "del-remap-backup.json",
+        "mimeType": "application/json",
+        "buffer": del_remap_json.encode("utf-8"),
+    })
+    expect(page.locator("#fullBackupPreview")).to_be_visible()
+    page.locator("#fullBackupConfirmBtn").click()
+    expect(page.locator("#fullBackupStatus")).to_have_class(re.compile(r"\bis-success\b"))
+
+    first_remap_id = page.evaluate(
+        """async () => {
+            const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+            const aStore = DivinationAiChatStore.createStore();
+            const records = await hStore.listRecords("all");
+            const remapped = records.find(r => r.question === "删原记录后复用重映射");
+            // Delete the original colliding local record AND clear chats!
+            await hStore.deleteRecord("shared-del-1");
+            await aStore.clearConversations();
+            return remapped && remapped.id;
+        }"""
+    )
+    assert first_remap_id and first_remap_id.startswith("reading-remap-"), (label, first_remap_id)
+
+    # Restore #2: MUST recognize & reuse reading-remap-* (count stays 1, NO duplicate at "shared-del-1", chat links to reading-remap-*)!
+    page.locator("#fullBackupImportInput").set_input_files({
+        "name": "del-remap-backup.json",
+        "mimeType": "application/json",
+        "buffer": del_remap_json.encode("utf-8"),
+    })
+    expect(page.locator("#fullBackupPreview")).to_be_visible()
+    page.locator("#fullBackupConfirmBtn").click()
+    expect(page.locator("#fullBackupStatus")).to_have_class(re.compile(r"\bis-success\b"))
+
+    after_second = page.evaluate(
+        """async () => {
+            const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+            const aStore = DivinationAiChatStore.createStore();
+            const records = await hStore.listRecords("all");
+            const chats = await aStore.listConversations({ archived: "all" });
+            const chat = chats.find(c => c.id === "chat-del-1");
+            return {
+                recordIds: records.map(r => r.id),
+                chatReadingIds: chat && chat.readingIds,
+                snapshotId: chat && chat.readingSnapshots && chat.readingSnapshots[0] && chat.readingSnapshots[0].id,
+                interpretedIds: chat && chat.messages && chat.messages[1] && chat.messages[1].interpretedReadingIds
+            };
+        }"""
+    )
+    assert after_second == {
+        "recordIds": [first_remap_id],
+        "chatReadingIds": [first_remap_id],
+        "snapshotId": first_remap_id,
+        "interpretedIds": [first_remap_id],
+    }, (label, after_second)
+
+    close_backup_dialog(page, android)
 
 
 def run_surface(pw, root_dir, android):

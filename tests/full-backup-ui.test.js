@@ -910,6 +910,26 @@ test("full-backup UI renders localized copy and retry state for history_dependen
           warnings: ["history: max 5000 records reached", "aiChats: deferred after history failure"]
         };
       }
+      if (mode === "checkFailed") {
+        return {
+          status: "failed",
+          succeededSections: [],
+          failedSections: [{ section: "aiChats", code: "history_check_failed", message: "aiChats: historyStore listRecords failed" }],
+          restored: { aiChats: { imported: 0, updated: 0, skipped: 0 } },
+          appliedPreferences: {},
+          warnings: ["aiChats: historyStore listRecords failed"]
+        };
+      }
+      if (mode === "conflictUnresolved") {
+        return {
+          status: "failed",
+          succeededSections: [],
+          failedSections: [{ section: "aiChats", code: "history_conflict_unresolved", message: "aiChats: colliding ID has no snapshot" }],
+          restored: { aiChats: { imported: 0, updated: 0, skipped: 0 } },
+          appliedPreferences: {},
+          warnings: ["aiChats: colliding ID has no snapshot"]
+        };
+      }
       return {
         status: "failed",
         succeededSections: [],
@@ -994,4 +1014,27 @@ test("full-backup UI renders localized copy and retry state for history_dependen
   i18n.setLocale("en");
   ui.refreshLanguage();
   assert.match(byId.fullBackupStatus.textContent, /Could not save Theme\/Language preferences/);
+
+  // 4) history_check_failed & history_conflict_unresolved
+  getBox("preferences").checked = false; getBox("preferences").dispatch("change");
+  getBox("aiChats").checked = true; getBox("aiChats").dispatch("change");
+  mode = "checkFailed";
+  byId.fullBackupConfirmBtn.click();
+  await settle();
+  assert.equal(byId.fullBackupStatus.classList.contains("is-error"), true);
+  assert.match(byId.fullBackupStatus.textContent, /Could not read local reading history/);
+  assert.equal(byId.fullBackupSummaryList.children[0].dataset.backupFailureCode, "history_check_failed");
+  i18n.setLocale("zh-CN");
+  ui.refreshLanguage();
+  assert.match(byId.fullBackupStatus.textContent, /无法读取本机占卜历史/);
+
+  mode = "conflictUnresolved";
+  byId.fullBackupConfirmBtn.click();
+  await settle();
+  assert.equal(byId.fullBackupStatus.classList.contains("is-error"), true);
+  assert.match(byId.fullBackupStatus.textContent, /缺少牌面快照以安全分离/);
+  assert.equal(byId.fullBackupSummaryList.children[0].dataset.backupFailureCode, "history_conflict_unresolved");
+  i18n.setLocale("en");
+  ui.refreshLanguage();
+  assert.match(byId.fullBackupStatus.textContent, /without a card snapshot to safely detach/);
 });
