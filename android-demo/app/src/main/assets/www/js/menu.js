@@ -63,6 +63,8 @@
 
     var historyButton = document.getElementById("historyOpenBtn");
     if (historyButton) historyButton.addEventListener("click", function () { setOpen(false); });
+    var fullBackupButton = document.getElementById("fullBackupOpenBtn");
+    if (fullBackupButton) fullBackupButton.addEventListener("click", function () { setOpen(false, false); });
     var aiOpenLink = document.getElementById("aiOpenLink");
     if (aiOpenLink) aiOpenLink.addEventListener("click", function () { setOpen(false); });
     var aiMenuBack = document.getElementById("aiMenuBackToReading");

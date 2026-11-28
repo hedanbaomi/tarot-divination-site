@@ -31,6 +31,7 @@
   <link rel="stylesheet" href="css/card-notes.css?v=f8c5b711">
   <link rel="stylesheet" href="css/lxxxi-realms.css?v=7810ea5b">
   <link rel="stylesheet" href="css/reading-image.css?v=5e333386">
+  <link rel="stylesheet" href="css/full-backup.css?v=a3a6b342">
 </head>
 <body>
   <div class="sky-moon" id="skyMoon" role="button" tabindex="0"
@@ -355,6 +356,86 @@
       </div>
     </dialog>
 
+    <dialog class="full-backup-dialog" id="fullBackupDialog" aria-labelledby="fullBackupDialogTitle"
+      aria-describedby="fullBackupPrivacy">
+      <div class="full-backup-shell">
+        <header class="full-backup-header">
+          <div>
+            <p class="full-backup-kicker" data-i18n="fullBackup.kicker">FULL BACKUP</p>
+            <h2 id="fullBackupDialogTitle" tabindex="-1" data-i18n="fullBackup.title">全量备份与恢复</h2>
+          </div>
+          <button class="history-icon-btn" id="fullBackupCloseBtn" type="button"
+            aria-label="关闭全量备份与恢复" data-i18n-aria-label="fullBackup.closeLabel">×</button>
+        </header>
+
+        <div class="full-backup-privacy" id="fullBackupPrivacy" role="note">
+          <p class="full-backup-privacy-main" data-i18n="fullBackup.privacyMain">
+            全量备份包含：占卜历史、卡牌笔记、自定义牌阵、AI 对话记录，以及界面主题与语言偏好。所有导出与恢复均在本机本地完成，不经过任何网络上传。
+          </p>
+          <p class="full-backup-privacy-security" data-i18n="fullBackup.privacySecurity">
+            安全提示：出于隐私保护，全量备份明确不包含 AI API Key、模型端点或服务商配置；更换设备后请在 AI 设置中重新填写密钥。
+          </p>
+        </div>
+
+        <p class="full-backup-status" id="fullBackupStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+
+        <section class="full-backup-section" id="fullBackupExportSection" aria-labelledby="fullBackupExportHeading">
+          <div class="full-backup-section-head">
+            <h3 id="fullBackupExportHeading" data-i18n="fullBackup.exportTitle">导出本机数据</h3>
+            <button class="btn-mini full-backup-refresh-btn" id="fullBackupRefreshBtn" type="button"
+              data-i18n="fullBackup.refresh">刷新统计</button>
+          </div>
+          <p class="full-backup-section-desc" data-i18n="fullBackup.exportDesc">
+            将当前设备上的各模块数据打包为单个 JSON 文件，便于换设备迁移或长期归档。
+          </p>
+          <ul class="full-backup-counts" id="fullBackupLocalCounts" aria-label="本地数据统计"
+            data-i18n-aria-label="fullBackup.countsAria"></ul>
+          <p class="full-backup-unavailable" id="fullBackupUnavailable" hidden></p>
+          <div class="full-backup-actions">
+            <button class="btn btn-accent" id="fullBackupExportBtn" type="button"
+              data-i18n="fullBackup.exportBtn">导出全量备份 JSON</button>
+          </div>
+        </section>
+
+        <section class="full-backup-section" id="fullBackupImportSection" aria-labelledby="fullBackupImportHeading">
+          <div class="full-backup-section-head">
+            <h3 id="fullBackupImportHeading" data-i18n="fullBackup.importTitle">从备份文件恢复</h3>
+          </div>
+          <p class="full-backup-section-desc" data-i18n="fullBackup.importDesc">
+            选择先前导出的全量备份 JSON 文件，先预览内容并勾选需要合并恢复的模块；不会覆盖或清空未勾选的数据。
+          </p>
+          <div class="full-backup-actions" id="fullBackupChooseWrap">
+            <button class="btn btn-secondary" id="fullBackupChooseBtn" type="button"
+              data-i18n="fullBackup.chooseFile">选择备份文件</button>
+            <input class="visually-hidden" id="fullBackupImportInput" type="file"
+              accept=".json,application/json" tabindex="-1" aria-hidden="true">
+          </div>
+
+          <div class="full-backup-preview" id="fullBackupPreview" hidden>
+            <div class="full-backup-preview-meta">
+              <p class="full-backup-preview-file" id="fullBackupPreviewFile"></p>
+              <p class="full-backup-preview-time" id="fullBackupPreviewTime"></p>
+            </div>
+            <p class="full-backup-preview-hint" data-i18n="fullBackup.previewHint">
+              请勾选要合并恢复的数据模块：
+            </p>
+            <ul class="full-backup-checklist" id="fullBackupPreviewList"></ul>
+            <div class="full-backup-preview-actions">
+              <button class="btn btn-accent" id="fullBackupConfirmBtn" type="button"
+                data-i18n="fullBackup.confirmRestore">确认合并恢复</button>
+              <button class="btn btn-secondary" id="fullBackupCancelBtn" type="button"
+                data-i18n="fullBackup.cancel">取消</button>
+            </div>
+          </div>
+
+          <div class="full-backup-summary" id="fullBackupSummary" hidden aria-live="polite">
+            <h4 data-i18n="fullBackup.summaryTitle">恢复结果</h4>
+            <ul class="full-backup-summary-list" id="fullBackupSummaryList"></ul>
+          </div>
+        </section>
+      </div>
+    </dialog>
+
     <dialog class="announcement-dialog" id="announcementDialog" aria-labelledby="announcementDialogTitle"
       aria-describedby="announcementStatus">
       <div class="announcement-dialog-shell">
@@ -664,6 +745,12 @@
           <span class="setting-label" data-i18n="settings.pageVersion">页面版本</span>
           <a class="btn-mini" id="switchPageVersion" href="classic.html" data-i18n="settings.useClassic">切回旧版</a>
         </div>
+        <div class="setting-group setting-group-backup">
+          <span class="setting-label" data-i18n="settings.fullBackup">数据备份</span>
+          <button class="btn-mini" id="fullBackupOpenBtn" type="button"
+            aria-haspopup="dialog" aria-controls="fullBackupDialog"
+            data-i18n="fullBackup.open">全量备份与恢复</button>
+        </div>
         <div class="setting-group setting-group-spread">
           <label for="spreadSelect" data-i18n="settings.spread">预设牌阵</label>
           <select id="spreadSelect" aria-describedby="spreadSettingSummary"></select>
@@ -748,7 +835,7 @@
   <script src="js/lxxxi-data.js?v=02647575"></script>
   <script src="js/spreads.js?v=ce79364a"></script>
   <script src="js/i18n-data-en.js?v=d6a2ccc1"></script>
-  <script src="js/i18n.js?v=8c894b80"></script>
+  <script src="js/i18n.js?v=5b7b104c"></script>
   <script src="js/theme.js?v=5853fe83"></script>
   <template id="webAnnouncementsModule">
     <script src="js/announcements.js?v=b50d452a"></script>
@@ -770,6 +857,9 @@
   <script src="js/reading-image.js?v=37f47f6a"></script>
   <script src="js/reading-image-ui.js?v=0ae6a8f4"></script>
   <script src="js/history-ui.js?v=05300fde"></script>
+  <script src="js/ai-chat-store.js?v=e5f71612"></script>
+  <script src="js/full-backup.js?v=65d589c6"></script>
+  <script src="js/full-backup-ui.js?v=8c3a1787"></script>
   <script src="js/shuffle-gesture.js?v=495eb9f4"></script>
   <script src="js/free-board-ui.js?v=5f36df4a"></script>
   <script src="js/app.js?v=cc867a31"></script>

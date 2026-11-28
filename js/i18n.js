@@ -750,6 +750,73 @@
       ,"ai.starter.core": "直说核心结论：这副牌眼下最核心的矛盾卡在哪？牌势正往哪边推？"
       ,"ai.starter.action": "先一句话交代稳固的基本盘，再重点深挖我没意识到的盲点与破局抓手。"
       ,"ai.starter.compare": "若关联了多条记录，请对比局势在时间线上的真实演变，看看哪些隐患正在缓解或加剧。"
+      ,"settings.fullBackup": "数据备份"
+      ,"fullBackup.open": "全量备份与恢复"
+      ,"fullBackup.kicker": "FULL BACKUP"
+      ,"fullBackup.title": "全量备份与恢复"
+      ,"fullBackup.closeLabel": "关闭全量备份与恢复"
+      ,"fullBackup.privacyMain": "全量备份包含：占卜历史、卡牌笔记、自定义牌阵、AI 对话记录，以及界面主题与语言偏好。所有导出与恢复均在本机本地完成，不经过任何网络上传。"
+      ,"fullBackup.privacySecurity": "安全提示：出于隐私保护，全量备份明确不包含 AI API Key、模型端点或服务商配置；更换设备后请在 AI 设置中重新填写密钥。"
+      ,"fullBackup.exportTitle": "导出本机数据"
+      ,"fullBackup.exportDesc": "将当前设备上的各模块数据打包为单个 JSON 文件，便于换设备迁移或长期归档。"
+      ,"fullBackup.refresh": "刷新统计"
+      ,"fullBackup.countsAria": "本地数据统计"
+      ,"fullBackup.loadingCounts": "正在读取本地数据统计…"
+      ,"fullBackup.countsFailed": "未能读取本地数据统计，请稍后重试。"
+      ,"fullBackup.unavailableNotice": "以下模块当前存储不可用，导出时将自动跳过：{modules}"
+      ,"fullBackup.exportBtn": "导出全量备份 JSON"
+      ,"fullBackup.exporting": "正在打包全量备份…"
+      ,"fullBackup.exportedWeb": "已下载全量备份：{fileName}。"
+      ,"fullBackup.exportChoosing": "正在打开保存位置，请为 {fileName} 选择保存文件夹。"
+      ,"fullBackup.exportedAndroid": "已保存全量备份：{fileName}。"
+      ,"fullBackup.exportCancelled": "已取消导出，本地数据未受影响。"
+      ,"fullBackup.exportFailed": "导出全量备份失败，请稍后重试。"
+      ,"fullBackup.exportBusy": "请先完成当前文件导出。"
+      ,"fullBackup.importTitle": "从备份文件恢复"
+      ,"fullBackup.importDesc": "选择先前导出的全量备份 JSON 文件，先预览内容并勾选需要合并恢复的模块；不会覆盖或清空未勾选的数据。"
+      ,"fullBackup.chooseFile": "选择备份文件"
+      ,"fullBackup.parsing": "正在校验备份文件…"
+      ,"fullBackup.fileTooLarge": "备份文件超过 16 MiB 上限，已拒绝导入。"
+      ,"fullBackup.parseFailed": "备份文件校验失败：文件格式无效、已损坏或包含不允许的敏感字段。"
+      ,"fullBackup.previewFile": "文件：{fileName}"
+      ,"fullBackup.previewTime": "导出时间：{time}"
+      ,"fullBackup.previewHint": "请勾选要合并恢复的数据模块："
+      ,"fullBackup.previewEmpty": "该备份文件中没有可恢复的数据项。"
+      ,"fullBackup.confirmRestore": "确认合并恢复"
+      ,"fullBackup.cancel": "取消"
+      ,"fullBackup.selectAtLeastOne": "请至少勾选一个模块再执行恢复。"
+      ,"fullBackup.restoring": "正在合并恢复所选模块…"
+      ,"fullBackup.restoreDone": "合并恢复完成。"
+      ,"fullBackup.restoreFailed": "恢复失败，请检查存储可用性后重试。"
+      ,"fullBackup.restoreCancelled": "已取消恢复，本地数据未作任何修改。"
+      ,"fullBackup.summaryTitle": "恢复结果"
+      ,"fullBackup.section.history": "占卜历史"
+      ,"fullBackup.section.cardNotes": "卡牌笔记"
+      ,"fullBackup.section.customSpreads": "自定义牌阵"
+      ,"fullBackup.section.aiChats": "AI 对话记录"
+      ,"fullBackup.section.preferences": "界面偏好（主题与语言）"
+      ,"fullBackup.count.history": "{count} 条记录"
+      ,"fullBackup.count.cardNotes": "{count} 条笔记"
+      ,"fullBackup.count.customSpreads": "{count} 个牌阵"
+      ,"fullBackup.count.aiChats": "{count} 段对话"
+      ,"fullBackup.count.preferences": "{summary}"
+      ,"fullBackup.count.preferencesEmpty": "未包含"
+      ,"fullBackup.count.unavailable": "不可用"
+      ,"fullBackup.prefTheme": "主题：{theme}"
+      ,"fullBackup.prefLocale": "语言：{locale}"
+      ,"fullBackup.locale.zh-CN": "简体中文"
+      ,"fullBackup.locale.en": "English"
+      ,"fullBackup.summary.history": "占卜历史：导入 {imported} 条"
+      ,"fullBackup.summary.historyRemapped": "占卜历史：导入 {imported} 条（重映射 {remapped} 个冲突 ID）"
+      ,"fullBackup.summary.historySkipped": "占卜历史：导入 {imported} 条，跳过已有 {skipped} 条"
+      ,"fullBackup.summary.historyFull": "占卜历史：导入 {imported} 条（重映射 {remapped} 个冲突 ID），跳过已有 {skipped} 条"
+      ,"fullBackup.summary.cardNotes": "卡牌笔记：导入 {imported} 条，保留已有 {skipped} 条"
+      ,"fullBackup.summary.customSpreads": "自定义牌阵：导入 {imported} 个，跳过已有 {skipped} 个"
+      ,"fullBackup.summary.aiChats": "AI 对话记录：导入 {imported} 段，跳过 {skipped} 段"
+      ,"fullBackup.summary.aiChatsDetailed": "AI 对话记录：新增 {imported} 段，更新 {updated} 段，跳过 {skipped} 段"
+      ,"fullBackup.summary.preferences": "界面偏好：已应用（{summary}）"
+      ,"fullBackup.summary.preferencesUnchanged": "界面偏好：与当前设置一致，无需更改"
+      ,"fullBackup.summary.warning": "提示：{message}"
     },
     "en": {
       "page.title": "Quareia Divination",
@@ -1491,7 +1558,74 @@
       "ai.questionPlaceholder": "Add what you asked and the timeframe (e.g. Changing jobs in the next 3 months)",
       "ai.starter.core": "Give me the straight verdict: what is the most central tension and momentum here?",
       "ai.starter.action": "Briefly anchor what is stable on the board, then dig into the blind spots and key levers I haven't noticed.",
-      "ai.starter.compare": "Across the attached readings, trace how the underlying pattern has shifted and which pressures are easing or intensifying."
+      "ai.starter.compare": "Across the attached readings, trace how the underlying pattern has shifted and which pressures are easing or intensifying.",
+      "settings.fullBackup": "Data backup",
+      "fullBackup.open": "Full Backup & Restore",
+      "fullBackup.kicker": "FULL BACKUP",
+      "fullBackup.title": "Full Backup & Restore",
+      "fullBackup.closeLabel": "Close Full Backup & Restore",
+      "fullBackup.privacyMain": "Full backup includes Reading History, Card Notes, Custom Spreads, AI Chats, and Theme/Language preferences. Everything is processed locally on this device with zero network upload.",
+      "fullBackup.privacySecurity": "Security notice: For your safety, full backups explicitly exclude AI API keys, model endpoints, and provider settings. Re-enter your API key in AI Settings on a new device.",
+      "fullBackup.exportTitle": "Export local data",
+      "fullBackup.exportDesc": "Bundle all supported modules on this device into a single JSON file for device migration or safekeeping.",
+      "fullBackup.refresh": "Refresh counts",
+      "fullBackup.countsAria": "Local data counts",
+      "fullBackup.loadingCounts": "Reading local data counts…",
+      "fullBackup.countsFailed": "Could not read local data counts. Please try again.",
+      "fullBackup.unavailableNotice": "Storage is currently unavailable for: {modules}. They will be skipped during export.",
+      "fullBackup.exportBtn": "Export Full Backup JSON",
+      "fullBackup.exporting": "Preparing full backup…",
+      "fullBackup.exportedWeb": "Downloaded full backup: {fileName}.",
+      "fullBackup.exportChoosing": "Opening save location. Choose a folder for {fileName}.",
+      "fullBackup.exportedAndroid": "Saved full backup: {fileName}.",
+      "fullBackup.exportCancelled": "Export cancelled. Your local data was not changed.",
+      "fullBackup.exportFailed": "Could not export full backup. Please try again.",
+      "fullBackup.exportBusy": "Finish the current file export first.",
+      "fullBackup.importTitle": "Restore from backup file",
+      "fullBackup.importDesc": "Choose a previously exported full backup JSON file to preview its contents and pick which modules to merge. Unchecked modules are left untouched.",
+      "fullBackup.chooseFile": "Choose Backup File",
+      "fullBackup.parsing": "Validating backup file…",
+      "fullBackup.fileTooLarge": "This backup file exceeds the 16 MiB limit and was rejected.",
+      "fullBackup.parseFailed": "Backup validation failed: invalid format, corrupted data, or disallowed sensitive fields.",
+      "fullBackup.previewFile": "File: {fileName}",
+      "fullBackup.previewTime": "Exported: {time}",
+      "fullBackup.previewHint": "Choose which modules to merge and restore:",
+      "fullBackup.previewEmpty": "This backup file contains no restorable items.",
+      "fullBackup.confirmRestore": "Merge & Restore Selected",
+      "fullBackup.cancel": "Cancel",
+      "fullBackup.selectAtLeastOne": "Select at least one module to restore.",
+      "fullBackup.restoring": "Merging and restoring selected modules…",
+      "fullBackup.restoreDone": "Merge & restore complete.",
+      "fullBackup.restoreFailed": "Restore failed. Please check storage availability and try again.",
+      "fullBackup.restoreCancelled": "Restore cancelled. No local data was modified.",
+      "fullBackup.summaryTitle": "Restore summary",
+      "fullBackup.section.history": "Reading History",
+      "fullBackup.section.cardNotes": "Card Notes",
+      "fullBackup.section.customSpreads": "Custom Spreads",
+      "fullBackup.section.aiChats": "AI Chats",
+      "fullBackup.section.preferences": "Preferences (Theme & Language)",
+      "fullBackup.count.history": "{count} reading(s)",
+      "fullBackup.count.cardNotes": "{count} note(s)",
+      "fullBackup.count.customSpreads": "{count} spread(s)",
+      "fullBackup.count.aiChats": "{count} chat(s)",
+      "fullBackup.count.preferences": "{summary}",
+      "fullBackup.count.preferencesEmpty": "Not included",
+      "fullBackup.count.unavailable": "Unavailable",
+      "fullBackup.prefTheme": "Theme: {theme}",
+      "fullBackup.prefLocale": "Language: {locale}",
+      "fullBackup.locale.zh-CN": "简体中文",
+      "fullBackup.locale.en": "English",
+      "fullBackup.summary.history": "Reading History: imported {imported}",
+      "fullBackup.summary.historyRemapped": "Reading History: imported {imported} ({remapped} duplicate IDs remapped)",
+      "fullBackup.summary.historySkipped": "Reading History: imported {imported}, skipped {skipped} existing",
+      "fullBackup.summary.historyFull": "Reading History: imported {imported} ({remapped} duplicate IDs remapped), skipped {skipped} existing",
+      "fullBackup.summary.cardNotes": "Card Notes: imported {imported}, kept {skipped} existing",
+      "fullBackup.summary.customSpreads": "Custom Spreads: imported {imported}, skipped {skipped} existing",
+      "fullBackup.summary.aiChats": "AI Chats: imported {imported}, skipped {skipped}",
+      "fullBackup.summary.aiChatsDetailed": "AI Chats: added {imported}, updated {updated}, skipped {skipped}",
+      "fullBackup.summary.preferences": "Preferences: applied ({summary})",
+      "fullBackup.summary.preferencesUnchanged": "Preferences: already matched current settings",
+      "fullBackup.summary.warning": "Notice: {message}"
     }
   };
 

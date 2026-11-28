@@ -87,3 +87,22 @@ test("an image preview opened from a history entry closes before the history pan
   assert.equal(context.DivinationUiBack.handleBack(), true);
   assert.deepEqual(calls, ["image", "image", "history"]);
 });
+
+test("full backup dialog consumes system back before the drawer menu", () => {
+  const calls = [];
+  let backupOpen = true;
+  const context = {
+    DivinationFullBackupUi: { handleBack() {
+      calls.push("full-backup");
+      if (!backupOpen) return false;
+      backupOpen = false;
+      return true;
+    }},
+    DivinationMenu: { handleBack() { calls.push("menu"); return true; } }
+  };
+  vm.runInNewContext(source, context);
+  assert.equal(context.DivinationUiBack.handleBack(), true);
+  assert.deepEqual(calls, ["full-backup"]);
+  assert.equal(context.DivinationUiBack.handleBack(), true);
+  assert.deepEqual(calls, ["full-backup", "full-backup", "menu"]);
+});
