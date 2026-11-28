@@ -7,6 +7,7 @@
 
   if (typeof window === "undefined" || typeof document === "undefined") return;
 
+  if (window.navigator && window.navigator.onLine === false) return;
   var location = window.location || {};
   if (
     location.protocol !== "https:" ||

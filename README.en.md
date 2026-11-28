@@ -18,6 +18,12 @@ https://hedanbaomi.github.io/tarot-divination-site/
 
 The core reading experience is a static frontend. Announcements, optional anonymous usage statistics, and Cloudflare Web Analytics require a network connection; AI chat connects to the model provider you configure.
 
+## Web PWA and the iOS Home Screen
+
+Open the site in Safari on iPhone or iPad and choose **Share → Add to Home Screen**. If **Open as Web App** appears, turn it on and tap **Add**. Stay online the first time you open it from the Home Screen so the browser can save the offline files.
+
+Once those files are ready, both reading interfaces work offline. You can draw and reveal cards, read the full meanings and spreads for all three decks, and use local history, draw statistics, and card notes. The browser keeps up to 96 previously viewed Tarot and Mystagogus card images. Clearing site data removes the cache. LXXXI artwork and AI model replies require a connection. The AI workspace can still open locally saved chats offline.
+
 ## Android App
 
 This project also provides a free offline Android version (`android-demo/`), wrapping the website into a phone-friendly offline experience:
