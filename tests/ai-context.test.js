@@ -598,3 +598,64 @@ test("personaLevel shrinks the persona so a small context window keeps recent tu
     "compact prompt estimates fewer tokens"
   );
 });
+
+test("personal notes are opt-in, scoped by deck and position, bounded, and absent from snapshots", () => {
+  const map = new Map();
+  const records = ["tarot", "mystagogus", "lxxxi"].map(deckType => ({
+    id: deckType, layoutMode: "preset", deckType, spreadId: "custom-notes", createdAt: 1234,
+    cards: [{ cardId: "shared-id", positionNumber: 1 }, { cardId: "unmatched", positionNumber: 2 }]
+  }));
+  for (const record of records) map.set(record.deckType + ":shared-id", record.deckType + " note " + "🌙".repeat(700));
+  map.set("tarot:unattached", "unattached private text");
+  for (const record of records) {
+    const off = { locale: "en", cardNotesMap: map };
+    const on = { ...off, includeCardNotes: true };
+    const plain = aiContext.formatReadingsForPrompt([record], off);
+    const optedIn = aiContext.formatReadingsForPrompt([record], on);
+    const details = aiContext.resolveReadingDetails(record, on);
+    assert.equal(aiContext.resolveReadingDetails(record, off).cards[0].personalNote, undefined);
+    assert.equal(details.cards[1].personalNote, undefined);
+    const note = details.cards[0].personalNote;
+    assert.equal([...note].length, 600);
+    assert.ok(note.startsWith(record.deckType + " note ") && note.endsWith("🌙…"));
+    assert.ok(optedIn.includes(JSON.stringify(note)));
+    assert.match(optedIn, /subjective, not official source text/);
+    assert.doesNotMatch(optedIn, /unattached private text/);
+    assert.doesNotMatch(plain, /personal card note|🌙/i);
+    const inherited = { ...off, includeCardNotes: false, resolvedReadings: [details] };
+    assert.equal(aiContext.formatReadingsForPrompt([record], inherited), plain);
+    assert.deepEqual(aiContext.buildReadingSnapshot(record, on), aiContext.buildReadingSnapshot(record, off));
+    const cost = text => aiContext.estimateConversationTokens({ systemPrompt: text, messages: [] });
+    assert.ok(cost(optedIn) > cost(plain));
+  }
+  const missingDeck = { ...records[0], deckType: "" };
+  assert.doesNotMatch(aiContext.formatReadingsForPrompt([missingDeck], {
+    locale: "en", includeCardNotes: true, cardNotesMap: map
+  }), /personal card note|🌙/i);
+  const stacked = { ...records[0], overviewMethod: "stacked" };
+  const stackedMd = aiContext.formatReadingsForPrompt([stacked], {locale: "en", includeCardNotes: true, cardNotesMap: map});
+  assert.equal(stackedMd.match(/Personal card note/g).length, 1);
+  assert.match(stackedMd, /tarot note/);
+  assert.equal(aiContext.truncateCardNote("🌙".repeat(600)), "🌙".repeat(600));
+  const zh = aiContext.formatReadingsForPrompt([records[0]], {locale:"zh-CN", includeCardNotes:true, cardNotesMap:map});
+  assert.match(zh, /用户个人卡牌笔记（主观笔记，非官方教材原文）/);
+});
+
+test("reading distinct card notes ignores unavailable storage and mismatched return keys", async () => {
+  const { readAttachedCardNotes } = require("../js/ai-ui.js");
+  const records = [{ deckType: "tarot", cards: ["a", "a", "b", "c"].map(cardId => ({ cardId })) }];
+  const requested = [];
+  const fake = { get: async (deckType, cardId) => {
+    requested.push([deckType, cardId]);
+    if (cardId === "c") throw new Error("IndexedDB unavailable");
+    return { deckType: cardId === "b" ? "lxxxi" : deckType, cardId, text: "local fixture" };
+  }};
+  const read = store => readAttachedCardNotes(store, records, aiContext.truncateCardNote);
+  assert.deepEqual([...await read(null)], []);
+  assert.deepEqual([...await read(fake)], [["tarot:a", "local fixture"]]);
+  assert.equal(requested.length, 3);
+  const unavailable = require("../js/card-notes-store.js").createStore({ indexedDB: null, readOnly: true, isKnownCard: () => true });
+  assert.deepEqual(Object.keys(unavailable), ["get"]);
+  assert.deepEqual([...await read(unavailable)], []);
+  assert.deepEqual([...await read({ get: () => new Promise(() => {}) })], []);
+});

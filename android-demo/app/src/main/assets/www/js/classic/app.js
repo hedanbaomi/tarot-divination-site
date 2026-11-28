@@ -78,6 +78,8 @@
     el.spreadSettingGroup = document.querySelector(".setting-group-spread");
     el.spreadSettingSummary = document.getElementById("spreadSettingSummary");
     el.shuffleBtn = document.getElementById("shuffleBtn");
+    el.aiBtn = document.getElementById("readingAiBtn");
+    el.markdownBtn = document.getElementById("readingMarkdownBtn");
     el.imageBtn = document.getElementById("readingImageBtn");
     el.switchArcanaBtn = document.getElementById("switchArcanaBtn");
     el.deckArea = document.querySelector(".deck-area");
@@ -1265,7 +1267,10 @@
   }
 
   function renderResults() {
-    el.imageBtn.hidden = !canExportImage();
+    var exportable = canExportImage();
+    el.aiBtn.hidden = !exportable || isFreeform();
+    el.markdownBtn.hidden = !exportable;
+    el.imageBtn.hidden = !exportable;
     if (isFreeform()) {
       el.resultsSection.style.display = "none";
       return;
@@ -1703,6 +1708,14 @@
     }, handleShuffle);
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);
+    el.aiBtn.addEventListener("click", function () {
+      if (!isFreeform() && canExportImage()) historyUiController.openTableInAi();
+    });
+    el.markdownBtn.addEventListener("click", function () {
+      if (!canExportImage()) return;
+      var record = createCurrentHistoryRecord();
+      historyUiController.exportTableMarkdown(record);
+    });
     el.imageBtn.addEventListener("click", function () {
       if (canExportImage()) historyUiController.exportTableImage(createCurrentHistoryRecord());
     });

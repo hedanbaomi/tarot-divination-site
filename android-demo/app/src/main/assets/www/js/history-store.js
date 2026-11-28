@@ -56,6 +56,7 @@
     if (!recordsApi ||
         typeof recordsApi.validateRecord !== "function" ||
         typeof recordsApi.normalizeQuestion !== "function" ||
+        typeof recordsApi.normalizeReflection !== "function" ||
         typeof recordsApi.isRecentDuplicate !== "function" ||
         typeof recordsApi.resolveImportedIds !== "function") {
       throw new Error("DivinationHistoryRecords API is unavailable");
@@ -281,12 +282,12 @@
       });
     }
 
-    function updateQuestion(id, question) {
+    function updateNote(id, field, value, normalize) {
       if (typeof id !== "string" || id.length === 0) {
         return Promise.reject(new Error("History record id is required"));
       }
       return Promise.resolve().then(function () {
-        var normalized = recordsApi.normalizeQuestion(question);
+        var normalized = normalize(value);
         return runTransaction("readwrite", function (store, succeed, fail) {
           var request = store.get(id);
           request.onsuccess = function () {
@@ -297,13 +298,13 @@
               }
               var record = request.result;
               recordsApi.validateRecord(record);
-              if (normalized) record.question = normalized;
-              else delete record.question;
+              if (normalized) record[field] = normalized;
+              else delete record[field];
               recordsApi.validateRecord(record);
               var putRequest = store.put(record);
               putRequest.onsuccess = function () { succeed(cloneJson(record)); };
               putRequest.onerror = function () {
-                fail(putRequest.error || new Error("Could not update the history question"));
+                fail(putRequest.error || new Error("Could not update the history " + field));
               };
             } catch (error) {
               fail(error);
@@ -314,6 +315,14 @@
           };
         });
       });
+    }
+
+    function updateQuestion(id, question) {
+      return updateNote(id, "question", question, recordsApi.normalizeQuestion);
+    }
+
+    function updateReflection(id, reflection) {
+      return updateNote(id, "reflection", reflection, recordsApi.normalizeReflection);
     }
 
     function deleteRecord(id) {
@@ -399,6 +408,7 @@
       getRecord: getRecord,
       saveRecord: saveRecord,
       updateQuestion: updateQuestion,
+      updateReflection: updateReflection,
       deleteRecord: deleteRecord,
       clearRecords: clearRecords,
       importRecords: importRecords

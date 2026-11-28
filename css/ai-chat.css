@@ -446,6 +446,26 @@ html.ui2 body.ai-chat-page .menu-toggle {
   gap: 6px;
 }
 
+.ai-card-notes-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.ai-card-notes-option label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.ai-card-notes-option input { accent-color: var(--accent); }
+.ai-card-notes-option p { flex-basis: 100%; margin: 0; }
+.ai-card-notes-option [role="status"] { color: var(--accent-light); }
+
 .ai-attached-chips {
   display: flex;
   flex-wrap: wrap;
