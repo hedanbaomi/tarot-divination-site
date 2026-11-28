@@ -49,7 +49,7 @@
   }
   function send(event, extra) {
     var token = generation;
-    if (!isEnabled() || typeof window.fetch !== "function") return Promise.resolve(false);
+    if (!isEnabled() || (window.navigator && window.navigator.onLine === false) || typeof window.fetch !== "function") return Promise.resolve(false);
     return identity().then(function (id) {
       if (!isEnabled() || token !== generation) return false;
       write("id", id);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve, sep } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const pages = ['index.html', 'classic.html', 'ai.html'];
@@ -118,6 +118,8 @@ function withVersion(url, expected) {
   return { current: values, next: `${path}?${updated}${fragment}` };
 }
 
+// Keep the worker's atomic install set in sync with the three published pages.
+const shellScriptsAndStyles = new Set();
 let problems = 0;
 let changes = 0;
 for (const page of pages) {
@@ -140,6 +142,8 @@ for (const page of pages) {
       expected = createHash('sha256').update(content, 'utf8').digest('hex').slice(0, 8);
     }
     catch (error) { console.error(`${page}:${line}: cannot read asset ${attr.value}: ${error.message}`); problems++; continue; }
+    const publicPath = relative(root, asset).split(sep).join('/');
+    shellScriptsAndStyles.add(publicPath + '?v=' + expected);
     const version = withVersion(attr.value, expected);
     if (version.current.length === 1 && version.current[0] === expected) continue;
     console.error(`${page}:${line}: ${version.current.length ? 'stale or duplicate' : 'missing'} version\n  - ${attr.value}\n  + ${version.next}`);
@@ -149,6 +153,45 @@ for (const page of pages) {
   if (edits.length) {
     for (const edit of edits.reverse()) html = html.slice(0, edit.start) + edit.value + html.slice(edit.end);
     writeFileSync(pagePath, html, 'utf8');
+  }
+}
+const workerPath = resolve(root, 'sw.js');
+if (!problems && existsSync(workerPath)) {
+  const manifest = JSON.parse(readFileSync(resolve(root, 'manifest.webmanifest'), 'utf8'));
+  const iconPaths = ['assets/icons/favicon.svg', 'assets/icons/apple-touch-icon.png', ...manifest.icons.map(icon => icon.src)];
+  if (!iconPaths.every(file => /^assets\/icons\/[\w-]+\.(?:svg|png)$/.test(file))) {
+    throw new Error('PWA install icons must be public files under assets/icons/');
+  }
+  const files = [...new Set([...pages, 'manifest.webmanifest', ...iconPaths, ...shellScriptsAndStyles])].sort();
+  const digest = createHash('sha256');
+  const pageHashes = {};
+  for (const file of files) {
+    digest.update(file).update('\0');
+    // Versioned script/style URLs already carry their content hashes.
+    if (!file.includes('?')) {
+      const bytes = readFileSync(resolve(root, file));
+      const content = file.endsWith('.png') ? bytes : bytes.toString('utf8').replace(/\r\n/g, '\n');
+      digest.update(content);
+      if (pages.includes(file)) pageHashes[file] = createHash('sha256').update(content).digest('hex').slice(0, 12);
+    }
+    digest.update('\0');
+  }
+  const worker = readFileSync(workerPath, 'utf8');
+  const block = /^const SHELL_VERSION = [^;]+;\r?\nconst PAGE_HASHES = [^;]+;\r?\nconst SHELL_FILES = \[[\s\S]*?\];(?=\r?\n\/\/ End generated shell\.)/m;
+  if (!block.test(worker)) throw new Error('Missing generated shell block in sw.js');
+  digest.update(worker.replace(block, '').replace(/\r\n/g, '\n'));
+  const version = digest.digest('hex').slice(0, 12);
+  const generated = 'const SHELL_VERSION = "' + version + '";\nconst PAGE_HASHES = ' + JSON.stringify(pageHashes, null, 2) +
+    ';\nconst SHELL_FILES = ' + JSON.stringify(files, null, 2) + ';';
+  const updated = worker.replace(block, () => worker.includes('\r\n') ? generated.replace(/\n/g, '\r\n') : generated);
+  if (updated !== worker) {
+    if (fix) {
+      writeFileSync(workerPath, updated, 'utf8');
+      console.log('Updated offline shell in sw.js.');
+    } else {
+      console.error('sw.js: stale offline shell; run check-asset-versions.mjs --fix');
+      problems++;
+    }
   }
 }
 if (fix && changes) console.log(`Updated ${changes} asset URL(s).`);

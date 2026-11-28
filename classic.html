@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#060919">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" sizes="180x180">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="description" content="Quareia 占卜：支持塔罗、Mystagogus（M 牌）与 LXXXI 魔法牌，轻点牌堆抽牌，翻牌解读，预设牌阵与正逆位模式。">
   <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
   <title>Quareia 占卜 · Quareia Divination</title>
@@ -688,7 +693,10 @@
   <script src="js/classic/messages.js?v=06b586bc"></script>
   <script src="js/i18n.js?v=3326c5fe"></script>
   <script src="js/theme.js?v=5853fe83"></script>
-  <script src="js/announcements.js?v=b50d452a"></script>
+  <template id="webAnnouncementsModule">
+    <script src="js/announcements.js?v=b50d452a"></script>
+  </template>
+  <script src="js/web-announcements.js?v=7cd811e5"></script>
   <script src="js/dialogs.js?v=1e48afd9"></script>
   <script src="js/custom-selects.js?v=00602ed5"></script>
   <script src="js/custom-spreads.js?v=4d01a929"></script>
@@ -710,7 +718,8 @@
   <script src="js/classic/app.js?v=9730e553"></script>
   <script src="js/deck-shuffle.js?v=a4bf68d3"></script>
   <script src="js/classic/celestial-sky.js?v=84754ac7" defer></script>
-  <script src="js/web-analytics.js?v=d6d43580"></script>
-  <script src="js/web-telemetry.js?v=e3bb59d8"></script>
+  <script src="js/web-analytics.js?v=af241000"></script>
+  <script src="js/web-telemetry.js?v=45fcf383"></script>
+  <script src="js/pwa-register.js?v=9bbd33e1"></script>
 </body>
 </html>
