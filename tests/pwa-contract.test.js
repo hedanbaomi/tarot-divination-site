@@ -184,6 +184,21 @@ test("network-first serves changed content and falls back offline without cachin
   assert.deepEqual([...w.stores.values()].flatMap(m => [...m.keys()]), [scope + art, scope + script, scope + "ai.html"]);
 });
 
+test("an interrupted response body falls back even after successful HTTP headers", async () => {
+  let interrupted = false;
+  const w = worker(async request => {
+    const body = interrupted ? new ReadableStream({
+      start(controller) { controller.error(new TypeError("connection reset")); }
+    }) : read("ai.html");
+    const response = new Response(body);
+    Object.defineProperties(response, {type: {value: "basic"}, url: {value: request.url}});
+    return response;
+  });
+  await w.dispatch("ai.html");
+  interrupted = true;
+  assert.equal(await (await w.dispatch("ai.html")).text(), read("ai.html"));
+});
+
 test("redirected, cross-origin, private and non-image responses cannot enter the card cache", async () => {
   const card = "assets/cards/m/m-01.jpeg";
   for (const [url, redirected, policy, type] of [
