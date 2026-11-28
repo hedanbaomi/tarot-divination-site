@@ -129,6 +129,18 @@
     return Number.isNaN(parsed) ? null : parsed;
   }
 
+  function withinPeriod(createdMs, cutoffMs) {
+    return cutoffMs == null || (createdMs !== null && createdMs >= cutoffMs);
+  }
+
+  function isCountableRecord(record) {
+    return !!record && Array.isArray(record.cards) && DECKS.indexOf(record.deckType) !== -1;
+  }
+
+  function isCountableCard(record, card) {
+    return card && card.cardId && (record.layoutMode !== "freeform" || card.revealed !== false);
+  }
+
   function pickDefaultDeck(records, preferredDeck) {
     if (!preferredDeck || preferredDeck === "all") return "all";
     var counts = { tarot: 0, mystagogus: 0, lxxxi: 0 };
@@ -176,20 +188,17 @@
     var cardMap = new Map();
 
     (records || []).forEach(function (record) {
-      if (!record || !Array.isArray(record.cards)) return;
-      if (DECKS.indexOf(record.deckType) === -1) return;
+      if (!isCountableRecord(record)) return;
       if (!isAllDecks && record.deckType !== deckType) return;
       var createdMs = parseTimestamp(record.createdAt);
-      if (cutoffMs !== null && (createdMs === null || createdMs < cutoffMs)) return;
+      if (!withinPeriod(createdMs, cutoffMs)) return;
 
-      var freeform = record.layoutMode === "freeform";
       var recordDeck = record.deckType;
       var deckSourceMap = sourceByDeck[recordDeck];
       var countedInReading = 0;
 
       record.cards.forEach(function (card) {
-        if (!card || !card.cardId) return;
-        if (freeform && card.revealed === false) return;
+        if (!isCountableCard(record, card)) return;
 
         var sourceCard = (deckSourceMap && deckSourceMap.get(card.cardId)) || null;
         var subCategoryId = classifyCard(recordDeck, card, sourceCard);
@@ -332,6 +341,7 @@
     return {
       deckType: deckType,
       period: period,
+      cutoffMs: cutoffMs,
       deckSize: deckSize,
       readingCount: readingCount,
       totalDraws: totalDraws,
@@ -344,6 +354,14 @@
     };
   }
 
+  function matchesCardFilter(record, filter) {
+    if (!isCountableRecord(record) || !filter || record.deckType !== filter.deckType) return false;
+    if (!withinPeriod(parseTimestamp(record.createdAt), filter.cutoffMs)) return false;
+    return record.cards.some(function (card) {
+      return isCountableCard(record, card) && card.cardId === filter.cardId;
+    });
+  }
+
   return {
     DECKS: DECKS,
     DECK_FILTERS: DECK_FILTERS,
@@ -354,6 +372,7 @@
     classifyCard: classifyCard,
     getCategoryInfo: getCategoryInfo,
     pickDefaultDeck: pickDefaultDeck,
+    matchesCardFilter: matchesCardFilter,
     summarize: summarize
   };
 });

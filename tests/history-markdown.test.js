@@ -87,6 +87,29 @@ test("Android formatter mirrors the web formatter", () => {
     fs.readFileSync(path.join(root, "android-demo/app/src/main/assets/www/js/history-markdown.js"), "utf8"));
 });
 
+test("single and batch exports include escaped reflections only where present in both locales", () => {
+  const formatter = require("../js/history-markdown.js");
+  const first = record("tarot", "major-00", { reflection: "First line\n# injected\n- item\n<img src=x>" });
+  const second = record("tarot", "major-01");
+  for (const [locale, heading] of [["zh-CN", "复盘"], ["en", "Reflection"]]) {
+    const display = {
+      t: key => key === "history.reflection" ? heading : key,
+      spreadName: () => "Spread", deckName: () => "Tarot", formatTime: value => value,
+      positionName: () => "Position", cardName: (_record, card) => card.cardName,
+      interpretation: () => ({ keywords: [], meaning: "Meaning" })
+    };
+    const single = formatter.format([first], display);
+    const batch = formatter.format([first, second], display);
+    for (const output of [single, batch]) {
+      assert.equal(output.split("### " + heading).length, 2, locale);
+      assert.ok(output.includes("> First line\n> \\# injected\n> \\- item\n> &lt;img src=x&gt;"));
+      assert.ok(!output.includes("<img"));
+    }
+    assert.ok(!formatter.format([second], display).includes("### " + heading));
+    assert.ok(batch.indexOf("### " + heading) < batch.lastIndexOf("## Spread"));
+  }
+});
+
 test("single and batch Markdown exports credit only the decks in the file, once per deck", () => {
   const guidebooks = {
     tarot: "https://www.quareia.com/s/tarotbook-for-Q-website-g5at.pdf",

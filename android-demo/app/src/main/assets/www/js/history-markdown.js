@@ -28,6 +28,15 @@
     return t("history.credit." + deck, { url: guidebooks[deck] });
   }
 
+  function appendNote(lines, heading, value) {
+    lines.push("", "### " + heading, "");
+    value.split(/\r\n?|\n/).forEach(function (line) {
+      // Protect list, rule, and code-block syntax at the start of each quoted line.
+      lines.push("> " + inline(line).replace(/^(\s*)([-+=!]|\d+[.)])/,
+        function (_, spaces, marker) { return spaces + marker.slice(0, -1) + "\\" + marker.slice(-1); }));
+    });
+  }
+
   function format(records, display) {
     var t = display.t;
     var lines = ["# " + t("history.notesTitle")];
@@ -42,12 +51,7 @@
         "- **" + t("history.field.cards") + "**: " + record.cards.length);
 
       if (record.question) {
-        lines.push("", "### " + t("history.question"), "");
-        record.question.split(/\r\n?|\n/).forEach(function (line) {
-          // Protect list, rule, and code-block syntax at the start of each quoted line.
-          lines.push("> " + inline(line).replace(/^(\s*)([-+=!]|\d+[.)])/,
-            function (_, spaces, marker) { return spaces + marker.slice(0, -1) + "\\" + marker.slice(-1); }));
-        });
+        appendNote(lines, t("history.question"), record.question);
       }
 
       var cards = record.cards.slice().sort(freeform
@@ -70,6 +74,7 @@
         // Meanings come exclusively from the bundled deck, in the current language and orientation.
         lines.push("", interpretation.meaning || t("history.meaningUnavailable"));
       });
+      if (record.reflection) appendNote(lines, t("history.reflection"), record.reflection);
     });
     var citedDecks = Object.keys(guidebooks).filter(function (deck) { return decks.has(deck); });
     if (citedDecks.length) {

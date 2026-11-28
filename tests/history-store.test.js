@@ -391,3 +391,41 @@ test("question updates preserve the record and distinct questions are not duplic
   assert.deepEqual(cleared, first);
   assert.deepEqual(await store.getRecord("one"), first);
 });
+
+test("reflection updates preserve the reading, validate before writing and handle failed writes", async function () {
+  var fake = createFakeIndexedDB();
+  var store = require("../js/history-store.js").createStore({ indexedDB: fake, dbName: "reflections" });
+  var first = makeRecord("one", "2026-07-21T00:00:00.000Z", "Same");
+  first.question = "Existing question";
+  await store.saveRecord(first);
+  var updated = await store.updateReflection("one", "  第一行\r\n第二行\r第三行  ");
+  assert.deepEqual(updated, Object.assign({}, first, { reflection: "第一行\n第二行\n第三行" }));
+  assert.deepEqual(await store.getRecord("one"), updated);
+  await assert.rejects(store.updateReflection("one", "x".repeat(4001)), /4000/);
+  await assert.rejects(store.updateReflection("one", 123), /string/);
+  await assert.rejects(store.updateReflection("", "value"), /id/);
+  assert.equal(await store.updateReflection("missing", "value"), null);
+  assert.deepEqual(await store.getRecord("one"), updated);
+
+  var records = fake._databases.get("reflections")._stores.get("readings").records;
+  var originalSet = records.set;
+  records.set = function () { throw new Error("simulated write failure"); };
+  await assert.rejects(store.updateReflection("one", "changed"));
+  records.set = originalSet;
+  assert.deepEqual(await store.getRecord("one"), updated);
+
+  var candidate = structuredClone(first);
+  candidate.id = "two";
+  candidate.createdAt = "2026-07-21T00:00:05.000Z";
+  candidate.reflection = "different reflection";
+  assert.equal((await store.saveRecord(candidate)).saved, true);
+  var duplicate = structuredClone(candidate);
+  duplicate.id = "three";
+  assert.equal((await store.saveRecord(duplicate)).duplicate, true);
+  var imported = structuredClone(candidate);
+  imported.id = "imported";
+  assert.deepEqual((await store.importRecords([imported])).records, [imported]);
+  assert.deepEqual(await store.getRecord("imported"), imported);
+  assert.deepEqual(await store.updateReflection("one", " \r\n "), first);
+  assert.deepEqual(await store.getRecord("one"), first);
+});

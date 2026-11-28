@@ -198,6 +198,7 @@
       redo: options.redo || byId(document, "freeBoardRedoBtn"),
       revealAll: options.revealAll || byId(document, "freeBoardRevealAllBtn"),
       image: byId(document, "freeBoardImageBtn"),
+      markdown: byId(document, "freeBoardMarkdownBtn"),
       resetView: options.resetView || byId(document, "freeBoardResetViewBtn"),
       shuffle: options.shuffle || byId(document, "freeBoardShuffleBtn"),
       discard: options.discard || byId(document, "freeBoardDiscardDraftBtn")
@@ -616,7 +617,9 @@
       if (elements.hint) elements.hint.textContent = t("freeBoard.hint");
       if (elements.undo) elements.undo.disabled = !stateController.canUndo();
       if (elements.redo) elements.redo.disabled = !stateController.canRedo();
-      if (elements.image) elements.image.hidden = !state.cards.some(function (card) { return card.revealed; });
+      var hasRevealed = state.cards.some(function (card) { return card.revealed; });
+      if (elements.image) elements.image.hidden = !hasRevealed;
+      if (elements.markdown) elements.markdown.hidden = !hasRevealed;
       if (elements.revealAll) elements.revealAll.disabled = state.cards.length === 0 ||
         state.cards.every(function (card) { return card.revealed; });
       if (elements.shuffle) elements.shuffle.disabled = state.cards.length === 0 && state.remainingPile.length === 0;
@@ -1104,6 +1107,9 @@
       if (elements.undo) elements.undo.addEventListener("click", function () { mutate("undo", [], "undo"); });
       if (elements.redo) elements.redo.addEventListener("click", function () { mutate("redo", [], "redo"); });
       if (elements.revealAll) elements.revealAll.addEventListener("click", revealAll);
+      if (elements.markdown) elements.markdown.addEventListener("click", function () {
+        options.getHistoryController().exportTableMarkdown(buildHistoryRecord(), elements.saveStatus);
+      });
       if (elements.image) elements.image.addEventListener("click", function () {
         var state = getState();
         if (state && state.cards.some(function (card) { return card.revealed; })) {
