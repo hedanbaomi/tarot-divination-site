@@ -30,13 +30,18 @@ test("history UI never renders imported data through innerHTML", function () {
   assert.match(historyUi, /replaceChildren/);
 });
 
-test("history edits only a reading-level question and retains the JSON backup controls on every surface", function () {
+test("history edits reading-level questions and reflections and retains backup controls on every surface", function () {
   for (const assets of ["", "android-demo/app/src/main/assets/www"]) {
     for (const page of ["index.html", "classic.html"]) {
       const source = fs.readFileSync(path.join(root, assets, page), "utf8");
       const dialog = source.match(/<dialog class="history-dialog"[\s\S]+?<\/dialog>/)[0];
       assert.doesNotMatch(dialog, /\bcontenteditable\b/i);
-      assert.deepEqual(Array.from(dialog.matchAll(/<textarea\b[^>]* id="([^"]+)"/gi), m => m[1]), ["historyQuestionInput"]);
+      assert.deepEqual(Array.from(dialog.matchAll(/<textarea\b[^>]* id="([^"]+)"/gi), m => m[1]), ["historyQuestionInput", "historyReflectionInput"]);
+      assert.match(dialog, /id="historyReflectionInput"[^>]*maxlength="4000"/);
+      assert.match(dialog, /id="historyCardFilter"[^>]*hidden/);
+      const results = source.match(/<section[^>]+id="resultsSection"[\s\S]+?<\/section>/)[0];
+      assert.deepEqual(Array.from(results.matchAll(/<button[^>]+id="([^"]+)"/g), m => m[1]),
+        ["readingAiBtn", "readingImageBtn", "readingMarkdownBtn"]);
       assert.match(dialog, /id="historySearch" type="search"/);
       assert.match(dialog, /id="historyImportInput" type="file"/);
       const limit = require("../js/history-records.js").MAX_QUESTION_LENGTH;
@@ -173,7 +178,7 @@ test("Free Board history details show order only and keep spatial rendering dorm
 
 test("Android history export uses the system save picker and reports completion", function () {
   assert.match(androidHistoryUi, /androidHistoryExport/);
-  assert.match(androidHistoryUi, /DivinationNativeFileExport\.save\(content, fileName, onHistoryExportResult\)/);
+  assert.match(androidHistoryUi, /DivinationNativeFileExport\.save\(content, fileName, function \(result\)/);
 
   assert.match(androidHistoryUi, /history\.exportChoosing/);
   assert.match(androidHistoryUi, /history\.fileSaved/);
@@ -307,7 +312,9 @@ function historyDom() {
     "historyClearBtn", "readingQuestion", "readingQuestionToggle", "readingQuestionCaption",
     "readingQuestionPanel", "readingQuestionSummary", "historySearch", "historySelectBtn",
     "historyExportSelectedBtn", "historyMarkdownBtn", "historyQuestionText", "historyEditQuestionBtn",
-    "historyQuestionEditor", "historyQuestionInput", "historySaveQuestionBtn", "historyCancelQuestionBtn"
+    "historyQuestionEditor", "historyQuestionInput", "historySaveQuestionBtn", "historyCancelQuestionBtn",
+    "readingActionStatus", "historyCardFilter", "historyReflectionText", "historyEditReflection",
+    "historyReflectionEditor", "historyReflectionInput", "historySaveReflection", "historyCancelReflection", "historyClearReflection"
   ];
   var byIdMap = {};
   ids.forEach(function (id) { byIdMap[id] = new FakeElement("div"); });
@@ -383,6 +390,12 @@ test("Actual Layout board reconstructs coordinates, flips to card meaning, prese
           var record = records.find(item => item.id === id);
           record.question = value.trim();
           return record;
+        },
+        updateReflection: async function (id, value) {
+          const record = records.find(item => item.id === id);
+          if (value.trim()) record.reflection = value.trim();
+          else delete record.reflection;
+          return record;
         }
       }
     });
@@ -445,6 +458,26 @@ test("Actual Layout board reconstructs coordinates, flips to card meaning, prese
     byIdMap.historySearch.listeners.input[0]();
     assert.equal(byIdMap.historyList.children.length, 1);
     assert.equal(byIdMap.historyList.querySelector(".history-question-preview").textContent, "How to begin?");
+
+    byIdMap.historyList.children[0].children[0].click();
+    byIdMap.historyEditReflection.click();
+    byIdMap.historyReflectionInput.value = "Next week, ask again.";
+    byIdMap.historySaveReflection.click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(byIdMap.historyReflectionText.textContent, "Next week, ask again.");
+    await controller.refresh();
+    byIdMap.historySearch.value = "NEXT WEEK";
+    byIdMap.historySearch.listeners.input[0]();
+    assert.equal(byIdMap.historyList.children.length, 1);
+    assert.ok(byIdMap.historyList.querySelector(".history-reflection-badge"));
+    byIdMap.historyList.children[0].children[0].click();
+    byIdMap.historyEditReflection.click();
+    assert.equal(byIdMap.historyClearReflection.hidden, false);
+    byIdMap.historyClearReflection.click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(byIdMap.historyReflectionText.hidden, true);
+    await controller.refresh();
+    assert.equal(byIdMap.historyList.children.length, 0);
   } finally {
     globalThis.document = prevDocument;
     i18n.setLocale("zh-CN");
@@ -505,6 +538,67 @@ test("queued autosaves capture the original question and preserve a newer board 
     assert.equal(dom.elements.readingQuestionToggle.getAttribute("aria-expanded"), "false");
   } finally {
     globalThis.document = previousDocument;
+  }
+});
+
+test("result AI waits for the current write, uses the persisted duplicate ID, and rejects stale or missing saves", async () => {
+  const dom = historyDom();
+  const previousDocument = globalThis.document;
+  const previousLocation = globalThis.location;
+  const navigations = [];
+  globalThis.document = dom.document;
+  globalThis.location = { assign: url => navigations.push(url) };
+  const persisted = { id: "stored/id?with & spaces" };
+  let finishWrite;
+  let found = persisted;
+  const store = {
+    open: async () => {},
+    saveRecord: () => new Promise(resolve => { finishWrite = resolve; }),
+    getRecord: async id => {
+      assert.equal(id, persisted.id);
+      return found;
+    }
+  };
+  try {
+    const controller = historyUiApi.init({ store, recordsApi: require("../js/history-records.js") });
+    controller.updateSaveAvailability(true);
+    const candidate = { id: "candidate" };
+    const write = controller.saveRecord(candidate);
+    const go = controller.openTableInAi();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(navigations, []);
+    finishWrite({ saved: false, duplicate: true, record: persisted });
+    await Promise.all([write, go]);
+    assert.deepEqual(navigations, ["ai.html?readingId=" + encodeURIComponent(persisted.id)]);
+
+    // Another tab removed the saved reading.
+    found = null;
+    await controller.openTableInAi();
+    assert.equal(dom.elements.readingActionStatus.classList.contains("is-error"), true);
+
+    // A board reset while a different reading is still queued invalidates the pending click.
+    const next = controller.saveRecord(candidate);
+    const interrupted = controller.openTableInAi();
+    await new Promise(resolve => setImmediate(resolve));
+    controller.resetQuestion();
+    found = persisted;
+    finishWrite({ saved: true, record: persisted });
+    await Promise.all([next, interrupted]);
+    assert.equal(dom.elements.readingActionStatus.textContent, "");
+
+    const unavailable = historyUiApi.init({
+      store: { open: async () => { throw new Error("IndexedDB unavailable"); } },
+      recordsApi: require("../js/history-records.js")
+    });
+    unavailable.updateSaveAvailability(true);
+    unavailable.saveRecord(candidate);
+    await unavailable.openTableInAi();
+    assert.equal(dom.elements.readingActionStatus.textContent, require("../js/i18n.js").t("reading.aiUnavailable"));
+    assert.equal(navigations.length, 1);
+  } finally {
+    globalThis.document = previousDocument;
+    if (previousLocation === undefined) delete globalThis.location;
+    else globalThis.location = previousLocation;
   }
 });
 

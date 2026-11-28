@@ -287,3 +287,37 @@ test("summarize supports all-decks combined statistics without merging cross-dec
   assert.equal(all.cards[0].subCategoryId, "underworld");
   assert.equal(all.cards[0].count, 2);
 });
+
+test("stats drill-down matches exact deck and visible cards once per reading at the same time boundary", () => {
+  const now = Date.parse("2026-11-24T12:00:00Z");
+  const boundary = now - 30 * 86400000;
+  const card = { cardId: "shared-id" };
+  function reading(id, deckType, layoutMode, cards, when = boundary) {
+    return { id, deckType, layoutMode, cards, createdAt: new Date(when).toISOString() };
+  }
+  const records = [
+    reading("two-slots", "tarot", "preset", [card, card]),
+    reading("other-deck", "mystagogus", "preset", [card]),
+    reading("down", "tarot", "freeform", [{ ...card, revealed: false }]),
+    reading("up", "tarot", "freeform", [{ ...card, revealed: true }]),
+    reading("old", "tarot", "preset", [card], boundary - 1),
+    reading("different-card", "tarot", "preset", [{ cardId: "shared-id-2" }])
+  ];
+  function drillDown(options, deckType) {
+    const summary = statsApi.summarize(records, { ...options, now, decks });
+    const entry = summary.cards.find(row => row.deckType === deckType && row.cardId === card.cardId);
+    const matches = records.filter(record => statsApi.matchesCardFilter(record, {
+      deckType: entry.deckType, cardId: entry.cardId, cutoffMs: summary.cutoffMs
+    }));
+    return { draws: entry.count, ids: matches.map(record => record.id), cutoff: summary.cutoffMs };
+  }
+  assert.deepEqual(drillDown({ deckType: "all", period: "30d" }, "tarot"),
+    { draws: 3, ids: ["two-slots", "up"], cutoff: boundary });
+  assert.deepEqual(drillDown({ deckType: "all", period: "all" }, "mystagogus"),
+    { draws: 1, ids: ["other-deck"], cutoff: null });
+  assert.deepEqual(drillDown({ deckType: "tarot", period: "all" }, "tarot"),
+    { draws: 4, ids: ["two-slots", "up", "old"], cutoff: null });
+  for (const filter of [null, { cardId: card.cardId }, { deckType: "all", cardId: card.cardId }, { deckType: "tarot" }]) {
+    assert.equal(statsApi.matchesCardFilter(records[0], filter), false);
+  }
+});

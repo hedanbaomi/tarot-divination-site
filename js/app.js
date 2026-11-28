@@ -84,6 +84,8 @@
     el.spreadSettingGroup = document.querySelector(".setting-group-spread");
     el.spreadSettingSummary = document.getElementById("spreadSettingSummary");
     el.shuffleBtn = document.getElementById("shuffleBtn");
+    el.aiBtn = document.getElementById("readingAiBtn");
+    el.markdownBtn = document.getElementById("readingMarkdownBtn");
     el.imageBtn = document.getElementById("readingImageBtn");
     el.switchArcanaBtn = document.getElementById("switchArcanaBtn");
     el.deckArea = document.querySelector(".deck-area");
@@ -2181,7 +2183,10 @@
   }
 
   function renderResults() {
-    el.imageBtn.hidden = !canExportImage();
+    var exportable = canExportImage();
+    el.aiBtn.hidden = !exportable || isFreeform();
+    el.markdownBtn.hidden = !exportable;
+    el.imageBtn.hidden = !exportable;
     if (isFreeform()) {
       /* 自由模式没有牌位，翻开的牌直接按摆牌顺序列成解读列表 */
       var revealedCards = freeDrawn.filter(function (item) { return item.revealed; });
@@ -2700,6 +2705,16 @@
     if (freeRedoBtn) freeRedoBtn.addEventListener("click", redoFreeDraw);
     el.switchArcanaBtn.addEventListener("click", switchArcanaPhase);
     el.revealBtn.addEventListener("click", revealAll);
+    el.aiBtn.addEventListener("click", function () {
+      if (!isFreeform() && canExportImage()) historyUiController.openTableInAi();
+    });
+    el.markdownBtn.addEventListener("click", function () {
+      if (!canExportImage()) return;
+      var record = isFreeform()
+        ? globalThis.DivinationHistoryRecords.buildFreeformLayoutRecord(freeformHistoryInput())
+        : createCurrentHistoryRecord();
+      historyUiController.exportTableMarkdown(record);
+    });
     el.imageBtn.addEventListener("click", function () {
       if (!canExportImage()) return;
       if (!isFreeform()) {

@@ -19,7 +19,7 @@
     })();
   </script>
   <script src="js/page-version.js?v=be52e4d6"></script>
-  <link rel="stylesheet" href="css/styles.css?v=cc1fafa4">
+  <link rel="stylesheet" href="css/styles.css?v=ff011a8f">
   <link rel="stylesheet" href="css/free-board.css?v=1df82a4f">
   <link rel="stylesheet" href="css/custom-spreads.css?v=976723b3">
   <link rel="stylesheet" href="css/redesign.css?v=4e84a901">
@@ -153,7 +153,12 @@
         <p class="section-index"><span class="section-index-num">03</span><span data-i18n="results.kicker">解读</span></p>
         <h2 data-i18n="results.title">解读结果</h2>
       </div>
-      <button class="btn btn-secondary btn-mini" id="readingImageBtn" type="button" data-i18n="image.export" hidden>导出图片</button>
+      <div class="reading-actions">
+        <button class="btn btn-secondary btn-mini" id="readingAiBtn" type="button" data-i18n="reading.ai" hidden>AI 解牌</button>
+        <button class="btn btn-secondary btn-mini" id="readingImageBtn" type="button" data-i18n="image.export" hidden>导出图片</button>
+        <button class="btn btn-secondary btn-mini" id="readingMarkdownBtn" type="button" data-i18n="history.exportNotes" hidden>导出 Markdown</button>
+      </div>
+      <p class="history-action-status" id="readingActionStatus" role="status"></p>
       <div class="results-list" id="resultsList"></div>
     </section>
 
@@ -238,6 +243,7 @@
             aria-selected="false" aria-controls="historyStatsView" data-i18n="history.tabStats">抽牌统计</button>
         </div>
 
+        <button type="button" class="btn-mini history-card-filter" id="historyCardFilter" hidden></button>
         <div class="history-toolbar" id="historyToolbar" data-view="list">
           <div class="history-filter">
             <label for="historyDeckFilter" data-i18n="history.filterLabel">按牌组筛选</label>
@@ -263,7 +269,7 @@
         <section class="history-list-view" id="historyListView" role="tabpanel" data-view="list" aria-label="占卜历史记录" data-i18n-aria-label="history.listAria">
           <div class="history-note-tools">
             <label class="history-search">
-              <span data-i18n="history.search">搜索问题、牌阵或牌名</span>
+              <span data-i18n="history.search">搜索问题、复盘、牌阵或牌名</span>
               <input id="historySearch" type="search" dir="auto">
             </label>
             <div class="history-note-actions">
@@ -318,6 +324,21 @@
               <div class="history-note-actions">
                 <button class="btn btn-secondary" id="historySaveQuestionBtn" type="button" data-i18n="history.saveQuestion">保存问题</button>
                 <button class="btn-mini" id="historyCancelQuestionBtn" type="button" data-i18n="history.cancel">取消</button>
+              </div>
+            </div>
+          </section>
+          <section class="history-question" aria-labelledby="historyReflectionLabel">
+            <div class="history-question-head">
+              <h4 id="historyReflectionLabel" data-i18n="history.reflection">事后复盘 / 个人心得</h4>
+              <button class="btn-mini" id="historyEditReflection" type="button">补写复盘</button>
+            </div>
+            <p id="historyReflectionText" dir="auto" hidden></p>
+            <div id="historyReflectionEditor" hidden>
+              <textarea id="historyReflectionInput" class="question-input" rows="4" maxlength="4000" aria-labelledby="historyReflectionLabel" dir="auto"></textarea>
+              <div class="history-note-actions">
+                <button class="btn btn-secondary" id="historySaveReflection" type="button" data-i18n="history.saveReflection">保存复盘</button>
+                <button class="btn-mini" id="historyClearReflection" type="button" data-i18n="history.clearReflection" hidden>清空复盘</button>
+                <button class="btn-mini" id="historyCancelReflection" type="button" data-i18n="history.cancel">取消</button>
               </div>
             </div>
           </section>
@@ -722,7 +743,7 @@
   <script src="js/lxxxi-data.js?v=02647575"></script>
   <script src="js/spreads.js?v=ce79364a"></script>
   <script src="js/i18n-data-en.js?v=d6a2ccc1"></script>
-  <script src="js/i18n.js?v=869b010e"></script>
+  <script src="js/i18n.js?v=8c894b80"></script>
   <script src="js/theme.js?v=5853fe83"></script>
   <script src="js/announcements.js?v=b50d452a"></script>
   <script src="js/dialogs.js?v=1e48afd9"></script>
@@ -734,16 +755,16 @@
   <script src="js/native-file-export.js?v=9e39edd3"></script>
   <script src="js/card-notes-store.js?v=97ac423d"></script>
   <script src="js/card-notes.js?v=8a3f9ead"></script>
-  <script src="js/history-records.js?v=f1bfb156"></script>
-  <script src="js/history-store.js?v=49167162"></script>
-  <script src="js/history-markdown.js?v=0baa8c11"></script>
-  <script src="js/history-stats.js?v=af4ef775"></script>
+  <script src="js/history-records.js?v=06a385e5"></script>
+  <script src="js/history-store.js?v=fa761f25"></script>
+  <script src="js/history-markdown.js?v=0e787405"></script>
+  <script src="js/history-stats.js?v=d2ac5a95"></script>
   <script src="js/reading-image.js?v=37f47f6a"></script>
   <script src="js/reading-image-ui.js?v=0ae6a8f4"></script>
-  <script src="js/history-ui.js?v=b7c8d42a"></script>
+  <script src="js/history-ui.js?v=05300fde"></script>
   <script src="js/shuffle-gesture.js?v=495eb9f4"></script>
-  <script src="js/free-board-ui.js?v=f50d21dd"></script>
-  <script src="js/app.js?v=15724499"></script>
+  <script src="js/free-board-ui.js?v=5f36df4a"></script>
+  <script src="js/app.js?v=cc867a31"></script>
   <script src="js/deck-ring.js?v=b844d121"></script>
   <script src="js/deck-shuffle.js?v=a4bf68d3"></script>
   <div class="spread-popover" id="spreadPopover" hidden role="dialog" aria-modal="false"
