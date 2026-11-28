@@ -18,6 +18,22 @@
       fields.every(function (field) { return Object.prototype.hasOwnProperty.call(value, field); });
   }
 
+  // Only an invalidation signal crosses tabs. The reader looks up its own attached cards.
+  function openChangeChannel() {
+    try { return new root.BroadcastChannel(DB_NAME + "-changed"); }
+    catch (_error) { return null; }
+  }
+
+  function notifyChange(result) {
+    var channel = openChangeChannel();
+    if (channel) {
+      try { channel.postMessage("changed"); }
+      catch (_error) { /* The write has already committed. */ }
+      finally { channel.close(); }
+    }
+    return result;
+  }
+
   function createStore(options) {
     options = options || {};
     if (typeof options.isKnownCard !== "function") throw new Error("isKnownCard is required");
@@ -51,6 +67,11 @@
           return;
         }
         request.onupgradeneeded = function () {
+          if (options.readOnly) {
+            request.transaction.abort();
+            fail(new Error("No existing card notes database"));
+            return;
+          }
           try { request.result.createObjectStore(STORE_NAME, { keyPath: ["deckType", "cardId"] }); }
           catch (error) { try { request.transaction.abort(); } catch (_) {} fail(error); }
         };
@@ -158,7 +179,7 @@
           };
           failedRequest(request, fail);
         });
-      });
+      }).then(notifyChange);
     }
     function exportBackup() {
       return list().then(function (notes) { return JSON.stringify({ format: BACKUP_FORMAT, version: BACKUP_VERSION, notes: notes }, null, 2); });
@@ -193,9 +214,10 @@
           });
           done(result);
         });
-      });
+      }).then(notifyChange);
     }
+    if (options.readOnly) return { get: get };
     return { list: list, keys: keys, get: get, save: save, exportBackup: exportBackup, importBackup: importBackup };
   }
-  return { DB_NAME: DB_NAME, DB_VERSION: DB_VERSION, STORE_NAME: STORE_NAME, BACKUP_FORMAT: BACKUP_FORMAT, BACKUP_VERSION: BACKUP_VERSION, createStore: createStore };
+  return { DB_NAME: DB_NAME, DB_VERSION: DB_VERSION, STORE_NAME: STORE_NAME, BACKUP_FORMAT: BACKUP_FORMAT, BACKUP_VERSION: BACKUP_VERSION, createStore: createStore, openChangeChannel: openChangeChannel };
 });
