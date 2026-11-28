@@ -1997,3 +1997,363 @@ test("Review 2 Fix #5: preferences QuotaExceededError or failed read-back fails 
   assert.equal(dropRes.failedSections[0].code, "preferences_persist_failed");
 });
 
+test("Review 3 Fix #1: aiChats-only / deleted-history backup detaches colliding snapshots instead of linking to wrong local reading, and fails closed without snapshot", async function () {
+  var localTsIso = "2026-11-01T10:00:00.000Z";
+  var localTsMs = Date.parse(localTsIso);
+  var backupTsMs = Date.parse("2026-11-02T10:00:00.000Z");
+
+  var localReading = makePresetRecord("shared", localTsIso, {
+    question: "Local Hierophant",
+    cards: [{
+      cardId: "major-05",
+      cardNumber: "5",
+      cardName: "教皇",
+      orientation: "upright",
+      slotIndex: 0,
+      positionNumber: 1,
+      positionName: "当下 · Present",
+      layer: null,
+      arcana: "major",
+      suit: ""
+    }]
+  });
+
+  // Case 1A: aiChats-only backup (sections.history omitted) containing TWO conversations referencing "shared":
+  // - chat-diff: snapshot is Backup Fool (differs from local Hierophant) -> MUST detach to deterministic reading-detached-*!
+  // - chat-same: snapshot matches local Hierophant (same card + timestamp, even with edited chat-local question) -> keeps "shared"!
+  var aiOnlyRaw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T15:00:00.000Z",
+    sections: {
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000100000,
+        conversations: [
+          {
+            id: "chat-diff",
+            title: "Deleted Fool reading chat",
+            createdAt: 1700000090000,
+            updatedAt: 1700000100000,
+            readingIds: ["shared"],
+            readingSnapshots: [{
+              id: "shared",
+              layoutMode: "preset",
+              deckType: "tarot",
+              spreadId: "three-card-horizontal",
+              spreadName: "三张牌",
+              positionCount: 1,
+              createdAt: backupTsMs,
+              question: "Backup Fool",
+              cards: [{ slotIndex: 0, positionNumber: 1, cardId: "major-00", cardName: "愚者", orientation: "upright" }]
+            }],
+            messages: [
+              { id: "m1", role: "user", content: "Read Fool", createdAt: 1700000095000 },
+              { id: "m2", role: "assistant", content: "Fool insight.", createdAt: 1700000100000, interpretedReadingIds: ["shared"] }
+            ]
+          },
+          {
+            id: "chat-same",
+            title: "Matching Hierophant chat",
+            createdAt: 1700000090000,
+            updatedAt: 1700000100000,
+            readingIds: ["shared"],
+            readingSnapshots: [{
+              id: "shared",
+              layoutMode: "preset",
+              deckType: "tarot",
+              spreadId: "three-card-horizontal",
+              spreadName: "三张牌",
+              positionCount: 1,
+              createdAt: localTsMs,
+              question: "Slightly edited chat-local question",
+              cards: [{ slotIndex: 0, positionNumber: 1, cardId: "major-05", cardName: "教皇", orientation: "upright" }]
+            }],
+            messages: [
+              { id: "m3", role: "user", content: "Read Hierophant", createdAt: 1700000095000 },
+              { id: "m4", role: "assistant", content: "Hierophant insight.", createdAt: 1700000100000, interpretedReadingIds: ["shared"] }
+            ]
+          }
+        ]
+      }
+    }
+  });
+
+  var envA = createTestEnvironment();
+  await envA.adapters.historyStore.saveRecord(localReading);
+  var parsedA = fullBackup.parseBackup(aiOnlyRaw, envA.adapters);
+
+  var resA = await fullBackup.restoreBackup(parsedA, ["aiChats"], envA.adapters);
+  assert.equal(resA.status, "ok");
+  assert.deepEqual(resA.succeededSections, ["aiChats"]);
+  assert.deepEqual(resA.failedSections, []);
+  assert.deepEqual(resA.restored.aiChats, { imported: 2, updated: 0, skipped: 0 });
+
+  var diffChat = await envA.adapters.aiChatStore.getConversation("chat-diff");
+  assert.equal(diffChat.readingIds.length, 1);
+  assert.notEqual(diffChat.readingIds[0], "shared", "Colliding deleted-history chat MUST NOT link to local 'shared'");
+  assert.match(diffChat.readingIds[0], /^reading-detached-[0-9a-f]{32}$/);
+  var detachedId = diffChat.readingIds[0];
+  assert.equal(diffChat.readingSnapshots.length, 1);
+  assert.equal(diffChat.readingSnapshots[0].id, detachedId);
+  assert.equal(diffChat.readingSnapshots[0].cards[0].cardId, "major-00");
+  assert.deepEqual(diffChat.messages[1].interpretedReadingIds, [detachedId]);
+
+  var sameChat = await envA.adapters.aiChatStore.getConversation("chat-same");
+  assert.deepEqual(sameChat.readingIds, ["shared"], "Verified matching local reading keeps live link");
+  assert.equal(sameChat.readingSnapshots[0].id, "shared");
+  assert.deepEqual(sameChat.messages[1].interpretedReadingIds, ["shared"]);
+
+  // Local history reading must remain untouched and parsed backup must not be mutated.
+  assert.equal((await envA.adapters.historyStore.getRecord("shared")).cards[0].cardId, "major-05");
+  assert.deepEqual(parsedA.sections.aiChats.conversations[0].readingIds, ["shared"]);
+
+  // Re-restoring the same aiChats-only backup is idempotent (deterministic detached ID, skipped: 2).
+  var resARetry = await fullBackup.restoreBackup(parsedA, ["aiChats"], envA.adapters);
+  assert.equal(resARetry.status, "ok");
+  assert.deepEqual(resARetry.restored.aiChats, { imported: 0, updated: 0, skipped: 2 });
+
+  // Case 1B: Full backup whose sections.history is present (empty records: []) while aiChats references deleted "shared"
+  // Restoring ["history", "aiChats"] together must STILL run the local collision check and detach!
+  var emptyHistoryRaw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T15:05:00.000Z",
+    sections: {
+      history: historyRecords.createExportEnvelope([], "2026-11-28T15:05:00.000Z"),
+      aiChats: parsedA.sections.aiChats
+    }
+  });
+  var envB = createTestEnvironment();
+  await envB.adapters.historyStore.saveRecord(localReading);
+  var resB = await fullBackup.restoreBackup(emptyHistoryRaw, ["history", "aiChats"], envB.adapters);
+  assert.equal(resB.status, "ok");
+  assert.deepEqual(resB.succeededSections, ["history", "aiChats"]);
+  var diffChatB = await envB.adapters.aiChatStore.getConversation("chat-diff");
+  assert.equal(diffChatB.readingIds[0], detachedId, "Detached ID must be deterministic across restores");
+
+  // Case 1C: Colliding deleted-history reference with NO usable snapshot -> MUST fail closed (zero chats written)!
+  var noSnapRaw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T15:10:00.000Z",
+    sections: {
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000110000,
+        conversations: [{
+          id: "chat-no-snap",
+          title: "Snapshotless chat",
+          createdAt: 1700000105000,
+          updatedAt: 1700000110000,
+          readingIds: ["shared"],
+          readingSnapshots: [],
+          messages: [{ id: "m1", role: "user", content: "What did it mean?", createdAt: 1700000110000 }]
+        }]
+      }
+    }
+  });
+  var envC = createTestEnvironment();
+  await envC.adapters.historyStore.saveRecord(localReading);
+  var resC = await fullBackup.restoreBackup(noSnapRaw, ["aiChats"], envC.adapters);
+  assert.equal(resC.status, "failed");
+  assert.deepEqual(resC.succeededSections, []);
+  assert.equal(resC.failedSections.length, 1);
+  assert.equal(resC.failedSections[0].section, "aiChats");
+  assert.equal(resC.failedSections[0].code, "history_dependency_required");
+  assert.equal((await envC.adapters.aiChatStore.listConversations({ archived: "all" })).length, 0);
+});
+
+test("Review 3 Fix #2: aiChats-only restore fails closed with history_check_failed when local historyStore cannot be read", async function () {
+  var linkedRaw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T15:20:00.000Z",
+    sections: {
+      history: historyRecords.createExportEnvelope([
+        makePresetRecord("r1", "2026-11-01T10:00:00.000Z", { question: "Reading 1" })
+      ], "2026-11-28T15:20:00.000Z"),
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000120000,
+        conversations: [{
+          id: "chat-needs-check",
+          title: "Linked chat",
+          createdAt: 1700000115000,
+          updatedAt: 1700000120000,
+          readingIds: ["r1"],
+          readingSnapshots: [{
+            id: "r1",
+            layoutMode: "preset",
+            deckType: "tarot",
+            spreadId: "three-card-horizontal",
+            spreadName: "三张牌",
+            positionCount: 1,
+            createdAt: Date.parse("2026-11-01T10:00:00.000Z"),
+            cards: [{ slotIndex: 0, positionNumber: 1, cardId: "major-00", cardName: "愚者", orientation: "upright" }]
+          }],
+          messages: [{ id: "m1", role: "user", content: "Check link", createdAt: 1700000120000 }]
+        }]
+      }
+    }
+  });
+
+  // Case 2A: historyStore.listRecords rejects (IndexedDB blocked / corrupted / unavailable).
+  var envReject = createTestEnvironment();
+  envReject.adapters.historyStore = {
+    listRecords: async function () { throw new Error("IDB read failed"); }
+  };
+  var resReject = await fullBackup.restoreBackup(linkedRaw, ["aiChats"], envReject.adapters);
+  assert.equal(resReject.status, "failed");
+  assert.deepEqual(resReject.succeededSections, []);
+  assert.equal(resReject.failedSections.length, 1);
+  assert.equal(resReject.failedSections[0].section, "aiChats");
+  assert.equal(resReject.failedSections[0].code, "history_check_failed");
+  assert.equal((await envReject.adapters.aiChatStore.listConversations({ archived: "all" })).length, 0, "Zero AI chats written when historyStore cannot be read");
+
+  // Case 2B: historyStore adapter is completely missing (null).
+  var envMissing = createTestEnvironment();
+  envMissing.adapters.historyStore = null;
+  var resMissing = await fullBackup.restoreBackup(linkedRaw, ["aiChats"], envMissing.adapters);
+  assert.equal(resMissing.status, "failed");
+  assert.equal(resMissing.failedSections.length, 1);
+  assert.equal(resMissing.failedSections[0].section, "aiChats");
+  assert.equal(resMissing.failedSections[0].code, "history_check_failed");
+  assert.equal((await envMissing.adapters.aiChatStore.listConversations({ archived: "all" })).length, 0);
+
+  // Case 2C: Free-chat conversation with NO linked reading IDs still succeeds even when historyStore is unavailable.
+  var freeChatRaw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T15:25:00.000Z",
+    sections: {
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000125000,
+        conversations: [{
+          id: "chat-free",
+          title: "General tarot Q&A",
+          createdAt: 1700000120000,
+          updatedAt: 1700000125000,
+          readingIds: [],
+          readingSnapshots: [],
+          messages: [{ id: "m1", role: "user", content: "What is the Fool?", createdAt: 1700000125000 }]
+        }]
+      }
+    }
+  });
+  var resFree = await fullBackup.restoreBackup(freeChatRaw, ["aiChats"], envReject.adapters);
+  assert.equal(resFree.status, "ok");
+  assert.deepEqual(resFree.succeededSections, ["aiChats"]);
+  assert.equal((await envReject.adapters.aiChatStore.listConversations({ archived: "all" })).length, 1);
+});
+
+test("Review 3 Fix #3: deleting original colliding local reading before re-restore reuses reading-remap-* with zero duplicate and preserves AI links", async function () {
+  var localReading = makePresetRecord("shared", "2026-11-01T10:00:00.000Z", {
+    question: "Local Hierophant",
+    cards: [{
+      cardId: "major-05",
+      cardNumber: "5",
+      cardName: "教皇",
+      orientation: "upright",
+      slotIndex: 0,
+      positionNumber: 1,
+      positionName: "当下 · Present",
+      layer: null,
+      arcana: "major",
+      suit: ""
+    }]
+  });
+  var backupReading = makePresetRecord("shared", "2026-11-02T10:00:00.000Z", {
+    question: "Backup Fool",
+    cards: [{
+      cardId: "major-00",
+      cardNumber: "0",
+      cardName: "愚者",
+      orientation: "upright",
+      slotIndex: 0,
+      positionNumber: 1,
+      positionName: "当下 · Present",
+      layer: null,
+      arcana: "major",
+      suit: ""
+    }]
+  });
+
+  var rawBackup = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T15:30:00.000Z",
+    sections: {
+      history: historyRecords.createExportEnvelope([backupReading], "2026-11-28T15:30:00.000Z"),
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000130000,
+        conversations: [{
+          id: "chat-remap-del",
+          title: "Fool reading follow-up",
+          createdAt: 1700000125000,
+          updatedAt: 1700000130000,
+          readingIds: ["shared"],
+          readingSnapshots: [{
+            id: "shared",
+            layoutMode: "preset",
+            deckType: "tarot",
+            spreadId: "three-card-horizontal",
+            spreadName: "三张牌",
+            positionCount: 1,
+            createdAt: Date.parse("2026-11-02T10:00:00.000Z"),
+            question: "Backup Fool",
+            cards: [{ slotIndex: 0, positionNumber: 1, cardId: "major-00", cardName: "愚者", orientation: "upright" }]
+          }],
+          messages: [
+            { id: "m1", role: "user", content: "Interpret", createdAt: 1700000126000 },
+            { id: "m2", role: "assistant", content: "Done", createdAt: 1700000130000, interpretedReadingIds: ["shared"] }
+          ]
+        }]
+      }
+    }
+  });
+
+  var env = createTestEnvironment();
+  await env.adapters.historyStore.saveRecord(localReading);
+
+  // Restore #1: backup "shared" remaps to reading-remap-<hex32>.
+  var res1 = await fullBackup.restoreBackup(rawBackup, ["history", "aiChats"], env.adapters);
+  assert.equal(res1.status, "ok");
+  assert.deepEqual(res1.restored.history, { imported: 1, remapped: 1, skipped: 0 });
+  var remappedId = res1.historyIdMap.shared;
+  assert.match(remappedId, /^reading-remap-[0-9a-f]{32}$/);
+  assert.equal((await env.adapters.historyStore.listRecords()).length, 2);
+
+  // User deletes original local "shared" (Hierophant); only remappedId (Fool) stays.
+  await env.adapters.historyStore.deleteRecord("shared");
+  assert.equal((await env.adapters.historyStore.listRecords()).length, 1);
+
+  // Restore #2: re-restoring ["history", "aiChats"] MUST skip (reuse remappedId), create ZERO duplicate at "shared"!
+  var res2 = await fullBackup.restoreBackup(rawBackup, ["history", "aiChats"], env.adapters);
+  assert.equal(res2.status, "ok");
+  assert.deepEqual(res2.restored.history, { imported: 0, remapped: 0, skipped: 1 });
+  assert.deepEqual(res2.restored.aiChats, { imported: 0, updated: 0, skipped: 1 });
+  assert.deepEqual(res2.historyIdMap, { shared: remappedId });
+  var recordsAfter2 = await env.adapters.historyStore.listRecords();
+  assert.equal(recordsAfter2.length, 1, "Must NOT duplicate Fool back under 'shared'");
+  assert.equal(recordsAfter2[0].id, remappedId);
+
+  // Also test aiChats-only restore after deleting original local "shared" and the AI chat:
+  // checkAiChatsHistoryDependency must STILL find remappedId and link the restored chat to remappedId (not dead "shared")!
+  await env.adapters.aiChatStore.deleteConversation("chat-remap-del");
+  var res3 = await fullBackup.restoreBackup(rawBackup, ["aiChats"], env.adapters);
+  assert.equal(res3.status, "ok");
+  assert.deepEqual(res3.historyIdMap, { shared: remappedId });
+  var chatAfter3 = await env.adapters.aiChatStore.getConversation("chat-remap-del");
+  assert.deepEqual(chatAfter3.readingIds, [remappedId]);
+  assert.equal(chatAfter3.readingSnapshots[0].id, remappedId);
+  assert.deepEqual(chatAfter3.messages[1].interpretedReadingIds, [remappedId]);
+});
+

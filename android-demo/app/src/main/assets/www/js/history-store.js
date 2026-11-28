@@ -526,6 +526,24 @@
                 canonicalById[rec.id] = recordsApi.canonicalRecordContent(rec);
               }
 
+              function findExistingRemappedId(originalId, createdAt, canonical) {
+                for (var probe = 0; probe < 1000; probe += 1) {
+                  var probeId = deriveId(originalId, createdAt, canonical, probe);
+                  if (typeof probeId !== "string" || probeId.length === 0 || probeId.length > 120) {
+                    throw new Error("Derived remapped history id is invalid");
+                  }
+                  var atProbe = occupiedById[probeId];
+                  if (!atProbe) {
+                    if (probe >= 9) break;
+                    continue;
+                  }
+                  if (atProbe.createdAt === createdAt && canonicalById[probeId] === canonical) {
+                    return probeId;
+                  }
+                }
+                return null;
+              }
+
               var toInsert = [];
               var remappedCount = 0;
               var skippedCount = 0;
@@ -537,6 +555,24 @@
                 var incomingCanonical = recordsApi.canonicalRecordContent(incoming);
                 var existingAtId = occupiedById[originalId];
 
+                if (existingAtId &&
+                    existingAtId.createdAt === incoming.createdAt &&
+                    canonicalById[originalId] === incomingCanonical) {
+                  skippedCount += 1;
+                  continue;
+                }
+
+                // Always probe source-ID-scoped remapped IDs first, even when originalId is free
+                // (e.g., if the user previously imported under reading-remap-* and later deleted originalId).
+                var existingRemapped = findExistingRemappedId(originalId, incoming.createdAt, incomingCanonical);
+                if (existingRemapped) {
+                  skippedCount += 1;
+                  if (!Object.prototype.hasOwnProperty.call(idMap, originalId)) {
+                    idMap[originalId] = existingRemapped;
+                  }
+                  continue;
+                }
+
                 if (!existingAtId) {
                   var directCopy = cloneJson(incoming);
                   recordsApi.validateRecord(directCopy);
@@ -546,21 +582,14 @@
                   continue;
                 }
 
-                if (existingAtId.createdAt === incoming.createdAt &&
-                    canonicalById[originalId] === incomingCanonical) {
-                  skippedCount += 1;
-                  continue;
-                }
-
-                // True ID collision with different content: resolve deterministically per source ID.
+                // True ID collision with different content: allocate deterministic slot per source ID.
                 var resolved = false;
                 for (var attempt = 0; attempt < 1000; attempt += 1) {
                   var candidateId = deriveId(originalId, incoming.createdAt, incomingCanonical, attempt);
                   if (typeof candidateId !== "string" || candidateId.length === 0 || candidateId.length > 120) {
                     throw new Error("Derived remapped history id is invalid");
                   }
-                  var atCandidate = occupiedById[candidateId];
-                  if (!atCandidate) {
+                  if (!occupiedById[candidateId]) {
                     var remappedCopy = cloneJson(incoming);
                     remappedCopy.id = candidateId;
                     recordsApi.validateRecord(remappedCopy);
@@ -568,15 +597,6 @@
                     canonicalById[candidateId] = incomingCanonical;
                     toInsert.push(remappedCopy);
                     remappedCount += 1;
-                    if (!Object.prototype.hasOwnProperty.call(idMap, originalId)) {
-                      idMap[originalId] = candidateId;
-                    }
-                    resolved = true;
-                    break;
-                  }
-                  if (atCandidate.createdAt === incoming.createdAt &&
-                      canonicalById[candidateId] === incomingCanonical) {
-                    skippedCount += 1;
                     if (!Object.prototype.hasOwnProperty.call(idMap, originalId)) {
                       idMap[originalId] = candidateId;
                     }

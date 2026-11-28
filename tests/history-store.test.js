@@ -633,3 +633,51 @@ test("mergeBackupRecords executes atomically in one serialized readwrite transac
   );
   assert.equal((await tab1Store.listRecords()).length, 4);
 });
+
+test("mergeBackupRecords reuses existing remapped copy without duplicating when original colliding local ID was later deleted", async function () {
+  var storeApi = require("../js/history-store.js");
+  var fakeIdb = createFakeIndexedDB();
+  var store = storeApi.createStore({ indexedDB: fakeIdb, recordsApi: recordsApi, dbName: "remap-after-delete" });
+
+  // Local has "shared" (LocalCard).
+  await store.saveRecord(makeRecord("shared", "2026-08-01T00:00:00.000Z", "LocalCard"));
+
+  // Restore #1: backup "shared" (BackupCard) collides and remaps to reading-remap-<hex32>.
+  var backupShared = makeRecord("shared", "2026-08-02T00:00:00.000Z", "BackupCard");
+  var first = await store.mergeBackupRecords([backupShared]);
+  assert.equal(first.importedCount, 1);
+  assert.equal(first.remappedCount, 1);
+  assert.equal(first.skippedCount, 0);
+  var remappedId = first.idMap.shared;
+  assert.match(remappedId, /^reading-remap-[0-9a-f]{32}$/);
+  assert.equal((await store.listRecords()).length, 2);
+
+  // User deletes original local "shared"; only the remapped copy remains.
+  await store.deleteRecord("shared");
+  var afterDelete = await store.listRecords();
+  assert.equal(afterDelete.length, 1);
+  assert.equal(afterDelete[0].id, remappedId);
+
+  // Restore #2: re-importing the same backup must recognize remappedId, skip insertion, and still emit idMap.
+  var second = await store.mergeBackupRecords([backupShared]);
+  assert.equal(second.importedCount, 0);
+  assert.equal(second.remappedCount, 0);
+  assert.equal(second.skippedCount, 1);
+  assert.deepEqual(second.idMap, { shared: remappedId });
+
+  var afterSecond = await store.listRecords();
+  assert.equal(afterSecond.length, 1, "Must NOT re-insert a duplicate copy under 'shared'");
+  assert.equal(afterSecond[0].id, remappedId);
+
+  // An independent twin record "r2" with identical createdAt + content still imports under "r2" (not collapsed into remappedId).
+  var independentTwin = makeRecord("r2", "2026-08-02T00:00:00.000Z", "BackupCard");
+  var third = await store.mergeBackupRecords([backupShared, independentTwin]);
+  assert.equal(third.importedCount, 1);
+  assert.equal(third.remappedCount, 0);
+  assert.equal(third.skippedCount, 1);
+  assert.deepEqual(third.idMap, { shared: remappedId });
+  var afterThird = await store.listRecords();
+  assert.equal(afterThird.length, 2);
+  assert.ok(afterThird.some(function (rec) { return rec.id === remappedId; }));
+  assert.ok(afterThird.some(function (rec) { return rec.id === "r2"; }));
+});

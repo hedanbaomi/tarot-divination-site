@@ -1432,16 +1432,14 @@
     });
   }
 
-  function deriveDeterministicRemapId(originalId, createdAt, canonicalContent, attempt, resolved) {
+  function hashHex32(input, resolved) {
     if (resolved && resolved.historyStoreApi &&
-        typeof resolved.historyStoreApi.deriveRemappedId === "function") {
-      return resolved.historyStoreApi.deriveRemappedId(originalId, createdAt, canonicalContent, attempt);
+        typeof resolved.historyStoreApi.sha256Hex === "function") {
+      return resolved.historyStoreApi.sha256Hex(input).slice(0, 32);
     }
-    if (defaultDeps.historyStore && typeof defaultDeps.historyStore.deriveRemappedId === "function") {
-      return defaultDeps.historyStore.deriveRemappedId(originalId, createdAt, canonicalContent, attempt);
+    if (defaultDeps.historyStore && typeof defaultDeps.historyStore.sha256Hex === "function") {
+      return defaultDeps.historyStore.sha256Hex(input).slice(0, 32);
     }
-    // Fallback pure-JS synchronous deterministic hash if DivinationHistoryStore module is absent.
-    var input = originalId + "\0" + createdAt + "\0" + canonicalContent;
     var h1 = 0x811c9dc5;
     var h2 = 0x811c9dc5;
     var h3 = 0x9e3779b9;
@@ -1453,44 +1451,157 @@
       h3 = Math.imul(h3 ^ (ch * 31 + i), 0x85ebca6b) >>> 0;
       h4 = Math.imul(h4 ^ (ch + (i << 3)), 0xc2b2ae35) >>> 0;
     }
-    var hex = h1.toString(16).padStart(8, "0") +
+    return h1.toString(16).padStart(8, "0") +
       h2.toString(16).padStart(8, "0") +
       h3.toString(16).padStart(8, "0") +
       h4.toString(16).padStart(8, "0");
+  }
+
+  function deriveDeterministicRemapId(originalId, createdAt, canonicalContent, attempt, resolved) {
+    if (resolved && resolved.historyStoreApi &&
+        typeof resolved.historyStoreApi.deriveRemappedId === "function") {
+      return resolved.historyStoreApi.deriveRemappedId(originalId, createdAt, canonicalContent, attempt);
+    }
+    if (defaultDeps.historyStore && typeof defaultDeps.historyStore.deriveRemappedId === "function") {
+      return defaultDeps.historyStore.deriveRemappedId(originalId, createdAt, canonicalContent, attempt);
+    }
+    var hex = hashHex32(originalId + "\0" + createdAt + "\0" + canonicalContent, resolved);
     var suffix = attempt && attempt > 0 ? "-" + String(attempt + 1) : "";
     return "reading-remap-" + hex + suffix;
   }
 
-  function collectAiReferencedReadingIds(aiChatsSection) {
+  function deriveDetachedReadingId(convId, originalRefId, snapshotSignature, attempt, resolved) {
+    var hex = hashHex32(convId + "\0" + originalRefId + "\0" + snapshotSignature, resolved);
+    var suffix = attempt && attempt > 0 ? "-" + String(attempt + 1) : "";
+    return "reading-detached-" + hex + suffix;
+  }
+
+  function findExistingRemappedIdInMap(existingById, canonicalById, originalId, createdAt, canonical, resolved) {
+    for (var probe = 0; probe < 1000; probe += 1) {
+      var probeId = deriveDeterministicRemapId(originalId, createdAt, canonical, probe, resolved);
+      var atProbe = existingById[probeId];
+      if (!atProbe) {
+        if (probe >= 9) break;
+        continue;
+      }
+      if (atProbe.createdAt === createdAt && canonicalById[probeId] === canonical) {
+        return probeId;
+      }
+    }
+    return null;
+  }
+
+  function canonicalSnapshotSignature(snap) {
+    var cards = Array.isArray(snap.cards) ? snap.cards.map(function (c) {
+      return {
+        slotIndex: typeof c.slotIndex === "number" ? c.slotIndex : null,
+        positionNumber: typeof c.positionNumber === "number" ? c.positionNumber : null,
+        cardId: typeof c.cardId === "string" ? c.cardId.trim() : "",
+        cardName: typeof c.cardName === "string" ? c.cardName.trim() : "",
+        orientation: typeof c.orientation === "string" ? c.orientation.trim() : "",
+        layer: typeof c.layer === "string" ? c.layer.trim() : ""
+      };
+    }) : [];
+    return JSON.stringify({
+      deckType: typeof snap.deckType === "string" ? snap.deckType.trim() : "",
+      spreadId: typeof snap.spreadId === "string" ? snap.spreadId.trim() : "",
+      spreadName: typeof snap.spreadName === "string" ? snap.spreadName.trim() : "",
+      positionCount: typeof snap.positionCount === "number" ? snap.positionCount : cards.length,
+      orientationMode: typeof snap.orientationMode === "string" ? snap.orientationMode.trim() : "",
+      filterMode: typeof snap.filterMode === "string" ? snap.filterMode.trim() : "",
+      overviewMethod: typeof snap.overviewMethod === "string" ? snap.overviewMethod.trim() : "",
+      createdAt: parseStrictTimestampMs(snap.createdAt) || 0,
+      cards: cards
+    });
+  }
+
+  function snapshotMatchesLocalRecord(snap, localRec) {
+    if (!snap || typeof snap !== "object" || !localRec || typeof localRec !== "object") return false;
+    if (localRec.layoutMode === "freeform") return false;
+    if (!Array.isArray(snap.cards) || snap.cards.length === 0 ||
+        !Array.isArray(localRec.cards) || localRec.cards.length !== snap.cards.length) {
+      return false;
+    }
+    var snapDeck = typeof snap.deckType === "string" ? snap.deckType.trim() : "";
+    if (snapDeck && localRec.deckType && snapDeck !== localRec.deckType) return false;
+
+    var snapSpreadId = typeof snap.spreadId === "string" ? snap.spreadId.trim() : "";
+    if (snapSpreadId && localRec.spreadId && snapSpreadId !== localRec.spreadId) return false;
+
+    var snapTs = parseStrictTimestampMs(snap.createdAt);
+    var localTs = parseStrictTimestampMs(localRec.createdAt);
+    if (!Number.isFinite(snapTs) || snapTs <= 0 || !Number.isFinite(localTs) || localTs <= 0 || snapTs !== localTs) {
+      return false;
+    }
+
+    function sortCards(list) {
+      return list.slice().sort(function (a, b) {
+        var sa = typeof a.slotIndex === "number" ? a.slotIndex : (typeof a.positionNumber === "number" ? a.positionNumber - 1 : 0);
+        var sb = typeof b.slotIndex === "number" ? b.slotIndex : (typeof b.positionNumber === "number" ? b.positionNumber - 1 : 0);
+        if (sa !== sb) return sa - sb;
+        var la = (a.layer === "major" || a.layer === "minor") ? a.layer : "";
+        var lb = (b.layer === "major" || b.layer === "minor") ? b.layer : "";
+        if (la !== lb) return la < lb ? -1 : 1;
+        var ca = String(a.cardId || "");
+        var cb = String(b.cardId || "");
+        return ca < cb ? -1 : (ca > cb ? 1 : 0);
+      });
+    }
+
+    var snapSorted = sortCards(snap.cards);
+    var localSorted = sortCards(localRec.cards);
+    for (var i = 0; i < snapSorted.length; i += 1) {
+      var sc = snapSorted[i];
+      var lc = localSorted[i];
+      var sCardId = typeof sc.cardId === "string" ? sc.cardId.trim() : "";
+      var lCardId = typeof lc.cardId === "string" ? lc.cardId.trim() : "";
+      if (!sCardId || !lCardId || sCardId !== lCardId) return false;
+
+      var sOrient = typeof sc.orientation === "string" ? sc.orientation.trim() : "";
+      var lOrient = typeof lc.orientation === "string" ? lc.orientation.trim() : "upright";
+      if (sOrient && lOrient && sOrient !== lOrient) return false;
+
+      if (typeof sc.slotIndex === "number" && Number.isFinite(sc.slotIndex) &&
+          typeof lc.slotIndex === "number" && sc.slotIndex !== lc.slotIndex) {
+        return false;
+      }
+      if (typeof sc.positionNumber === "number" && Number.isFinite(sc.positionNumber) &&
+          typeof lc.positionNumber === "number" && sc.positionNumber !== lc.positionNumber) {
+        return false;
+      }
+      var sLayer = (sc.layer === "major" || sc.layer === "minor") ? sc.layer : "";
+      var lLayer = (lc.layer === "major" || lc.layer === "minor") ? lc.layer : "";
+      if ((sLayer || lLayer) && sLayer !== lLayer) return false;
+    }
+    return true;
+  }
+
+  function collectConvReferencedReadingIds(conv) {
     var refs = Object.create(null);
-    if (!aiChatsSection || !Array.isArray(aiChatsSection.conversations)) return refs;
-    for (var i = 0; i < aiChatsSection.conversations.length; i += 1) {
-      var conv = aiChatsSection.conversations[i];
-      if (!conv || typeof conv !== "object") continue;
-      if (Array.isArray(conv.readingIds)) {
-        for (var r = 0; r < conv.readingIds.length; r += 1) {
-          if (typeof conv.readingIds[r] === "string" && conv.readingIds[r].trim()) {
-            refs[conv.readingIds[r].trim()] = true;
-          }
+    if (!conv || typeof conv !== "object") return refs;
+    if (Array.isArray(conv.readingIds)) {
+      for (var r = 0; r < conv.readingIds.length; r += 1) {
+        if (typeof conv.readingIds[r] === "string" && conv.readingIds[r].trim()) {
+          refs[conv.readingIds[r].trim()] = true;
         }
       }
-      if (Array.isArray(conv.readingSnapshots)) {
-        for (var s = 0; s < conv.readingSnapshots.length; s += 1) {
-          var snap = conv.readingSnapshots[s];
-          if (snap && typeof snap === "object") {
-            if (typeof snap.id === "string" && snap.id.trim()) refs[snap.id.trim()] = true;
-            if (typeof snap.readingId === "string" && snap.readingId.trim()) refs[snap.readingId.trim()] = true;
-          }
+    }
+    if (Array.isArray(conv.readingSnapshots)) {
+      for (var s = 0; s < conv.readingSnapshots.length; s += 1) {
+        var snap = conv.readingSnapshots[s];
+        if (snap && typeof snap === "object") {
+          if (typeof snap.id === "string" && snap.id.trim()) refs[snap.id.trim()] = true;
+          if (typeof snap.readingId === "string" && snap.readingId.trim()) refs[snap.readingId.trim()] = true;
         }
       }
-      if (Array.isArray(conv.messages)) {
-        for (var m = 0; m < conv.messages.length; m += 1) {
-          var msg = conv.messages[m];
-          if (msg && typeof msg === "object" && Array.isArray(msg.interpretedReadingIds)) {
-            for (var k = 0; k < msg.interpretedReadingIds.length; k += 1) {
-              if (typeof msg.interpretedReadingIds[k] === "string" && msg.interpretedReadingIds[k].trim()) {
-                refs[msg.interpretedReadingIds[k].trim()] = true;
-              }
+    }
+    if (Array.isArray(conv.messages)) {
+      for (var m = 0; m < conv.messages.length; m += 1) {
+        var msg = conv.messages[m];
+        if (msg && typeof msg === "object" && Array.isArray(msg.interpretedReadingIds)) {
+          for (var k = 0; k < msg.interpretedReadingIds.length; k += 1) {
+            if (typeof msg.interpretedReadingIds[k] === "string" && msg.interpretedReadingIds[k].trim()) {
+              refs[msg.interpretedReadingIds[k].trim()] = true;
             }
           }
         }
@@ -1499,30 +1610,54 @@
     return refs;
   }
 
-  function checkAiChatsHistoryDependency(historySection, aiChatsSection, resolved, historyIdMap, historyWasSelected, historySucceeded) {
-    if (!historySection || !Array.isArray(historySection.records) || historySection.records.length === 0) {
-      return Promise.resolve({ ok: true });
-    }
-    var referencedIds = collectAiReferencedReadingIds(aiChatsSection);
-    var referencedRecords = [];
-    for (var i = 0; i < historySection.records.length; i += 1) {
-      var rec = historySection.records[i];
-      if (rec && typeof rec.id === "string" && referencedIds[rec.id]) {
-        referencedRecords.push(rec);
+  function collectAiReferencedReadingIds(aiChatsSection) {
+    var refs = Object.create(null);
+    if (!aiChatsSection || !Array.isArray(aiChatsSection.conversations)) return refs;
+    for (var i = 0; i < aiChatsSection.conversations.length; i += 1) {
+      var convRefs = collectConvReferencedReadingIds(aiChatsSection.conversations[i]);
+      var keys = Object.keys(convRefs);
+      for (var k = 0; k < keys.length; k += 1) {
+        refs[keys[k]] = true;
       }
     }
-    if (referencedRecords.length === 0) {
-      return Promise.resolve({ ok: true });
-    }
-    if (historyWasSelected && historySucceeded) {
-      return Promise.resolve({ ok: true });
+    return refs;
+  }
+
+  function checkAiChatsHistoryDependency(historySection, aiChatsSection, resolved, historyIdMap, historyWasSelected, historySucceeded) {
+    var referencedIds = collectAiReferencedReadingIds(aiChatsSection);
+    var referencedIdList = Object.keys(referencedIds);
+    if (referencedIdList.length === 0) {
+      return Promise.resolve({ ok: true, perConvRewrites: null });
     }
 
-    // Check existing local history store to see if any referenced backup reading collides with
-    // a different local reading without already having its deterministic remapped copy stored.
+    var historyById = Object.create(null);
+    var referencedBackupRecords = [];
+    if (historySection && Array.isArray(historySection.records)) {
+      for (var i = 0; i < historySection.records.length; i += 1) {
+        var rec = historySection.records[i];
+        if (rec && typeof rec.id === "string") {
+          historyById[rec.id] = rec;
+          if (referencedIds[rec.id]) {
+            referencedBackupRecords.push(rec);
+          }
+        }
+      }
+    }
+
+    var hasDeletedOrExternalRefs = referencedIdList.some(function (refId) {
+      return !historyById[refId];
+    });
+
+    // Only skip inspecting local history when history was restored cleanly in this run
+    // AND every reading ID referenced by aiChats existed in sections.history.
+    if (historyWasSelected && historySucceeded && !hasDeletedOrExternalRefs) {
+      return Promise.resolve({ ok: true, perConvRewrites: null });
+    }
+
     var recordsApi = resolved.historyRecords;
+    var needsRecordsApi = referencedBackupRecords.length > 0;
     if (!resolved.historyStore || typeof resolved.historyStore.listRecords !== "function" ||
-        !recordsApi || typeof recordsApi.canonicalRecordContent !== "function") {
+        (needsRecordsApi && (!recordsApi || typeof recordsApi.canonicalRecordContent !== "function"))) {
       if (historyWasSelected && !historySucceeded) {
         return Promise.resolve({
           ok: false,
@@ -1530,7 +1665,11 @@
           message: "deferred because linked history records failed to restore"
         });
       }
-      return Promise.resolve({ ok: true });
+      return Promise.resolve({
+        ok: false,
+        code: "history_check_failed",
+        message: "could not read local history to verify linked readings"
+      });
     }
 
     return Promise.resolve().then(function () {
@@ -1539,65 +1678,137 @@
       if (!Array.isArray(existingRecords)) existingRecords = [];
       var existingById = Object.create(null);
       var canonicalById = Object.create(null);
+      var canComputeCanonical = Boolean(recordsApi && typeof recordsApi.canonicalRecordContent === "function");
       for (var e = 0; e < existingRecords.length; e += 1) {
         var existing = existingRecords[e];
         existingById[existing.id] = existing;
-        canonicalById[existing.id] = recordsApi.canonicalRecordContent(existing);
+        if (canComputeCanonical) {
+          canonicalById[existing.id] = recordsApi.canonicalRecordContent(existing);
+        }
       }
 
-      var unresolvedCollisions = [];
-      for (var j = 0; j < referencedRecords.length; j += 1) {
-        var backupRec = referencedRecords[j];
-        if (hasOwn(historyIdMap, backupRec.id)) continue;
-        var atOriginal = existingById[backupRec.id];
-        if (!atOriginal) continue;
-        var backupCanonical = recordsApi.canonicalRecordContent(backupRec);
-        if (atOriginal.createdAt === backupRec.createdAt &&
-            canonicalById[backupRec.id] === backupCanonical) {
-          continue;
-        }
-        // True collision with a DIFFERENT local reading: check if deterministic remapped copy already exists.
-        var foundRemappedId = null;
-        for (var attempt = 0; attempt < 1000; attempt += 1) {
-          var candidateId = deriveDeterministicRemapId(
+      // Case A: Reading IDs present in backup sections.history
+      var unresolvedHistoryCollisions = [];
+      if (!(historyWasSelected && historySucceeded)) {
+        for (var j = 0; j < referencedBackupRecords.length; j += 1) {
+          var backupRec = referencedBackupRecords[j];
+          if (hasOwn(historyIdMap, backupRec.id)) continue;
+          var backupCanonical = recordsApi.canonicalRecordContent(backupRec);
+          var atOriginal = existingById[backupRec.id];
+          if (atOriginal &&
+              atOriginal.createdAt === backupRec.createdAt &&
+              canonicalById[backupRec.id] === backupCanonical) {
+            continue;
+          }
+          // Probe deterministic source-ID-scoped remapped copy even when originalId is now absent
+          // (e.g., user deleted the original colliding local record after Restore #1).
+          var foundRemappedId = findExistingRemappedIdInMap(
+            existingById,
+            canonicalById,
             backupRec.id,
             backupRec.createdAt,
             backupCanonical,
-            attempt,
             resolved
           );
-          var atCandidate = existingById[candidateId];
-          if (!atCandidate) {
-            break;
+          if (foundRemappedId) {
+            historyIdMap[backupRec.id] = foundRemappedId;
+            continue;
           }
-          if (atCandidate.createdAt === backupRec.createdAt &&
-              canonicalById[candidateId] === backupCanonical) {
-            foundRemappedId = candidateId;
-            break;
+          if (atOriginal) {
+            unresolvedHistoryCollisions.push(backupRec.id);
           }
-        }
-        if (foundRemappedId) {
-          historyIdMap[backupRec.id] = foundRemappedId;
-        } else {
-          unresolvedCollisions.push(backupRec.id);
         }
       }
 
-      if (unresolvedCollisions.length > 0) {
+      if (unresolvedHistoryCollisions.length > 0) {
         if (historyWasSelected && !historySucceeded) {
           return {
             ok: false,
             code: "history_dependency_failed",
-            message: "deferred because colliding history reading(s) failed to restore (" + unresolvedCollisions.join(", ") + ")"
+            message: "deferred because colliding history reading(s) failed to restore (" + unresolvedHistoryCollisions.join(", ") + ")"
           };
         }
         return {
           ok: false,
           code: "history_dependency_required",
-          message: "colliding history reading(s) must be restored before or together with AI chats (" + unresolvedCollisions.join(", ") + ")"
+          message: "colliding history reading(s) must be restored before or together with AI chats (" + unresolvedHistoryCollisions.join(", ") + ")"
         };
       }
-      return { ok: true };
+
+      // Case B: Reading IDs NOT in backup sections.history (deleted before export or aiChats-only backup).
+      // Verify against local historyStore per conversation; detach colliding snapshots deterministically
+      // or fail closed if no usable snapshot exists to prove identity / detach safely.
+      var perConvRewrites = null;
+      var unresolvedExternalCollisions = [];
+      var conversations = Array.isArray(aiChatsSection && aiChatsSection.conversations)
+        ? aiChatsSection.conversations
+        : [];
+      for (var ci = 0; ci < conversations.length; ci += 1) {
+        var conv = conversations[ci];
+        if (!conv || typeof conv !== "object") continue;
+        var convRefs = Object.keys(collectConvReferencedReadingIds(conv));
+        if (convRefs.length === 0) continue;
+
+        var snapById = Object.create(null);
+        if (Array.isArray(conv.readingSnapshots)) {
+          for (var si = 0; si < conv.readingSnapshots.length; si += 1) {
+            var sItem = conv.readingSnapshots[si];
+            if (sItem && typeof sItem === "object") {
+              if (typeof sItem.id === "string" && sItem.id.trim()) {
+                snapById[sItem.id.trim()] = sItem;
+              }
+              if (typeof sItem.readingId === "string" && sItem.readingId.trim() && !snapById[sItem.readingId.trim()]) {
+                snapById[sItem.readingId.trim()] = sItem;
+              }
+            }
+          }
+        }
+
+        var usedDetachedInConv = Object.create(null);
+        for (var ri = 0; ri < convRefs.length; ri += 1) {
+          var refId = convRefs[ri];
+          if (historyById[refId]) continue;
+          var localAtRef = existingById[refId];
+          if (!localAtRef) continue;
+          var convSnap = snapById[refId] || null;
+          if (convSnap && snapshotMatchesLocalRecord(convSnap, localAtRef)) {
+            continue;
+          }
+          if (convSnap && Array.isArray(convSnap.cards) && convSnap.cards.length > 0) {
+            var sig = canonicalSnapshotSignature(convSnap);
+            var convIdStr = typeof conv.id === "string" ? conv.id.trim() : String(ci);
+            var detachedId = null;
+            for (var dAttempt = 0; dAttempt < 1000; dAttempt += 1) {
+              var cand = deriveDetachedReadingId(convIdStr, refId, sig, dAttempt, resolved);
+              if (!existingById[cand] && !usedDetachedInConv[cand]) {
+                detachedId = cand;
+                usedDetachedInConv[cand] = true;
+                break;
+              }
+            }
+            if (!detachedId) {
+              unresolvedExternalCollisions.push(refId);
+              continue;
+            }
+            if (!perConvRewrites) perConvRewrites = Object.create(null);
+            if (!perConvRewrites[ci]) perConvRewrites[ci] = Object.create(null);
+            perConvRewrites[ci][refId] = detachedId;
+          } else {
+            unresolvedExternalCollisions.push(refId);
+          }
+        }
+      }
+
+      if (unresolvedExternalCollisions.length > 0) {
+        return {
+          ok: false,
+          code: "history_dependency_required",
+          message: "colliding history reading(s) without verifiable snapshots cannot be linked (" +
+            Array.from(new Set(unresolvedExternalCollisions)).join(", ") + ")"
+        };
+      }
+
+      return { ok: true, perConvRewrites: perConvRewrites };
     }).catch(function () {
       if (historyWasSelected && !historySucceeded) {
         return {
@@ -1606,23 +1817,33 @@
           message: "deferred because linked history records failed to restore"
         };
       }
-      return { ok: true };
+      return {
+        ok: false,
+        code: "history_check_failed",
+        message: "could not read local history to verify linked readings"
+      };
     });
   }
 
-  function rewriteAiChatsReadingIds(section, historyIdMap) {
-    var keys = historyIdMap ? Object.keys(historyIdMap) : [];
-    if (keys.length === 0) return section;
+  function rewriteAiChatsReadingIds(section, historyIdMap, perConvRewrites) {
+    var hasGlobal = historyIdMap && Object.keys(historyIdMap).length > 0;
+    var hasPerConv = Boolean(perConvRewrites && Object.keys(perConvRewrites).length > 0);
+    if (!hasGlobal && !hasPerConv) return section;
     var cloned = safeClone(section);
     if (!cloned || !Array.isArray(cloned.conversations)) return cloned;
-
-    function mapReadingId(id) {
-      return typeof id === "string" && hasOwn(historyIdMap, id) ? historyIdMap[id] : id;
-    }
 
     for (var i = 0; i < cloned.conversations.length; i += 1) {
       var conv = cloned.conversations[i];
       if (!conv || typeof conv !== "object") continue;
+      var convMap = perConvRewrites && perConvRewrites[i] ? perConvRewrites[i] : null;
+
+      var mapReadingId = function (id) {
+        if (typeof id !== "string") return id;
+        var key = id.trim();
+        if (convMap && hasOwn(convMap, key)) return convMap[key];
+        if (historyIdMap && hasOwn(historyIdMap, key)) return historyIdMap[key];
+        return id;
+      };
 
       if (Array.isArray(conv.readingIds)) {
         var nextIds = [];
@@ -1750,16 +1971,32 @@
           var incoming = incomingRecords[j];
           var incomingCanonical = recordsApi.canonicalRecordContent(incoming);
           var existingAtId = occupiedById[incoming.id];
+          if (existingAtId &&
+              existingAtId.createdAt === incoming.createdAt &&
+              canonicalById[incoming.id] === incomingCanonical) {
+            skipped += 1;
+            continue;
+          }
+          var existingRemapped = findExistingRemappedIdInMap(
+            occupiedById,
+            canonicalById,
+            incoming.id,
+            incoming.createdAt,
+            incomingCanonical,
+            resolved
+          );
+          if (existingRemapped) {
+            skipped += 1;
+            if (!hasOwn(historyIdMap, incoming.id)) {
+              historyIdMap[incoming.id] = existingRemapped;
+            }
+            continue;
+          }
           if (!existingAtId) {
             var directCopy = safeClone(incoming);
             occupiedById[directCopy.id] = directCopy;
             canonicalById[directCopy.id] = incomingCanonical;
             toImport.push(directCopy);
-            continue;
-          }
-          if (existingAtId.createdAt === incoming.createdAt &&
-              canonicalById[incoming.id] === incomingCanonical) {
-            skipped += 1;
             continue;
           }
           for (var attempt = 0; attempt < 1000; attempt += 1) {
@@ -1770,22 +2007,13 @@
               attempt,
               resolved
             );
-            var atCandidate = occupiedById[candidateId];
-            if (!atCandidate) {
+            if (!occupiedById[candidateId]) {
               var remappedCopy = safeClone(incoming);
               remappedCopy.id = candidateId;
               occupiedById[candidateId] = remappedCopy;
               canonicalById[candidateId] = incomingCanonical;
               toImport.push(remappedCopy);
               remappedCount += 1;
-              if (!hasOwn(historyIdMap, incoming.id)) {
-                historyIdMap[incoming.id] = candidateId;
-              }
-              break;
-            }
-            if (atCandidate.createdAt === incoming.createdAt &&
-                canonicalById[candidateId] === incomingCanonical) {
-              skipped += 1;
               if (!hasOwn(historyIdMap, incoming.id)) {
                 historyIdMap[incoming.id] = candidateId;
               }
@@ -1945,12 +2173,12 @@
     });
   }
 
-  function restoreAiChatsSection(section, resolved, warnings, failedSections, historyIdMap) {
+  function restoreAiChatsSection(section, resolved, warnings, failedSections, historyIdMap, perConvRewrites) {
     if (!resolved.aiChatStore || typeof resolved.aiChatStore.importBackup !== "function") {
       recordSectionFailure(failedSections, warnings, "aiChats", "storage_unavailable", "storage is unavailable");
       return Promise.resolve({ ok: false, summary: { imported: 0, updated: 0, skipped: 0 } });
     }
-    var rewrittenSection = rewriteAiChatsReadingIds(section, historyIdMap);
+    var rewrittenSection = rewriteAiChatsReadingIds(section, historyIdMap, perConvRewrites);
     var aiChatModule = resolved.aiChatStoreApi;
     var hasInspector = typeof resolved.aiChatStore.listConversations === "function" &&
       aiChatModule && typeof aiChatModule.normalizeConversation === "function";
@@ -2411,8 +2639,14 @@
                 restored.aiChats = { imported: 0, updated: 0, skipped: 0 };
                 return undefined;
               }
-              return restoreAiChatsSection(parsed.sections.aiChats, resolved, warnings, failedSections, historyIdMap)
-                .then(function (outcome) {
+              return restoreAiChatsSection(
+                parsed.sections.aiChats,
+                resolved,
+                warnings,
+                failedSections,
+                historyIdMap,
+                dep.perConvRewrites
+              ).then(function (outcome) {
                   restored.aiChats = outcome.summary;
                   if (outcome.ok) succeededSections.push("aiChats");
                 });
