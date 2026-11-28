@@ -45,6 +45,7 @@
   var CARD_NOTES_VERSION = 1;
   var AI_CHATS_FORMAT = "quareia-ai-chats-backup";
   var AI_CHATS_VERSION = 1;
+  var DEFAULT_HISTORY_MAX_BYTES = 5 * 1024 * 1024;
   var DEFAULT_AI_CHATS_MAX_BYTES = 8 * 1024 * 1024;
   var DEFAULT_CUSTOM_SPREADS_MAX_SIZE = 50;
 
@@ -425,30 +426,29 @@
     };
   }
 
-  function validateAiTimestamp(value, path, allowZero) {
+  function parseStrictTimestampMs(value) {
     if (typeof value === "number") {
-      if (!Number.isFinite(value) || value < 0 || (!allowZero && value === 0)) {
-        fail(path, "must be a valid timestamp");
-      }
-      return;
+      return Number.isFinite(value) && value >= 0 ? value : NaN;
     }
     if (typeof value === "string") {
       var trimmed = value.trim();
-      if (!trimmed) fail(path, "must be a valid timestamp");
+      if (!trimmed) return NaN;
       if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
         var num = Number(trimmed);
-        if (!Number.isFinite(num) || num < 0 || (!allowZero && num === 0)) {
-          fail(path, "must be a valid timestamp");
-        }
-        return;
+        return Number.isFinite(num) && num >= 0 ? num : NaN;
       }
       var parsed = Date.parse(trimmed);
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        fail(path, "must be a valid timestamp");
-      }
-      return;
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : NaN;
     }
-    fail(path, "must be a valid timestamp");
+    return NaN;
+  }
+
+  function validateAiTimestamp(value, path, allowZero) {
+    var ms = parseStrictTimestampMs(value);
+    if (!Number.isFinite(ms) || ms < 0 || (!allowZero && ms === 0)) {
+      fail(path, "must be a valid timestamp");
+    }
+    return ms;
   }
 
   function validateAiSnapshotCard(card, path) {
@@ -587,11 +587,19 @@
   function validateAiConversation(conv, path) {
     assertPlainObject(conv, path);
     assertOnlyKeys(conv, AI_CONVERSATION_KEYS, path);
-    var hasId = typeof conv.id === "string" && conv.id.trim().length > 0;
-    var hasTitle = typeof conv.title === "string" && conv.title.trim().length > 0;
-    var hasArrays = Array.isArray(conv.messages) || Array.isArray(conv.readingIds) || Array.isArray(conv.readingSnapshots);
-    if (!hasId && !hasTitle && !hasArrays) {
-      fail(path, "invalid AI conversation entry");
+    if (!hasOwn(conv, "id") || typeof conv.id !== "string" || !conv.id.trim()) {
+      fail(path + ".id", "must be a non-empty string");
+    }
+    if (!hasOwn(conv, "createdAt")) {
+      fail(path + ".createdAt", "is required");
+    }
+    validateAiTimestamp(conv.createdAt, path + ".createdAt", false);
+    if (!hasOwn(conv, "updatedAt")) {
+      fail(path + ".updatedAt", "is required");
+    }
+    validateAiTimestamp(conv.updatedAt, path + ".updatedAt", false);
+    if (!hasOwn(conv, "messages") || !Array.isArray(conv.messages)) {
+      fail(path + ".messages", "must be an array");
     }
     var stringFields = ["id", "title", "profileId"];
     for (var i = 0; i < stringFields.length; i += 1) {
@@ -611,12 +619,6 @@
         fail(path + ".skillMode", "unsupported skillMode");
       }
     }
-    if (hasOwn(conv, "createdAt")) {
-      validateAiTimestamp(conv.createdAt, path + ".createdAt", true);
-    }
-    if (hasOwn(conv, "updatedAt")) {
-      validateAiTimestamp(conv.updatedAt, path + ".updatedAt", true);
-    }
     if (hasOwn(conv, "readingIds")) {
       assertArrayNoHoles(conv.readingIds, path + ".readingIds");
       for (var r = 0; r < conv.readingIds.length; r += 1) {
@@ -631,11 +633,9 @@
         validateAiSnapshot(conv.readingSnapshots[s], path + ".readingSnapshots[" + s + "]");
       }
     }
-    if (hasOwn(conv, "messages")) {
-      assertArrayNoHoles(conv.messages, path + ".messages");
-      for (var m = 0; m < conv.messages.length; m += 1) {
-        validateAiMessage(conv.messages[m], path + ".messages[" + m + "]");
-      }
+    assertArrayNoHoles(conv.messages, path + ".messages");
+    for (var m = 0; m < conv.messages.length; m += 1) {
+      validateAiMessage(conv.messages[m], path + ".messages[" + m + "]");
     }
     if (hasOwn(conv, "contextSummary")) {
       validateAiContextSummary(conv.contextSummary, path + ".contextSummary");
@@ -645,14 +645,23 @@
     }
   }
 
-  function validateHistorySection(section, validators) {
+  function validateHistorySection(section, validators, skipByteLimit) {
     var historyRecords = resolveDep(validators, "historyRecords", "DivinationHistoryRecords", "historyRecords");
     if (!historyRecords || typeof historyRecords.parseImportJson !== "function") {
       fail("sections.history", "DivinationHistoryRecords validator is unavailable");
     }
     assertPlainObject(section, "sections.history");
     assertExactKeys(section, HISTORY_ENVELOPE_KEYS, "sections.history");
+    var maxBytes = typeof historyRecords.MAX_IMPORT_BYTES === "number"
+      ? historyRecords.MAX_IMPORT_BYTES
+      : DEFAULT_HISTORY_MAX_BYTES;
     var serialized = JSON.stringify(section);
+    if (!skipByteLimit && exceedsUtf8ByteLimit(serialized, maxBytes)) {
+      fail("sections.history", "exceeds history backup byte limit", "backup_too_large");
+    }
+    if (skipByteLimit) {
+      return safeClone(section);
+    }
     var parsed = historyRecords.parseImportJson(serialized);
     return parsed;
   }
@@ -754,7 +763,7 @@
     };
   }
 
-  function validateAiChatsSection(section, validators) {
+  function validateAiChatsSection(section, validators, skipByteLimit) {
     var aiChatModule = resolveDep(validators, "aiChatStoreApi", "DivinationAiChatStore", "aiChatStore");
     assertPlainObject(section, "sections.aiChats");
     assertExactKeys(section, AI_CHATS_ENVELOPE_KEYS, "sections.aiChats");
@@ -769,9 +778,11 @@
     var maxBytes = aiChatModule && typeof aiChatModule.MAX_BACKUP_BYTES === "number"
       ? aiChatModule.MAX_BACKUP_BYTES
       : DEFAULT_AI_CHATS_MAX_BYTES;
-    var serialized = JSON.stringify(section);
-    if (exceedsUtf8ByteLimit(serialized, maxBytes)) {
-      fail("sections.aiChats", "exceeds AI chat backup byte limit", "backup_too_large");
+    if (!skipByteLimit) {
+      var serialized = JSON.stringify(section);
+      if (exceedsUtf8ByteLimit(serialized, maxBytes)) {
+        fail("sections.aiChats", "exceeds AI chat backup byte limit", "backup_too_large");
+      }
     }
     for (var i = 0; i < section.conversations.length; i += 1) {
       validateAiConversation(section.conversations[i], "sections.aiChats.conversations[" + i + "]");
@@ -1113,6 +1124,8 @@
     };
     var tasks = [];
 
+    var validationErrors = [];
+
     // 1. history
     if (requestedSections.indexOf("history") !== -1) {
       if (resolved.historyStore && typeof resolved.historyStore.listRecords === "function" &&
@@ -1120,11 +1133,15 @@
         tasks.push(Promise.resolve().then(function () {
           return resolved.historyStore.listRecords();
         }).then(function (records) {
-          var historyEnv = resolved.historyRecords.createExportEnvelope(records, exportedAt);
-          scanTreeSecurity(historyEnv, "sections.history", new Set());
-          sections.history = historyEnv;
-          counts.history = historyEnv.records.length;
-        }).catch(function () {
+          try {
+            var historyEnv = resolved.historyRecords.createExportEnvelope(records, exportedAt);
+            scanTreeSecurity(historyEnv, "sections.history", new Set());
+            sections.history = historyEnv;
+            counts.history = historyEnv.records.length;
+          } catch (error) {
+            validationErrors.push(error);
+          }
+        }, function () {
           unavailableMap.history = true;
         }));
       } else {
@@ -1151,10 +1168,14 @@
             };
           });
         }).then(function (notesObj) {
-          var clean = validateCardNotesSection(notesObj, resolved);
-          sections.cardNotes = clean;
-          counts.cardNotes = clean.notes.length;
-        }).catch(function () {
+          try {
+            var clean = validateCardNotesSection(notesObj, resolved);
+            sections.cardNotes = clean;
+            counts.cardNotes = clean.notes.length;
+          } catch (error) {
+            validationErrors.push(error);
+          }
+        }, function () {
           unavailableMap.cardNotes = true;
         }));
       } else {
@@ -1187,15 +1208,19 @@
           });
           return Promise.all(codePromises);
         }).then(function (codes) {
-          var sectionObj = {
-            format: CUSTOM_SPREADS_FORMAT,
-            version: CUSTOM_SPREADS_VERSION,
-            codes: codes
-          };
-          var clean = validateCustomSpreadsSection(sectionObj, resolved);
-          sections.customSpreads = clean;
-          counts.customSpreads = clean.codes.length;
-        }).catch(function () {
+          try {
+            var sectionObj = {
+              format: CUSTOM_SPREADS_FORMAT,
+              version: CUSTOM_SPREADS_VERSION,
+              codes: codes
+            };
+            var clean = validateCustomSpreadsSection(sectionObj, resolved);
+            sections.customSpreads = clean;
+            counts.customSpreads = clean.codes.length;
+          } catch (error) {
+            validationErrors.push(error);
+          }
+        }, function () {
           unavailableMap.customSpreads = true;
         }));
       } else {
@@ -1209,11 +1234,15 @@
         tasks.push(Promise.resolve().then(function () {
           return resolved.aiChatStore.exportBackup();
         }).then(function (exported) {
-          scanTreeSecurity(exported, "sections.aiChats", new Set());
-          var clean = validateAiChatsSection(exported, resolved);
-          sections.aiChats = clean;
-          counts.aiChats = clean.conversations.length;
-        }).catch(function () {
+          try {
+            scanTreeSecurity(exported, "sections.aiChats", new Set());
+            var clean = validateAiChatsSection(exported, resolved, true);
+            sections.aiChats = clean;
+            counts.aiChats = clean.conversations.length;
+          } catch (error) {
+            validationErrors.push(error);
+          }
+        }, function () {
           unavailableMap.aiChats = true;
         }));
       } else {
@@ -1233,6 +1262,10 @@
     }
 
     return Promise.all(tasks).then(function () {
+      if (validationErrors.length > 0) {
+        throw validationErrors[0];
+      }
+
       var orderedSections = {};
       for (var k = 0; k < SECTION_KEYS.length; k += 1) {
         var sectionKey = SECTION_KEYS[k];
@@ -1247,6 +1280,100 @@
         sections: orderedSections
       };
       var json = JSON.stringify(envelope, null, 2);
+      var totalBytes = utf8ByteLength(json);
+      var oversizedSections = [];
+
+      if (hasOwn(orderedSections, "history")) {
+        var historyMaxBytes = resolved.historyRecords && typeof resolved.historyRecords.MAX_IMPORT_BYTES === "number"
+          ? resolved.historyRecords.MAX_IMPORT_BYTES
+          : DEFAULT_HISTORY_MAX_BYTES;
+        var historyCompact = JSON.stringify(orderedSections.history);
+        var historyBytes = utf8ByteLength(historyCompact);
+        if (historyBytes > historyMaxBytes) {
+          oversizedSections.push({
+            section: "history",
+            bytes: historyBytes,
+            maxBytes: historyMaxBytes
+          });
+        }
+      }
+
+      if (hasOwn(orderedSections, "aiChats")) {
+        var aiChatsMaxBytes = resolved.aiChatStoreApi && typeof resolved.aiChatStoreApi.MAX_BACKUP_BYTES === "number"
+          ? resolved.aiChatStoreApi.MAX_BACKUP_BYTES
+          : DEFAULT_AI_CHATS_MAX_BYTES;
+        var aiChatsCompact = JSON.stringify(orderedSections.aiChats);
+        var aiChatsBytes = utf8ByteLength(aiChatsCompact);
+        if (aiChatsBytes > aiChatsMaxBytes) {
+          oversizedSections.push({
+            section: "aiChats",
+            bytes: aiChatsBytes,
+            maxBytes: aiChatsMaxBytes
+          });
+        }
+      }
+
+      if (totalBytes > MAX_BACKUP_BYTES) {
+        var otherSections = ["cardNotes", "customSpreads", "preferences"];
+        for (var oi = 0; oi < otherSections.length; oi += 1) {
+          var oKey = otherSections[oi];
+          if (!hasOwn(orderedSections, oKey)) continue;
+          var singleSection = {};
+          singleSection[oKey] = orderedSections[oKey];
+          var aloneEnvelope = {
+            format: BACKUP_FORMAT,
+            version: BACKUP_VERSION,
+            exportedAt: exportedAt,
+            sections: singleSection
+          };
+          var aloneBytes = utf8ByteLength(JSON.stringify(aloneEnvelope, null, 2));
+          if (aloneBytes > MAX_BACKUP_BYTES) {
+            oversizedSections.push({
+              section: oKey,
+              bytes: aloneBytes,
+              maxBytes: MAX_BACKUP_BYTES
+            });
+          }
+        }
+        oversizedSections.push({
+          section: "total",
+          bytes: totalBytes,
+          maxBytes: MAX_BACKUP_BYTES
+        });
+      }
+
+      if (oversizedSections.length > 0) {
+        var summaryParts = oversizedSections.map(function (entry) {
+          return entry.section + " (" + entry.bytes + " / " + entry.maxBytes + " bytes)";
+        });
+        var sizeError = createError(
+          "export_too_large",
+          "Backup export exceeds import size limit: " + summaryParts.join(", ")
+        );
+        sizeError.totalBytes = totalBytes;
+        sizeError.maxBytes = MAX_BACKUP_BYTES;
+        sizeError.oversizedSections = oversizedSections;
+        throw sizeError;
+      }
+
+      // Self-validate final JSON with the exact parseBackup pipeline so no exported file can fail re-import.
+      try {
+        parseBackup(json, resolved);
+      } catch (selfCheckError) {
+        if (selfCheckError && selfCheckError.code === "backup_too_large") {
+          var wrappedSizeError = createError("export_too_large", selfCheckError.message);
+          wrappedSizeError.totalBytes = totalBytes;
+          wrappedSizeError.maxBytes = MAX_BACKUP_BYTES;
+          wrappedSizeError.oversizedSections = [{
+            section: "total",
+            bytes: totalBytes,
+            maxBytes: MAX_BACKUP_BYTES
+          }];
+          throw wrappedSizeError;
+        }
+        throw selfCheckError;
+      }
+
       var unavailable = SECTION_KEYS.filter(function (key) {
         return unavailableMap[key] === true;
       });
@@ -1260,14 +1387,137 @@
     });
   }
 
-  function restoreHistorySection(section, resolved, warnings) {
+  function recordSectionFailure(failedSections, warnings, section, code, message) {
+    var fullMessage = section + ": " + message;
+    warnings.push(fullMessage);
+    failedSections.push({
+      section: section,
+      code: code || "restore_failed",
+      message: fullMessage
+    });
+  }
+
+  function resolveExistingHistoryIdMap(historySection, resolved) {
+    if (!historySection || !Array.isArray(historySection.records) || historySection.records.length === 0) {
+      return Promise.resolve({});
+    }
+    if (!resolved.historyStore || typeof resolved.historyStore.listRecords !== "function" ||
+        !resolved.historyRecords || typeof resolved.historyRecords.canonicalRecordContent !== "function" ||
+        typeof resolved.historyRecords.recordsEquivalent !== "function") {
+      return Promise.resolve({});
+    }
+    return Promise.resolve().then(function () {
+      return resolved.historyStore.listRecords();
+    }).then(function (existingRecords) {
+      var map = {};
+      if (!Array.isArray(existingRecords) || existingRecords.length === 0) return map;
+      var existingById = Object.create(null);
+      var existingByContentKey = Object.create(null);
+      for (var i = 0; i < existingRecords.length; i += 1) {
+        var existing = existingRecords[i];
+        existingById[existing.id] = existing;
+        var cKey = existing.createdAt + "\0" + resolved.historyRecords.canonicalRecordContent(existing);
+        if (!existingByContentKey[cKey]) {
+          existingByContentKey[cKey] = existing;
+        }
+      }
+      for (var j = 0; j < historySection.records.length; j += 1) {
+        var incoming = historySection.records[j];
+        var byId = existingById[incoming.id];
+        if (byId && byId.createdAt === incoming.createdAt &&
+            resolved.historyRecords.recordsEquivalent(byId, incoming)) {
+          continue;
+        }
+        var inKey = incoming.createdAt + "\0" + resolved.historyRecords.canonicalRecordContent(incoming);
+        var existingCopy = existingByContentKey[inKey];
+        if (existingCopy && existingCopy.id !== incoming.id) {
+          map[incoming.id] = existingCopy.id;
+        }
+      }
+      return map;
+    }).catch(function () {
+      return {};
+    });
+  }
+
+  function rewriteAiChatsReadingIds(section, historyIdMap) {
+    var keys = historyIdMap ? Object.keys(historyIdMap) : [];
+    if (keys.length === 0) return section;
+    var cloned = safeClone(section);
+    if (!cloned || !Array.isArray(cloned.conversations)) return cloned;
+
+    function mapReadingId(id) {
+      return typeof id === "string" && hasOwn(historyIdMap, id) ? historyIdMap[id] : id;
+    }
+
+    for (var i = 0; i < cloned.conversations.length; i += 1) {
+      var conv = cloned.conversations[i];
+      if (!conv || typeof conv !== "object") continue;
+
+      if (Array.isArray(conv.readingIds)) {
+        var nextIds = [];
+        var seenId = Object.create(null);
+        for (var r = 0; r < conv.readingIds.length; r += 1) {
+          var mappedId = mapReadingId(conv.readingIds[r]);
+          if (typeof mappedId === "string" && mappedId && !seenId[mappedId]) {
+            seenId[mappedId] = true;
+            nextIds.push(mappedId);
+          }
+        }
+        conv.readingIds = nextIds;
+      }
+
+      if (Array.isArray(conv.readingSnapshots)) {
+        var nextSnaps = [];
+        var seenSnap = Object.create(null);
+        for (var s = 0; s < conv.readingSnapshots.length; s += 1) {
+          var snap = conv.readingSnapshots[s];
+          if (snap && typeof snap === "object") {
+            if (typeof snap.id === "string") {
+              snap.id = mapReadingId(snap.id);
+            }
+            if (typeof snap.readingId === "string") {
+              snap.readingId = mapReadingId(snap.readingId);
+            }
+            var snapKey = typeof snap.id === "string" ? snap.id : "";
+            if (!snapKey || !seenSnap[snapKey]) {
+              if (snapKey) seenSnap[snapKey] = true;
+              nextSnaps.push(snap);
+            }
+          }
+        }
+        conv.readingSnapshots = nextSnaps;
+      }
+
+      if (Array.isArray(conv.messages)) {
+        for (var m = 0; m < conv.messages.length; m += 1) {
+          var msg = conv.messages[m];
+          if (msg && typeof msg === "object" && Array.isArray(msg.interpretedReadingIds)) {
+            var nextInterp = [];
+            var seenInterp = Object.create(null);
+            for (var k = 0; k < msg.interpretedReadingIds.length; k += 1) {
+              var mappedInterp = mapReadingId(msg.interpretedReadingIds[k]);
+              if (typeof mappedInterp === "string" && mappedInterp && !seenInterp[mappedInterp]) {
+                seenInterp[mappedInterp] = true;
+                nextInterp.push(mappedInterp);
+              }
+            }
+            msg.interpretedReadingIds = nextInterp;
+          }
+        }
+      }
+    }
+    return cloned;
+  }
+
+  function restoreHistorySection(section, resolved, warnings, failedSections, historyIdMap) {
     if (!resolved.historyStore || typeof resolved.historyStore.importRecords !== "function") {
-      warnings.push("history: storage is unavailable");
-      return Promise.resolve({ imported: 0, remapped: 0, skipped: 0 });
+      recordSectionFailure(failedSections, warnings, "history", "storage_unavailable", "storage is unavailable");
+      return Promise.resolve({ ok: false, summary: { imported: 0, remapped: 0, skipped: 0 } });
     }
     var incomingRecords = section.records;
     if (incomingRecords.length === 0) {
-      return Promise.resolve({ imported: 0, remapped: 0, skipped: 0 });
+      return Promise.resolve({ ok: true, summary: { imported: 0, remapped: 0, skipped: 0 } });
     }
     var recordsApi = resolved.historyRecords;
     var readExisting = typeof resolved.historyStore.listRecords === "function"
@@ -1276,64 +1526,114 @@
 
     return readExisting.then(function (existingRecords) {
       var toImport = incomingRecords;
+      var originalIds = incomingRecords.map(function (r) { return r.id; });
       var skipped = 0;
       if (Array.isArray(existingRecords) && recordsApi && typeof recordsApi.recordsEquivalent === "function") {
+        var hasCanonical = typeof recordsApi.canonicalRecordContent === "function";
         var existingById = Object.create(null);
+        var existingByContentKey = Object.create(null);
         for (var i = 0; i < existingRecords.length; i += 1) {
-          existingById[existingRecords[i].id] = existingRecords[i];
+          var existing = existingRecords[i];
+          existingById[existing.id] = existing;
+          if (hasCanonical) {
+            var cKey = existing.createdAt + "\0" + recordsApi.canonicalRecordContent(existing);
+            if (!existingByContentKey[cKey]) {
+              existingByContentKey[cKey] = existing;
+            }
+          }
         }
         toImport = [];
+        originalIds = [];
         for (var j = 0; j < incomingRecords.length; j += 1) {
           var incoming = incomingRecords[j];
           var match = existingById[incoming.id];
           if (match && match.createdAt === incoming.createdAt && recordsApi.recordsEquivalent(match, incoming)) {
             skipped += 1;
-          } else {
-            toImport.push(incoming);
+            continue;
           }
+          if (hasCanonical) {
+            var inKey = incoming.createdAt + "\0" + recordsApi.canonicalRecordContent(incoming);
+            var existingCopy = existingByContentKey[inKey];
+            if (existingCopy) {
+              skipped += 1;
+              if (existingCopy.id !== incoming.id) {
+                historyIdMap[incoming.id] = existingCopy.id;
+              }
+              continue;
+            }
+          }
+          toImport.push(incoming);
+          originalIds.push(incoming.id);
         }
       }
       if (toImport.length === 0) {
-        return { imported: 0, remapped: 0, skipped: skipped };
+        return { ok: true, summary: { imported: 0, remapped: 0, skipped: skipped } };
       }
       return resolved.historyStore.importRecords(toImport).then(function (res) {
+        if (res && Array.isArray(res.records)) {
+          for (var k = 0; k < originalIds.length; k += 1) {
+            var oldId = originalIds[k];
+            var storedRecord = res.records[k];
+            if (storedRecord && typeof storedRecord.id === "string" && storedRecord.id !== oldId) {
+              historyIdMap[oldId] = storedRecord.id;
+            }
+          }
+        }
         return {
-          imported: res && typeof res.importedCount === "number" ? res.importedCount : toImport.length,
-          remapped: res && typeof res.remappedCount === "number" ? res.remappedCount : 0,
-          skipped: skipped
+          ok: true,
+          summary: {
+            imported: res && typeof res.importedCount === "number" ? res.importedCount : toImport.length,
+            remapped: res && typeof res.remappedCount === "number" ? res.remappedCount : 0,
+            skipped: skipped
+          }
         };
       });
     }).catch(function (error) {
-      warnings.push("history: " + (error && error.message ? error.message : "restore failed"));
-      return { imported: 0, remapped: 0, skipped: 0 };
+      recordSectionFailure(
+        failedSections,
+        warnings,
+        "history",
+        (error && error.code) || "restore_failed",
+        error && error.message ? error.message : "restore failed"
+      );
+      return { ok: false, summary: { imported: 0, remapped: 0, skipped: 0 } };
     });
   }
 
-  function restoreCardNotesSection(section, resolved, warnings) {
+  function restoreCardNotesSection(section, resolved, warnings, failedSections) {
     if (!resolved.cardNotesStore || typeof resolved.cardNotesStore.importBackup !== "function") {
-      warnings.push("cardNotes: storage is unavailable");
-      return Promise.resolve({ imported: 0, skipped: 0 });
+      recordSectionFailure(failedSections, warnings, "cardNotes", "storage_unavailable", "storage is unavailable");
+      return Promise.resolve({ ok: false, summary: { imported: 0, skipped: 0 } });
     }
     return Promise.resolve().then(function () {
       return resolved.cardNotesStore.importBackup(JSON.stringify(section));
     }).then(function (res) {
       return {
-        imported: res && typeof res.imported === "number" ? res.imported : 0,
-        skipped: res && typeof res.skipped === "number" ? res.skipped : 0
+        ok: true,
+        summary: {
+          imported: res && typeof res.imported === "number" ? res.imported : 0,
+          skipped: res && typeof res.skipped === "number" ? res.skipped : 0
+        }
       };
     }).catch(function (error) {
-      warnings.push("cardNotes: " + (error && error.message ? error.message : "restore failed"));
-      return { imported: 0, skipped: 0 };
+      recordSectionFailure(
+        failedSections,
+        warnings,
+        "cardNotes",
+        (error && error.code) || "restore_failed",
+        error && error.message ? error.message : "restore failed"
+      );
+      return { ok: false, summary: { imported: 0, skipped: 0 } };
     });
   }
 
-  function restoreCustomSpreadsSection(section, resolved, warnings) {
+  function restoreCustomSpreadsSection(section, resolved, warnings, failedSections) {
     if (!resolved.customSpreadsLibrary ||
         typeof resolved.customSpreadsLibrary.list !== "function" ||
         typeof resolved.customSpreadsLibrary.importCode !== "function" ||
         !resolved.customSpreads) {
-      warnings.push("customSpreads: storage is unavailable");
-      return Promise.resolve({ imported: 0, skipped: 0 });
+      recordSectionFailure(failedSections, warnings, "customSpreads", "storage_unavailable", "storage is unavailable");
+      return Promise.resolve({ ok: false, summary: { imported: 0, skipped: 0 } });
     }
     return Promise.resolve().then(function () {
       return resolved.customSpreadsLibrary.list();
@@ -1365,6 +1665,7 @@
         var skipped = 0;
         var capacityOverflow = 0;
         var storageErrorMessage = "";
+        var storageErrorCode = "";
 
         var step = Promise.resolve();
         section.codes.forEach(function (code) {
@@ -1388,6 +1689,7 @@
                 skipped += 1;
                 if (!storageErrorMessage) {
                   storageErrorMessage = error && error.message ? error.message : "restore failed";
+                  storageErrorCode = (error && error.code) || "restore_failed";
                 }
               }
             });
@@ -1395,42 +1697,66 @@
         });
 
         return step.then(function () {
+          var failed = false;
           if (capacityOverflow > 0) {
-            warnings.push("customSpreads: library capacity limit reached; skipped " + capacityOverflow + " spread(s)");
+            var capMsg = "library capacity limit reached; skipped " + capacityOverflow + " spread(s)";
+            if (imported === 0 && !storageErrorMessage) {
+              recordSectionFailure(failedSections, warnings, "customSpreads", "CUSTOM_SPREAD_LIBRARY_FULL", capMsg);
+              failed = true;
+            } else {
+              warnings.push("customSpreads: " + capMsg);
+            }
           }
           if (storageErrorMessage) {
-            warnings.push("customSpreads: " + storageErrorMessage);
+            recordSectionFailure(failedSections, warnings, "customSpreads", storageErrorCode, storageErrorMessage);
+            failed = true;
           }
-          return { imported: imported, skipped: skipped };
+          return { ok: !failed, summary: { imported: imported, skipped: skipped } };
         });
       });
     }).catch(function (error) {
-      warnings.push("customSpreads: " + (error && error.message ? error.message : "restore failed"));
-      return { imported: 0, skipped: 0 };
+      recordSectionFailure(
+        failedSections,
+        warnings,
+        "customSpreads",
+        (error && error.code) || "restore_failed",
+        error && error.message ? error.message : "restore failed"
+      );
+      return { ok: false, summary: { imported: 0, skipped: 0 } };
     });
   }
 
-  function restoreAiChatsSection(section, resolved, warnings) {
+  function restoreAiChatsSection(section, resolved, warnings, failedSections, historyIdMap) {
     if (!resolved.aiChatStore || typeof resolved.aiChatStore.importBackup !== "function") {
-      warnings.push("aiChats: storage is unavailable");
-      return Promise.resolve({ imported: 0, updated: 0, skipped: 0 });
+      recordSectionFailure(failedSections, warnings, "aiChats", "storage_unavailable", "storage is unavailable");
+      return Promise.resolve({ ok: false, summary: { imported: 0, updated: 0, skipped: 0 } });
     }
+    var rewrittenSection = rewriteAiChatsReadingIds(section, historyIdMap);
     var aiChatModule = resolved.aiChatStoreApi;
     var hasInspector = typeof resolved.aiChatStore.listConversations === "function" &&
       aiChatModule && typeof aiChatModule.normalizeConversation === "function";
 
     if (!hasInspector) {
       return Promise.resolve().then(function () {
-        return resolved.aiChatStore.importBackup(section, { mode: "merge" });
+        return resolved.aiChatStore.importBackup(rewrittenSection, { mode: "merge" });
       }).then(function (res) {
         return {
-          imported: res && typeof res.importedCount === "number" ? res.importedCount : 0,
-          updated: 0,
-          skipped: res && typeof res.skippedCount === "number" ? res.skippedCount : 0
+          ok: true,
+          summary: {
+            imported: res && typeof res.importedCount === "number" ? res.importedCount : 0,
+            updated: 0,
+            skipped: res && typeof res.skippedCount === "number" ? res.skippedCount : 0
+          }
         };
       }).catch(function (error) {
-        warnings.push("aiChats: " + (error && error.message ? error.message : "restore failed"));
-        return { imported: 0, updated: 0, skipped: 0 };
+        recordSectionFailure(
+          failedSections,
+          warnings,
+          "aiChats",
+          (error && error.code) || "restore_failed",
+          error && error.message ? error.message : "restore failed"
+        );
+        return { ok: false, summary: { imported: 0, updated: 0, skipped: 0 } };
       });
     }
 
@@ -1445,22 +1771,35 @@
         }
       }
 
-      // Deduplicate incoming conversations by ID keeping the newest, matching DivinationAiChatStore rules.
+      // Deduplicate incoming conversations by ID keeping the newest proven timestamp (never synthesized Date.now()).
       var deduped = [];
       var dedupIndexById = Object.create(null);
       var skipped = 0;
-      for (var c = 0; c < section.conversations.length; c += 1) {
-        var norm = aiChatModule.normalizeConversation(section.conversations[c]);
+      for (var c = 0; c < rewrittenSection.conversations.length; c += 1) {
+        var rawConv = rewrittenSection.conversations[c];
+        var rawUpdatedAt = parseStrictTimestampMs(rawConv && rawConv.updatedAt);
+        var rawCreatedAt = parseStrictTimestampMs(rawConv && rawConv.createdAt);
+        if (!rawConv || typeof rawConv.id !== "string" || !rawConv.id.trim() ||
+            !Number.isFinite(rawUpdatedAt) || rawUpdatedAt <= 0 ||
+            !Number.isFinite(rawCreatedAt) || rawCreatedAt <= 0 ||
+            !Array.isArray(rawConv.messages)) {
+          skipped += 1;
+          continue;
+        }
+        var norm = aiChatModule.normalizeConversation(rawConv);
+        var entry = { conv: norm, provenUpdatedAt: rawUpdatedAt };
         var prevIdx = dedupIndexById[norm.id];
         if (prevIdx !== undefined) {
           skipped += 1;
-          var prevItem = deduped[prevIdx];
-          if ((Number(norm.updatedAt) || 0) >= (Number(prevItem.updatedAt) || 0)) {
-            deduped[prevIdx] = norm;
+          var prevEntry = deduped[prevIdx];
+          if (entry.provenUpdatedAt > prevEntry.provenUpdatedAt ||
+              (entry.provenUpdatedAt === prevEntry.provenUpdatedAt &&
+               entry.conv.messages.length > prevEntry.conv.messages.length)) {
+            deduped[prevIdx] = entry;
           }
         } else {
           dedupIndexById[norm.id] = deduped.length;
-          deduped.push(norm);
+          deduped.push(entry);
         }
       }
 
@@ -1469,18 +1808,18 @@
       var plannedUpdated = 0;
 
       for (var j = 0; j < deduped.length; j += 1) {
-        var incoming = deduped[j];
+        var incoming = deduped[j].conv;
+        var incomingUpdated = deduped[j].provenUpdatedAt;
         var existing = existingById[incoming.id];
         if (!existing) {
           toImport.push(incoming);
           plannedImported += 1;
           continue;
         }
-        var existingUpdated = Number(existing.updatedAt) || 0;
-        var incomingUpdated = Number(incoming.updatedAt) || 0;
-        if (existingUpdated > incomingUpdated ||
-            (existingUpdated === incomingUpdated && existing.messages.length > incoming.messages.length) ||
-            JSON.stringify(existing) === JSON.stringify(incoming)) {
+        var existingUpdated = parseStrictTimestampMs(existing.updatedAt);
+        var safeExistingUpdated = Number.isFinite(existingUpdated) ? existingUpdated : 0;
+        // Never allow an equal, older, or unverified timestamp to overwrite an existing local conversation.
+        if (!(incomingUpdated > 0 && incomingUpdated > safeExistingUpdated)) {
           skipped += 1;
           continue;
         }
@@ -1489,13 +1828,13 @@
       }
 
       if (toImport.length === 0) {
-        return { imported: 0, updated: 0, skipped: skipped };
+        return { ok: true, summary: { imported: 0, updated: 0, skipped: skipped } };
       }
 
       var payload = {
-        format: section.format,
-        version: section.version,
-        exportedAt: section.exportedAt,
+        format: rewrittenSection.format,
+        version: rewrittenSection.version,
+        exportedAt: rewrittenSection.exportedAt,
         conversations: toImport
       };
       return resolved.aiChatStore.importBackup(payload, { mode: "merge" }).then(function (res) {
@@ -1505,22 +1844,35 @@
         var actualImported = Math.min(plannedImported, writtenCount);
         var actualUpdated = Math.max(0, Math.min(plannedUpdated, writtenCount - actualImported));
         return {
-          imported: actualImported,
-          updated: actualUpdated,
-          skipped: skipped + extraSkipped
+          ok: true,
+          summary: {
+            imported: actualImported,
+            updated: actualUpdated,
+            skipped: skipped + extraSkipped
+          }
         };
       });
     }).catch(function (error) {
-      warnings.push("aiChats: " + (error && error.message ? error.message : "restore failed"));
-      return { imported: 0, updated: 0, skipped: 0 };
+      recordSectionFailure(
+        failedSections,
+        warnings,
+        "aiChats",
+        (error && error.code) || "restore_failed",
+        error && error.message ? error.message : "restore failed"
+      );
+      return { ok: false, summary: { imported: 0, updated: 0, skipped: 0 } };
     });
   }
 
-  function restorePreferencesSection(section, resolved, warnings) {
+  function restorePreferencesSection(section, resolved, warnings, failedSections) {
     var applied = { theme: null, locale: null };
     var appliedCount = 0;
+    var expectedCount = 0;
+    var firstFailureCode = "";
+    var firstFailureMessage = "";
 
     if (hasOwn(section, "theme")) {
+      expectedCount += 1;
       if (resolved.themeApi && typeof resolved.themeApi.setTheme === "function") {
         try {
           var themeRes = resolved.themeApi.setTheme(section.theme);
@@ -1532,17 +1884,32 @@
             applied.theme = section.theme;
             appliedCount += 1;
           } else {
-            warnings.push("preferences: theme '" + section.theme + "' is not supported in this view");
+            var unsupportedMsg = "theme '" + section.theme + "' is not supported in this view";
+            warnings.push("preferences: " + unsupportedMsg);
+            if (!firstFailureMessage) {
+              firstFailureCode = "unsupported_preference";
+              firstFailureMessage = unsupportedMsg;
+            }
           }
         } catch (error) {
-          warnings.push("preferences: " + (error && error.message ? error.message : "could not apply theme"));
+          var themeErrMsg = error && error.message ? error.message : "could not apply theme";
+          warnings.push("preferences: " + themeErrMsg);
+          if (!firstFailureMessage) {
+            firstFailureCode = (error && error.code) || "restore_failed";
+            firstFailureMessage = themeErrMsg;
+          }
         }
       } else {
         warnings.push("preferences: theme API is unavailable");
+        if (!firstFailureMessage) {
+          firstFailureCode = "storage_unavailable";
+          firstFailureMessage = "theme API is unavailable";
+        }
       }
     }
 
     if (hasOwn(section, "locale")) {
+      expectedCount += 1;
       if (resolved.i18nApi && typeof resolved.i18nApi.setLocale === "function") {
         try {
           var localeRes = resolved.i18nApi.setLocale(section.locale);
@@ -1554,17 +1921,41 @@
             applied.locale = section.locale;
             appliedCount += 1;
           } else {
-            warnings.push("preferences: locale '" + section.locale + "' could not be applied");
+            var localeUnsupportedMsg = "locale '" + section.locale + "' could not be applied";
+            warnings.push("preferences: " + localeUnsupportedMsg);
+            if (!firstFailureMessage) {
+              firstFailureCode = "unsupported_preference";
+              firstFailureMessage = localeUnsupportedMsg;
+            }
           }
         } catch (error) {
-          warnings.push("preferences: " + (error && error.message ? error.message : "could not apply locale"));
+          var localeErrMsg = error && error.message ? error.message : "could not apply locale";
+          warnings.push("preferences: " + localeErrMsg);
+          if (!firstFailureMessage) {
+            firstFailureCode = (error && error.code) || "restore_failed";
+            firstFailureMessage = localeErrMsg;
+          }
         }
       } else {
         warnings.push("preferences: i18n API is unavailable");
+        if (!firstFailureMessage) {
+          firstFailureCode = "storage_unavailable";
+          firstFailureMessage = "i18n API is unavailable";
+        }
       }
     }
 
+    var ok = expectedCount === 0 || appliedCount > 0;
+    if (!ok) {
+      failedSections.push({
+        section: "preferences",
+        code: firstFailureCode || "restore_failed",
+        message: "preferences: " + (firstFailureMessage || "restore failed")
+      });
+    }
+
     return {
+      ok: ok,
       appliedPreferences: applied,
       summary: {
         theme: applied.theme,
@@ -1620,6 +2011,10 @@
       var restored = {};
       var appliedPreferences = { theme: null, locale: null };
       var warnings = [];
+      var succeededSections = [];
+      var failedSections = [];
+      var historyIdMap = {};
+      var historyWasSelected = targetSections.indexOf("history") !== -1 && hasOwn(parsed.sections, "history");
 
       var chain = Promise.resolve();
       targetSections.forEach(function (sectionKey) {
@@ -1629,29 +2024,46 @@
         }
         chain = chain.then(function () {
           if (sectionKey === "history") {
-            return restoreHistorySection(parsed.sections.history, resolved, warnings).then(function (summary) {
-              restored.history = summary;
-            });
+            return restoreHistorySection(parsed.sections.history, resolved, warnings, failedSections, historyIdMap)
+              .then(function (outcome) {
+                restored.history = outcome.summary;
+                if (outcome.ok) succeededSections.push("history");
+              });
           }
           if (sectionKey === "cardNotes") {
-            return restoreCardNotesSection(parsed.sections.cardNotes, resolved, warnings).then(function (summary) {
-              restored.cardNotes = summary;
-            });
+            return restoreCardNotesSection(parsed.sections.cardNotes, resolved, warnings, failedSections)
+              .then(function (outcome) {
+                restored.cardNotes = outcome.summary;
+                if (outcome.ok) succeededSections.push("cardNotes");
+              });
           }
           if (sectionKey === "customSpreads") {
-            return restoreCustomSpreadsSection(parsed.sections.customSpreads, resolved, warnings).then(function (summary) {
-              restored.customSpreads = summary;
-            });
+            return restoreCustomSpreadsSection(parsed.sections.customSpreads, resolved, warnings, failedSections)
+              .then(function (outcome) {
+                restored.customSpreads = outcome.summary;
+                if (outcome.ok) succeededSections.push("customSpreads");
+              });
           }
           if (sectionKey === "aiChats") {
-            return restoreAiChatsSection(parsed.sections.aiChats, resolved, warnings).then(function (summary) {
-              restored.aiChats = summary;
+            var prepMap = (!historyWasSelected && hasOwn(parsed.sections, "history"))
+              ? resolveExistingHistoryIdMap(parsed.sections.history, resolved).then(function (existingMap) {
+                Object.keys(existingMap).forEach(function (oldId) {
+                  if (!hasOwn(historyIdMap, oldId)) historyIdMap[oldId] = existingMap[oldId];
+                });
+              })
+              : Promise.resolve();
+            return prepMap.then(function () {
+              return restoreAiChatsSection(parsed.sections.aiChats, resolved, warnings, failedSections, historyIdMap);
+            }).then(function (outcome) {
+              restored.aiChats = outcome.summary;
+              if (outcome.ok) succeededSections.push("aiChats");
             });
           }
           if (sectionKey === "preferences") {
-            var prefResult = restorePreferencesSection(parsed.sections.preferences, resolved, warnings);
-            appliedPreferences = prefResult.appliedPreferences;
-            restored.preferences = prefResult.summary;
+            var prefOutcome = restorePreferencesSection(parsed.sections.preferences, resolved, warnings, failedSections);
+            appliedPreferences = prefOutcome.appliedPreferences;
+            restored.preferences = prefOutcome.summary;
+            if (prefOutcome.ok) succeededSections.push("preferences");
             return undefined;
           }
           return undefined;
@@ -1659,9 +2071,17 @@
       });
 
       return chain.then(function () {
+        var status = "ok";
+        if (failedSections.length > 0) {
+          status = (targetSections.length > 0 && succeededSections.length === 0) ? "failed" : "partial";
+        }
         return {
+          status: status,
           restored: restored,
           appliedPreferences: appliedPreferences,
+          succeededSections: succeededSections,
+          failedSections: failedSections,
+          historyIdMap: historyIdMap,
           warnings: warnings
         };
       });

@@ -1168,3 +1168,427 @@ test("loads cleanly as a pure browser UMD global without CommonJS and rejects fo
   assert.equal(env.adapters.themeApi.getTheme(), "celestial");
 });
 
+test("Fix #1: rejects incomplete/missing-timestamp AI conversations and never lets unverified or equal timestamps overwrite local chats", async function () {
+  var env = createTestEnvironment();
+  var a = env.adapters;
+
+  await a.aiChatStore.createConversation({
+    id: "chat-keep",
+    title: "Local important conversation",
+    createdAt: 1700000000000,
+    updatedAt: 1700000005000,
+    pinned: true,
+    messages: [{ id: "m-local", role: "user", content: "Do not wipe me", createdAt: 1700000005000 }]
+  });
+
+  // Incomplete entries from a 2020 backup (missing timestamps / messages / zero timestamps) must fail closed.
+  var incompleteConversations = [
+    { id: "chat-keep" },
+    { id: "chat-keep", messages: [] },
+    { id: "chat-keep", createdAt: 1577836800000, messages: [] },
+    { id: "chat-keep", updatedAt: 1577836800000, messages: [] },
+    { id: "chat-keep", createdAt: 1577836800000, updatedAt: 1577836800000 },
+    { id: "chat-keep", createdAt: 0, updatedAt: 1577836800000, messages: [] },
+    { id: "chat-keep", createdAt: 1577836800000, updatedAt: 0, messages: [] },
+    { id: "chat-keep", createdAt: 1577836800000, updatedAt: "", messages: [] },
+    { title: "No id", createdAt: 1577836800000, updatedAt: 1577836800000, messages: [] }
+  ];
+
+  for (var i = 0; i < incompleteConversations.length; i += 1) {
+    var raw = JSON.stringify({
+      format: fullBackup.BACKUP_FORMAT,
+      version: 1,
+      exportedAt: "2020-01-01T00:00:00.000Z",
+      sections: {
+        aiChats: {
+          format: "quareia-ai-chats-backup",
+          version: 1,
+          exportedAt: 1577836800000,
+          conversations: [incompleteConversations[i]]
+        }
+      }
+    });
+    assert.throws(function () { fullBackup.parseBackup(raw, a); }, /createdAt|updatedAt|messages|id/i);
+    await assert.rejects(fullBackup.restoreBackup(raw, ["aiChats"], a));
+  }
+
+  // Local conversation must be completely untouched.
+  var afterBad = await a.aiChatStore.getConversation("chat-keep");
+  assert.equal(afterBad.messages.length, 1);
+  assert.equal(afterBad.messages[0].content, "Do not wipe me");
+  assert.equal(afterBad.pinned, true);
+
+  // Equal timestamp (e.g. local was pinned/edited without touching updatedAt, or empty messages) must keep local intact.
+  var equalTsRaw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T06:00:00.000Z",
+    sections: {
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000005000,
+        conversations: [{
+          id: "chat-keep",
+          title: "Unpinned backup with 0 messages",
+          createdAt: 1700000000000,
+          updatedAt: 1700000005000,
+          pinned: false,
+          messages: []
+        }]
+      }
+    }
+  });
+  var equalRes = await fullBackup.restoreBackup(equalTsRaw, ["aiChats"], a);
+  assert.equal(equalRes.status, "ok");
+  assert.deepEqual(equalRes.restored.aiChats, { imported: 0, updated: 0, skipped: 1 });
+  var afterEqual = await a.aiChatStore.getConversation("chat-keep");
+  assert.equal(afterEqual.messages.length, 1);
+  assert.equal(afterEqual.pinned, true);
+  assert.equal(afterEqual.title, "Local important conversation");
+
+  // Strictly newer proven timestamp updates cleanly.
+  var newerTsRaw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T06:00:00.000Z",
+    sections: {
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000010000,
+        conversations: [{
+          id: "chat-keep",
+          title: "Legitimately newer chat",
+          createdAt: 1700000000000,
+          updatedAt: 1700000010000,
+          pinned: true,
+          messages: [
+            { id: "m-local", role: "user", content: "Do not wipe me", createdAt: 1700000005000 },
+            { id: "m-reply", role: "assistant", content: "Newer assistant reply", createdAt: 1700000010000 }
+          ]
+        }]
+      }
+    }
+  });
+  var newerRes = await fullBackup.restoreBackup(newerTsRaw, ["aiChats"], a);
+  assert.equal(newerRes.status, "ok");
+  assert.deepEqual(newerRes.restored.aiChats, { imported: 0, updated: 1, skipped: 0 });
+  var afterNewer = await a.aiChatStore.getConversation("chat-keep");
+  assert.equal(afterNewer.title, "Legitimately newer chat");
+  assert.equal(afterNewer.messages.length, 2);
+});
+
+test("Fix #2 & Fix #4: remapped history IDs rewrite restored AI chat references and retrying ID-conflicting backup does not duplicate records", async function () {
+  var env = createTestEnvironment();
+  var a = env.adapters;
+
+  // Local device has reading id="shared" with Card A (major-00 / Fool).
+  await a.historyStore.saveRecord(makePresetRecord("shared", "2026-11-01T10:00:00.000Z", {
+    question: "Local Fool reading"
+  }));
+
+  // Backup also has id="shared" with Card B (major-01 / Magician), plus a non-colliding reading "unique-2",
+  // and an AI chat linked to both "shared" and "unique-2" across readingIds, readingSnapshots, and interpretedReadingIds.
+  var backupReadingShared = makePresetRecord("shared", "2026-11-02T12:00:00.000Z", {
+    question: "Backup Magician reading",
+    cards: [{
+      cardId: "major-01",
+      cardNumber: "1",
+      cardName: "魔法师",
+      orientation: "upright",
+      slotIndex: 0,
+      positionNumber: 1,
+      positionName: "当下 · Present",
+      layer: null,
+      arcana: "major",
+      suit: ""
+    }]
+  });
+  var backupReadingUnique = makePresetRecord("unique-2", "2026-11-03T12:00:00.000Z", {
+    question: "Unique reading"
+  });
+
+  var rawBackup = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T08:00:00.000Z",
+    sections: {
+      history: historyRecords.createExportEnvelope([backupReadingShared, backupReadingUnique], "2026-11-28T08:00:00.000Z"),
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000020000,
+        conversations: [{
+          id: "chat-linked",
+          title: "Magician follow-up",
+          createdAt: 1700000010000,
+          updatedAt: 1700000020000,
+          readingIds: ["shared", "unique-2"],
+          readingSnapshots: [
+            {
+              id: "shared",
+              layoutMode: "preset",
+              deckType: "tarot",
+              spreadId: "three-card-horizontal",
+              spreadName: "三张牌",
+              positionCount: 1,
+              createdAt: 1700000005000,
+              question: "Backup Magician reading",
+              cards: [{ slotIndex: 0, positionNumber: 1, cardId: "major-01", cardName: "魔法师", orientation: "upright" }]
+            },
+            {
+              id: "unique-2",
+              layoutMode: "preset",
+              deckType: "tarot",
+              spreadId: "three-card-horizontal",
+              spreadName: "三张牌",
+              positionCount: 1,
+              createdAt: 1700000006000,
+              question: "Unique reading",
+              cards: [{ slotIndex: 0, positionNumber: 1, cardId: "major-00", cardName: "愚者", orientation: "upright" }]
+            }
+          ],
+          messages: [
+            { id: "m1", role: "user", content: "Analyze both spreads", createdAt: 1700000011000 },
+            {
+              id: "m2",
+              role: "assistant",
+              content: "Magician directs focus.",
+              createdAt: 1700000012000,
+              interpretedReadingIds: ["shared", "unique-2"]
+            }
+          ]
+        }]
+      }
+    }
+  });
+
+  var parsed = fullBackup.parseBackup(rawBackup, a);
+
+  // First restore: "shared" remaps to a fresh ID, AI chat links must follow the remapped ID.
+  var firstRes = await fullBackup.restoreBackup(parsed, ["history", "aiChats"], a);
+  assert.equal(firstRes.status, "ok");
+  assert.deepEqual(firstRes.succeededSections, ["history", "aiChats"]);
+  assert.deepEqual(firstRes.failedSections, []);
+  assert.deepEqual(firstRes.restored.history, { imported: 2, remapped: 1, skipped: 0 });
+  assert.deepEqual(firstRes.restored.aiChats, { imported: 1, updated: 0, skipped: 0 });
+
+  var remappedId = firstRes.historyIdMap.shared;
+  assert.ok(typeof remappedId === "string" && remappedId.length > 0 && remappedId !== "shared");
+  assert.deepEqual(Object.keys(firstRes.historyIdMap), ["shared"]);
+
+  // Local "shared" is untouched; remappedId holds Magician; total history count is 3.
+  assert.equal((await a.historyStore.listRecords()).length, 3);
+  assert.equal((await a.historyStore.getRecord("shared")).question, "Local Fool reading");
+  assert.equal((await a.historyStore.getRecord(remappedId)).question, "Backup Magician reading");
+  assert.equal((await a.historyStore.getRecord(remappedId)).cards[0].cardId, "major-01");
+
+  // Restored AI chat must reference remappedId (NOT local "shared") across all reference locations.
+  var chat = await a.aiChatStore.getConversation("chat-linked");
+  assert.deepEqual(chat.readingIds, [remappedId, "unique-2"]);
+  assert.deepEqual(chat.readingSnapshots.map(function (s) { return s.id; }), [remappedId, "unique-2"]);
+  assert.deepEqual(chat.messages[1].interpretedReadingIds, [remappedId, "unique-2"]);
+
+  // Parsed object must not have been mutated in place.
+  assert.deepEqual(parsed.sections.aiChats.conversations[0].readingIds, ["shared", "unique-2"]);
+
+  // Fix #4: Retrying the EXACT same ID-conflicting backup must NOT create a duplicate remapped copy!
+  var retryRes = await fullBackup.restoreBackup(parsed, ["history", "aiChats"], a);
+  assert.equal(retryRes.status, "ok");
+  assert.deepEqual(retryRes.restored.history, { imported: 0, remapped: 0, skipped: 2 });
+  assert.deepEqual(retryRes.restored.aiChats, { imported: 0, updated: 0, skipped: 1 });
+  assert.equal((await a.historyStore.listRecords()).length, 3, "No duplicate remapped record on retry");
+  assert.deepEqual(retryRes.historyIdMap, { shared: remappedId }, "historyIdMap must still point to existing remapped copy on retry");
+
+  // Partial-failure retry: if AI chat failed on attempt 1 and user retries ONLY ["aiChats"], it still remaps to remappedId!
+  await a.aiChatStore.deleteConversation("chat-linked");
+  var aiRetryOnly = await fullBackup.restoreBackup(parsed, ["aiChats"], a);
+  assert.equal(aiRetryOnly.status, "ok");
+  assert.deepEqual(aiRetryOnly.historyIdMap, { shared: remappedId });
+  var chatAfterAiOnlyRetry = await a.aiChatStore.getConversation("chat-linked");
+  assert.deepEqual(chatAfterAiOnlyRetry.readingIds, [remappedId, "unique-2"]);
+  assert.deepEqual(chatAfterAiOnlyRetry.readingSnapshots.map(function (s) { return s.id; }), [remappedId, "unique-2"]);
+  assert.deepEqual(chatAfterAiOnlyRetry.messages[1].interpretedReadingIds, [remappedId, "unique-2"]);
+});
+
+test("Fix #3: collectBackup rejects un-importable oversized exports with structured export_too_large errors", async function () {
+  // Repro A: 1,150 valid history records exceeding DivinationHistoryRecords.MAX_IMPORT_BYTES (5 MiB)
+  var manyRecords = [];
+  var longQuestion = "Q".repeat(1500);
+  var longNote = "A".repeat(3800);
+  var baseTs = Date.parse("2026-01-01T00:00:00.000Z");
+  for (var i = 0; i < 1150; i += 1) {
+    manyRecords.push(makePresetRecord("rec-" + i, new Date(baseTs + i * 60000).toISOString(), {
+      question: longQuestion + "-" + i,
+      reflection: longNote
+    }));
+  }
+  var envHistoryTooBig = createTestEnvironment();
+  envHistoryTooBig.adapters.historyStore = {
+    listRecords: async function () { return manyRecords; },
+    importRecords: async function () { return { importedCount: 0, remappedCount: 0, records: [] }; }
+  };
+
+  await assert.rejects(
+    fullBackup.collectBackup(envHistoryTooBig.adapters, { exportedAt: "2026-11-28T10:00:00.000Z" }),
+    function (err) {
+      assert.equal(err.code, "export_too_large");
+      assert.equal(err.maxBytes, fullBackup.MAX_BACKUP_BYTES);
+      assert.ok(typeof err.totalBytes === "number" && err.totalBytes > historyRecords.MAX_IMPORT_BYTES);
+      assert.ok(Array.isArray(err.oversizedSections));
+      var histEntry = err.oversizedSections.find(function (s) { return s.section === "history"; });
+      assert.ok(histEntry, "oversizedSections must identify history");
+      assert.equal(histEntry.maxBytes, historyRecords.MAX_IMPORT_BYTES);
+      assert.ok(histEntry.bytes > historyRecords.MAX_IMPORT_BYTES);
+      assert.match(err.message, /history/i);
+      return true;
+    }
+  );
+
+  // Repro B: Huge card notes exceeding MAX_BACKUP_BYTES (16 MiB)
+  var hugeText = "X".repeat(16 * 1024 * 1024 + 4096);
+  var envNotesTooBig = createTestEnvironment();
+  envNotesTooBig.adapters.cardNotesStore = {
+    exportBackup: async function () {
+      return JSON.stringify({
+        format: "divination-card-notes",
+        version: 1,
+        notes: [{ deckType: "tarot", cardId: "major-00", text: hugeText }]
+      });
+    }
+  };
+  await assert.rejects(
+    fullBackup.collectBackup(envNotesTooBig.adapters, { exportedAt: "2026-11-28T10:00:00.000Z" }),
+    function (err) {
+      assert.equal(err.code, "export_too_large");
+      assert.ok(err.totalBytes > fullBackup.MAX_BACKUP_BYTES);
+      assert.equal(err.maxBytes, fullBackup.MAX_BACKUP_BYTES);
+      assert.ok(err.oversizedSections.some(function (s) { return s.section === "cardNotes"; }));
+      assert.ok(err.oversizedSections.some(function (s) { return s.section === "total"; }));
+      return true;
+    }
+  );
+
+  // Repro C: Oversized AI chats (> 8 MiB) must throw export_too_large rather than silently becoming unavailable
+  var hugeChatText = "Y".repeat(aiChatStoreApi.MAX_BACKUP_BYTES + 2048);
+  var envAiTooBig = createTestEnvironment();
+  envAiTooBig.adapters.aiChatStore = {
+    exportBackup: async function () {
+      return {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000000000,
+        conversations: [{
+          id: "big-chat",
+          title: "Huge chat",
+          createdAt: 1700000000000,
+          updatedAt: 1700000000000,
+          messages: [{ id: "m1", role: "user", content: hugeChatText, createdAt: 1700000000000 }]
+        }]
+      };
+    }
+  };
+  await assert.rejects(
+    fullBackup.collectBackup(envAiTooBig.adapters, { exportedAt: "2026-11-28T10:00:00.000Z" }),
+    function (err) {
+      assert.equal(err.code, "export_too_large");
+      var aiEntry = err.oversizedSections.find(function (s) { return s.section === "aiChats"; });
+      assert.ok(aiEntry, "oversizedSections must identify aiChats");
+      assert.equal(aiEntry.maxBytes, aiChatStoreApi.MAX_BACKUP_BYTES);
+      assert.ok(aiEntry.bytes > aiChatStoreApi.MAX_BACKUP_BYTES);
+      return true;
+    }
+  );
+
+  // Repro D: Combined sections individually within limits, but total exceeds 16 MiB
+  var envTotalTooBig = createTestEnvironment();
+  envTotalTooBig.adapters.cardNotesStore = {
+    exportBackup: async function () {
+      return JSON.stringify({
+        format: "divination-card-notes",
+        version: 1,
+        notes: [
+          { deckType: "tarot", cardId: "major-00", text: "N".repeat(10 * 1024 * 1024) }
+        ]
+      });
+    }
+  };
+  envTotalTooBig.adapters.aiChatStore = {
+    exportBackup: async function () {
+      return {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000000000,
+        conversations: [{
+          id: "med-chat",
+          title: "7 MiB chat",
+          createdAt: 1700000000000,
+          updatedAt: 1700000000000,
+          messages: [{ id: "m1", role: "user", content: "C".repeat(7 * 1024 * 1024), createdAt: 1700000000000 }]
+        }]
+      };
+    }
+  };
+  await assert.rejects(
+    fullBackup.collectBackup(envTotalTooBig.adapters, { exportedAt: "2026-11-28T10:00:00.000Z" }),
+    function (err) {
+      assert.equal(err.code, "export_too_large");
+      assert.ok(err.totalBytes > fullBackup.MAX_BACKUP_BYTES);
+      assert.deepEqual(err.oversizedSections.map(function (s) { return s.section; }), ["total"]);
+      return true;
+    }
+  );
+});
+
+test("Shared outcome contract: restoreBackup returns status ok | partial | failed with succeededSections, failedSections, and historyIdMap", async function () {
+  var raw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T11:30:00.000Z",
+    sections: {
+      history: historyRecords.createExportEnvelope([
+        makePresetRecord("h-1", "2026-11-01T00:00:00.000Z")
+      ], "2026-11-28T11:30:00.000Z"),
+      cardNotes: {
+        format: "divination-card-notes",
+        version: 1,
+        notes: [{ deckType: "tarot", cardId: "major-00", text: "Note 1" }]
+      },
+      preferences: { theme: "parchment", locale: "en" }
+    }
+  });
+
+  // 1. All-failed: selecting only cardNotes when notes store refuses to open
+  var envAllFail = createTestEnvironment();
+  envAllFail.adapters.cardNotesStore = {
+    importBackup: async function () {
+      var err = new Error("IndexedDB blocked");
+      err.code = "idb_blocked";
+      throw err;
+    }
+  };
+  var allFailRes = await fullBackup.restoreBackup(raw, ["cardNotes"], envAllFail.adapters);
+  assert.equal(allFailRes.status, "failed");
+  assert.deepEqual(allFailRes.succeededSections, []);
+  assert.equal(allFailRes.failedSections.length, 1);
+  assert.equal(allFailRes.failedSections[0].section, "cardNotes");
+  assert.equal(allFailRes.failedSections[0].code, "idb_blocked");
+  assert.match(allFailRes.failedSections[0].message, /IndexedDB blocked/);
+  assert.deepEqual(allFailRes.historyIdMap, {});
+
+  // 2. Partial-failed: history + preferences succeed, cardNotes fails
+  var partialRes = await fullBackup.restoreBackup(raw, ["history", "cardNotes", "preferences"], envAllFail.adapters);
+  assert.equal(partialRes.status, "partial");
+  assert.deepEqual(partialRes.succeededSections, ["history", "preferences"]);
+  assert.equal(partialRes.failedSections.length, 1);
+  assert.equal(partialRes.failedSections[0].section, "cardNotes");
+
+  // 3. All-ok on empty selection
+  var emptySelRes = await fullBackup.restoreBackup(raw, [], envAllFail.adapters);
+  assert.equal(emptySelRes.status, "ok");
+  assert.deepEqual(emptySelRes.succeededSections, []);
+  assert.deepEqual(emptySelRes.failedSections, []);
+  assert.deepEqual(emptySelRes.historyIdMap, {});
+});
+
