@@ -496,3 +496,280 @@ test("full-backup UI delegates custom spreads to live controller, refreshes card
   assert.equal(byId.menuToggle.focusedCount, 1);
   assert.equal(byId.fullBackupOpenBtn.focusedCount, 0);
 });
+
+test("full-backup UI keeps preview open on all-failed/partial restore, supports retry, and blocks oversize exports with section details", async () => {
+  function FakeElement(tag, id) {
+    this.tagName = tag.toUpperCase();
+    this.id = id || "";
+    this.className = "";
+    this.textContent = "";
+    this.hidden = false;
+    this.disabled = false;
+    this.checked = false;
+    this.type = "";
+    this.value = "";
+    this.open = false;
+    this.isConnected = true;
+    this.offsetParent = {};
+    this.dataset = {};
+    this.children = [];
+    this.listeners = Object.create(null);
+    this.attributes = Object.create(null);
+    const self = this;
+    this.classList = {
+      contains: function (c) { return self.className.split(/\s+/).filter(Boolean).includes(c); },
+      add: function (c) { if (!this.contains(c)) self.className = (self.className + " " + c).trim(); },
+      remove: function (c) { self.className = self.className.split(/\s+/).filter(function (x) { return x && x !== c; }).join(" "); },
+      toggle: function (c, force) {
+        var on = typeof force === "boolean" ? force : !this.contains(c);
+        if (on) this.add(c); else this.remove(c);
+        return on;
+      }
+    };
+  }
+  FakeElement.prototype.appendChild = function (child) {
+    if (child && child.isFragment) {
+      child.children.forEach(c => this.children.push(c));
+      child.children = [];
+      return child;
+    }
+    this.children.push(child);
+    return child;
+  };
+  FakeElement.prototype.replaceChildren = function (...nodes) {
+    this.children = [];
+    nodes.forEach(n => this.appendChild(n));
+  };
+  FakeElement.prototype.setAttribute = function (k, v) { this.attributes[k] = String(v); };
+  FakeElement.prototype.getAttribute = function (k) { return this.attributes[k] || null; };
+  FakeElement.prototype.removeAttribute = function (k) { delete this.attributes[k]; };
+  FakeElement.prototype.hasAttribute = function (k) { return Object.prototype.hasOwnProperty.call(this.attributes, k); };
+  FakeElement.prototype.addEventListener = function (type, fn) {
+    (this.listeners[type] || (this.listeners[type] = [])).push(fn);
+  };
+  FakeElement.prototype.dispatch = function (type, event = {}) {
+    event.currentTarget = this;
+    event.target = event.target || this;
+    event.preventDefault = event.preventDefault || (() => {});
+    event.stopPropagation = event.stopPropagation || (() => {});
+    (this.listeners[type] || []).slice().forEach(fn => fn(event));
+  };
+  FakeElement.prototype.click = function () { this.dispatch("click"); };
+  FakeElement.prototype.focus = function () {};
+  FakeElement.prototype.remove = function () {};
+  FakeElement.prototype.showModal = function () { this.open = true; };
+  FakeElement.prototype.close = function () { this.open = false; };
+  Object.defineProperty(FakeElement.prototype, "childElementCount", {
+    get() { return this.children.length; }
+  });
+
+  const ids = [
+    "fullBackupOpenBtn", "fullBackupDialog", "fullBackupCloseBtn", "fullBackupDialogTitle",
+    "fullBackupStatus", "fullBackupRefreshBtn", "fullBackupLocalCounts", "fullBackupUnavailable",
+    "fullBackupExportBtn", "fullBackupChooseBtn", "fullBackupImportInput", "fullBackupPreview",
+    "fullBackupPreviewFile", "fullBackupPreviewTime", "fullBackupPreviewList",
+    "fullBackupConfirmBtn", "fullBackupCancelBtn", "fullBackupSummary", "fullBackupSummaryList"
+  ];
+  const byId = Object.create(null);
+  ids.forEach(id => { byId[id] = new FakeElement("div", id); });
+  byId.fullBackupPreview.hidden = true;
+  byId.fullBackupSummary.hidden = true;
+  byId.fullBackupUnavailable.hidden = true;
+
+  const doc = {
+    readyState: "complete",
+    body: new FakeElement("body"),
+    getElementById: (id) => byId[id] || null,
+    createElement: (tag) => new FakeElement(tag),
+    createDocumentFragment: () => Object.assign(new FakeElement("fragment"), { isFragment: true }),
+    addEventListener: () => {}
+  };
+
+  let blobCalls = 0;
+  let nativeSaveCalls = 0;
+  let cardNotesRefreshCount = 0;
+  let restoreMode = "allFailed";
+  const restoreLog = [];
+  const dispatchedEvents = [];
+
+  const fakeCore = {
+    SECTION_KEYS: ["history", "cardNotes", "customSpreads", "aiChats", "preferences"],
+    MAX_BACKUP_BYTES: 16 * 1024 * 1024,
+    async inspectLocalCounts() {
+      return { history: 0, cardNotes: 0, customSpreads: 0, aiChats: 0, preferences: 2, unavailable: [] };
+    },
+    async collectBackup() {
+      const err = new Error("history exceeds 5 MiB limit");
+      err.code = "export_too_large";
+      err.totalBytes = 6.2 * 1024 * 1024;
+      err.maxBytes = 16 * 1024 * 1024;
+      err.oversizedSections = [
+        { section: "history", bytes: Math.round(6.2 * 1024 * 1024), maxBytes: 5 * 1024 * 1024 }
+      ];
+      throw err;
+    },
+    parseBackup() {
+      return {
+        format: "quareia-full-backup",
+        version: 1,
+        exportedAt: "2026-11-28T06:00:00.000Z",
+        sections: {
+          history: { records: [{}] },
+          cardNotes: { notes: [{}] }
+        },
+        counts: { history: 1, cardNotes: 1, customSpreads: 0, aiChats: 0, preferences: 0 },
+        availableSections: ["history", "cardNotes"]
+      };
+    },
+    async restoreBackup(_parsed, selected) {
+      restoreLog.push(selected.slice());
+      if (restoreMode === "allFailed") {
+        return {
+          status: "failed",
+          succeededSections: [],
+          failedSections: [{ section: "cardNotes", code: "storage_error", message: "cardNotes: IndexedDB refused open" }],
+          restored: { cardNotes: { imported: 0, skipped: 0 } },
+          appliedPreferences: {},
+          warnings: ["cardNotes: IndexedDB refused open"]
+        };
+      }
+      if (restoreMode === "partial") {
+        return {
+          status: "partial",
+          succeededSections: ["history"],
+          failedSections: [{ section: "cardNotes", code: "storage_error", message: "cardNotes: Quota exceeded" }],
+          restored: {
+            history: { imported: 1, remapped: 0, skipped: 0 },
+            cardNotes: { imported: 0, skipped: 0 }
+          },
+          appliedPreferences: {},
+          warnings: ["cardNotes: Quota exceeded"]
+        };
+      }
+      return {
+        status: "ok",
+        succeededSections: selected.slice(),
+        failedSections: [],
+        restored: {
+          history: { imported: 1, remapped: 0, skipped: 0 },
+          cardNotes: { imported: 1, skipped: 0 }
+        },
+        appliedPreferences: {},
+        warnings: []
+      };
+    }
+  };
+
+  const i18n = require("../js/i18n.js");
+  i18n.setLocale("zh-CN");
+
+  const context = {
+    document: doc,
+    setTimeout,
+    addEventListener: () => {},
+    dispatchEvent: (ev) => { dispatchedEvents.push(ev); },
+    CustomEvent: function (type, init) { this.type = type; this.detail = init && init.detail; },
+    Blob: function () { blobCalls += 1; },
+    URL: { createObjectURL: () => { blobCalls += 1; return "blob:x"; }, revokeObjectURL: () => {} },
+    DivinationI18n: i18n,
+    DivinationTheme: { getTheme: () => "celestial" },
+    DivinationCardNotes: { refresh: async () => { cardNotesRefreshCount += 1; } },
+    DivinationFullBackup: fakeCore,
+    androidHistoryExport: { save: () => { nativeSaveCalls += 1; return true; } },
+    DivinationNativeFileExport: { save: () => { nativeSaveCalls += 1; return true; } }
+  };
+  vm.runInNewContext(read("js/full-backup-ui.js"), context, { filename: "full-backup-ui.js" });
+
+  const ui = context.DivinationFullBackupUi;
+  const settle = () => new Promise(r => setImmediate(r));
+  const getCheckboxes = () => byId.fullBackupPreviewList.children.map(li => li.children[0].children[0]);
+
+  byId.fullBackupOpenBtn.click();
+  await settle();
+
+  // 1. export_too_large blocks both Web Blob download and Android native picker, naming the oversized module.
+  byId.fullBackupExportBtn.click();
+  await settle();
+  assert.equal(blobCalls, 0);
+  assert.equal(nativeSaveCalls, 0);
+  assert.equal(byId.fullBackupStatus.classList.contains("is-error"), true);
+  assert.equal(byId.fullBackupStatus.classList.contains("is-success"), false);
+  assert.match(byId.fullBackupStatus.textContent, /占卜历史/);
+  assert.match(byId.fullBackupStatus.textContent, /6\.20 MiB/);
+  assert.match(byId.fullBackupStatus.textContent, /5\.00 MiB/);
+  // Switching language re-localizes the oversize error message cleanly.
+  i18n.setLocale("en");
+  ui.refreshLanguage();
+  assert.match(byId.fullBackupStatus.textContent, /Reading History/);
+  assert.match(byId.fullBackupStatus.textContent, /6\.20 MiB/);
+  i18n.setLocale("zh-CN");
+  ui.refreshLanguage();
+
+  // 2. All-failed restore: select only cardNotes -> error style, preview stays open & retryable.
+  byId.fullBackupImportInput.files = [{ name: "backup.json", size: 120, text: async () => "{}" }];
+  byId.fullBackupImportInput.dispatch("change");
+  await settle();
+  let boxes = getCheckboxes();
+  assert.equal(boxes.length, 2);
+  boxes[0].checked = false;
+  boxes[0].dispatch("change");
+  assert.equal(boxes[1].dataset.backupSection, "cardNotes");
+
+  restoreMode = "allFailed";
+  byId.fullBackupConfirmBtn.click();
+  await settle();
+  assert.deepEqual(restoreLog, [["cardNotes"]]);
+  assert.equal(byId.fullBackupStatus.classList.contains("is-error"), true);
+  assert.equal(byId.fullBackupStatus.classList.contains("is-success"), false);
+  assert.equal(byId.fullBackupPreview.hidden, false, "preview must stay open on all-failed restore");
+  assert.equal(byId.fullBackupConfirmBtn.disabled, false, "confirm button must stay enabled for retry");
+  assert.equal(byId.fullBackupSummary.hidden, false);
+  assert.equal(byId.fullBackupSummary.classList.contains("is-error"), true);
+  assert.equal(byId.fullBackupSummaryList.children.length, 1, "no duplicate warning line when failure already shown");
+  assert.match(byId.fullBackupSummaryList.children[0].textContent, /卡牌笔记：恢复失败.*IndexedDB refused open/);
+  assert.equal(cardNotesRefreshCount, 0, "failed cardNotes must not trigger refresh");
+  assert.equal(dispatchedEvents.length, 0, "all-failed restore must not emit restored event");
+
+  // Retry succeeds without re-picking file.
+  restoreMode = "ok";
+  byId.fullBackupConfirmBtn.click();
+  await settle();
+  assert.deepEqual(restoreLog, [["cardNotes"], ["cardNotes"]]);
+  assert.equal(byId.fullBackupStatus.classList.contains("is-success"), true);
+  assert.equal(byId.fullBackupStatus.classList.contains("is-error"), false);
+  assert.equal(byId.fullBackupPreview.hidden, true);
+  assert.equal(byId.fullBackupSummary.classList.contains("is-error"), false);
+  assert.equal(cardNotesRefreshCount, 1);
+
+  // 3. Partial-failed restore: history succeeds, cardNotes fails -> ONLY cardNotes stays checked!
+  byId.fullBackupImportInput.files = [{ name: "backup.json", size: 120, text: async () => "{}" }];
+  byId.fullBackupImportInput.dispatch("change");
+  await settle();
+  restoreMode = "partial";
+  byId.fullBackupConfirmBtn.click();
+  await settle();
+  assert.deepEqual(restoreLog[2], ["history", "cardNotes"]);
+  assert.equal(byId.fullBackupStatus.classList.contains("is-error"), true);
+  assert.equal(byId.fullBackupStatus.classList.contains("is-success"), false);
+  assert.match(byId.fullBackupStatus.textContent, /部分恢复完成.*1.*1.*卡牌笔记/);
+  assert.equal(byId.fullBackupPreview.hidden, false, "preview must stay open on partial restore");
+  assert.equal(byId.fullBackupSummary.classList.contains("is-error"), true);
+  assert.equal(byId.fullBackupSummaryList.children.length, 2);
+  assert.match(byId.fullBackupSummaryList.children[0].textContent, /占卜历史：导入 1 条/);
+  assert.match(byId.fullBackupSummaryList.children[1].textContent, /卡牌笔记：恢复失败.*Quota exceeded/);
+
+  boxes = getCheckboxes();
+  assert.equal(boxes[0].dataset.backupSection, "history");
+  assert.equal(boxes[0].checked, false, "succeeded section must be unchecked after partial restore");
+  assert.equal(boxes[1].dataset.backupSection, "cardNotes");
+  assert.equal(boxes[1].checked, true, "failed section must stay checked for one-click retry");
+
+  // One-click retry only retries cardNotes and clears preview once complete.
+  restoreMode = "ok";
+  byId.fullBackupConfirmBtn.click();
+  await settle();
+  assert.deepEqual(restoreLog[3], ["cardNotes"]);
+  assert.equal(byId.fullBackupStatus.classList.contains("is-success"), true);
+  assert.equal(byId.fullBackupPreview.hidden, true);
+  assert.equal(byId.fullBackupSummary.classList.contains("is-error"), false);
+});

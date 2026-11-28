@@ -233,9 +233,122 @@
     function setStatus(key, values, tone) {
       statusState = { key: key || "", values: values || null, tone: tone || "" };
       if (!statusEl) return;
-      statusEl.textContent = key ? t(key, values) : "";
+      var resolvedValues = typeof values === "function" ? values() : values;
+      statusEl.textContent = key ? t(key, resolvedValues) : "";
       statusEl.classList.toggle("is-success", tone === "success");
       statusEl.classList.toggle("is-error", tone === "error");
+    }
+
+    function formatMiB(bytes) {
+      if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes < 0) return "?";
+      var mib = bytes / (1024 * 1024);
+      return mib >= 10 ? mib.toFixed(1) : mib.toFixed(2);
+    }
+
+    function sectionDisplayName(sectionKey) {
+      if (sectionKey === "total") return t("fullBackup.section.total");
+      return t("fullBackup.section." + sectionKey);
+    }
+
+    function formatModuleList(sectionKeys) {
+      var separator = getLocale() === "en" ? ", " : "、";
+      return sectionKeys.map(sectionDisplayName).join(separator);
+    }
+
+    function formatOversizedDetails(error) {
+      var items = Array.isArray(error && error.oversizedSections) ? error.oversizedSections : [];
+      var separator = getLocale() === "en" ? ", " : "、";
+      if (items.length > 0) {
+        return items.map(function (entry) {
+          var key = entry && typeof entry.section === "string" ? entry.section : "total";
+          var name = sectionDisplayName(key);
+          if (entry && typeof entry.bytes === "number" && typeof entry.maxBytes === "number") {
+            return t("fullBackup.oversizeItem", {
+              section: name,
+              actual: formatMiB(entry.bytes),
+              limit: formatMiB(entry.maxBytes)
+            });
+          }
+          return name;
+        }).join(separator);
+      }
+      if (error && typeof error.totalBytes === "number" && typeof error.maxBytes === "number") {
+        return t("fullBackup.oversizeItem", {
+          section: sectionDisplayName("total"),
+          actual: formatMiB(error.totalBytes),
+          limit: formatMiB(error.maxBytes)
+        });
+      }
+      return "";
+    }
+
+    function stripSectionPrefix(sectionKey, message) {
+      var text = String(message || "").trim();
+      if (!text) return "";
+      var prefix = sectionKey + ":";
+      if (text.indexOf(prefix) === 0) {
+        return text.slice(prefix.length).trim();
+      }
+      return text;
+    }
+
+    function resolveRestoreStatus(outcome, selectedSections) {
+      var failedList = [];
+      var failedBySection = Object.create(null);
+      if (outcome && Array.isArray(outcome.failedSections)) {
+        outcome.failedSections.forEach(function (entry) {
+          if (!entry || typeof entry.section !== "string") return;
+          if (!failedBySection[entry.section]) {
+            var normalized = {
+              section: entry.section,
+              code: typeof entry.code === "string" ? entry.code : "",
+              message: typeof entry.message === "string" ? entry.message : ""
+            };
+            failedBySection[entry.section] = normalized;
+            failedList.push(normalized);
+          }
+        });
+      }
+
+      var hasExplicitStatus = Boolean(
+        outcome && (outcome.status === "ok" || outcome.status === "partial" || outcome.status === "failed")
+      );
+      if (!hasExplicitStatus && failedList.length === 0 && outcome && Array.isArray(outcome.warnings)) {
+        outcome.warnings.forEach(function (warning) {
+          var match = String(warning).match(/^(history|cardNotes|customSpreads|aiChats|preferences)\s*:\s*(.*)$/);
+          if (match && selectedSections.indexOf(match[1]) !== -1 && !failedBySection[match[1]]) {
+            var fallbackEntry = {
+              section: match[1],
+              code: "warning",
+              message: match[2] || String(warning)
+            };
+            failedBySection[match[1]] = fallbackEntry;
+            failedList.push(fallbackEntry);
+          }
+        });
+      }
+
+      var succeededList = outcome && Array.isArray(outcome.succeededSections)
+        ? outcome.succeededSections.filter(function (s) { return !failedBySection[s]; })
+        : selectedSections.filter(function (s) { return !failedBySection[s]; });
+
+      var status;
+      if (hasExplicitStatus) {
+        status = outcome.status;
+      } else if (failedList.length === 0) {
+        status = "ok";
+      } else if (selectedSections.length > 0 && succeededList.length === 0) {
+        status = "failed";
+      } else {
+        status = "partial";
+      }
+
+      return {
+        status: status,
+        succeededSections: succeededList,
+        failedSections: failedList,
+        failedBySection: failedBySection
+      };
     }
 
     function setBusy(nextBusy) {
@@ -374,17 +487,17 @@
       }
     }
 
-    async function refreshCounts() {
+    async function refreshCounts(preserveStatus) {
       var core = getCore();
       if (!core || typeof core.inspectLocalCounts !== "function") return null;
-      if (!statusState.key) setStatus("fullBackup.loadingCounts", null, "");
+      if (!preserveStatus && !statusState.key) setStatus("fullBackup.loadingCounts", null, "");
       try {
         lastLocalCounts = await core.inspectLocalCounts(getAdapters());
         renderLocalCounts();
-        if (statusState.key === "fullBackup.loadingCounts") setStatus("", null, "");
+        if (!preserveStatus && statusState.key === "fullBackup.loadingCounts") setStatus("", null, "");
         return lastLocalCounts;
       } catch (_error) {
-        setStatus("fullBackup.countsFailed", null, "error");
+        if (!preserveStatus) setStatus("fullBackup.countsFailed", null, "error");
         return null;
       }
     }
@@ -538,17 +651,33 @@
       if (!summaryEl || !summaryListEl) return;
       if (!lastRestoreState) {
         summaryEl.hidden = true;
+        summaryEl.classList.remove("is-error");
         summaryListEl.replaceChildren();
         return;
       }
       var selected = lastRestoreState.selectedSections || [];
       var outcome = lastRestoreState.outcome || {};
+      var resolved = lastRestoreState.resolvedStatus || resolveRestoreStatus(outcome, selected);
       var restored = outcome.restored || {};
       var appliedPreferences = outcome.appliedPreferences || {};
       var warnings = Array.isArray(outcome.warnings) ? outcome.warnings : [];
 
       var fragment = doc.createDocumentFragment();
+      var coveredFailureMessages = Object.create(null);
       selected.forEach(function (key) {
+        var failure = resolved.failedBySection && resolved.failedBySection[key];
+        if (failure) {
+          var reason = stripSectionPrefix(key, failure.message);
+          var failLi = doc.createElement("li");
+          failLi.className = "full-backup-summary-error";
+          failLi.dataset.backupSummarySection = key;
+          failLi.textContent = reason
+            ? t("fullBackup.summary.sectionFailed", { section: sectionDisplayName(key), reason: reason })
+            : t("fullBackup.summary.sectionFailedGeneric", { section: sectionDisplayName(key) });
+          fragment.appendChild(failLi);
+          if (reason) coveredFailureMessages[key + ":" + reason] = true;
+          return;
+        }
         var text = formatSectionSummaryLine(key, restored[key], appliedPreferences);
         if (!text) return;
         var li = doc.createElement("li");
@@ -557,13 +686,19 @@
         fragment.appendChild(li);
       });
       warnings.forEach(function (warning) {
+        var rawWarning = String(warning);
+        var match = rawWarning.match(/^(history|cardNotes|customSpreads|aiChats|preferences)\s*:\s*(.*)$/);
+        if (match && coveredFailureMessages[match[1] + ":" + match[2].trim()]) {
+          return;
+        }
         var li = doc.createElement("li");
         li.className = "full-backup-summary-warning";
-        li.textContent = t("fullBackup.summary.warning", { message: String(warning) });
+        li.textContent = t("fullBackup.summary.warning", { message: rawWarning });
         fragment.appendChild(li);
       });
 
       summaryListEl.replaceChildren(fragment);
+      summaryEl.classList.toggle("is-error", resolved.status === "failed" || resolved.status === "partial");
       summaryEl.hidden = summaryListEl.childElementCount === 0;
     }
 
@@ -617,8 +752,19 @@
         renderLocalCounts();
         var fileName = buildFileName(new Date());
         saveExportFile(bundle.json, fileName);
-      } catch (_error) {
-        setStatus("fullBackup.exportFailed", null, "error");
+      } catch (error) {
+        if (error && error.code === "export_too_large") {
+          var oversizeDetails = formatOversizedDetails(error);
+          if (oversizeDetails) {
+            setStatus("fullBackup.exportTooLarge", function () {
+              return { details: formatOversizedDetails(error) };
+            }, "error");
+          } else {
+            setStatus("fullBackup.exportTooLargeGeneric", null, "error");
+          }
+        } else {
+          setStatus("fullBackup.exportFailed", null, "error");
+        }
       } finally {
         setBusy(false);
       }
@@ -682,25 +828,59 @@
       setStatus("fullBackup.restoring", null, "");
       try {
         var outcome = await core.restoreBackup(pendingBackup, selectedSections, getAdapters());
-        clearPreview();
+        var resolved = resolveRestoreStatus(outcome, selectedSections);
         lastRestoreState = {
           selectedSections: selectedSections.slice(),
-          outcome: outcome
+          outcome: outcome,
+          resolvedStatus: resolved
         };
-        renderRestoreSummary();
-        setStatus("fullBackup.restoreDone", null, "success");
+
+        if (resolved.status === "failed") {
+          // Keep preview and selected checkboxes open so the user can retry immediately.
+          renderPreview();
+          renderRestoreSummary();
+          setStatus("fullBackup.restoreAllFailed", null, "error");
+        } else if (resolved.status === "partial") {
+          // Keep preview open with ONLY the failed section(s) checked for one-click retry.
+          var available = Array.isArray(pendingBackup.availableSections)
+            ? pendingBackup.availableSections
+            : [];
+          available.forEach(function (key) {
+            selectedMap[key] = Boolean(resolved.failedBySection[key]);
+          });
+          renderPreview();
+          renderRestoreSummary();
+          setStatus("fullBackup.restorePartial", function () {
+            return {
+              succeeded: resolved.succeededSections.length,
+              failed: resolved.failedSections.length,
+              failedModules: formatModuleList(resolved.failedSections.map(function (item) { return item.section; }))
+            };
+          }, "error");
+        } else {
+          clearPreview();
+          renderRestoreSummary();
+          setStatus("fullBackup.restoreDone", null, "success");
+        }
+
+        var cardNotesSucceeded = resolved.succeededSections.indexOf("cardNotes") !== -1;
         var cardNotesRefreshed = false;
-        if (selectedSections.indexOf("cardNotes") !== -1 &&
+        if (cardNotesSucceeded &&
             global.DivinationCardNotes &&
             typeof global.DivinationCardNotes.refresh === "function") {
           cardNotesRefreshed = true;
           try { await global.DivinationCardNotes.refresh(); } catch (_err) {}
         }
-        await refreshCounts();
-        if (typeof global.dispatchEvent === "function" && typeof global.CustomEvent === "function") {
+        await refreshCounts(true);
+        if (resolved.succeededSections.length > 0 &&
+            typeof global.dispatchEvent === "function" &&
+            typeof global.CustomEvent === "function") {
           global.dispatchEvent(new global.CustomEvent("quareia:fullbackuprestored", {
             detail: {
-              selectedSections: selectedSections.slice(),
+              selectedSections: resolved.succeededSections.slice(),
+              status: resolved.status,
+              succeededSections: resolved.succeededSections.slice(),
+              failedSections: resolved.failedSections.slice(),
               outcome: outcome,
               cardNotesRefreshed: cardNotesRefreshed
             }

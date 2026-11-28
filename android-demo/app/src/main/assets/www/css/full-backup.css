@@ -367,7 +367,16 @@
   overflow-wrap: anywhere;
 }
 
-.full-backup-summary-warning {
+.full-backup-summary.is-error {
+  border-color: var(--reversed-color);
+}
+
+.full-backup-summary.is-error h4 {
+  color: var(--reversed-color);
+}
+
+.full-backup-summary-warning,
+.full-backup-summary-error {
   color: var(--reversed-color);
 }
 
