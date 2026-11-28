@@ -111,6 +111,45 @@ test("questions are normalized, bounded and round-trip across backup versions", 
   assert.equal(history.recordsEquivalent(v1, changed), false);
 });
 
+test("reflections are optional normalized closed-schema content across all record versions", function () {
+  var spread = spreads.getTarotSpread("three-card-horizontal");
+  var input = buildInput(spread, [
+    entry(0, card("major-00", "00", "愚者")),
+    entry(1, card("major-01", "01", "魔法师")),
+    entry(2, card("major-02", "02", "女祭司"))
+  ], { reflection: "  第一行\r\n第二行\r第三行  " });
+  var free = buildFreeformInput([freeformCard("major-00", 0)], { reflection: input.reflection });
+  var v1 = history.buildReadingRecord(input);
+  var records = [v1, history.buildPresetRecord(v1), history.buildFreeformLayoutRecord(free), history.buildFreeformRecord(free)];
+  records.forEach(function (record) {
+    assert.equal(record.reflection, "第一行\n第二行\n第三行");
+    assert.deepEqual(history.parseImportJson(history.serializeExport([record])).records, [record]);
+    var legacy = structuredClone(record);
+    delete legacy.reflection;
+    assert.deepEqual(history.parseImportJson(history.serializeExport([legacy])).records, [legacy]);
+    assert.equal(history.recordsEquivalent(record, legacy), false);
+    var same = structuredClone(record);
+    same.id = "different-id";
+    assert.equal(history.recordsEquivalent(record, same), true);
+    [" ", "  untrimmed", "line\r\nline", 42, null, "x".repeat(4001)].forEach(function (value) {
+      var invalid = structuredClone(record);
+      invalid.reflection = value;
+      assert.throws(function () { history.validateRecord(invalid); }, /reflection/);
+      var envelope = history.createExportEnvelope([record]);
+      envelope.records[0] = invalid;
+      assert.throws(function () { history.parseImportJson(JSON.stringify(envelope)); }, /reflection/);
+    });
+    var unexpected = structuredClone(record);
+    unexpected.notes = "not allowed";
+    assert.throws(function () { history.validateRecord(unexpected); }, /unexpected field notes/);
+  });
+  assert.equal(history.MAX_REFLECTION_LENGTH, 4000);
+  assert.equal(history.normalizeReflection("😀".repeat(2000)).length, 4000);
+  assert.throws(function () { history.normalizeReflection("😀".repeat(2001)); }, /4000/);
+  assert.throws(function () { history.normalizeReflection({}); }, /string/);
+  assert.equal(Object.hasOwn(history.buildReadingRecord(Object.assign({}, input, { reflection: " \r\n " })), "reflection"), false);
+});
+
 test("builds a complete immutable snapshot for a normal spread", function () {
   var spread = spreads.getTarotSpread("three-card-horizontal");
   var record = history.buildReadingRecord(buildInput(spread, [

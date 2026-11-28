@@ -254,6 +254,9 @@
     var selectedIds = new Set();
     var questionRevision = 0;
     var tableRecord = null;
+    var tableSave = null;
+    var editingField = null;
+    var cardFilter = null;
     var useSavedQuestion = false;
     var listRevision = 0;
     var activeTab = "list";
@@ -279,16 +282,13 @@
       statsPeriods: byId("historyStatsPeriods"),
       statsBody: byId("historyStatsBody"),
       search: byId("historySearch"),
+      cardFilter: byId("historyCardFilter"),
+      readingStatus: byId("readingActionStatus"),
+      clearReflection: byId("historyClearReflection"),
       select: byId("historySelectBtn"),
       exportSelected: byId("historyExportSelectedBtn"),
       markdown: byId("historyMarkdownBtn"),
       image: byId("historyImageBtn"),
-      questionText: byId("historyQuestionText"),
-      edit: byId("historyEditQuestionBtn"),
-      editor: byId("historyQuestionEditor"),
-      editInput: byId("historyQuestionInput"),
-      saveQuestion: byId("historySaveQuestionBtn"),
-      cancelQuestion: byId("historyCancelQuestionBtn"),
       open: byId("historyOpenBtn"),
       saveStatus: byId("historySaveStatus"),
       dialog: byId("historyDialog"),
@@ -308,17 +308,36 @@
       clear: byId("historyClearBtn")
     };
 
+    var noteEditors = {
+      question: {
+        text: byId("historyQuestionText"), edit: byId("historyEditQuestionBtn"),
+        panel: byId("historyQuestionEditor"), input: byId("historyQuestionInput"),
+        save: byId("historySaveQuestionBtn"), cancel: byId("historyCancelQuestionBtn"),
+        addKey: "history.addQuestion", editKey: "history.editQuestion",
+        savedKey: "history.questionSaved", failedKey: "history.questionFailed",
+        update: function (id, value) { return store.updateQuestion(id, value); }
+      },
+      reflection: {
+        text: byId("historyReflectionText"), edit: byId("historyEditReflection"),
+        panel: byId("historyReflectionEditor"), input: byId("historyReflectionInput"),
+        save: byId("historySaveReflection"), cancel: byId("historyCancelReflection"),
+        addKey: "history.addReflection", editKey: "history.editReflection",
+        savedKey: "history.reflectionSaved", failedKey: "history.reflectionFailed",
+        update: function (id, value) { return store.updateReflection(id, value); }
+      }
+    };
+
     // The Android host opens the system save picker and calls this callback
     // only after it has written the selected content:// destination.
-    function onHistoryExportResult(result) {
+    function onHistoryExportResult(status, result) {
       if (result && result.cancelled) {
-        setTranslatedStatus(elements.actionStatus, "history.exportCancelled", null, false);
+        setTranslatedStatus(status, "history.exportCancelled", null, false);
       } else if (result && result.ok) {
-        setTranslatedStatus(elements.actionStatus, "history.fileSaved", {
+        setTranslatedStatus(status, "history.fileSaved", {
           fileName: result.fileName || "tarot-history.json"
         }, false);
       } else {
-        setTranslatedStatus(elements.actionStatus, "history.exportFailed", null, true);
+        setTranslatedStatus(status, "history.exportFailed", null, true);
       }
     }
 
@@ -363,6 +382,7 @@
       var inStats = !inDetail && activeTab === "stats" && Boolean(elements.statsView);
       if (elements.tabs) elements.tabs.hidden = inDetail;
       if (elements.toolbar) elements.toolbar.hidden = inDetail || inStats;
+      elements.cardFilter.hidden = inDetail || inStats || !cardFilter;
       if (elements.listView) elements.listView.hidden = inDetail || inStats;
       if (elements.statsView) elements.statsView.hidden = !inStats;
       if (elements.tabList) {
@@ -675,6 +695,20 @@
             count: entry.count,
             pct: formatPercent(entry.share)
           })));
+          var viewRecords = button(t("history.viewCardRecords"), "btn-mini");
+          viewRecords.setAttribute("data-view-card-records", entry.cardId);
+          viewRecords.addEventListener("click", function () {
+            var previousDeck = cardFilter ? cardFilter.previousDeck : elements.filter.value;
+            cardFilter = {
+              deckType: entry.deckType, cardId: entry.cardId, entry: entry,
+              period: summary.period, cutoffMs: summary.cutoffMs, previousDeck: previousDeck
+            };
+            setDeckFilter(entry.deckType);
+            elements.search.value = "";
+            renderList();
+            elements.cardFilter.focus();
+          });
+          side.appendChild(viewRecords);
           if (globalThis.DivinationCardNotes && typeof globalThis.DivinationCardNotes.createButton === "function") {
             var noteBtn = globalThis.DivinationCardNotes.createButton(entry.deckType, entry.cardId);
             if (noteBtn) side.appendChild(noteBtn);
@@ -728,7 +762,7 @@
       function contains(value) {
         return value && value.toLocaleLowerCase().includes(query);
       }
-      return contains(record.question) || contains(displaySpreadName(record, resolveSpread)) ||
+      return contains(record.question) || contains(record.reflection) || contains(displaySpreadName(record, resolveSpread)) ||
         contains(displayDeckName(record)) || record.cards.some(function (card) {
           return contains(displayCardName(record, card)) ||
             contains(displayPositionName(record, card, resolveSpread));
@@ -739,8 +773,19 @@
       var deck = elements.filter.value;
       var query = elements.search.value.trim().toLocaleLowerCase();
       var records = allRecords.filter(function (record) {
-        return (!deck || deck === "all" || deck === record.deckType) && matchesSearch(record, query);
+        return (!deck || deck === "all" || deck === record.deckType) &&
+          (!cardFilter || statsApi.matchesCardFilter(record, cardFilter)) && matchesSearch(record, query);
       });
+      if (cardFilter) {
+        var entry = cardFilter.entry;
+        var label = t("history.cardFilter", {
+          card: localized(entry.sourceCard, "name") || entry.fallbackName,
+          deck: t("deck.name." + entry.deckType)
+        });
+        if (cardFilter.period !== "all") label += " · " + t("history.stats.period" + cardFilter.period);
+        elements.cardFilter.textContent = label + " ×";
+        elements.cardFilter.setAttribute("aria-label", t("history.clearCardFilter", { filter: label }));
+      }
       updateSelectionActions();
       showListView();
       elements.list.replaceChildren();
@@ -775,6 +820,9 @@
         openButton.appendChild(heading);
         if (record.question) {
           openButton.appendChild(textElement("span", "history-question-preview", record.question));
+        }
+        if (record.reflection) {
+          openButton.appendChild(textElement("span", "history-reflection-badge", t("history.hasReflection")));
         }
         openButton.appendChild(meta);
         if (!selecting) {
@@ -1077,45 +1125,58 @@
       return section;
     }
 
-    function renderQuestion(record, editing) {
-      elements.questionText.textContent = record.question || "";
-      elements.questionText.hidden = editing || !record.question;
-      elements.edit.textContent = t(record.question ? "history.editQuestion" : "history.addQuestion");
-      elements.edit.hidden = editing;
-      elements.editor.hidden = !editing;
-      elements.markdown.disabled = editing;
-      if (elements.image) elements.image.disabled = editing;
+    function renderNotes() {
+      Object.keys(noteEditors).forEach(function (field) {
+        var editor = noteEditors[field];
+        var value = selectedRecord[field] || "";
+        var editing = editingField === field;
+        editor.text.textContent = value;
+        editor.text.hidden = editing || !value;
+        editor.edit.textContent = t(value ? editor.editKey : editor.addKey);
+        editor.edit.hidden = editing;
+        editor.edit.disabled = Boolean(editingField);
+        editor.panel.hidden = !editing;
+      });
+      elements.clearReflection.hidden = editingField !== "reflection" || !selectedRecord.reflection;
+      elements.markdown.disabled = Boolean(editingField);
+      if (elements.image) elements.image.disabled = Boolean(editingField);
     }
 
-    function finishQuestionEdit() {
-      renderQuestion(selectedRecord, false);
-      elements.edit.focus();
+    function finishNoteEdit(editor) {
+      editingField = null;
+      renderNotes();
+      editor.edit.focus();
     }
 
-    async function saveQuestionEdit() {
+    async function saveNote(field, value) {
+      var editor = noteEditors[field];
       var id = selectedRecordId;
-      if (!id || elements.saveQuestion.disabled) return;
-      elements.saveQuestion.disabled = true;
+      if (!id || editor.save.disabled) return;
+      editor.save.disabled = editor.cancel.disabled = editor.input.disabled = true;
+      if (field === "reflection") elements.clearReflection.disabled = true;
       try {
-        var updated = await store.updateQuestion(id, elements.editInput.value);
+        var updated = await editor.update(id, value);
         if (!updated) throw new Error("Reading no longer exists");
+        if (tableRecord && tableRecord.id === id) tableRecord = updated;
         if (selectedRecordId !== id) return;
         selectedRecord = updated;
-        finishQuestionEdit();
-        setTranslatedStatus(elements.actionStatus, "history.questionSaved", null, false);
+        finishNoteEdit(editor);
+        var cleared = field === "reflection" && !updated.reflection;
+        setTranslatedStatus(elements.actionStatus, cleared ? "history.reflectionCleared" : editor.savedKey, null, false);
       } catch (_error) {
-        if (selectedRecordId === id) setTranslatedStatus(elements.actionStatus, "history.questionFailed", null, true);
+        if (selectedRecordId === id) setTranslatedStatus(elements.actionStatus, editor.failedKey, null, true);
       } finally {
-        elements.saveQuestion.disabled = false;
+        editor.save.disabled = editor.cancel.disabled = editor.input.disabled = false;
+        if (field === "reflection") elements.clearReflection.disabled = false;
       }
     }
 
     function showDetail(record) {
-      var editing = selectedRecordId === record.id && !elements.editor.hidden;
+      if (selectedRecordId !== record.id) editingField = null;
       listRevision++;
       selectedRecordId = record.id;
-      renderQuestion(record, editing);
       selectedRecord = record;
+      renderNotes();
       syncDialogViews();
       elements.list.hidden = true;
       elements.empty.hidden = true;
@@ -1236,7 +1297,18 @@
       }
     }
 
+    function setDeckFilter(deck) {
+      elements.filter.value = deck;
+      if (globalThis.DivinationCustomSelects) globalThis.DivinationCustomSelects.sync();
+    }
+
+    function clearCardFilter() {
+      if (cardFilter) setDeckFilter(cardFilter.previousDeck);
+      cardFilter = null;
+    }
+
     function openDialog() {
+      clearCardFilter();
       restoreFocusTo = document.activeElement;
       selecting = false;
       selectedIds.clear();
@@ -1281,7 +1353,13 @@
       tableRecord = null;
       useSavedQuestion = false;
       questionRevision++;
+      tableSave = null;
       setStatus(elements.saveStatus, "", false);
+      setStatus(elements.readingStatus, "", false);
+      clearQuestionDraft();
+    }
+
+    function clearQuestionDraft() {
       elements.question.value = "";
       renderQuestionSummary();
       setQuestionExpanded(false);
@@ -1300,7 +1378,8 @@
       var duplicateKey = isFreeBoard ? "history.duplicateFreeBoard" : "history.duplicate";
       var failedKey = "history.saveSnapshotError";
       setTranslatedStatus(elements.saveStatus, savingKey, null, false);
-      return enqueueSave(async function () {
+      setStatus(elements.readingStatus, "", false);
+      tableSave = enqueueSave(async function () {
         var ready = available || await storeReady;
         if (!ready) {
           if (revision === questionRevision) setTranslatedStatus(elements.saveStatus, "history.saveUnavailable", null, true);
@@ -1312,10 +1391,10 @@
           var result = await store.saveRecord(record);
           if (revision === questionRevision && tableRecord === record) {
             if (elements.question.value === draftQuestion) {
-              resetQuestion();
-              tableRecord = record;
+              clearQuestionDraft();
               useSavedQuestion = true;
             }
+            tableRecord = result.record;
             setTranslatedStatus(elements.saveStatus, result.duplicate ? duplicateKey : savedKey, null, false);
           }
           if (elements.dialog.open && !selectedRecordId) await refreshList();
@@ -1325,10 +1404,29 @@
           return null;
         }
       });
+      return tableSave;
+    }
+
+    async function openTableInAi() {
+      var pending = tableSave;
+      try {
+        var result = await pending;
+        if (pending !== tableSave || !readingComplete) return;
+        var saved = result && result.record && await store.getRecord(result.record.id);
+        if (pending !== tableSave || !readingComplete) return;
+        if (saved && saved.layoutMode !== "freeform") {
+          globalThis.location.assign("ai.html?readingId=" + encodeURIComponent(saved.id));
+          return;
+        }
+      } catch (_error) {
+        // Local history may have been cleared or become unavailable after the draw.
+      }
+      if (pending === tableSave) setTranslatedStatus(elements.readingStatus, "reading.aiUnavailable", null, true);
     }
 
     function saveCurrentReading() {
       if (!readingComplete) return;
+      tableSave = null;
       var record;
       try {
         record = createSnapshot();
@@ -1388,12 +1486,15 @@
       });
     }
 
-    function downloadFile(content, fileName, mimeType) {
+    function downloadFile(content, fileName, mimeType, status) {
+      status = status || elements.actionStatus;
       var nativeBridge = globalThis.androidHistoryExport;
       if (nativeBridge && typeof nativeBridge.save === "function") {
-        setTranslatedStatus(elements.actionStatus, "history.exportChoosing", { fileName: fileName }, false);
-        if (!globalThis.DivinationNativeFileExport.save(content, fileName, onHistoryExportResult)) {
-          setTranslatedStatus(elements.actionStatus, "history.exportBusy", null, true);
+        setTranslatedStatus(status, "history.exportChoosing", { fileName: fileName }, false);
+        if (!globalThis.DivinationNativeFileExport.save(content, fileName, function (result) {
+          onHistoryExportResult(status, result);
+        })) {
+          setTranslatedStatus(status, "history.exportBusy", null, true);
         }
         return;
       }
@@ -1406,7 +1507,7 @@
       link.click();
       link.remove();
       setTimeout(function () { URL.revokeObjectURL(url); }, 0);
-      setTranslatedStatus(elements.actionStatus, "history.fileDownloaded", { fileName: fileName }, false);
+      setTranslatedStatus(status, "history.fileDownloaded", { fileName: fileName }, false);
     }
 
     function openImage(record, freeCardWidth) {
@@ -1415,7 +1516,7 @@
       globalThis.DivinationReadingImageUi.open(model, record.createdAt);
     }
 
-    function exportTableImage(record, freeCardWidth) {
+    function annotateTableSnapshot(record) {
       var question = recordsApi.normalizeQuestion(elements.question.value);
       var sameReading = tableRecord && tableRecord.deckType === record.deckType &&
         tableRecord.spreadId === record.spreadId && tableRecord.cards.length === record.cards.length &&
@@ -1426,22 +1527,32 @@
         });
       if (sameReading) {
         record.createdAt = tableRecord.createdAt;
+        if (tableRecord.reflection) record.reflection = tableRecord.reflection;
         if (!question && useSavedQuestion) question = tableRecord.question;
       }
-      record.question = question || "";
-      openImage(record, freeCardWidth);
+      if (question) record.question = question;
+      else delete record.question;
+      return record;
     }
 
-    function exportMarkdown(records) {
+    function exportTableImage(record, freeCardWidth) {
+      openImage(annotateTableSnapshot(record), freeCardWidth);
+    }
+
+    function exportTableMarkdown(record, status) {
+      exportMarkdown([annotateTableSnapshot(record)], status || elements.readingStatus);
+    }
+
+    function exportMarkdown(records, status) {
       if (!records.length) return;
       try {
         var content = formatMarkdown(records, resolveSpread);
         var stamp = records.length === 1 ? records[0].createdAt : new Date().toISOString();
         var fileName = (records.length === 1 ? "reading-" : "readings-") +
           new Date(stamp).toISOString().replace(/[:.]/g, "-") + ".md";
-        downloadFile(content, fileName, "text/markdown");
+        downloadFile(content, fileName, "text/markdown", status);
       } catch (_error) {
-        setTranslatedStatus(elements.actionStatus, "history.exportFailed", null, true);
+        setTranslatedStatus(status || elements.actionStatus, "history.exportFailed", null, true);
       }
     }
 
@@ -1486,6 +1597,7 @@
       renderQuestionSummary();
       refreshStatus(elements.saveStatus);
       refreshStatus(elements.actionStatus);
+      refreshStatus(elements.readingStatus);
       if (selectedRecord) {
         showDetail(selectedRecord);
         return Promise.resolve();
@@ -1531,13 +1643,18 @@
       useSavedQuestion = false;
       renderQuestionSummary();
     });
-    elements.edit.addEventListener("click", function () {
-      elements.editInput.value = selectedRecord.question || "";
-      renderQuestion(selectedRecord, true);
-      elements.editInput.focus();
+    Object.keys(noteEditors).forEach(function (field) {
+      var editor = noteEditors[field];
+      editor.edit.addEventListener("click", function () {
+        editingField = field;
+        editor.input.value = selectedRecord[field] || "";
+        renderNotes();
+        editor.input.focus();
+      });
+      editor.cancel.addEventListener("click", function () { finishNoteEdit(editor); });
+      editor.save.addEventListener("click", function () { saveNote(field, editor.input.value); });
     });
-    elements.cancelQuestion.addEventListener("click", finishQuestionEdit);
-    elements.saveQuestion.addEventListener("click", saveQuestionEdit);
+    elements.clearReflection.addEventListener("click", function () { saveNote("reflection", ""); });
     if (elements.tabList) {
       elements.tabList.addEventListener("click", function () {
         if (activeTab === "list") return;
@@ -1570,6 +1687,7 @@
         if (!btn) return;
         var nextDeck = btn.getAttribute("data-stats-deck");
         if (!nextDeck || nextDeck === statsDeck) return;
+        clearCardFilter();
         statsDeck = nextDeck;
         statsDeckUserPicked = true;
         statsCategoryId = null;
@@ -1588,7 +1706,15 @@
         renderStats();
       });
     }
-    elements.filter.addEventListener("change", renderList);
+    elements.cardFilter.addEventListener("click", function () {
+      clearCardFilter();
+      renderList();
+      (byId("historyDeckFilterTrigger") || elements.filter).focus();
+    });
+    elements.filter.addEventListener("change", function () {
+      cardFilter = null;
+      renderList();
+    });
     elements.search.addEventListener("input", renderList);
     elements.select.addEventListener("click", function () {
       selecting = !selecting;
@@ -1635,6 +1761,8 @@
       resetQuestion: resetQuestion,
       updateSaveAvailability: updateSaveAvailability,
       saveCompletedReading: saveCurrentReading,
+      openTableInAi: openTableInAi,
+      exportTableMarkdown: exportTableMarkdown,
       exportTableImage: exportTableImage,
       saveFreeformReading: saveFreeformReading,
       saveRecord: saveRecord,
