@@ -1,0 +1,1170 @@
+"use strict";
+
+var assert = require("node:assert/strict");
+var fs = require("node:fs");
+var path = require("node:path");
+var test = require("node:test");
+var vm = require("node:vm");
+
+var fullBackup = require("../js/full-backup.js");
+var historyRecords = require("../js/history-records.js");
+var historyStoreApi = require("../js/history-store.js");
+var cardNotesStoreApi = require("../js/card-notes-store.js");
+var customSpreadsApi = require("../js/custom-spreads.js");
+var aiChatStoreApi = require("../js/ai-chat-store.js");
+var mystagogusData = require("../js/mystagogus-data.js");
+var lxxxiData = require("../js/lxxxi-data.js");
+
+var ROOT = path.resolve(__dirname, "..");
+
+function loadTarotDeckFull() {
+  var source = fs.readFileSync(path.join(ROOT, "js/tarot-data.js"), "utf8");
+  var sandbox = {};
+  vm.runInNewContext(source + "\nthis.__tarotDeckFull = tarotDeckFull;", sandbox);
+  return sandbox.__tarotDeckFull;
+}
+
+// Unified fake IndexedDB that supports history-store, card-notes-store (compound keyPath),
+// and ai-chat-store (indexes, objectStoreNames, rollback on abort).
+function createUnifiedFakeIndexedDB() {
+  var databases = new Map();
+
+  function keyOf(keyPath, value) {
+    if (Array.isArray(keyPath)) {
+      return JSON.stringify(keyPath.map(function (k) { return value[k]; }));
+    }
+    return JSON.stringify(value[keyPath]);
+  }
+
+  function rawKeyOf(key) {
+    return JSON.stringify(key);
+  }
+
+  function FakeObjectStore(def, tx) {
+    this._def = def;
+    this._tx = tx;
+    this.indexNames = {
+      contains: function (name) { return def.indexes.has(name); }
+    };
+  }
+
+  FakeObjectStore.prototype.createIndex = function (name, keyPath, options) {
+    this._def.indexes.set(name, {
+      name: name,
+      keyPath: keyPath,
+      unique: Boolean(options && options.unique)
+    });
+    return this._def.indexes.get(name);
+  };
+
+  function enqueue(tx, op) {
+    var req = {
+      result: undefined,
+      error: null,
+      onsuccess: null,
+      onerror: null
+    };
+    tx._queue.push({ req: req, op: op });
+    tx._schedulePump();
+    return req;
+  }
+
+  FakeObjectStore.prototype.get = function (key) {
+    var def = this._def;
+    return enqueue(this._tx, function () {
+      var val = def.records.get(rawKeyOf(key));
+      return val === undefined ? undefined : structuredClone(val);
+    });
+  };
+
+  FakeObjectStore.prototype.getAll = function () {
+    var def = this._def;
+    return enqueue(this._tx, function () {
+      return Array.from(def.records.values(), function (v) { return structuredClone(v); });
+    });
+  };
+
+  FakeObjectStore.prototype.getAllKeys = function () {
+    var def = this._def;
+    return enqueue(this._tx, function () {
+      return Array.from(def.records.keys(), function (k) { return JSON.parse(k); });
+    });
+  };
+
+  FakeObjectStore.prototype.add = function (value) {
+    var def = this._def;
+    return enqueue(this._tx, function () {
+      var k = keyOf(def.keyPath, value);
+      if (def.records.has(k)) {
+        var err = new Error("ConstraintError");
+        err.name = "ConstraintError";
+        throw err;
+      }
+      def.records.set(k, structuredClone(value));
+      return JSON.parse(k);
+    });
+  };
+
+  FakeObjectStore.prototype.put = function (value) {
+    var def = this._def;
+    return enqueue(this._tx, function () {
+      var k = keyOf(def.keyPath, value);
+      def.records.set(k, structuredClone(value));
+      return JSON.parse(k);
+    });
+  };
+
+  FakeObjectStore.prototype.delete = function (key) {
+    var def = this._def;
+    return enqueue(this._tx, function () {
+      def.records.delete(rawKeyOf(key));
+      return undefined;
+    });
+  };
+
+  FakeObjectStore.prototype.clear = function () {
+    var def = this._def;
+    return enqueue(this._tx, function () {
+      def.records.clear();
+      return undefined;
+    });
+  };
+
+  function FakeTransaction(db, storeNames) {
+    this._db = db;
+    this._storeNames = Array.isArray(storeNames) ? storeNames : [storeNames];
+    this._queue = [];
+    this._pumping = false;
+    this._aborted = false;
+    this._completed = false;
+    this._snapshots = new Map();
+    this.error = null;
+    var self = this;
+    this._storeNames.forEach(function (name) {
+      var def = db._stores.get(name);
+      if (def) self._snapshots.set(name, new Map(def.records));
+    });
+    setImmediate(function () { self._schedulePump(); });
+  }
+
+  FakeTransaction.prototype.objectStore = function (name) {
+    if (this._storeNames.indexOf(name) === -1) throw new Error("Store not in transaction: " + name);
+    var def = this._db._stores.get(name);
+    if (!def) throw new Error("Unknown object store: " + name);
+    return new FakeObjectStore(def, this);
+  };
+
+  FakeTransaction.prototype.abort = function () {
+    if (this._aborted || this._completed) return;
+    this._aborted = true;
+    this.error = this.error || new Error("AbortError");
+    var self = this;
+    this._snapshots.forEach(function (snap, name) {
+      var def = self._db._stores.get(name);
+      if (def) def.records = new Map(snap);
+    });
+    if (typeof this.onabort === "function") this.onabort({ target: this });
+  };
+
+  FakeTransaction.prototype._schedulePump = function () {
+    var self = this;
+    if (self._pumping || self._aborted || self._completed) return;
+    self._pumping = true;
+    setImmediate(function step() {
+      if (self._aborted) {
+        self._pumping = false;
+        return;
+      }
+      var item = self._queue.shift();
+      if (!item) {
+        self._pumping = false;
+        // Allow microtasks from request.onsuccess handlers to enqueue follow-up requests
+        setTimeout(function () {
+          if (self._aborted || self._completed) return;
+          if (self._queue.length > 0) {
+            self._schedulePump();
+            return;
+          }
+          self._completed = true;
+          if (typeof self.oncomplete === "function") self.oncomplete({ target: self });
+        }, 0);
+        return;
+      }
+      try {
+        item.req.result = item.op();
+        if (typeof item.req.onsuccess === "function") {
+          item.req.onsuccess({ target: item.req });
+        }
+      } catch (error) {
+        item.req.error = error;
+        self.error = error;
+        if (typeof item.req.onerror === "function") {
+          item.req.onerror({ target: item.req });
+        }
+        self.abort();
+        self._pumping = false;
+        return;
+      }
+      setImmediate(step);
+    });
+  };
+
+  function FakeDatabase(name, version) {
+    this.name = name;
+    this.version = version;
+    this._stores = new Map();
+    var self = this;
+    this.objectStoreNames = {
+      contains: function (storeName) { return self._stores.has(storeName); }
+    };
+  }
+
+  FakeDatabase.prototype.createObjectStore = function (name, options) {
+    var def = {
+      keyPath: options && options.keyPath,
+      records: new Map(),
+      indexes: new Map()
+    };
+    this._stores.set(name, def);
+    return new FakeObjectStore(def, this._upgradeTx);
+  };
+
+  FakeDatabase.prototype.transaction = function (storeNames) {
+    return new FakeTransaction(this, storeNames);
+  };
+
+  FakeDatabase.prototype.close = function () {};
+
+  return {
+    open: function (name, version) {
+      var req = {};
+      setImmediate(function () {
+        var db = databases.get(name);
+        var oldVersion = db ? db.version : 0;
+        if (!db) db = new FakeDatabase(name, version);
+        if (version > oldVersion) {
+          db.version = version;
+          var upgradeTx = new FakeTransaction(db, []);
+          db._upgradeTx = upgradeTx;
+          req.result = db;
+          req.transaction = upgradeTx;
+          if (typeof req.onupgradeneeded === "function") {
+            req.onupgradeneeded({ oldVersion: oldVersion, newVersion: version, target: req });
+          }
+          if (upgradeTx._aborted) {
+            req.error = upgradeTx.error || new Error("Upgrade aborted");
+            if (typeof req.onerror === "function") req.onerror({ target: req });
+            return;
+          }
+        }
+        databases.set(name, db);
+        req.result = db;
+        if (typeof req.onsuccess === "function") req.onsuccess({ target: req });
+      });
+      return req;
+    }
+  };
+}
+
+function createMemoryStorage() {
+  var map = new Map();
+  return {
+    getItem: function (k) { return map.has(k) ? map.get(k) : null; },
+    setItem: function (k, v) { map.set(k, String(v)); },
+    removeItem: function (k) { map.delete(k); },
+    _map: map
+  };
+}
+
+function createFakeThemeApi(initialTheme, allowedThemes) {
+  var current = initialTheme || "celestial";
+  var allowed = allowedThemes || fullBackup.VALID_THEMES.slice();
+  return {
+    calls: [],
+    getTheme: function () { return current; },
+    setTheme: function (next) {
+      this.calls.push(next);
+      if (allowed.indexOf(next) === -1 || next === current) return false;
+      current = next;
+      return true;
+    }
+  };
+}
+
+function createFakeI18nApi(initialLocale) {
+  var current = initialLocale || "zh-CN";
+  return {
+    calls: [],
+    getLocale: function () { return current; },
+    setLocale: function (next) {
+      this.calls.push(next);
+      if (fullBackup.VALID_LOCALES.indexOf(next) === -1 || next === current) return false;
+      current = next;
+      return true;
+    }
+  };
+}
+
+function createDeckCatalogChecker() {
+  var tarot = loadTarotDeckFull();
+  var set = new Set();
+  tarot.forEach(function (c) { set.add("tarot/" + c.id); });
+  mystagogusData.mystagogusDeckFull.forEach(function (c) { set.add("mystagogus/" + c.id); });
+  lxxxiData.lxxxiDeckFull.forEach(function (c) { set.add("lxxxi/" + c.id); });
+  return function (deckType, cardId) {
+    return set.has(deckType + "/" + cardId);
+  };
+}
+
+function createTestEnvironment(options) {
+  options = options || {};
+  var idb = createUnifiedFakeIndexedDB();
+  var storage = createMemoryStorage();
+  var isKnownCard = createDeckCatalogChecker();
+  var platform = options.platform || "android";
+
+  return {
+    idb: idb,
+    storage: storage,
+    adapters: {
+      historyRecords: historyRecords,
+      historyStore: historyStoreApi.createStore({ indexedDB: idb, recordsApi: historyRecords }),
+      cardNotesStore: cardNotesStoreApi.createStore({ indexedDB: idb, isKnownCard: isKnownCard }),
+      customSpreads: customSpreadsApi,
+      customSpreadsLibrary: customSpreadsApi.createLibrary({ platform: platform, storage: storage }),
+      aiChatStoreApi: aiChatStoreApi,
+      aiChatStore: aiChatStoreApi.createStore({ indexedDB: idb }),
+      themeApi: createFakeThemeApi(options.theme || "celestial", options.allowedThemes),
+      i18nApi: createFakeI18nApi(options.locale || "zh-CN"),
+      isKnownCard: isKnownCard
+    }
+  };
+}
+
+function makePresetRecord(id, createdAt, overrides) {
+  return Object.assign({
+    schemaVersion: historyRecords.SCHEMA_V2_VERSION,
+    layoutMode: "preset",
+    id: id,
+    createdAt: createdAt,
+    deckType: "tarot",
+    deckMode: "tarot",
+    deckName: "RWS 塔罗",
+    spreadId: "three-card-horizontal",
+    spreadName: "三张牌",
+    positionCount: 1,
+    orientationMode: "mixed",
+    filterMode: "mixed",
+    overviewMethod: "not-applicable",
+    cards: [{
+      cardId: "major-00",
+      cardNumber: "0",
+      cardName: "愚者",
+      orientation: "upright",
+      slotIndex: 0,
+      positionNumber: 1,
+      positionName: "当下 · Present",
+      layer: null,
+      arcana: "major",
+      suit: ""
+    }]
+  }, overrides || {});
+}
+
+function makeV1Record(id, createdAt, overrides) {
+  return Object.assign({
+    schemaVersion: historyRecords.SCHEMA_VERSION,
+    id: id,
+    createdAt: createdAt,
+    deckType: "mystagogus",
+    deckMode: "mystagogus",
+    deckName: "Mystagogus",
+    spreadId: "single",
+    spreadName: "单牌",
+    positionCount: 1,
+    orientationMode: "upright-only",
+    filterMode: "not-applicable",
+    overviewMethod: "not-applicable",
+    cards: [{
+      cardId: "m-01",
+      cardNumber: "1",
+      cardName: "始源者",
+      orientation: "upright",
+      slotIndex: 0,
+      positionNumber: 1,
+      positionName: "核心 · Core",
+      layer: null,
+      arcana: "mystagogus",
+      suit: ""
+    }]
+  }, overrides || {});
+}
+
+function makeV3FreeformRecord(id, createdAt, overrides) {
+  return Object.assign({
+    schemaVersion: historyRecords.SCHEMA_V3_VERSION,
+    layoutMode: "freeform",
+    id: id,
+    createdAt: createdAt,
+    deckType: "lxxxi",
+    deckMode: "lxxxi",
+    deckName: "LXXXI",
+    orientationMode: "upright-only",
+    filterMode: "not-applicable",
+    overviewMethod: "not-applicable",
+    cards: [{
+      cardId: "lxxxi-01",
+      cardNumber: "1",
+      cardName: "星辰之父 I",
+      arcana: "lxxxi",
+      suit: "",
+      orientation: "upright",
+      revealed: true,
+      drawOrder: 1
+    }]
+  }, overrides || {});
+}
+
+function makeCustomSpreadDef(name, description) {
+  return {
+    name: name,
+    description: description || "",
+    columns: 3,
+    rows: 1,
+    deckScope: "any",
+    tarotMode: "mixed",
+    stackingMode: "single",
+    positions: [
+      { name: "因", meaning: "背景与起因", column: 1, row: 1 },
+      { name: "果", meaning: "当前显化", column: 3, row: 1 }
+    ]
+  };
+}
+
+test("exports exact UMD contract constants and matches Android byte-for-byte", function () {
+  assert.equal(fullBackup.BACKUP_FORMAT, "quareia-full-backup");
+  assert.equal(fullBackup.BACKUP_VERSION, 1);
+  assert.equal(fullBackup.MAX_BACKUP_BYTES, 16 * 1024 * 1024);
+  assert.deepEqual(Array.from(fullBackup.SECTION_KEYS), [
+    "history",
+    "cardNotes",
+    "customSpreads",
+    "aiChats",
+    "preferences"
+  ]);
+  assert.equal(typeof fullBackup.inspectLocalCounts, "function");
+  assert.equal(typeof fullBackup.collectBackup, "function");
+  assert.equal(typeof fullBackup.parseBackup, "function");
+  assert.equal(typeof fullBackup.restoreBackup, "function");
+
+  var webBuf = fs.readFileSync(path.join(ROOT, "js/full-backup.js"));
+  var androidBuf = fs.readFileSync(path.join(ROOT, "android-demo/app/src/main/assets/www/js/full-backup.js"));
+  assert.equal(Buffer.compare(webBuf, androidBuf), 0, "Web and Android js/full-backup.js must be byte-identical");
+
+  // Security static audit: zero innerHTML, zero network calls, zero AI config key references.
+  var source = webBuf.toString("utf8");
+  assert.doesNotMatch(source, /\binnerHTML\b/);
+  assert.doesNotMatch(source, /\bfetch\s*\(/);
+  assert.doesNotMatch(source, /\bXMLHttpRequest\b/);
+  assert.doesNotMatch(source, /\bsendBeacon\b/);
+  assert.doesNotMatch(source, /quareia-ai-config/i);
+  assert.doesNotMatch(source, /androidAiConfig/);
+});
+
+test("built-in 3-deck known card catalog matches all 237 cards from tarot, mystagogus, and lxxxi", function () {
+  var tarot = loadTarotDeckFull();
+  var allPairs = [];
+  tarot.forEach(function (c) { allPairs.push(["tarot", c.id]); });
+  mystagogusData.mystagogusDeckFull.forEach(function (c) { allPairs.push(["mystagogus", c.id]); });
+  lxxxiData.lxxxiDeckFull.forEach(function (c) { allPairs.push(["lxxxi", c.id]); });
+  assert.equal(allPairs.length, 237);
+
+  // Verify default parseBackup (without custom validators.isKnownCard) accepts all 237 real cards
+  var rawValid = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T06:00:00.000Z",
+    sections: {
+      cardNotes: {
+        format: "divination-card-notes",
+        version: 1,
+        notes: allPairs.map(function (pair, idx) {
+          return { deckType: pair[0], cardId: pair[1], text: "Note " + idx };
+        })
+      }
+    }
+  });
+  var parsed = fullBackup.parseBackup(rawValid);
+  assert.equal(parsed.counts.cardNotes, 237);
+
+  // Rejects unknown card IDs and unknown decks with default validator
+  var badCards = [
+    { deckType: "tarot", cardId: "major-22", text: "nope" },
+    { deckType: "tarot", cardId: "minor-wands-11", text: "nope" },
+    { deckType: "mystagogus", cardId: "m-00", text: "nope" },
+    { deckType: "mystagogus", cardId: "m-79", text: "nope" },
+    { deckType: "lxxxi", cardId: "lxxxi-82", text: "nope" },
+    { deckType: "oracle", cardId: "major-00", text: "nope" }
+  ];
+  badCards.forEach(function (badRow) {
+    var rawBad = JSON.stringify({
+      format: fullBackup.BACKUP_FORMAT,
+      version: 1,
+      exportedAt: "2026-11-28T06:00:00.000Z",
+      sections: {
+        cardNotes: { format: "divination-card-notes", version: 1, notes: [badRow] }
+      }
+    });
+    assert.throws(function () { fullBackup.parseBackup(rawBad); }, /unknown card key/i);
+  });
+});
+
+test("full round-trip across all 5 sections preserves v1/v2/v3 history with question/reflection, notes, spreads, chats, and preferences", async function () {
+  var sourceEnv = createTestEnvironment({ theme: "parchment", locale: "en", platform: "web" });
+  var s = sourceEnv.adapters;
+
+  // Populate history with v1, v2 preset (with question + reflection), and v3 freeform
+  await s.historyStore.saveRecord(makeV1Record("rec-v1", "2026-11-01T10:00:00.000Z", {
+    question: "What grounds this month?"
+  }));
+  await s.historyStore.saveRecord(makePresetRecord("rec-v2", "2026-11-02T10:00:00.000Z", {
+    question: "Should I switch roles?",
+    reflection: "Looking back, the Fool pointed to missing prerequisites."
+  }));
+  await s.historyStore.saveRecord(makeV3FreeformRecord("rec-v3", "2026-11-03T10:00:00.000Z", {
+    reflection: "Order-only freeform note preserved."
+  }));
+
+  // Populate card notes across all 3 decks (preserving CRLF/whitespace)
+  await s.cardNotesStore.save("tarot", "major-00", "  Fool study note\r\nLine 2  ", null);
+  await s.cardNotesStore.save("mystagogus", "m-01", "Progenitor before dawn", null);
+  await s.cardNotesStore.save("lxxxi", "lxxxi-01", "Star Father spark", null);
+
+  // Populate custom spreads
+  s.customSpreadsLibrary.upsert(makeCustomSpreadDef("Two Pillars", "Cause and effect"));
+  s.customSpreadsLibrary.upsert(makeCustomSpreadDef("Seasonal Gate", "Quarterly check"));
+
+  // Populate AI chats (active + archived, pinned, snapshot, usage, summary)
+  await s.aiChatStore.createConversation({
+    id: "chat-active",
+    title: "Career reading chat",
+    createdAt: 1700000001000,
+    updatedAt: 1700000005000,
+    pinned: true,
+    archived: false,
+    profileId: "prof_local_1",
+    skillMode: "auto",
+    readingIds: ["rec-v2"],
+    readingSnapshots: [{
+      id: "rec-v2",
+      layoutMode: "preset",
+      deckType: "tarot",
+      spreadId: "three-card-horizontal",
+      spreadName: "三张牌",
+      positionCount: 1,
+      createdAt: 1700000000000,
+      question: "Should I switch roles?",
+      cards: [{
+        slotIndex: 0,
+        positionNumber: 1,
+        positionName: "当下 · Present",
+        cardId: "major-00",
+        cardName: "愚者",
+        orientation: "upright",
+        arcana: "major"
+      }]
+    }],
+    messages: [
+      { id: "m1", role: "user", content: "Interpret my spread", createdAt: 1700000002000 },
+      { id: "m2", role: "assistant", content: "Look closely at the unexamined assumptions.", model: "gpt-4o-mini", createdAt: 1700000003000, interpretedReadingIds: ["rec-v2"] }
+    ],
+    contextSummary: { text: "Discussed Fool in Present", coveredUntilId: "m2", compressedCount: 2, updatedAt: 1700000004000 },
+    lastUsage: { inputTokens: 120, outputTokens: 80, totalTokens: 200, updatedAt: 1700000004500 }
+  });
+  await s.aiChatStore.createConversation({
+    id: "chat-archived",
+    title: "Archived chat",
+    createdAt: 1700000000100,
+    updatedAt: 1700000000200,
+    archived: true,
+    messages: [{ id: "m3", role: "user", content: "Old question", createdAt: 1700000000150 }]
+  });
+
+  // Also ensure AI API keys stored in localStorage are NEVER touched or exported!
+  sourceEnv.storage.setItem("quareia-ai-config-v1", JSON.stringify({
+    version: 1,
+    activeProfileId: "prof_local_1",
+    profiles: [{
+      id: "prof_local_1",
+      format: "openai-chat",
+      baseUrl: "https://secret-proxy.example/v1",
+      apiKey: "sk-super-secret-do-not-export-99999",
+      model: "gpt-4o-mini"
+    }]
+  }));
+
+  // 1. Inspect local counts
+  var localCounts = await fullBackup.inspectLocalCounts(s);
+  assert.deepEqual(localCounts, {
+    history: 3,
+    cardNotes: 3,
+    customSpreads: 2,
+    aiChats: 2,
+    preferences: 2,
+    unavailable: []
+  });
+
+  // 2. Collect full backup
+  var fixedIso = "2026-11-28T06:30:00.000Z";
+  var collected = await fullBackup.collectBackup(s, { exportedAt: fixedIso });
+  assert.equal(collected.exportedAt, fixedIso);
+  assert.deepEqual(collected.unavailable, []);
+  assert.deepEqual(collected.counts, {
+    history: 3,
+    cardNotes: 3,
+    customSpreads: 2,
+    aiChats: 2,
+    preferences: 2
+  });
+  assert.equal(collected.envelope.format, "quareia-full-backup");
+  assert.equal(collected.envelope.version, 1);
+  assert.equal(collected.envelope.sections.history.formatVersion, 3);
+  assert.equal(collected.envelope.sections.customSpreads.format, "quareia-custom-spreads");
+  assert.deepEqual(collected.envelope.sections.preferences, { theme: "parchment", locale: "en" });
+
+  // Zero API key or endpoint leakage in exported JSON
+  assert.equal(collected.json.includes("sk-super-secret-do-not-export-99999"), false);
+  assert.equal(collected.json.includes("secret-proxy.example"), false);
+  assert.equal(collected.json.includes("apiKey"), false);
+
+  // 3. Parse backup strictly
+  var parsed = fullBackup.parseBackup(collected.json, s);
+  assert.equal(parsed.format, "quareia-full-backup");
+  assert.equal(parsed.version, 1);
+  assert.equal(parsed.exportedAt, fixedIso);
+  assert.deepEqual(parsed.availableSections, ["history", "cardNotes", "customSpreads", "aiChats", "preferences"]);
+  assert.deepEqual(parsed.counts, collected.counts);
+
+  // 4. Restore into a fresh target environment
+  var targetEnv = createTestEnvironment({ theme: "celestial", locale: "zh-CN", platform: "web" });
+  var t = targetEnv.adapters;
+  var result = await fullBackup.restoreBackup(parsed, parsed.availableSections, t);
+
+  assert.deepEqual(result.warnings, []);
+  assert.deepEqual(result.appliedPreferences, { theme: "parchment", locale: "en" });
+  assert.deepEqual(result.restored.history, { imported: 3, remapped: 0, skipped: 0 });
+  assert.deepEqual(result.restored.cardNotes, { imported: 3, skipped: 0 });
+  assert.deepEqual(result.restored.customSpreads, { imported: 2, skipped: 0 });
+  assert.deepEqual(result.restored.aiChats, { imported: 2, updated: 0, skipped: 0 });
+  assert.deepEqual(result.restored.preferences, { theme: "parchment", locale: "en", applied: 2 });
+
+  // Verify restored contents across all 5 stores
+  var restoredHistory = await t.historyStore.listRecords();
+  assert.equal(restoredHistory.length, 3);
+  var restoredV2 = await t.historyStore.getRecord("rec-v2");
+  assert.equal(restoredV2.question, "Should I switch roles?");
+  assert.equal(restoredV2.reflection, "Looking back, the Fool pointed to missing prerequisites.");
+  var restoredV3 = await t.historyStore.getRecord("rec-v3");
+  assert.equal(restoredV3.schemaVersion, 3);
+  assert.equal(restoredV3.reflection, "Order-only freeform note preserved.");
+
+  assert.equal((await t.cardNotesStore.get("tarot", "major-00")).text, "  Fool study note\r\nLine 2  ");
+  assert.equal((await t.cardNotesStore.get("mystagogus", "m-01")).text, "Progenitor before dawn");
+  assert.equal((await t.cardNotesStore.get("lxxxi", "lxxxi-01")).text, "Star Father spark");
+
+  assert.equal(t.customSpreadsLibrary.list().length, 2);
+
+  var restoredActiveChat = await t.aiChatStore.getConversation("chat-active");
+  assert.equal(restoredActiveChat.pinned, true);
+  assert.equal(restoredActiveChat.messages.length, 2);
+  assert.equal(restoredActiveChat.contextSummary.coveredUntilId, "m2");
+  assert.equal(restoredActiveChat.lastUsage.totalTokens, 200);
+  var restoredArchivedChat = await t.aiChatStore.getConversation("chat-archived");
+  assert.equal(restoredArchivedChat.archived, true);
+
+  assert.equal(t.themeApi.getTheme(), "parchment");
+  assert.equal(t.i18nApi.getLocale(), "en");
+
+  // 5. Idempotent re-restore of exact same backup creates zero duplicates
+  var secondResult = await fullBackup.restoreBackup(collected.json, parsed.availableSections, t);
+  assert.deepEqual(secondResult.warnings, []);
+  assert.deepEqual(secondResult.restored.history, { imported: 0, remapped: 0, skipped: 3 });
+  assert.deepEqual(secondResult.restored.cardNotes, { imported: 0, skipped: 3 });
+  assert.deepEqual(secondResult.restored.customSpreads, { imported: 0, skipped: 2 });
+  assert.deepEqual(secondResult.restored.aiChats, { imported: 0, updated: 0, skipped: 2 });
+  assert.equal((await t.historyStore.listRecords()).length, 3);
+  assert.equal((await t.cardNotesStore.list()).length, 3);
+  assert.equal(t.customSpreadsLibrary.list().length, 2);
+  assert.equal((await t.aiChatStore.listConversations({ archived: "all" })).length, 2);
+});
+
+test("non-destructive merge preserves local newer/distinct data across all stores and respects selectedSections", async function () {
+  var env = createTestEnvironment({ theme: "ember", locale: "zh-CN", platform: "android" });
+  var a = env.adapters;
+
+  // Local existing data
+  await a.historyStore.saveRecord(makePresetRecord("collision-id", "2026-11-01T10:00:00.000Z", {
+    question: "Local reading on same ID"
+  }));
+  await a.cardNotesStore.save("tarot", "major-00", "Local Fool note (keep)", null);
+  a.customSpreadsLibrary.upsert(makeCustomSpreadDef("Local Spread", "Keep me"));
+  await a.aiChatStore.createConversation({
+    id: "chat-local-newer",
+    title: "Local newer chat",
+    createdAt: 1000,
+    updatedAt: 9000,
+    messages: [{ id: "lm1", role: "user", content: "Newer local message", createdAt: 9000 }]
+  });
+  await a.aiChatStore.createConversation({
+    id: "chat-local-older",
+    title: "Local older chat",
+    createdAt: 1000,
+    updatedAt: 2000,
+    messages: [{ id: "lo1", role: "user", content: "Older local message", createdAt: 2000 }]
+  });
+
+  // Incoming backup has:
+  // - history record with SAME id ("collision-id") but DIFFERENT content -> must remap, not overwrite!
+  // - card note for major-00 (existing -> skip) and major-01 (new -> import)
+  // - 5 custom spreads (1 identical to Local Spread, 4 new -> total 5 hits Android limit; plus 1 extra -> capacity warning!)
+  // - AI chats: local-newer (older in backup -> skip), local-older (newer in backup -> update), brand-new (import)
+  // - preferences: jade / en — NOT selected -> must NOT change ember / zh-CN!
+  var extraSpreads = [
+    customSpreadsApi.encode(makeCustomSpreadDef("Local Spread", "Keep me")),
+    customSpreadsApi.encode(makeCustomSpreadDef("Imported 1")),
+    customSpreadsApi.encode(makeCustomSpreadDef("Imported 2")),
+    customSpreadsApi.encode(makeCustomSpreadDef("Imported 3")),
+    customSpreadsApi.encode(makeCustomSpreadDef("Imported 4")),
+    customSpreadsApi.encode(makeCustomSpreadDef("Overflow 5"))
+  ];
+  var backupJson = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T07:00:00.000Z",
+    sections: {
+      history: historyRecords.createExportEnvelope([
+        makePresetRecord("collision-id", "2026-11-05T10:00:00.000Z", {
+          question: "Incoming different reading on colliding ID"
+        })
+      ], "2026-11-28T07:00:00.000Z"),
+      cardNotes: {
+        format: "divination-card-notes",
+        version: 1,
+        notes: [
+          { deckType: "tarot", cardId: "major-00", text: "Backup Fool note (should skip)" },
+          { deckType: "tarot", cardId: "major-01", text: "Backup Magician note (should import)" }
+        ]
+      },
+      customSpreads: {
+        format: "quareia-custom-spreads",
+        version: 1,
+        codes: extraSpreads
+      },
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000010000,
+        conversations: [
+          {
+            id: "chat-local-newer",
+            title: "Stale backup version",
+            createdAt: 1000,
+            updatedAt: 3000,
+            messages: [{ id: "lm1", role: "user", content: "Old backup content", createdAt: 3000 }]
+          },
+          {
+            id: "chat-local-older",
+            title: "Updated backup version",
+            createdAt: 1000,
+            updatedAt: 5000,
+            messages: [
+              { id: "lo1", role: "user", content: "Older local message", createdAt: 2000 },
+              { id: "lo2", role: "assistant", content: "Updated reply", createdAt: 5000 }
+            ]
+          },
+          {
+            id: "chat-brand-new",
+            title: "Brand new chat",
+            createdAt: 4000,
+            updatedAt: 4500,
+            messages: [{ id: "bn1", role: "user", content: "Hello", createdAt: 4500 }]
+          }
+        ]
+      },
+      preferences: { theme: "jade", locale: "en" }
+    }
+  });
+
+  // Restore everything EXCEPT preferences
+  var res = await fullBackup.restoreBackup(backupJson, ["history", "cardNotes", "customSpreads", "aiChats"], a);
+
+  assert.deepEqual(res.restored.history, { imported: 1, remapped: 1, skipped: 0 });
+  assert.equal((await a.historyStore.listRecords()).length, 2);
+  assert.equal((await a.historyStore.getRecord("collision-id")).question, "Local reading on same ID");
+
+  assert.deepEqual(res.restored.cardNotes, { imported: 1, skipped: 1 });
+  assert.equal((await a.cardNotesStore.get("tarot", "major-00")).text, "Local Fool note (keep)");
+  assert.equal((await a.cardNotesStore.get("tarot", "major-01")).text, "Backup Magician note (should import)");
+
+  // Android limit is 5: 1 existing + 4 imported = 5; 1 duplicate + 1 overflow = 2 skipped, with capacity warning
+  assert.deepEqual(res.restored.customSpreads, { imported: 4, skipped: 2 });
+  assert.equal(a.customSpreadsLibrary.list().length, 5);
+  assert.equal(res.warnings.length, 1);
+  assert.match(res.warnings[0], /capacity limit/i);
+
+  assert.deepEqual(res.restored.aiChats, { imported: 1, updated: 1, skipped: 1 });
+  assert.equal((await a.aiChatStore.getConversation("chat-local-newer")).title, "Local newer chat");
+  assert.equal((await a.aiChatStore.getConversation("chat-local-older")).title, "Updated backup version");
+  assert.equal((await a.aiChatStore.getConversation("chat-brand-new")).title, "Brand new chat");
+
+  // Preferences were NOT selected, so theme/locale must stay untouched
+  assert.deepEqual(res.appliedPreferences, { theme: null, locale: null });
+  assert.equal(res.restored.preferences, undefined);
+  assert.equal(a.themeApi.getTheme(), "ember");
+  assert.equal(a.i18nApi.getLocale(), "zh-CN");
+  assert.deepEqual(a.themeApi.calls, []);
+  assert.deepEqual(a.i18nApi.calls, []);
+});
+
+test("rejects API keys, forbidden keys, extra keys, prototype pollution, and >16 MiB payloads fail-closed with zero writes", async function () {
+  var env = createTestEnvironment({ theme: "celestial", locale: "zh-CN" });
+  var a = env.adapters;
+
+  var validSectionHistory = historyRecords.createExportEnvelope([
+    makePresetRecord("should-not-write", "2026-11-01T00:00:00.000Z")
+  ], "2026-11-28T06:00:00.000Z");
+
+  // 1. Forbidden security / prototype pollution keys at various nesting levels
+  var forbiddenPayloads = [
+    '{"format":"quareia-full-backup","version":1,"exportedAt":"2026-11-28T06:00:00.000Z","sections":{"preferences":{"theme":"parchment"}},"__proto__":{"polluted":true}}',
+    '{"format":"quareia-full-backup","version":1,"exportedAt":"2026-11-28T06:00:00.000Z","sections":{"__proto__":{"polluted":true}}}',
+    '{"format":"quareia-full-backup","version":1,"exportedAt":"2026-11-28T06:00:00.000Z","sections":{"preferences":{"constructor":{"prototype":{"polluted":true}}}}}',
+    '{"format":"quareia-full-backup","version":1,"exportedAt":"2026-11-28T06:00:00.000Z","sections":{"preferences":{"prototype":{}}}}',
+    '{"format":"quareia-full-backup","version":1,"exportedAt":"2026-11-28T06:00:00.000Z","apiKey":"sk-123","sections":{}}',
+    '{"format":"quareia-full-backup","version":1,"exportedAt":"2026-11-28T06:00:00.000Z","sections":{"apiKeys":["sk-123"]}}',
+    '{"format":"quareia-full-backup","version":1,"exportedAt":"2026-11-28T06:00:00.000Z","sections":{"providers":[]}}',
+    '{"format":"quareia-full-backup","version":1,"exportedAt":"2026-11-28T06:00:00.000Z","sections":{"profiles":[]}}',
+    '{"format":"quareia-full-backup","version":1,"exportedAt":"2026-11-28T06:00:00.000Z","sections":{"aiChats":{"format":"quareia-ai-chats-backup","version":1,"exportedAt":1000,"conversations":[{"id":"c1","endpoint":"https://evil.example","messages":[]}]}}}',
+    '{"format":"quareia-full-backup","version":1,"exportedAt":"2026-11-28T06:00:00.000Z","sections":{"aiChats":{"format":"quareia-ai-chats-backup","version":1,"exportedAt":1000,"conversations":[{"id":"c1","messages":[{"id":"m1","role":"user","content":"hi","token":"secret-tok"}]}]}}}',
+    '{"format":"quareia-full-backup","version":1,"exportedAt":"2026-11-28T06:00:00.000Z","sections":{"preferences":{"secret":"xyz"}}}'
+  ];
+
+  for (var i = 0; i < forbiddenPayloads.length; i += 1) {
+    assert.throws(function () {
+      fullBackup.parseBackup(forbiddenPayloads[i], a);
+    }, /forbidden|unexpected/i);
+    await assert.rejects(fullBackup.restoreBackup(forbiddenPayloads[i], ["history", "preferences"], a));
+  }
+  assert.equal(({}).polluted, undefined, "Object.prototype must never be polluted");
+
+  // 2. Malformed JSON, wrong format/version, extra fields, invalid preferences
+  var invalidPayloads = [
+    "",
+    "not json",
+    "{}",
+    JSON.stringify({ format: "wrong", version: 1, exportedAt: "2026-11-28T06:00:00.000Z", sections: {} }),
+    JSON.stringify({ format: fullBackup.BACKUP_FORMAT, version: 2, exportedAt: "2026-11-28T06:00:00.000Z", sections: {} }),
+    JSON.stringify({ format: fullBackup.BACKUP_FORMAT, version: 1, exportedAt: "not-iso", sections: {} }),
+    JSON.stringify({ format: fullBackup.BACKUP_FORMAT, version: 1, exportedAt: "2026-11-28T06:00:00.000Z", sections: {}, extraField: 1 }),
+    JSON.stringify({ format: fullBackup.BACKUP_FORMAT, version: 1, exportedAt: "2026-11-28T06:00:00.000Z", sections: { unknownSection: {} } }),
+    JSON.stringify({ format: fullBackup.BACKUP_FORMAT, version: 1, exportedAt: "2026-11-28T06:00:00.000Z", sections: { preferences: { theme: "neon-xss" } } }),
+    JSON.stringify({ format: fullBackup.BACKUP_FORMAT, version: 1, exportedAt: "2026-11-28T06:00:00.000Z", sections: { preferences: { locale: "fr-FR" } } }),
+    JSON.stringify({ format: fullBackup.BACKUP_FORMAT, version: 1, exportedAt: "2026-11-28T06:00:00.000Z", sections: { preferences: { theme: "parchment", extra: true } } }),
+    JSON.stringify({ format: fullBackup.BACKUP_FORMAT, version: 1, exportedAt: "2026-11-28T06:00:00.000Z", sections: { customSpreads: { format: "quareia-custom-spreads", version: 1, codes: ["QSP2.corrupted.00000000"] } } })
+  ];
+  for (var j = 0; j < invalidPayloads.length; j += 1) {
+    assert.throws(function () { fullBackup.parseBackup(invalidPayloads[j], a); });
+  }
+
+  // 3. Fail-closed across sections: valid history + invalid cardNotes must NOT write history!
+  var mixedInvalid = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T06:00:00.000Z",
+    sections: {
+      history: validSectionHistory,
+      cardNotes: {
+        format: "divination-card-notes",
+        version: 1,
+        notes: [{ deckType: "tarot", cardId: "fake-card-999", text: "invalid" }]
+      },
+      preferences: { theme: "parchment", locale: "en" }
+    }
+  });
+  await assert.rejects(fullBackup.restoreBackup(mixedInvalid, ["history", "cardNotes", "preferences"], a), /unknown card key/i);
+  assert.equal((await a.historyStore.listRecords()).length, 0, "History must remain untouched when another section is invalid");
+  assert.equal((await a.cardNotesStore.list()).length, 0);
+  assert.equal(a.themeApi.getTheme(), "celestial");
+  assert.equal(a.i18nApi.getLocale(), "zh-CN");
+
+  // 4. UTF-8 byte limit (>16 MiB) enforced BEFORE JSON.parse (ASCII and multi-byte UTF-8)
+  var oversizedAscii = " ".repeat(fullBackup.MAX_BACKUP_BYTES + 1);
+  assert.throws(function () { fullBackup.parseBackup(oversizedAscii); }, function (err) {
+    return err.code === "backup_too_large";
+  });
+  var oversizedUtf8 = "汉".repeat(Math.floor(fullBackup.MAX_BACKUP_BYTES / 3) + 1);
+  assert.ok(oversizedUtf8.length < fullBackup.MAX_BACKUP_BYTES, "UTF-16 length is below 16M while UTF-8 exceeds 16 MiB");
+  assert.throws(function () { fullBackup.parseBackup(oversizedUtf8); }, function (err) {
+    return err.code === "backup_too_large";
+  });
+  await assert.rejects(fullBackup.restoreBackup(oversizedUtf8, ["history"], a), { code: "backup_too_large" });
+
+  // 5. Rejects unknown section name in selectedSections fail-closed before any write
+  var validRaw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T06:00:00.000Z",
+    sections: { history: validSectionHistory }
+  });
+  await assert.rejects(fullBackup.restoreBackup(validRaw, ["history", "apiKeys"], a), /unknown backup section/i);
+  assert.equal((await a.historyStore.listRecords()).length, 0);
+});
+
+test("handles partial backups and unavailable stores gracefully without throwing", async function () {
+  var brokenIdb = {
+    open: function () { throw new Error("IndexedDB disabled in private mode"); }
+  };
+  var isKnownCard = createDeckCatalogChecker();
+  var themeApi = createFakeThemeApi("grove-light");
+  var i18nApi = createFakeI18nApi("zh-CN");
+
+  var partialAdapters = {
+    historyRecords: historyRecords,
+    historyStore: historyStoreApi.createStore({ indexedDB: brokenIdb, recordsApi: historyRecords }),
+    cardNotesStore: cardNotesStoreApi.createStore({ indexedDB: brokenIdb, isKnownCard: isKnownCard }),
+    customSpreads: customSpreadsApi,
+    customSpreadsLibrary: null,
+    aiChatStoreApi: aiChatStoreApi,
+    aiChatStore: aiChatStoreApi.createStore({ indexedDB: brokenIdb, memoryFallback: false }),
+    themeApi: themeApi,
+    i18nApi: i18nApi,
+    isKnownCard: isKnownCard
+  };
+
+  // inspectLocalCounts must not throw; reports unavailable stores cleanly
+  var counts = await fullBackup.inspectLocalCounts(partialAdapters);
+  assert.deepEqual(counts, {
+    history: 0,
+    cardNotes: 0,
+    customSpreads: 0,
+    aiChats: 0,
+    preferences: 2,
+    unavailable: ["history", "cardNotes", "customSpreads", "aiChats"]
+  });
+
+  // collectBackup only includes readable sections
+  var collected = await fullBackup.collectBackup(partialAdapters, { exportedAt: "2026-11-28T08:00:00.000Z" });
+  assert.deepEqual(Object.keys(collected.envelope.sections), ["preferences"]);
+  assert.deepEqual(collected.unavailable, ["history", "cardNotes", "customSpreads", "aiChats"]);
+  assert.deepEqual(collected.envelope.sections.preferences, { theme: "grove-light", locale: "zh-CN" });
+
+  // parseBackup handles partial backup cleanly
+  var parsed = fullBackup.parseBackup(collected.json);
+  assert.deepEqual(parsed.availableSections, ["preferences"]);
+  assert.deepEqual(parsed.counts, {
+    history: 0,
+    cardNotes: 0,
+    customSpreads: 0,
+    aiChats: 0,
+    preferences: 2
+  });
+
+  // Restoring partial backup on classic page (only 4 themes) warns cleanly for unsupported theme while applying locale
+  var classicEnv = createTestEnvironment({
+    theme: "celestial",
+    locale: "en",
+    allowedThemes: ["celestial", "parchment", "ember", "grove"]
+  });
+  var restored = await fullBackup.restoreBackup(parsed, ["preferences"], classicEnv.adapters);
+  assert.deepEqual(restored.appliedPreferences, { theme: null, locale: "zh-CN" });
+  assert.equal(classicEnv.adapters.themeApi.getTheme(), "celestial");
+  assert.equal(classicEnv.adapters.i18nApi.getLocale(), "zh-CN");
+  assert.equal(restored.warnings.length, 1);
+  assert.match(restored.warnings[0], /grove-light/);
+});
+
+test("all 8 valid themes and both locales round-trip cleanly", async function () {
+  for (var i = 0; i < fullBackup.VALID_THEMES.length; i += 1) {
+    var theme = fullBackup.VALID_THEMES[i];
+    var locale = fullBackup.VALID_LOCALES[i % fullBackup.VALID_LOCALES.length];
+    var raw = JSON.stringify({
+      format: fullBackup.BACKUP_FORMAT,
+      version: 1,
+      exportedAt: "2026-11-28T09:00:00.000Z",
+      sections: { preferences: { theme: theme, locale: locale } }
+    });
+    var parsed = fullBackup.parseBackup(raw);
+    assert.deepEqual(parsed.sections.preferences, { theme: theme, locale: locale });
+
+    var target = createTestEnvironment({ theme: "celestial", locale: "zh-CN" });
+    var res = await fullBackup.restoreBackup(parsed, ["preferences"], target.adapters);
+    assert.deepEqual(res.appliedPreferences, { theme: theme, locale: locale });
+    assert.equal(target.adapters.themeApi.getTheme(), theme);
+    assert.equal(target.adapters.i18nApi.getLocale(), locale);
+  }
+});
+
+test("rejects oversized aiChats section (>8 MiB) fail-closed before writing any other section", async function () {
+  var env = createTestEnvironment();
+  var a = env.adapters;
+  var bigContent = "x".repeat(aiChatStoreApi.MAX_BACKUP_BYTES + 1024);
+  var raw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T09:30:00.000Z",
+    sections: {
+      history: historyRecords.createExportEnvelope([
+        makePresetRecord("before-big-chat", "2026-11-01T00:00:00.000Z")
+      ], "2026-11-28T09:30:00.000Z"),
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000000000,
+        conversations: [{
+          id: "huge-chat",
+          title: "Huge",
+          createdAt: 1000,
+          updatedAt: 1000,
+          messages: [{ id: "m1", role: "user", content: bigContent, createdAt: 1000 }]
+        }]
+      }
+    }
+  });
+  // Total payload is ~8 MiB (<16 MiB overall limit), so aiChats' own 8 MiB limit catches it fail-closed!
+  assert.ok(fullBackup.utf8ByteLength(raw) < fullBackup.MAX_BACKUP_BYTES);
+  assert.throws(function () { fullBackup.parseBackup(raw, a); }, { code: "backup_too_large" });
+  await assert.rejects(fullBackup.restoreBackup(raw, ["history", "aiChats"], a), { code: "backup_too_large" });
+  assert.equal((await a.historyStore.listRecords()).length, 0, "History must not be written when aiChats exceeds 8 MiB");
+});
+
+test("supports legacy QSP1 custom spread codes and skips canonical duplicates cleanly", async function () {
+  var env = createTestEnvironment({ platform: "web" });
+  var a = env.adapters;
+  var def = makeCustomSpreadDef("Legacy Spread", "From QSP1");
+  // Save canonical v2 spread locally
+  a.customSpreadsLibrary.upsert(def);
+  var v2Code = customSpreadsApi.encode(def);
+  // Construct matching v1 QSP1 code (same name/desc/grid/positions)
+  var v1Json = JSON.stringify({
+    v: 1,
+    n: def.name,
+    d: def.description,
+    c: def.columns,
+    r: def.rows,
+    p: def.positions.map(function (p) { return [p.name, p.meaning, p.column, p.row]; })
+  });
+  var payload = Buffer.from(v1Json, "utf8").toString("base64url");
+  var hash = 0x811C9DC5;
+  for (var i = 0; i < payload.length; i += 1) {
+    hash ^= payload.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  var v1Code = "QSP1." + payload + "." + hash.toString(16).padStart(8, "0");
+  assert.notEqual(v1Code, v2Code);
+
+  var raw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T10:00:00.000Z",
+    sections: {
+      customSpreads: {
+        format: "quareia-custom-spreads",
+        version: 1,
+        codes: [v1Code]
+      }
+    }
+  });
+  var res = await fullBackup.restoreBackup(raw, ["customSpreads"], a);
+  assert.deepEqual(res.restored.customSpreads, { imported: 0, skipped: 1 });
+  assert.equal(a.customSpreadsLibrary.list().length, 1);
+
+  // Duplicate canonical codes (QSP1 + QSP2 of same spread) inside ONE backup fail closed
+  var dupRaw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T10:00:00.000Z",
+    sections: {
+      customSpreads: {
+        format: "quareia-custom-spreads",
+        version: 1,
+        codes: [v1Code, v2Code]
+      }
+    }
+  });
+  assert.throws(function () { fullBackup.parseBackup(dupRaw, a); }, /duplicate/i);
+});
+
+test("loads cleanly as a pure browser UMD global without CommonJS and rejects forged pre-parsed objects", async function () {
+  var sandbox = {
+    URL: URL,
+    TextEncoder: TextEncoder,
+    Buffer: undefined
+  };
+  sandbox.globalThis = sandbox;
+  sandbox.window = sandbox;
+  var scripts = [
+    "js/tarot-data.js",
+    "js/mystagogus-data.js",
+    "js/lxxxi-data.js",
+    "js/history-records.js",
+    "js/history-store.js",
+    "js/card-notes-store.js",
+    "js/custom-spreads.js",
+    "js/ai-chat-store.js",
+    "js/full-backup.js"
+  ];
+  scripts.forEach(function (rel) {
+    var code = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    vm.runInNewContext(code, sandbox, { filename: rel });
+  });
+
+  var browserApi = sandbox.DivinationFullBackup;
+  assert.ok(browserApi, "Browser global DivinationFullBackup must be exported");
+  assert.equal(browserApi.BACKUP_FORMAT, "quareia-full-backup");
+
+  // Uses top-level const tarotDeckFull / mystagogusDeckFull / lxxxiDeckFull automatically in browser mode
+  var okRaw = JSON.stringify({
+    format: "quareia-full-backup",
+    version: 1,
+    exportedAt: "2026-11-28T11:00:00.000Z",
+    sections: {
+      cardNotes: {
+        format: "divination-card-notes",
+        version: 1,
+        notes: [
+          { deckType: "tarot", cardId: "minor-cups-queen", text: "Queen of Cups" },
+          { deckType: "mystagogus", cardId: "m-78", text: "Empty Vessel" },
+          { deckType: "lxxxi", cardId: "lxxxi-81", text: "Card 81" }
+        ]
+      }
+    }
+  });
+  var parsed = browserApi.parseBackup(okRaw);
+  assert.equal(parsed.counts.cardNotes, 3);
+
+  // Rejects forged pre-parsed objects with unexpected or non-enumerable forbidden keys
+  var env = createTestEnvironment();
+  var forgedExtra = {
+    format: "quareia-full-backup",
+    version: 1,
+    exportedAt: "2026-11-28T11:00:00.000Z",
+    sections: { preferences: { theme: "parchment" } },
+    unexpectedTopKey: true
+  };
+  await assert.rejects(fullBackup.restoreBackup(forgedExtra, ["preferences"], env.adapters), /unexpected key/i);
+  assert.equal(env.adapters.themeApi.getTheme(), "celestial");
+
+  var forgedHidden = {
+    format: "quareia-full-backup",
+    version: 1,
+    exportedAt: "2026-11-28T11:00:00.000Z",
+    sections: { preferences: { theme: "parchment" } }
+  };
+  Object.defineProperty(forgedHidden.sections.preferences, "apiKey", {
+    value: "sk-hidden",
+    enumerable: false
+  });
+  await assert.rejects(fullBackup.restoreBackup(forgedHidden, ["preferences"], env.adapters), /forbidden key/i);
+  assert.equal(env.adapters.themeApi.getTheme(), "celestial");
+});
+
