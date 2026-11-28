@@ -2,7 +2,6 @@
   "use strict";
 
   var SECTION_KEYS = ["history", "cardNotes", "customSpreads", "aiChats", "preferences"];
-  var SPREAD_SELECTION_KEY = "quareia-spread-selection-v1";
   var THEME_I18N_KEYS = {
     celestial: "theme.celestial",
     parchment: "theme.parchment",
@@ -79,70 +78,27 @@
   }
 
   function createCustomSpreadsAdapter(core) {
+    var ui = global.DivinationCustomSpreadUi;
+    if (ui &&
+        typeof ui.hasActiveController === "function" &&
+        ui.hasActiveController() &&
+        typeof ui.list === "function" &&
+        typeof ui.exportCode === "function" &&
+        typeof ui.importCode === "function") {
+      return {
+        list: function () { return ui.list(); },
+        getById: function (id) { return typeof ui.getById === "function" ? ui.getById(id) : null; },
+        exportCode: function (id) { return ui.exportCode(id); },
+        importCode: function (code) { return ui.importCode(code); }
+      };
+    }
+
     if (!core || typeof core.createLibrary !== "function") return null;
-    var storage = getLocalStorageSafe();
-    if (isAndroidSurface()) {
-      return core.createLibrary({ platform: "android", storage: storage });
-    }
-
-    // On Web, custom spreads are session-only except for the persisted active
-    // spread code in quareia-spread-selection-v1 and any backup-restored items
-    // stored in quareia-custom-spreads-v1. Combine both cleanly.
-    var persisted = null;
-    if (storage) {
-      try {
-        persisted = core.createLibrary({ platform: "android", storage: storage });
-      } catch (_error) {
-        persisted = null;
-      }
-    }
-    var mem = core.createLibrary({ platform: "web", storage: null });
-    if (persisted) {
-      persisted.list().forEach(function (spread) {
-        var code = persisted.exportCode(spread.id);
-        if (code) {
-          try { mem.importCode(code); } catch (_err) {}
-        }
-      });
-    }
-    if (storage) {
-      try {
-        var rawSel = storage.getItem(SPREAD_SELECTION_KEY);
-        if (rawSel) {
-          var sel = JSON.parse(rawSel);
-          if (sel && typeof sel.customSpreadCode === "string" && sel.customSpreadCode) {
-            mem.importCode(sel.customSpreadCode);
-          }
-        }
-      } catch (_err) {}
-    }
-
-    return {
-      list: function () { return mem.list(); },
-      getById: function (id) { return mem.getById(id); },
-      exportCode: function (id) { return mem.exportCode(id); },
-      upsert: function (def) {
-        var saved = mem.upsert(def);
-        if (persisted) {
-          try { persisted.upsert(def); } catch (_err) {}
-        }
-        return saved;
-      },
-      importCode: function (code) {
-        var imported = mem.importCode(code);
-        if (persisted) {
-          try { persisted.importCode(code); } catch (_err) {}
-        }
-        return imported;
-      },
-      remove: function (id) {
-        var removed = mem.remove(id);
-        if (persisted) {
-          try { persisted.remove(id); } catch (_err) {}
-        }
-        return removed;
-      }
-    };
+    var android = isAndroidSurface();
+    return core.createLibrary({
+      platform: android ? "android" : "web",
+      storage: android ? getLocalStorageSafe() : null
+    });
   }
 
   function createRuntimeAdapters(isKnownCard) {
@@ -408,7 +364,8 @@
       if (unavailableEl) {
         if (unavailableList.length > 0) {
           var names = unavailableList.map(function (key) { return t("fullBackup.section." + key); });
-          unavailableEl.textContent = t("fullBackup.unavailableNotice", { modules: names.join("、") });
+          var separator = getLocale() === "en" ? ", " : "、";
+          unavailableEl.textContent = t("fullBackup.unavailableNotice", { modules: names.join(separator) });
           unavailableEl.hidden = false;
         } else {
           unavailableEl.textContent = "";
@@ -732,10 +689,21 @@
         };
         renderRestoreSummary();
         setStatus("fullBackup.restoreDone", null, "success");
+        var cardNotesRefreshed = false;
+        if (selectedSections.indexOf("cardNotes") !== -1 &&
+            global.DivinationCardNotes &&
+            typeof global.DivinationCardNotes.refresh === "function") {
+          cardNotesRefreshed = true;
+          try { await global.DivinationCardNotes.refresh(); } catch (_err) {}
+        }
         await refreshCounts();
         if (typeof global.dispatchEvent === "function" && typeof global.CustomEvent === "function") {
           global.dispatchEvent(new global.CustomEvent("quareia:fullbackuprestored", {
-            detail: { selectedSections: selectedSections.slice(), outcome: outcome }
+            detail: {
+              selectedSections: selectedSections.slice(),
+              outcome: outcome,
+              cardNotesRefreshed: cardNotesRefreshed
+            }
           }));
         }
       } catch (_error) {
@@ -758,8 +726,15 @@
 
     function openDialog(trigger) {
       opener = trigger || doc.activeElement;
+      var openedFromMenu = Boolean(
+        (global.DivinationMenu && typeof global.DivinationMenu.isOpen === "function" && global.DivinationMenu.isOpen()) ||
+        (trigger && typeof trigger.closest === "function" && trigger.closest("#appMenu")) ||
+        (opener && typeof opener.closest === "function" && opener.closest("#appMenu"))
+      );
       if (global.DivinationMenu && typeof global.DivinationMenu.isOpen === "function" && global.DivinationMenu.isOpen()) {
         global.DivinationMenu.close();
+      }
+      if (openedFromMenu) {
         opener = el("menuToggle") || opener;
       }
       var settingsPanel = el("settingsPanel");
@@ -794,7 +769,10 @@
       }
       var target = opener;
       opener = null;
-      if (target && target.isConnected && target.offsetParent !== null && typeof target.focus === "function") {
+      var hiddenAncestor = target && typeof target.closest === "function"
+        ? target.closest('[aria-hidden="true"]')
+        : null;
+      if (target && target.isConnected && target.offsetParent !== null && !hiddenAncestor && typeof target.focus === "function") {
         target.focus({ preventScroll: true });
       } else {
         var fallback = el("menuToggle") || el("settingsOpenBtn");

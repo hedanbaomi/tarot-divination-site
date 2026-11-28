@@ -357,6 +357,13 @@
     } catch (_) { status("notes.badBackup"); }
   });
 
+  function refreshMarkers() {
+    var libraryOpen = Boolean(dialog && dialog.open && !active);
+    return refreshIndex(libraryOpen).then(function () {
+      if (libraryOpen && dialog.open && !active) renderList();
+    }).catch(function () { /* The next open will retry. */ });
+  }
+
   global.addEventListener("quareia:languagechange", function () {
     renderHeading();
     if (dialog.open && !active) renderList();
@@ -364,11 +371,18 @@
     status(statusKey, statusValues);
     if (active && active.error) recovery(active.error);
   });
+  global.addEventListener("quareia:fullbackuprestored", function (event) {
+    var detail = event && event.detail;
+    if (active || (detail && detail.cardNotesRefreshed)) return;
+    if (detail && Array.isArray(detail.selectedSections) && detail.selectedSections.indexOf("cardNotes") === -1) return;
+    refreshMarkers();
+  });
   refreshIndex(false).catch(function () { /* The editor reports storage errors when opened. */ });
   global.DivinationCardNotes = {
     markRevealedCard: markRevealedCard,
     createButton: function (deck, id) { return noteButton(deck, id, false); },
     isOpen: function () { return dialog.open; },
+    refresh: refreshMarkers,
     handleBack: handleBack
   };
 })(globalThis);

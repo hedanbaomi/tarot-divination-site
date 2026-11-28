@@ -129,8 +129,8 @@ def seed_all_modules(page, android):
             });
             await notesStore.save("tarot", "major-00", noteXss, null);
 
-            // 3. Custom Spreads
-            const spreadDef = {
+            // 3. Custom Spreads via live DivinationCustomSpreadUi controller
+            const spreadDef1 = {
                 name: "全量备份测试牌阵",
                 description: "测试跨设备导出恢复",
                 columns: 2,
@@ -143,16 +143,22 @@ def seed_all_modules(page, android):
                     { name: "方向", meaning: "下一步", column: 2, row: 1 }
                 ]
             };
-            const code = DivinationCustomSpreads.encode(spreadDef);
-            const lib = DivinationCustomSpreads.createLibrary({ platform: "android", storage: localStorage });
-            lib.importCode(code);
+            DivinationCustomSpreadUi.importCode(DivinationCustomSpreads.encode(spreadDef1));
             if (!isAndroid) {
-                localStorage.setItem("quareia-spread-selection-v1", JSON.stringify({
-                    deckType: "tarot",
-                    spreadId: DivinationCustomSpreads.toRuntimeSpread(spreadDef).id,
-                    overviewMethod: "single",
-                    customSpreadCode: code
-                }));
+                const spreadDef2 = {
+                    name: "第二会话测试牌阵",
+                    description: "验证 Web 多牌阵全量导出与即时恢复",
+                    columns: 1,
+                    rows: 2,
+                    deckScope: "any",
+                    tarotMode: "mixed",
+                    stackingMode: "single",
+                    positions: [
+                        { name: "上方", meaning: "显性趋势", column: 1, row: 1 },
+                        { name: "下方", meaning: "隐性根源", column: 1, row: 2 }
+                    ]
+                };
+                DivinationCustomSpreadUi.importCode(DivinationCustomSpreads.encode(spreadDef2));
             }
 
             // 4. AI Chats
@@ -194,7 +200,7 @@ def seed_all_modules(page, android):
     )
 
 
-def clear_all_modules(page):
+def clear_all_modules(page, android):
     page.evaluate(
         """async () => {
             const historyStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
@@ -221,6 +227,10 @@ def clear_all_modules(page):
             DivinationI18n.setLocale("zh-CN");
         }"""
     )
+    # Reload so DivinationCustomSpreadUi boots with a genuinely empty live controller.
+    page.reload()
+    if android:
+        dismiss_android_telemetry(page)
 
 
 def export_full_backup(page, android):
@@ -332,6 +342,7 @@ def run_scenario(pw, base_url, android, classic, width):
             seed_all_modules(page, android)
 
             # Open dialog in light parchment theme + English and verify counts & layout.
+            expected_spread_count = 1 if android else 2
             open_backup_dialog(page, android, classic)
             assert page.evaluate("document.documentElement.getAttribute('data-theme')") == "parchment"
             assert page.evaluate("document.documentElement.lang") == "en"
@@ -339,7 +350,7 @@ def run_scenario(pw, base_url, android, classic, width):
             expect(page.locator("#fullBackupPrivacy")).to_contain_text("API keys")
             expect(page.locator('[data-backup-count-section="history"]')).to_contain_text("1")
             expect(page.locator('[data-backup-count-section="cardNotes"]')).to_contain_text("1")
-            expect(page.locator('[data-backup-count-section="customSpreads"]')).to_contain_text("1")
+            expect(page.locator('[data-backup-count-section="customSpreads"]')).to_contain_text(str(expected_spread_count))
             expect(page.locator('[data-backup-count-section="aiChats"]')).to_contain_text("1")
             expect(page.locator('[data-backup-count-section="preferences"]')).to_contain_text("Parchment")
             assert_no_overflow(page, label + " light/en export view")
@@ -362,14 +373,29 @@ def run_scenario(pw, base_url, android, classic, width):
             assert envelope["sections"]["history"]["records"][0]["question"] == QUESTION_TEXT
             assert envelope["sections"]["history"]["records"][0]["reflection"] == REFLECTION_TEXT
             assert len(envelope["sections"]["cardNotes"]["notes"]) == 1
-            assert len(envelope["sections"]["customSpreads"]["codes"]) == 1
+            assert len(envelope["sections"]["customSpreads"]["codes"]) == expected_spread_count
             assert len(envelope["sections"]["aiChats"]["conversations"]) == 1
             assert envelope["sections"]["preferences"] == {"theme": "parchment", "locale": "en"}
 
             close_backup_dialog(page, android)
+            if android:
+                # Focus MUST return to #menuToggle, never inside #appMenu[aria-hidden="true"].
+                assert page.evaluate("document.activeElement && document.activeElement.id") == "menuToggle", label
 
-            # Clear all data & reset to dark celestial + zh-CN.
-            clear_all_modules(page)
+            # Clear all data & reload into dark celestial + zh-CN so live controllers boot empty.
+            clear_all_modules(page, android)
+            # Mount a live revealed-card marker for tarot/major-00 to verify instant marker sync on restore.
+            page.evaluate(
+                """() => {
+                    const marker = document.createElement("div");
+                    marker.id = "e2eCardNoteMarker";
+                    DivinationCardNotes.markRevealedCard(marker, "tarot", "major-00");
+                    document.body.appendChild(marker);
+                }"""
+            )
+            assert page.evaluate("document.getElementById('e2eCardNoteMarker').classList.contains('has-card-note')") is False
+            assert page.evaluate("DivinationCustomSpreadUi.list().length") == 0
+
             open_backup_dialog(page, android, classic)
             assert page.evaluate("document.documentElement.getAttribute('data-theme')") == "celestial"
             assert page.evaluate("document.documentElement.lang") == "zh-CN"
@@ -427,11 +453,32 @@ def run_scenario(pw, base_url, android, classic, width):
             expect(page.locator("#fullBackupSummaryList li")).to_have_count(4)
             expect(page.locator('[data-backup-count-section="history"]')).to_contain_text("1")
             expect(page.locator('[data-backup-count-section="cardNotes"]')).to_contain_text("1")
-            expect(page.locator('[data-backup-count-section="customSpreads"]')).to_contain_text("1")
+            expect(page.locator('[data-backup-count-section="customSpreads"]')).to_contain_text(str(expected_spread_count))
             expect(page.locator('[data-backup-count-section="aiChats"]')).to_contain_text("1")
             # Preferences were unchecked so theme & locale stay celestial + zh-CN.
             assert page.evaluate("document.documentElement.getAttribute('data-theme')") == "celestial"
             assert page.evaluate("document.documentElement.lang") == "zh-CN"
+            # Live UI sync without reloading: #spreadSelect options, #customSpreadLibrary, and revealed-card note marker update immediately!
+            live_state = page.evaluate(
+                """() => {
+                    const options = Array.from(document.querySelectorAll("#spreadSelect option")).map(o => o.textContent || "");
+                    const libText = (document.getElementById("customSpreadLibrary") || {}).textContent || "";
+                    const markerHasNote = document.getElementById("e2eCardNoteMarker").classList.contains("has-card-note");
+                    return {
+                        options,
+                        libText,
+                        liveCount: DivinationCustomSpreadUi.list().length,
+                        markerHasNote
+                    };
+                }"""
+            )
+            assert live_state["liveCount"] == expected_spread_count, (label, live_state)
+            assert any("全量备份测试牌阵" in opt for opt in live_state["options"]), (label, live_state)
+            assert "全量备份测试牌阵" in live_state["libText"], (label, live_state)
+            if not android:
+                assert any("第二会话测试牌阵" in opt for opt in live_state["options"]), (label, live_state)
+                assert "第二会话测试牌阵" in live_state["libText"], (label, live_state)
+            assert live_state["markerHasNote"] is True, (label, live_state)
             # Zero network requests occurred during preview, cancel, and 4-module data merge restore.
             backup_phase["active"] = False
             assert not backup_phase["requests"], (label, backup_phase["requests"])
@@ -452,9 +499,38 @@ def run_scenario(pw, base_url, android, classic, width):
             expect(page.locator("#fullBackupDialogTitle")).to_have_text("Full Backup & Restore")
             assert_no_overflow(page, label + " light/en post-restore summary")
 
-            # Verify zero XSS execution and persisted data after reload.
+            # Verify zero XSS execution and proper focus return on close.
             assert page.evaluate("Boolean(window.__xssFired)") is False
             close_backup_dialog(page, android)
+            if android:
+                assert page.evaluate("document.activeElement && document.activeElement.id") == "menuToggle", label
+
+                # Android no-clobber regression: create/import another spread WITHOUT reloading,
+                # verify BOTH the restored spread and new spread coexist in live UI AND after reload!
+                page.evaluate(
+                    """() => {
+                        const spreadDefB = {
+                            name: "新建牌阵B",
+                            description: "验证不覆盖已恢复牌阵",
+                            columns: 1,
+                            rows: 1,
+                            deckScope: "any",
+                            tarotMode: "mixed",
+                            stackingMode: "single",
+                            positions: [{ name: "核心", meaning: "提示", column: 1, row: 1 }]
+                        };
+                        DivinationCustomSpreadUi.importCode(DivinationCustomSpreads.encode(spreadDefB));
+                    }"""
+                )
+                after_add = page.evaluate(
+                    """() => ({
+                        names: DivinationCustomSpreadUi.list().map(s => s.name),
+                        options: Array.from(document.querySelectorAll("#spreadSelect option")).map(o => o.textContent || "")
+                    })"""
+                )
+                assert set(after_add["names"]) == {"全量备份测试牌阵", "新建牌阵B"}, (label, after_add)
+                assert any("全量备份测试牌阵" in o for o in after_add["options"]), (label, after_add)
+                assert any("新建牌阵B" in o for o in after_add["options"]), (label, after_add)
 
             page.reload()
             if android:
@@ -472,7 +548,6 @@ def run_scenario(pw, base_url, android, classic, width):
                         }
                     });
                     const aStore = DivinationAiChatStore.createStore();
-                    const cLib = DivinationCustomSpreads.createLibrary({ platform: "android", storage: localStorage });
                     const [readings, notes, chats] = await Promise.all([
                         hStore.listRecords("all"),
                         nStore.list(),
@@ -484,20 +559,22 @@ def run_scenario(pw, base_url, android, classic, width):
                         reflection: readings[0] && readings[0].reflection,
                         notes: notes.length,
                         noteText: notes[0] && notes[0].text,
-                        spreads: cLib.list().length,
+                        spreadNames: DivinationCustomSpreadUi.list().map(s => s.name),
                         chats: chats.length
                     };
                 }"""
             )
-            assert persisted == {
-                "readings": 1,
-                "question": QUESTION_TEXT,
-                "reflection": REFLECTION_TEXT,
-                "notes": 1,
-                "noteText": NOTE_XSS,
-                "spreads": 1,
-                "chats": 1,
-            }, (label, persisted)
+            assert persisted["readings"] == 1, (label, persisted)
+            assert persisted["question"] == QUESTION_TEXT, (label, persisted)
+            assert persisted["reflection"] == REFLECTION_TEXT, (label, persisted)
+            assert persisted["notes"] == 1, (label, persisted)
+            assert persisted["noteText"] == NOTE_XSS, (label, persisted)
+            assert persisted["chats"] == 1, (label, persisted)
+            if android:
+                assert set(persisted["spreadNames"]) == {"全量备份测试牌阵", "新建牌阵B"}, (label, persisted)
+            else:
+                # Web custom spreads are session-only by design.
+                assert persisted["spreadNames"] == [], (label, persisted)
 
             assert not page_errors, (label, page_errors)
             assert not console_errors, (label, console_errors)

@@ -395,6 +395,16 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .full-backup-count-row-wide {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .full-backup-count-row-wide .full-backup-count-value {
+    text-align: start;
+  }
+
   .full-backup-actions .btn,
   .full-backup-preview-actions .btn {
     width: 100%;
