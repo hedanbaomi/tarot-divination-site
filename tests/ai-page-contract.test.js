@@ -395,6 +395,7 @@ const THEME_IDS = [
 const REQUIRED_I18N_KEYS = [
   "ai.open", "ai.pageTitle", "ai.pageDescription", "ai.contextBarAria", "ai.deckTarot",
   "ai.settingsTitle", "history.openInAi", "privacy.ai", "ai.disclaimer", "ai.medicalNoticeTitle", "ai.medicalNoticeBody",
+  "ai.includeCardNotes", "ai.cardNotesPrivacy", "ai.cardNotesMatches",
   "ai.lockedPromptNote", "ai.fieldContextWindow", "ai.fieldAutoCompress", "ai.contextMeter",
   "ai.presetLabel", "ai.preset.deepseekFlash", "ai.preset.deepseekPro", "ai.presetApplied",
   "ai.clearConfig", "ai.clearConfigTitle", "ai.clearConfigMsg", "ai.clearConfigConfirm", "ai.configCleared",
@@ -408,6 +409,15 @@ const REQUIRED_I18N_KEYS = [
 ];
 
 function assertAiHtmlContract(label, html) {
+  const scripts = Array.from(html.matchAll(/<script\s+src="([^"?]+)/g), m => m[1]);
+  assert.ok(scripts.indexOf("js/card-notes-store.js") >= 0);
+  assert.ok(scripts.indexOf("js/card-notes-store.js") < scripts.indexOf("js/ai-ui.js"));
+  assert.ok(scripts.indexOf("js/ai-context.js") < scripts.indexOf("js/ai-ui.js"));
+  assert.ok(!scripts.includes("js/card-notes.js"), "AI only needs the notes reader");
+  const toggle = html.match(/<input[^>]+id="aiIncludeCardNotes"[^>]*>/)[0];
+  assert.match(toggle, /type="checkbox"/);
+  assert.doesNotMatch(toggle, /\bchecked\b/);
+  assert.match(toggle, /aria-describedby="aiCardNotesPrivacy"/);
   for (const id of REQUIRED_HTML_IDS) {
     assert.ok(html.includes(`id="${id}"`), `${label} ai.html missing #${id}`);
   }

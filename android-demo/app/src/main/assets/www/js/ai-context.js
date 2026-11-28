@@ -355,6 +355,27 @@
     return false;
   }
 
+  var MAX_CARD_NOTE_CHARS = 600;
+
+  function truncateCardNote(text) {
+    if (typeof text !== "string") return "";
+    var trimmed = text.trim();
+    if (trimmed.length <= MAX_CARD_NOTE_CHARS) return trimmed;
+    // Inspect at most 600 Unicode code points, even for very large local notes.
+    var chars = Array.from(trimmed.slice(0, MAX_CARD_NOTE_CHARS * 2 + 1));
+    return chars.length > MAX_CARD_NOTE_CHARS ? chars.slice(0, MAX_CARD_NOTE_CHARS - 1).join("") + "…" : trimmed;
+  }
+
+  function cardNoteFor(options, deckType, cardId) {
+    if (!options || options.includeCardNotes !== true || !options.cardNotesMap) return "";
+    if (deckType !== "tarot" && deckType !== "mystagogus" && deckType !== "lxxxi") return "";
+    var key = deckType + ":" + cardId;
+    var map = options.cardNotesMap;
+    var text = typeof map.get === "function" ? map.get(key) :
+      (Object.prototype.hasOwnProperty.call(map, key) ? map[key] : "");
+    return truncateCardNote(text);
+  }
+
   function resolveReadingDetails(record, options) {
     if (!isSelectableReadingRecord(record)) {
       return null;
@@ -435,7 +456,7 @@
         ? pos.row
         : (typeof entry.row === "number" && Number.isFinite(entry.row) ? entry.row : null);
 
-      return {
+      var resolvedCard = {
         index: index,
         slotIndex: parsedSlotIndex !== null ? parsedSlotIndex : Math.max(0, positionNumber - 1),
         cardId: entry.cardId,
@@ -466,6 +487,9 @@
         uprightKeywordsRef: uprightKeywordsRef,
         source: cardSource
       };
+      var note = cardNoteFor(options, record.deckType, entry.cardId);
+      if (note) resolvedCard.personalNote = note;
+      return resolvedCard;
     });
 
     return {
@@ -475,6 +499,7 @@
       rawCreatedAt: record.createdAt,
       formattedTime: formatTimestamp(record.createdAt, isEnglish),
       deckType: deckType,
+      sourceDeckType: record.deckType,
       deckName: getDeckDisplayName(deckType, isEnglish),
       deckShortLabel: getDeckShortLabel(deckType, isEnglish),
       orientationMode: record.orientationMode || "upright-only",
@@ -813,6 +838,16 @@
       ? "#### Positions & Internal Imagery Scratchpad (Use Core Concepts Naturally — Never Copy Whole Clauses or Roll-Call 1..N)"
       : "#### 牌位与内部意象底稿（可自然化用核心概念词与事实落点，严禁整句照抄原话或按 1→N 挨个点名）");
 
+    function appendPersonalNote(card) {
+      if (ctx.includeCardNotes !== true) return;
+      // Older snapshots may use a display-deck fallback. Notes require the original key.
+      var note = ctx.cardNotesMap ? cardNoteFor(ctx, resolved.sourceDeckType, card.cardId) : truncateCardNote(card.personalNote);
+      if (note) {
+        var label = isEnglish ? "Personal card note (subjective, not official source text)" : "用户个人卡牌笔记（主观笔记，非官方教材原文）";
+        lines.push("  - " + label + ": " + JSON.stringify(note));
+      }
+    }
+
     function buildCueForCard(cardItem) {
       if (skills && typeof skills.compileCardCue === "function") {
         return skills.compileCardCue(cardItem, {
@@ -874,6 +909,7 @@
           var tag = sub.layerLabel ? ("[" + sub.layerLabel + "] ") : "";
           var subCue = buildCueForCard(sub);
           lines.push("  - " + formatCardDetailLine(sub, tag, isEnglish, subCue));
+          appendPersonalNote(sub);
         }
       }
       return lines.join("\n");
@@ -929,6 +965,7 @@
       } else if (kwClean.length === 0 && distilledCue) {
         lines.push("  - " + (isEnglish ? "Imagery Cue" : "意象线索") + ": " + distilledCue);
       }
+      appendPersonalNote(c);
       if (cardCue && cardCue.filterSlotHint) {
         lines.push("  - " + (isEnglish ? "Filter Rule" : "筛查提示") + ": " + cardCue.filterSlotHint);
       }
@@ -977,6 +1014,8 @@
       sections.push(formatSingleReadingMarkdown(resolvedList[j], j, resolvedList.length, {
         skills: skills,
         register: register,
+        includeCardNotes: opts.includeCardNotes === true,
+        cardNotesMap: opts.cardNotesMap,
         omitCircuitHint: Boolean(opts.omitCircuitHint)
       }));
     }
@@ -1384,6 +1423,7 @@
     formatTimestamp: formatTimestamp,
     isSelectableReadingRecord: isSelectableReadingRecord,
     filterSelectableHistoryRecords: filterSelectableHistoryRecords,
+    truncateCardNote: truncateCardNote,
     resolveReadingDetails: resolveReadingDetails,
     resolveOrderedReadings: resolveOrderedReadings,
     buildReadingSnapshot: buildReadingSnapshot,

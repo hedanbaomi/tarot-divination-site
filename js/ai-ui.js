@@ -589,6 +589,42 @@
     return records.some(function (record) { return !readIds.has(record.id); });
   }
 
+  var CARD_NOTES_PREF = "quareia-ai-include-card-notes";
+
+  function readCardNotesPreference() {
+    try { return global.localStorage.getItem(CARD_NOTES_PREF) === "true"; }
+    catch (_error) { return false; }
+  }
+
+  async function readAttachedCardNotes(store, records, truncate) {
+    var matches = new Map();
+    if (!store) return matches;
+    var keys = new Map();
+    records.forEach(function (record) {
+      record.cards.forEach(function (card) {
+        keys.set(record.deckType + ":" + card.cardId, { deck: record.deckType, id: card.cardId });
+      });
+    });
+    if (!keys.size) return matches;
+    // A blocked or stalled optional database must not hold up the conversation.
+    var timer;
+    try {
+      var reads = Array.from(keys, async function ([key, card]) {
+        try {
+          var row = await store.get(card.deck, card.id);
+          if (row && row.deckType === card.deck && row.cardId === card.id) {
+            var text = truncate(row.text);
+            if (text) matches.set(key, text);
+          }
+        } catch (_error) { /* Missing, invalid or unreadable note. */ }
+      });
+      return await Promise.race([
+        Promise.all(reads).then(function () { return matches; }),
+        new Promise(function (resolve) { timer = setTimeout(function () { resolve(new Map()); }, 1500); })
+      ]);
+    } finally { clearTimeout(timer); }
+  }
+
   function initAiPage() {
     if (!byId("aiChatList") || !global.DivinationAiProviders || !global.DivinationAiContext || !global.DivinationAiChatStore) {
       return null;
@@ -609,6 +645,21 @@
     var historyStore = historyStoreApi && typeof historyStoreApi.createStore === "function"
       ? historyStoreApi.createStore()
       : null;
+
+    var notesStore = global.DivinationCardNotesStore && global.DivinationCardNotesStore.createStore({
+      readOnly: true,
+      isKnownCard: function (deck, id) {
+        var cards = deck === "tarot" ? tarotDeckFull : deck === "mystagogus" ? mystagogusDeckFull :
+          deck === "lxxxi" ? lxxxiDeckFull : [];
+        return cards.some(function (card) { return card.id === id; });
+      }
+    });
+    var includeCardNotes = readCardNotesPreference();
+    var notePreferenceRevision = 0;
+    var sessionOnlyNotesPreference = false;
+    var notePreviewRevision = 0;
+    var previewCardNotes = null;
+    var noteChanges = null;
 
     var customLibrary = null;
     if (global.DivinationCustomSpreads && typeof global.DivinationCustomSpreads.createLibrary === "function") {
@@ -677,6 +728,8 @@
       archiveChatBtn: byId("aiArchiveChatBtn"),
       deleteChatBtn: byId("aiDeleteChatBtn"),
       attachedChips: byId("aiAttachedChips"),
+      includeCardNotes: byId("aiIncludeCardNotes"),
+      cardNotesMatches: byId("aiCardNotesMatches"),
       storageWarning: byId("aiStorageWarning"),
       storageExportBtn: byId("aiStorageExportBtn"),
       setupBanner: byId("aiSetupBanner"),
@@ -1272,6 +1325,8 @@
         locale: locale,
         customLibrary: customLibrary,
         resolvedReadings: resolvedReadings,
+        cardNotesMap: options && options.cardNotesMap,
+        includeCardNotes: Boolean(options && options.cardNotesMap),
         messages: apiMessages,
         skillMode: skillMode,
         hasUninterpretedReading: hasUninterpretedReading,
@@ -1312,10 +1367,10 @@
     // conversations keep their history.
     var PROMPT_PERSONA_LEVELS = ["full", "compact", "none"];
 
-    function buildFittedPayload(conv, uptoIndex, hardCap) {
+    function buildFittedPayload(conv, uptoIndex, hardCap, cardNotesMap) {
       var payload;
       for (var i = 0; i < PROMPT_PERSONA_LEVELS.length; i += 1) {
-        payload = buildPromptPayloadForConversation(conv, uptoIndex, { personaLevel: PROMPT_PERSONA_LEVELS[i] });
+        payload = buildPromptPayloadForConversation(conv, uptoIndex, { personaLevel: PROMPT_PERSONA_LEVELS[i], cardNotesMap: cardNotesMap });
         if (payload.estimatedTokens < hardCap) break;
       }
       return payload;
@@ -1467,7 +1522,7 @@
       var profile = configStore.getActiveProfile();
       var ctxResolved = providers.resolveContextWindow(profile || {});
       var conv = state.activeConversation;
-      var payload = buildFittedPayload(conv, undefined, providers.inputTokenBudget(profile, ctxResolved.contextWindow));
+      var payload = buildFittedPayload(conv, undefined, providers.inputTokenBudget(profile, ctxResolved.contextWindow), previewCardNotes);
       var compressedCount = payload.compressedCount || 0;
       els.contextMeter.classList.toggle("is-compressed", compressedCount > 0);
 
@@ -1487,7 +1542,33 @@
       els.contextMeter.textContent = baseText;
     }
 
+    function refreshCardNotesPreview() {
+      if (!els.includeCardNotes || !els.cardNotesMatches) return;
+      var revision = ++notePreviewRevision;
+      previewCardNotes = null;
+      els.includeCardNotes.checked = includeCardNotes;
+      els.cardNotesMatches.hidden = true;
+      if (!includeCardNotes) return;
+      var records = getAttachedRecordsForConversation(state.activeConversation);
+      if (!records.length) return;
+      readAttachedCardNotes(notesStore, records, contextApi.truncateCardNote).then(function (notes) {
+        if (revision !== notePreviewRevision) return;
+        previewCardNotes = notes;
+        els.cardNotesMatches.textContent = tr("ai.cardNotesMatches", { count: notes.size });
+        els.cardNotesMatches.hidden = false;
+        renderContextMeter();
+      });
+    }
+
+    function setIncludeCardNotes(value) {
+      if (value !== includeCardNotes) notePreferenceRevision++;
+      includeCardNotes = value;
+      refreshCardNotesPreview();
+      renderContextMeter();
+    }
+
     function renderContextHeader() {
+      refreshCardNotesPreview();
       var conv = state.activeConversation;
       if (!conv) {
         if (els.activeChatTitle) {
@@ -2095,6 +2176,8 @@
       state.editingQuestionReadingId = "";
       state.abortController = typeof AbortController === "function" ? new AbortController() : null;
       updateStreamingUi();
+      // Capture the choice at the click, before any asynchronous conversation writes.
+      return includeCardNotes ? notePreferenceRevision : null;
     }
 
     function finishStreamingUi() {
@@ -2958,7 +3041,7 @@
     }
 
     // Streaming chat pipeline
-    function runGeneration(conversationSnapshot, assistantMsgIndex) {
+    async function runGeneration(conversationSnapshot, assistantMsgIndex, consentRevision) {
       var profile = configStore.getActiveProfile();
       var check = profile ? providers.validateProfile(profile) : { ok: false, errors: ["missing_api_key"] };
       if (!check.ok) {
@@ -2969,8 +3052,6 @@
 
       var conv = conversationSnapshot;
       var hardCap = providers.inputTokenBudget(profile, providers.resolveContextWindow(profile).contextWindow);
-      var payload = buildFittedPayload(conv, assistantMsgIndex, hardCap);
-
       state.streaming = true;
       state.compressing = false;
       state.editingMessageId = "";
@@ -2983,6 +3064,17 @@
       };
       updateStreamingUi();
 
+      function consentIsCurrent() {
+        return includeCardNotes && consentRevision === notePreferenceRevision &&
+          (sessionOnlyNotesPreference || readCardNotesPreference());
+      }
+      var notes = consentIsCurrent()
+        ? await readAttachedCardNotes(notesStore, getAttachedRecordsForConversation(conv), contextApi.truncateCardNote)
+        : null;
+      function requestNotes() {
+        return notes && consentIsCurrent() ? notes : null;
+      }
+      var payload = buildFittedPayload(conv, assistantMsgIndex, hardCap, requestNotes());
       var requestRecords = (payload.resolvedReadings || []).map(function (reading) {
         return { id: reading.id, names: collectRecordCardTokens(null, reading) };
       });
@@ -3041,7 +3133,7 @@
                 compressedCount: coveredCountBefore + addedRawCount,
                 updatedAt: Date.now()
               };
-              return buildFittedPayload(conv, assistantMsgIndex, hardCap);
+              return buildFittedPayload(conv, assistantMsgIndex, hardCap, requestNotes());
             }
             return payload;
           }).finally(function () {
@@ -3061,6 +3153,8 @@
       }
 
       return prepPromise.then(function (fitted) {
+        // Consent can change in another tab while an older conversation is compressed.
+        if (notes && !requestNotes()) fitted = buildFittedPayload(conv, assistantMsgIndex, hardCap);
         var finalMessages = truncateMessagesToBudget(
           fitted.apiMessages,
           fitted.systemPrompt,
@@ -3179,7 +3273,7 @@
         createdAt: now + 1
       });
       var conv = state.activeConversation;
-      startStreamingUi();
+      var notesConsent = startStreamingUi();
 
       var ensureConvPromise = conv
         ? Promise.resolve(conv)
@@ -3213,7 +3307,7 @@
         renderSidebar();
         renderContextHeader();
         renderMessages({ forceScroll: true });
-        return runGeneration(saved, saved.messages.length - 1);
+        return runGeneration(saved, saved.messages.length - 1, notesConsent);
       }).catch(function (err) { handleConversationWriteError(err, text); });
     }
 
@@ -3263,7 +3357,7 @@
       });
       kept.push(newAssistant);
 
-      startStreamingUi();
+      var notesConsent = startStreamingUi();
       chatStore.updateConversation(conv.id, {
         messages: kept,
         contextSummary: nextSummary,
@@ -3276,7 +3370,7 @@
         }
         state.activeConversation = saved;
         renderMessages({ forceScroll: true });
-        return runGeneration(saved, saved.messages.length - 1);
+        return runGeneration(saved, saved.messages.length - 1, notesConsent);
       }).catch(function (err) { handleConversationWriteError(err); });
     }
 
@@ -3332,7 +3426,7 @@
       }));
       state.editingMessageId = "";
 
-      startStreamingUi();
+      var notesConsent = startStreamingUi();
       chatStore.updateConversation(conv.id, {
         messages: kept,
         contextSummary: nextSummary,
@@ -3345,7 +3439,7 @@
         }
         state.activeConversation = saved;
         renderMessages({ forceScroll: true });
-        return runGeneration(saved, saved.messages.length - 1);
+        return runGeneration(saved, saved.messages.length - 1, notesConsent);
       }).catch(function (err) { handleConversationWriteError(err); });
     }
 
@@ -3753,13 +3847,32 @@
       }
     });
 
+    if (els.includeCardNotes) els.includeCardNotes.addEventListener("change", function () {
+      var checked = els.includeCardNotes.checked;
+      try {
+        global.localStorage.setItem(CARD_NOTES_PREF, String(checked));
+        sessionOnlyNotesPreference = false;
+      } catch (_error) { sessionOnlyNotesPreference = true; }
+      setIncludeCardNotes(checked);
+    });
+    global.addEventListener("focus", refreshCardNotesPreview);
     global.addEventListener("pageshow", function () {
+      if (!noteChanges && global.DivinationCardNotesStore) {
+        noteChanges = global.DivinationCardNotesStore.openChangeChannel();
+        if (noteChanges) noteChanges.onmessage = refreshCardNotesPreview;
+      }
+      if (!sessionOnlyNotesPreference) setIncludeCardNotes(readCardNotesPreference());
+      else refreshCardNotesPreview();
       updateBackLink();
       updateProfileIndicator();
     });
 
     global.addEventListener("storage", function (e) {
       var key = e ? e.key : "";
+      if (!key || key === CARD_NOTES_PREF) {
+        sessionOnlyNotesPreference = false;
+        setIncludeCardNotes(key === CARD_NOTES_PREF && e.newValue === "true");
+      }
       if (!key || key === "quareia-page-version" || key === "quareia-page-version-v1") {
         updateBackLink();
       }
@@ -3770,6 +3883,7 @@
     });
 
     global.addEventListener("pagehide", function () {
+      if (noteChanges) { noteChanges.close(); noteChanges = null; }
       if (!state.streaming) return;
       var ctx = state.activeStreamContext;
       state.activeStreamContext = null;
@@ -3897,6 +4011,7 @@
   }
 
   var api = {
+    readAttachedCardNotes: readAttachedCardNotes,
     renderMarkdownInto: renderMarkdownInto,
     normalizeConversationMessagesForApi: normalizeConversationMessagesForApi,
     truncateMessagesToBudget: truncateMessagesToBudget,
