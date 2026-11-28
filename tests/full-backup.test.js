@@ -2162,7 +2162,7 @@ test("Review 3 Fix #1: aiChats-only / deleted-history backup detaches colliding 
   assert.deepEqual(resC.succeededSections, []);
   assert.equal(resC.failedSections.length, 1);
   assert.equal(resC.failedSections[0].section, "aiChats");
-  assert.equal(resC.failedSections[0].code, "history_dependency_required");
+  assert.equal(resC.failedSections[0].code, "history_conflict_unresolved");
   assert.equal((await envC.adapters.aiChatStore.listConversations({ archived: "all" })).length, 0);
 });
 

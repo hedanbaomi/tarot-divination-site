@@ -1802,7 +1802,7 @@
       if (unresolvedExternalCollisions.length > 0) {
         return {
           ok: false,
-          code: "history_dependency_required",
+          code: "history_conflict_unresolved",
           message: "colliding history reading(s) without verifiable snapshots cannot be linked (" +
             Array.from(new Set(unresolvedExternalCollisions)).join(", ") + ")"
         };
