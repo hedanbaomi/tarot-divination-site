@@ -281,6 +281,7 @@ def run_scenario(pw, base_url, android, classic, width):
             viewport={"width": width, "height": 860},
             locale="zh-CN",
             accept_downloads=True,
+            service_workers="block",
         )
 
         def handle_route(route):
