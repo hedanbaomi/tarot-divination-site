@@ -48,6 +48,9 @@
   var DEFAULT_HISTORY_MAX_BYTES = 5 * 1024 * 1024;
   var DEFAULT_AI_CHATS_MAX_BYTES = 8 * 1024 * 1024;
   var DEFAULT_CUSTOM_SPREADS_MAX_SIZE = 50;
+  var MAX_VALID_DATE_MS = 8640000000000000;
+  var DEFAULT_THEME_STORAGE_KEY = "quareia-divination-theme";
+  var DEFAULT_LOCALE_STORAGE_KEY = "quareia-divination-locale";
 
   var ENVELOPE_KEYS = ["format", "version", "exportedAt", "sections"];
   var HISTORY_ENVELOPE_KEYS = ["formatVersion", "exportedAt", "records"];
@@ -427,25 +430,38 @@
   }
 
   function parseStrictTimestampMs(value) {
+    var ms = NaN;
     if (typeof value === "number") {
-      return Number.isFinite(value) && value >= 0 ? value : NaN;
-    }
-    if (typeof value === "string") {
+      if (!Number.isFinite(value) || value < 0 || value > MAX_VALID_DATE_MS) return NaN;
+      ms = value;
+    } else if (typeof value === "string") {
       var trimmed = value.trim();
       if (!trimmed) return NaN;
       if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
         var num = Number(trimmed);
-        return Number.isFinite(num) && num >= 0 ? num : NaN;
+        if (!Number.isFinite(num) || num < 0 || num > MAX_VALID_DATE_MS) return NaN;
+        ms = num;
+      } else {
+        var parsed = Date.parse(trimmed);
+        if (!Number.isFinite(parsed) || parsed < 0 || parsed > MAX_VALID_DATE_MS) return NaN;
+        ms = parsed;
       }
-      var parsed = Date.parse(trimmed);
-      return Number.isFinite(parsed) && parsed >= 0 ? parsed : NaN;
+    } else {
+      return NaN;
     }
-    return NaN;
+    var date = new Date(ms);
+    if (Number.isNaN(date.getTime())) return NaN;
+    try {
+      date.toISOString();
+    } catch (_error) {
+      return NaN;
+    }
+    return ms;
   }
 
   function validateAiTimestamp(value, path, allowZero) {
     var ms = parseStrictTimestampMs(value);
-    if (!Number.isFinite(ms) || ms < 0 || (!allowZero && ms === 0)) {
+    if (!Number.isFinite(ms) || ms < 0 || ms > MAX_VALID_DATE_MS || (!allowZero && ms === 0)) {
       fail(path, "must be a valid timestamp");
     }
     return ms;
@@ -537,7 +553,7 @@
       }
     }
     if (hasOwn(msg, "createdAt")) {
-      validateAiTimestamp(msg.createdAt, path + ".createdAt", true);
+      validateAiTimestamp(msg.createdAt, path + ".createdAt", false);
     }
     if (hasOwn(msg, "interpretedReadingIds")) {
       assertArrayNoHoles(msg.interpretedReadingIds, path + ".interpretedReadingIds");
@@ -943,8 +959,25 @@
       }
     }
 
+    var hasExplicitStorage = hasOwn(input, "storage");
+    var storage = null;
+    var storageError = null;
+    if (hasExplicitStorage) {
+      storage = input.storage;
+    } else if (root && "localStorage" in root) {
+      try {
+        storage = root.localStorage || null;
+      } catch (err) {
+        storage = null;
+        storageError = err;
+      }
+    }
+
+    var historyStoreApi = resolveDep(input, "historyStoreApi", "DivinationHistoryStore", "historyStore");
+
     return {
       historyRecords: historyRecords,
+      historyStoreApi: historyStoreApi,
       historyStore: historyStore,
       cardNotesStore: cardNotesStore,
       customSpreads: customSpreads,
@@ -953,6 +986,8 @@
       aiChatStore: aiChatStore,
       themeApi: themeApi,
       i18nApi: i18nApi,
+      storage: storage,
+      storageError: storageError,
       isKnownCard: isKnownCard
     };
   }
@@ -1397,46 +1432,181 @@
     });
   }
 
-  function resolveExistingHistoryIdMap(historySection, resolved) {
+  function deriveDeterministicRemapId(originalId, createdAt, canonicalContent, attempt, resolved) {
+    if (resolved && resolved.historyStoreApi &&
+        typeof resolved.historyStoreApi.deriveRemappedId === "function") {
+      return resolved.historyStoreApi.deriveRemappedId(originalId, createdAt, canonicalContent, attempt);
+    }
+    if (defaultDeps.historyStore && typeof defaultDeps.historyStore.deriveRemappedId === "function") {
+      return defaultDeps.historyStore.deriveRemappedId(originalId, createdAt, canonicalContent, attempt);
+    }
+    // Fallback pure-JS synchronous deterministic hash if DivinationHistoryStore module is absent.
+    var input = originalId + "\0" + createdAt + "\0" + canonicalContent;
+    var h1 = 0x811c9dc5;
+    var h2 = 0x811c9dc5;
+    var h3 = 0x9e3779b9;
+    var h4 = 0x85ebca6b;
+    for (var i = 0; i < input.length; i += 1) {
+      var ch = input.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 0x01000193) >>> 0;
+      h2 = Math.imul(h2 ^ (ch + i), 0x01000193) >>> 0;
+      h3 = Math.imul(h3 ^ (ch * 31 + i), 0x85ebca6b) >>> 0;
+      h4 = Math.imul(h4 ^ (ch + (i << 3)), 0xc2b2ae35) >>> 0;
+    }
+    var hex = h1.toString(16).padStart(8, "0") +
+      h2.toString(16).padStart(8, "0") +
+      h3.toString(16).padStart(8, "0") +
+      h4.toString(16).padStart(8, "0");
+    var suffix = attempt && attempt > 0 ? "-" + String(attempt + 1) : "";
+    return "reading-remap-" + hex + suffix;
+  }
+
+  function collectAiReferencedReadingIds(aiChatsSection) {
+    var refs = Object.create(null);
+    if (!aiChatsSection || !Array.isArray(aiChatsSection.conversations)) return refs;
+    for (var i = 0; i < aiChatsSection.conversations.length; i += 1) {
+      var conv = aiChatsSection.conversations[i];
+      if (!conv || typeof conv !== "object") continue;
+      if (Array.isArray(conv.readingIds)) {
+        for (var r = 0; r < conv.readingIds.length; r += 1) {
+          if (typeof conv.readingIds[r] === "string" && conv.readingIds[r].trim()) {
+            refs[conv.readingIds[r].trim()] = true;
+          }
+        }
+      }
+      if (Array.isArray(conv.readingSnapshots)) {
+        for (var s = 0; s < conv.readingSnapshots.length; s += 1) {
+          var snap = conv.readingSnapshots[s];
+          if (snap && typeof snap === "object") {
+            if (typeof snap.id === "string" && snap.id.trim()) refs[snap.id.trim()] = true;
+            if (typeof snap.readingId === "string" && snap.readingId.trim()) refs[snap.readingId.trim()] = true;
+          }
+        }
+      }
+      if (Array.isArray(conv.messages)) {
+        for (var m = 0; m < conv.messages.length; m += 1) {
+          var msg = conv.messages[m];
+          if (msg && typeof msg === "object" && Array.isArray(msg.interpretedReadingIds)) {
+            for (var k = 0; k < msg.interpretedReadingIds.length; k += 1) {
+              if (typeof msg.interpretedReadingIds[k] === "string" && msg.interpretedReadingIds[k].trim()) {
+                refs[msg.interpretedReadingIds[k].trim()] = true;
+              }
+            }
+          }
+        }
+      }
+    }
+    return refs;
+  }
+
+  function checkAiChatsHistoryDependency(historySection, aiChatsSection, resolved, historyIdMap, historyWasSelected, historySucceeded) {
     if (!historySection || !Array.isArray(historySection.records) || historySection.records.length === 0) {
-      return Promise.resolve({});
+      return Promise.resolve({ ok: true });
     }
+    var referencedIds = collectAiReferencedReadingIds(aiChatsSection);
+    var referencedRecords = [];
+    for (var i = 0; i < historySection.records.length; i += 1) {
+      var rec = historySection.records[i];
+      if (rec && typeof rec.id === "string" && referencedIds[rec.id]) {
+        referencedRecords.push(rec);
+      }
+    }
+    if (referencedRecords.length === 0) {
+      return Promise.resolve({ ok: true });
+    }
+    if (historyWasSelected && historySucceeded) {
+      return Promise.resolve({ ok: true });
+    }
+
+    // Check existing local history store to see if any referenced backup reading collides with
+    // a different local reading without already having its deterministic remapped copy stored.
+    var recordsApi = resolved.historyRecords;
     if (!resolved.historyStore || typeof resolved.historyStore.listRecords !== "function" ||
-        !resolved.historyRecords || typeof resolved.historyRecords.canonicalRecordContent !== "function" ||
-        typeof resolved.historyRecords.recordsEquivalent !== "function") {
-      return Promise.resolve({});
+        !recordsApi || typeof recordsApi.canonicalRecordContent !== "function") {
+      if (historyWasSelected && !historySucceeded) {
+        return Promise.resolve({
+          ok: false,
+          code: "history_dependency_failed",
+          message: "deferred because linked history records failed to restore"
+        });
+      }
+      return Promise.resolve({ ok: true });
     }
+
     return Promise.resolve().then(function () {
       return resolved.historyStore.listRecords();
     }).then(function (existingRecords) {
-      var map = {};
-      if (!Array.isArray(existingRecords) || existingRecords.length === 0) return map;
+      if (!Array.isArray(existingRecords)) existingRecords = [];
       var existingById = Object.create(null);
-      var existingByContentKey = Object.create(null);
-      for (var i = 0; i < existingRecords.length; i += 1) {
-        var existing = existingRecords[i];
+      var canonicalById = Object.create(null);
+      for (var e = 0; e < existingRecords.length; e += 1) {
+        var existing = existingRecords[e];
         existingById[existing.id] = existing;
-        var cKey = existing.createdAt + "\0" + resolved.historyRecords.canonicalRecordContent(existing);
-        if (!existingByContentKey[cKey]) {
-          existingByContentKey[cKey] = existing;
-        }
+        canonicalById[existing.id] = recordsApi.canonicalRecordContent(existing);
       }
-      for (var j = 0; j < historySection.records.length; j += 1) {
-        var incoming = historySection.records[j];
-        var byId = existingById[incoming.id];
-        if (byId && byId.createdAt === incoming.createdAt &&
-            resolved.historyRecords.recordsEquivalent(byId, incoming)) {
+
+      var unresolvedCollisions = [];
+      for (var j = 0; j < referencedRecords.length; j += 1) {
+        var backupRec = referencedRecords[j];
+        if (hasOwn(historyIdMap, backupRec.id)) continue;
+        var atOriginal = existingById[backupRec.id];
+        if (!atOriginal) continue;
+        var backupCanonical = recordsApi.canonicalRecordContent(backupRec);
+        if (atOriginal.createdAt === backupRec.createdAt &&
+            canonicalById[backupRec.id] === backupCanonical) {
           continue;
         }
-        var inKey = incoming.createdAt + "\0" + resolved.historyRecords.canonicalRecordContent(incoming);
-        var existingCopy = existingByContentKey[inKey];
-        if (existingCopy && existingCopy.id !== incoming.id) {
-          map[incoming.id] = existingCopy.id;
+        // True collision with a DIFFERENT local reading: check if deterministic remapped copy already exists.
+        var foundRemappedId = null;
+        for (var attempt = 0; attempt < 1000; attempt += 1) {
+          var candidateId = deriveDeterministicRemapId(
+            backupRec.id,
+            backupRec.createdAt,
+            backupCanonical,
+            attempt,
+            resolved
+          );
+          var atCandidate = existingById[candidateId];
+          if (!atCandidate) {
+            break;
+          }
+          if (atCandidate.createdAt === backupRec.createdAt &&
+              canonicalById[candidateId] === backupCanonical) {
+            foundRemappedId = candidateId;
+            break;
+          }
+        }
+        if (foundRemappedId) {
+          historyIdMap[backupRec.id] = foundRemappedId;
+        } else {
+          unresolvedCollisions.push(backupRec.id);
         }
       }
-      return map;
+
+      if (unresolvedCollisions.length > 0) {
+        if (historyWasSelected && !historySucceeded) {
+          return {
+            ok: false,
+            code: "history_dependency_failed",
+            message: "deferred because colliding history reading(s) failed to restore (" + unresolvedCollisions.join(", ") + ")"
+          };
+        }
+        return {
+          ok: false,
+          code: "history_dependency_required",
+          message: "colliding history reading(s) must be restored before or together with AI chats (" + unresolvedCollisions.join(", ") + ")"
+        };
+      }
+      return { ok: true };
     }).catch(function () {
-      return {};
+      if (historyWasSelected && !historySucceeded) {
+        return {
+          ok: false,
+          code: "history_dependency_failed",
+          message: "deferred because linked history records failed to restore"
+        };
+      }
+      return { ok: true };
     });
   }
 
@@ -1511,7 +1681,9 @@
   }
 
   function restoreHistorySection(section, resolved, warnings, failedSections, historyIdMap) {
-    if (!resolved.historyStore || typeof resolved.historyStore.importRecords !== "function") {
+    if (!resolved.historyStore ||
+        (typeof resolved.historyStore.mergeBackupRecords !== "function" &&
+         typeof resolved.historyStore.importRecords !== "function")) {
       recordSectionFailure(failedSections, warnings, "history", "storage_unavailable", "storage is unavailable");
       return Promise.resolve({ ok: false, summary: { imported: 0, remapped: 0, skipped: 0 } });
     }
@@ -1519,6 +1691,43 @@
     if (incomingRecords.length === 0) {
       return Promise.resolve({ ok: true, summary: { imported: 0, remapped: 0, skipped: 0 } });
     }
+
+    // Preferred atomic single-transaction path in DivinationHistoryStore.
+    if (typeof resolved.historyStore.mergeBackupRecords === "function") {
+      return Promise.resolve().then(function () {
+        return resolved.historyStore.mergeBackupRecords(incomingRecords, {
+          deriveRemappedId: function (originalId, createdAt, canonicalContent, attempt) {
+            return deriveDeterministicRemapId(originalId, createdAt, canonicalContent, attempt, resolved);
+          }
+        });
+      }).then(function (res) {
+        if (res && isPlainObject(res.idMap)) {
+          Object.keys(res.idMap).forEach(function (oldId) {
+            historyIdMap[oldId] = res.idMap[oldId];
+          });
+        }
+        return {
+          ok: true,
+          summary: {
+            imported: res && typeof res.importedCount === "number" ? res.importedCount : 0,
+            remapped: res && typeof res.remappedCount === "number" ? res.remappedCount : 0,
+            skipped: res && typeof res.skippedCount === "number" ? res.skippedCount : 0
+          }
+        };
+      }).catch(function (error) {
+        recordSectionFailure(
+          failedSections,
+          warnings,
+          "history",
+          (error && error.code) || "restore_failed",
+          error && error.message ? error.message : "restore failed"
+        );
+        return { ok: false, summary: { imported: 0, remapped: 0, skipped: 0 } };
+      });
+    }
+
+    // Fallback for minimal mock stores without mergeBackupRecords (still preserves non-colliding IDs
+    // and uses deterministic source-ID-scoped remapping on true collisions).
     var recordsApi = resolved.historyRecords;
     var readExisting = typeof resolved.historyStore.listRecords === "function"
       ? Promise.resolve().then(function () { return resolved.historyStore.listRecords(); })
@@ -1526,64 +1735,74 @@
 
     return readExisting.then(function (existingRecords) {
       var toImport = incomingRecords;
-      var originalIds = incomingRecords.map(function (r) { return r.id; });
       var skipped = 0;
-      if (Array.isArray(existingRecords) && recordsApi && typeof recordsApi.recordsEquivalent === "function") {
-        var hasCanonical = typeof recordsApi.canonicalRecordContent === "function";
-        var existingById = Object.create(null);
-        var existingByContentKey = Object.create(null);
+      var remappedCount = 0;
+      if (Array.isArray(existingRecords) && recordsApi && typeof recordsApi.canonicalRecordContent === "function") {
+        var occupiedById = Object.create(null);
+        var canonicalById = Object.create(null);
         for (var i = 0; i < existingRecords.length; i += 1) {
           var existing = existingRecords[i];
-          existingById[existing.id] = existing;
-          if (hasCanonical) {
-            var cKey = existing.createdAt + "\0" + recordsApi.canonicalRecordContent(existing);
-            if (!existingByContentKey[cKey]) {
-              existingByContentKey[cKey] = existing;
-            }
-          }
+          occupiedById[existing.id] = existing;
+          canonicalById[existing.id] = recordsApi.canonicalRecordContent(existing);
         }
         toImport = [];
-        originalIds = [];
         for (var j = 0; j < incomingRecords.length; j += 1) {
           var incoming = incomingRecords[j];
-          var match = existingById[incoming.id];
-          if (match && match.createdAt === incoming.createdAt && recordsApi.recordsEquivalent(match, incoming)) {
+          var incomingCanonical = recordsApi.canonicalRecordContent(incoming);
+          var existingAtId = occupiedById[incoming.id];
+          if (!existingAtId) {
+            var directCopy = safeClone(incoming);
+            occupiedById[directCopy.id] = directCopy;
+            canonicalById[directCopy.id] = incomingCanonical;
+            toImport.push(directCopy);
+            continue;
+          }
+          if (existingAtId.createdAt === incoming.createdAt &&
+              canonicalById[incoming.id] === incomingCanonical) {
             skipped += 1;
             continue;
           }
-          if (hasCanonical) {
-            var inKey = incoming.createdAt + "\0" + recordsApi.canonicalRecordContent(incoming);
-            var existingCopy = existingByContentKey[inKey];
-            if (existingCopy) {
-              skipped += 1;
-              if (existingCopy.id !== incoming.id) {
-                historyIdMap[incoming.id] = existingCopy.id;
+          for (var attempt = 0; attempt < 1000; attempt += 1) {
+            var candidateId = deriveDeterministicRemapId(
+              incoming.id,
+              incoming.createdAt,
+              incomingCanonical,
+              attempt,
+              resolved
+            );
+            var atCandidate = occupiedById[candidateId];
+            if (!atCandidate) {
+              var remappedCopy = safeClone(incoming);
+              remappedCopy.id = candidateId;
+              occupiedById[candidateId] = remappedCopy;
+              canonicalById[candidateId] = incomingCanonical;
+              toImport.push(remappedCopy);
+              remappedCount += 1;
+              if (!hasOwn(historyIdMap, incoming.id)) {
+                historyIdMap[incoming.id] = candidateId;
               }
-              continue;
+              break;
+            }
+            if (atCandidate.createdAt === incoming.createdAt &&
+                canonicalById[candidateId] === incomingCanonical) {
+              skipped += 1;
+              if (!hasOwn(historyIdMap, incoming.id)) {
+                historyIdMap[incoming.id] = candidateId;
+              }
+              break;
             }
           }
-          toImport.push(incoming);
-          originalIds.push(incoming.id);
         }
       }
       if (toImport.length === 0) {
         return { ok: true, summary: { imported: 0, remapped: 0, skipped: skipped } };
       }
       return resolved.historyStore.importRecords(toImport).then(function (res) {
-        if (res && Array.isArray(res.records)) {
-          for (var k = 0; k < originalIds.length; k += 1) {
-            var oldId = originalIds[k];
-            var storedRecord = res.records[k];
-            if (storedRecord && typeof storedRecord.id === "string" && storedRecord.id !== oldId) {
-              historyIdMap[oldId] = storedRecord.id;
-            }
-          }
-        }
         return {
           ok: true,
           summary: {
             imported: res && typeof res.importedCount === "number" ? res.importedCount : toImport.length,
-            remapped: res && typeof res.remappedCount === "number" ? res.remappedCount : 0,
+            remapped: remappedCount + (res && typeof res.remappedCount === "number" ? res.remappedCount : 0),
             skipped: skipped
           }
         };
@@ -1779,10 +1998,23 @@
         var rawConv = rewrittenSection.conversations[c];
         var rawUpdatedAt = parseStrictTimestampMs(rawConv && rawConv.updatedAt);
         var rawCreatedAt = parseStrictTimestampMs(rawConv && rawConv.createdAt);
+        var invalidMsgTs = false;
+        if (rawConv && Array.isArray(rawConv.messages)) {
+          for (var mi = 0; mi < rawConv.messages.length; mi += 1) {
+            var rawMsg = rawConv.messages[mi];
+            if (rawMsg && hasOwn(rawMsg, "createdAt")) {
+              var msgTs = parseStrictTimestampMs(rawMsg.createdAt);
+              if (!Number.isFinite(msgTs) || msgTs <= 0 || msgTs > MAX_VALID_DATE_MS) {
+                invalidMsgTs = true;
+                break;
+              }
+            }
+          }
+        }
         if (!rawConv || typeof rawConv.id !== "string" || !rawConv.id.trim() ||
-            !Number.isFinite(rawUpdatedAt) || rawUpdatedAt <= 0 ||
-            !Number.isFinite(rawCreatedAt) || rawCreatedAt <= 0 ||
-            !Array.isArray(rawConv.messages)) {
+            !Number.isFinite(rawUpdatedAt) || rawUpdatedAt <= 0 || rawUpdatedAt > MAX_VALID_DATE_MS ||
+            !Number.isFinite(rawCreatedAt) || rawCreatedAt <= 0 || rawCreatedAt > MAX_VALID_DATE_MS ||
+            !Array.isArray(rawConv.messages) || invalidMsgTs) {
           skipped += 1;
           continue;
         }
@@ -1864,39 +2096,135 @@
     });
   }
 
+  function persistPreferenceKey(storage, storageError, key, value) {
+    if (!storage || typeof storage.setItem !== "function" || typeof storage.getItem !== "function") {
+      var unavailMsg = storageError && storageError.message
+        ? storageError.message
+        : "local storage is unavailable";
+      return { ok: false, message: unavailMsg, previous: null, hadPrevious: false };
+    }
+    var hadPrevious = false;
+    var previous = null;
+    try {
+      previous = storage.getItem(key);
+      hadPrevious = previous !== null && previous !== undefined;
+    } catch (readErr) {
+      return {
+        ok: false,
+        message: readErr && readErr.message ? readErr.message : "could not read local storage",
+        previous: null,
+        hadPrevious: false
+      };
+    }
+    try {
+      storage.setItem(key, value);
+    } catch (writeErr) {
+      return {
+        ok: false,
+        message: writeErr && writeErr.message ? writeErr.message : "could not save to local storage",
+        previous: previous,
+        hadPrevious: hadPrevious
+      };
+    }
+    try {
+      var verified = storage.getItem(key);
+      if (verified !== value) {
+        return {
+          ok: false,
+          message: "saved value could not be verified in local storage",
+          previous: previous,
+          hadPrevious: hadPrevious
+        };
+      }
+    } catch (verifyErr) {
+      return {
+        ok: false,
+        message: verifyErr && verifyErr.message ? verifyErr.message : "could not verify local storage write",
+        previous: previous,
+        hadPrevious: hadPrevious
+      };
+    }
+    return { ok: true, previous: previous, hadPrevious: hadPrevious };
+  }
+
+  function rollbackPreferenceKey(storage, key, persistInfo) {
+    if (!storage) return;
+    try {
+      if (persistInfo && persistInfo.hadPrevious) {
+        storage.setItem(key, persistInfo.previous);
+      } else if (typeof storage.removeItem === "function") {
+        storage.removeItem(key);
+      }
+    } catch (_e) {}
+  }
+
   function restorePreferencesSection(section, resolved, warnings, failedSections) {
     var applied = { theme: null, locale: null };
     var appliedCount = 0;
     var expectedCount = 0;
+    var persistFailed = false;
+    var persistErrorMessage = "";
     var firstFailureCode = "";
     var firstFailureMessage = "";
 
     if (hasOwn(section, "theme")) {
       expectedCount += 1;
       if (resolved.themeApi && typeof resolved.themeApi.setTheme === "function") {
-        try {
-          var themeRes = resolved.themeApi.setTheme(section.theme);
-          var currentTheme = typeof resolved.themeApi.getTheme === "function"
-            ? resolved.themeApi.getTheme()
-            : section.theme;
-          if (themeRes === true || currentTheme === section.theme ||
-              (themeRes === undefined && currentTheme === section.theme)) {
-            applied.theme = section.theme;
-            appliedCount += 1;
-          } else {
-            var unsupportedMsg = "theme '" + section.theme + "' is not supported in this view";
-            warnings.push("preferences: " + unsupportedMsg);
-            if (!firstFailureMessage) {
-              firstFailureCode = "unsupported_preference";
-              firstFailureMessage = unsupportedMsg;
-            }
-          }
-        } catch (error) {
-          var themeErrMsg = error && error.message ? error.message : "could not apply theme";
-          warnings.push("preferences: " + themeErrMsg);
+        var themeSupported = !Array.isArray(resolved.themeApi.THEMES) ||
+          resolved.themeApi.THEMES.indexOf(section.theme) !== -1;
+        if (!themeSupported) {
+          var unsupportedThemeMsg = "theme '" + section.theme + "' is not supported in this view";
+          warnings.push("preferences: " + unsupportedThemeMsg);
           if (!firstFailureMessage) {
-            firstFailureCode = (error && error.code) || "restore_failed";
-            firstFailureMessage = themeErrMsg;
+            firstFailureCode = "unsupported_preference";
+            firstFailureMessage = unsupportedThemeMsg;
+          }
+        } else {
+          var themeKey = (typeof resolved.themeApi.STORAGE_KEY === "string" && resolved.themeApi.STORAGE_KEY) ||
+            DEFAULT_THEME_STORAGE_KEY;
+          var themePersist = persistPreferenceKey(resolved.storage, resolved.storageError, themeKey, section.theme);
+          if (!themePersist.ok) {
+            persistFailed = true;
+            var themePersistMsg = "could not persist theme '" + section.theme + "' (" + themePersist.message + ")";
+            warnings.push("preferences: " + themePersistMsg);
+            if (!persistErrorMessage) persistErrorMessage = themePersistMsg;
+          } else {
+            try {
+              var themeRes = resolved.themeApi.setTheme(section.theme);
+              var currentTheme = typeof resolved.themeApi.getTheme === "function"
+                ? resolved.themeApi.getTheme()
+                : section.theme;
+              if (themeRes === true || currentTheme === section.theme ||
+                  (themeRes === undefined && currentTheme === section.theme)) {
+                var recheckTheme = null;
+                try { recheckTheme = resolved.storage.getItem(themeKey); } catch (_reErr) { recheckTheme = null; }
+                if (recheckTheme === section.theme) {
+                  applied.theme = section.theme;
+                  appliedCount += 1;
+                } else {
+                  persistFailed = true;
+                  var themeVerifyMsg = "theme '" + section.theme + "' did not persist in local storage";
+                  warnings.push("preferences: " + themeVerifyMsg);
+                  if (!persistErrorMessage) persistErrorMessage = themeVerifyMsg;
+                }
+              } else {
+                rollbackPreferenceKey(resolved.storage, themeKey, themePersist);
+                var unsupportedMsg = "theme '" + section.theme + "' is not supported in this view";
+                warnings.push("preferences: " + unsupportedMsg);
+                if (!firstFailureMessage) {
+                  firstFailureCode = "unsupported_preference";
+                  firstFailureMessage = unsupportedMsg;
+                }
+              }
+            } catch (error) {
+              rollbackPreferenceKey(resolved.storage, themeKey, themePersist);
+              var themeErrMsg = error && error.message ? error.message : "could not apply theme";
+              warnings.push("preferences: " + themeErrMsg);
+              if (!firstFailureMessage) {
+                firstFailureCode = (error && error.code) || "restore_failed";
+                firstFailureMessage = themeErrMsg;
+              }
+            }
           }
         }
       } else {
@@ -1911,29 +2239,50 @@
     if (hasOwn(section, "locale")) {
       expectedCount += 1;
       if (resolved.i18nApi && typeof resolved.i18nApi.setLocale === "function") {
-        try {
-          var localeRes = resolved.i18nApi.setLocale(section.locale);
-          var currentLocale = typeof resolved.i18nApi.getLocale === "function"
-            ? resolved.i18nApi.getLocale()
-            : section.locale;
-          if (localeRes === true || currentLocale === section.locale ||
-              (localeRes === undefined && currentLocale === section.locale)) {
-            applied.locale = section.locale;
-            appliedCount += 1;
-          } else {
-            var localeUnsupportedMsg = "locale '" + section.locale + "' could not be applied";
-            warnings.push("preferences: " + localeUnsupportedMsg);
-            if (!firstFailureMessage) {
-              firstFailureCode = "unsupported_preference";
-              firstFailureMessage = localeUnsupportedMsg;
+        var localeKey = (typeof resolved.i18nApi.STORAGE_KEY === "string" && resolved.i18nApi.STORAGE_KEY) ||
+          DEFAULT_LOCALE_STORAGE_KEY;
+        var localePersist = persistPreferenceKey(resolved.storage, resolved.storageError, localeKey, section.locale);
+        if (!localePersist.ok) {
+          persistFailed = true;
+          var localePersistMsg = "could not persist locale '" + section.locale + "' (" + localePersist.message + ")";
+          warnings.push("preferences: " + localePersistMsg);
+          if (!persistErrorMessage) persistErrorMessage = localePersistMsg;
+        } else {
+          try {
+            var localeRes = resolved.i18nApi.setLocale(section.locale);
+            var currentLocale = typeof resolved.i18nApi.getLocale === "function"
+              ? resolved.i18nApi.getLocale()
+              : section.locale;
+            if (localeRes === true || currentLocale === section.locale ||
+                (localeRes === undefined && currentLocale === section.locale)) {
+              var recheckLocale = null;
+              try { recheckLocale = resolved.storage.getItem(localeKey); } catch (_leErr) { recheckLocale = null; }
+              if (recheckLocale === section.locale) {
+                applied.locale = section.locale;
+                appliedCount += 1;
+              } else {
+                persistFailed = true;
+                var localeVerifyMsg = "locale '" + section.locale + "' did not persist in local storage";
+                warnings.push("preferences: " + localeVerifyMsg);
+                if (!persistErrorMessage) persistErrorMessage = localeVerifyMsg;
+              }
+            } else {
+              rollbackPreferenceKey(resolved.storage, localeKey, localePersist);
+              var localeUnsupportedMsg = "locale '" + section.locale + "' could not be applied";
+              warnings.push("preferences: " + localeUnsupportedMsg);
+              if (!firstFailureMessage) {
+                firstFailureCode = "unsupported_preference";
+                firstFailureMessage = localeUnsupportedMsg;
+              }
             }
-          }
-        } catch (error) {
-          var localeErrMsg = error && error.message ? error.message : "could not apply locale";
-          warnings.push("preferences: " + localeErrMsg);
-          if (!firstFailureMessage) {
-            firstFailureCode = (error && error.code) || "restore_failed";
-            firstFailureMessage = localeErrMsg;
+          } catch (error) {
+            rollbackPreferenceKey(resolved.storage, localeKey, localePersist);
+            var localeErrMsg = error && error.message ? error.message : "could not apply locale";
+            warnings.push("preferences: " + localeErrMsg);
+            if (!firstFailureMessage) {
+              firstFailureCode = (error && error.code) || "restore_failed";
+              firstFailureMessage = localeErrMsg;
+            }
           }
         }
       } else {
@@ -1945,12 +2294,12 @@
       }
     }
 
-    var ok = expectedCount === 0 || appliedCount > 0;
+    var ok = !persistFailed && (expectedCount === 0 || appliedCount > 0);
     if (!ok) {
       failedSections.push({
         section: "preferences",
-        code: firstFailureCode || "restore_failed",
-        message: "preferences: " + (firstFailureMessage || "restore failed")
+        code: persistFailed ? "preferences_persist_failed" : (firstFailureCode || "restore_failed"),
+        message: "preferences: " + (persistFailed ? persistErrorMessage : (firstFailureMessage || "restore failed"))
       });
     }
 
@@ -2015,6 +2364,7 @@
       var failedSections = [];
       var historyIdMap = {};
       var historyWasSelected = targetSections.indexOf("history") !== -1 && hasOwn(parsed.sections, "history");
+      var historySucceeded = false;
 
       var chain = Promise.resolve();
       targetSections.forEach(function (sectionKey) {
@@ -2027,7 +2377,10 @@
             return restoreHistorySection(parsed.sections.history, resolved, warnings, failedSections, historyIdMap)
               .then(function (outcome) {
                 restored.history = outcome.summary;
-                if (outcome.ok) succeededSections.push("history");
+                if (outcome.ok) {
+                  historySucceeded = true;
+                  succeededSections.push("history");
+                }
               });
           }
           if (sectionKey === "cardNotes") {
@@ -2045,18 +2398,24 @@
               });
           }
           if (sectionKey === "aiChats") {
-            var prepMap = (!historyWasSelected && hasOwn(parsed.sections, "history"))
-              ? resolveExistingHistoryIdMap(parsed.sections.history, resolved).then(function (existingMap) {
-                Object.keys(existingMap).forEach(function (oldId) {
-                  if (!hasOwn(historyIdMap, oldId)) historyIdMap[oldId] = existingMap[oldId];
+            return checkAiChatsHistoryDependency(
+              parsed.sections.history,
+              parsed.sections.aiChats,
+              resolved,
+              historyIdMap,
+              historyWasSelected,
+              historySucceeded
+            ).then(function (dep) {
+              if (!dep.ok) {
+                recordSectionFailure(failedSections, warnings, "aiChats", dep.code, dep.message);
+                restored.aiChats = { imported: 0, updated: 0, skipped: 0 };
+                return undefined;
+              }
+              return restoreAiChatsSection(parsed.sections.aiChats, resolved, warnings, failedSections, historyIdMap)
+                .then(function (outcome) {
+                  restored.aiChats = outcome.summary;
+                  if (outcome.ok) succeededSections.push("aiChats");
                 });
-              })
-              : Promise.resolve();
-            return prepMap.then(function () {
-              return restoreAiChatsSection(parsed.sections.aiChats, resolved, warnings, failedSections, historyIdMap);
-            }).then(function (outcome) {
-              restored.aiChats = outcome.summary;
-              if (outcome.ok) succeededSections.push("aiChats");
             });
           }
           if (sectionKey === "preferences") {

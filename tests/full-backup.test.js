@@ -135,17 +135,29 @@ function createUnifiedFakeIndexedDB() {
     this._storeNames = Array.isArray(storeNames) ? storeNames : [storeNames];
     this._queue = [];
     this._pumping = false;
+    this._started = false;
     this._aborted = false;
     this._completed = false;
     this._snapshots = new Map();
     this.error = null;
+  }
+
+  FakeTransaction.prototype._begin = function () {
+    if (this._started || this._aborted || this._completed) return;
+    this._started = true;
     var self = this;
     this._storeNames.forEach(function (name) {
-      var def = db._stores.get(name);
+      var def = self._db._stores.get(name);
       if (def) self._snapshots.set(name, new Map(def.records));
     });
-    setImmediate(function () { self._schedulePump(); });
-  }
+    this._schedulePump();
+  };
+
+  FakeTransaction.prototype._finish = function () {
+    if (this._db && typeof this._db._onTxFinish === "function") {
+      this._db._onTxFinish(this);
+    }
+  };
 
   FakeTransaction.prototype.objectStore = function (name) {
     if (this._storeNames.indexOf(name) === -1) throw new Error("Store not in transaction: " + name);
@@ -164,11 +176,12 @@ function createUnifiedFakeIndexedDB() {
       if (def) def.records = new Map(snap);
     });
     if (typeof this.onabort === "function") this.onabort({ target: this });
+    this._finish();
   };
 
   FakeTransaction.prototype._schedulePump = function () {
     var self = this;
-    if (self._pumping || self._aborted || self._completed) return;
+    if (!self._started || self._pumping || self._aborted || self._completed) return;
     self._pumping = true;
     setImmediate(function step() {
       if (self._aborted) {
@@ -187,6 +200,7 @@ function createUnifiedFakeIndexedDB() {
           }
           self._completed = true;
           if (typeof self.oncomplete === "function") self.oncomplete({ target: self });
+          self._finish();
         }, 0);
         return;
       }
@@ -213,11 +227,27 @@ function createUnifiedFakeIndexedDB() {
     this.name = name;
     this.version = version;
     this._stores = new Map();
+    this._txQueue = [];
+    this._activeTx = null;
     var self = this;
     this.objectStoreNames = {
       contains: function (storeName) { return self._stores.has(storeName); }
     };
   }
+
+  FakeDatabase.prototype._onTxFinish = function (tx) {
+    if (this._activeTx === tx) {
+      this._activeTx = null;
+      this._drainTxQueue();
+    }
+  };
+
+  FakeDatabase.prototype._drainTxQueue = function () {
+    if (this._activeTx || this._txQueue.length === 0) return;
+    var next = this._txQueue.shift();
+    this._activeTx = next;
+    setImmediate(function () { next._begin(); });
+  };
 
   FakeDatabase.prototype.createObjectStore = function (name, options) {
     var def = {
@@ -230,7 +260,10 @@ function createUnifiedFakeIndexedDB() {
   };
 
   FakeDatabase.prototype.transaction = function (storeNames) {
-    return new FakeTransaction(this, storeNames);
+    var tx = new FakeTransaction(this, storeNames);
+    this._txQueue.push(tx);
+    this._drainTxQueue();
+    return tx;
   };
 
   FakeDatabase.prototype.close = function () {};
@@ -280,6 +313,8 @@ function createFakeThemeApi(initialTheme, allowedThemes) {
   var current = initialTheme || "celestial";
   var allowed = allowedThemes || fullBackup.VALID_THEMES.slice();
   return {
+    STORAGE_KEY: "quareia-divination-theme",
+    THEMES: allowed.slice(),
     calls: [],
     getTheme: function () { return current; },
     setTheme: function (next) {
@@ -294,6 +329,7 @@ function createFakeThemeApi(initialTheme, allowedThemes) {
 function createFakeI18nApi(initialLocale) {
   var current = initialLocale || "zh-CN";
   return {
+    STORAGE_KEY: "quareia-divination-locale",
     calls: [],
     getLocale: function () { return current; },
     setLocale: function (next) {
@@ -318,8 +354,8 @@ function createDeckCatalogChecker() {
 
 function createTestEnvironment(options) {
   options = options || {};
-  var idb = createUnifiedFakeIndexedDB();
-  var storage = createMemoryStorage();
+  var idb = options.indexedDB || createUnifiedFakeIndexedDB();
+  var storage = options.storage || createMemoryStorage();
   var isKnownCard = createDeckCatalogChecker();
   var platform = options.platform || "android";
 
@@ -328,7 +364,8 @@ function createTestEnvironment(options) {
     storage: storage,
     adapters: {
       historyRecords: historyRecords,
-      historyStore: historyStoreApi.createStore({ indexedDB: idb, recordsApi: historyRecords }),
+      historyStoreApi: historyStoreApi,
+      historyStore: historyStoreApi.createStore({ indexedDB: idb, recordsApi: options.recordsApi || historyRecords }),
       cardNotesStore: cardNotesStoreApi.createStore({ indexedDB: idb, isKnownCard: isKnownCard }),
       customSpreads: customSpreadsApi,
       customSpreadsLibrary: customSpreadsApi.createLibrary({ platform: platform, storage: storage }),
@@ -336,6 +373,7 @@ function createTestEnvironment(options) {
       aiChatStore: aiChatStoreApi.createStore({ indexedDB: idb }),
       themeApi: createFakeThemeApi(options.theme || "celestial", options.allowedThemes),
       i18nApi: createFakeI18nApi(options.locale || "zh-CN"),
+      storage: storage,
       isKnownCard: isKnownCard
     }
   };
@@ -1590,5 +1628,372 @@ test("Shared outcome contract: restoreBackup returns status ok | partial | faile
   assert.deepEqual(emptySelRes.succeededSections, []);
   assert.deepEqual(emptySelRes.failedSections, []);
   assert.deepEqual(emptySelRes.historyIdMap, {});
+});
+
+test("Review 2 Fix #1: blocks or defers aiChats when colliding history readings are unresolved (both aiChats-first and 5000-cap history failure)", async function () {
+  var localReading = makePresetRecord("shared", "2026-11-01T10:00:00.000Z", {
+    question: "Local Hierophant",
+    cards: [{
+      cardId: "major-05",
+      cardNumber: "5",
+      cardName: "教皇",
+      orientation: "upright",
+      slotIndex: 0,
+      positionNumber: 1,
+      positionName: "当下 · Present",
+      layer: null,
+      arcana: "major",
+      suit: ""
+    }]
+  });
+  var backupReading = makePresetRecord("shared", "2026-11-02T10:00:00.000Z", {
+    question: "Backup Fool",
+    cards: [{
+      cardId: "major-00",
+      cardNumber: "0",
+      cardName: "愚者",
+      orientation: "upright",
+      slotIndex: 0,
+      positionNumber: 1,
+      positionName: "当下 · Present",
+      layer: null,
+      arcana: "major",
+      suit: ""
+    }]
+  });
+  var rawBackup = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T12:00:00.000Z",
+    sections: {
+      history: historyRecords.createExportEnvelope([backupReading], "2026-11-28T12:00:00.000Z"),
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000050000,
+        conversations: [{
+          id: "chat-shared",
+          title: "Fool reading chat",
+          createdAt: 1700000040000,
+          updatedAt: 1700000050000,
+          readingIds: ["shared"],
+          readingSnapshots: [{
+            id: "shared",
+            layoutMode: "preset",
+            deckType: "tarot",
+            spreadId: "three-card-horizontal",
+            spreadName: "三张牌",
+            positionCount: 1,
+            createdAt: 1700000030000,
+            question: "Backup Fool",
+            cards: [{ slotIndex: 0, positionNumber: 1, cardId: "major-00", cardName: "愚者", orientation: "upright" }]
+          }],
+          messages: [
+            { id: "m1", role: "user", content: "Interpret Fool", createdAt: 1700000045000 },
+            { id: "m2", role: "assistant", content: "Fool means blank slate.", createdAt: 1700000050000, interpretedReadingIds: ["shared"] }
+          ]
+        }]
+      }
+    }
+  });
+
+  // Repro A: user restores aiChats ONLY before history -> MUST fail with history_dependency_required and NOT write aiChats!
+  var envA = createTestEnvironment();
+  await envA.adapters.historyStore.saveRecord(localReading);
+  var resAiFirst = await fullBackup.restoreBackup(rawBackup, ["aiChats"], envA.adapters);
+  assert.equal(resAiFirst.status, "failed");
+  assert.deepEqual(resAiFirst.succeededSections, []);
+  assert.equal(resAiFirst.failedSections.length, 1);
+  assert.equal(resAiFirst.failedSections[0].section, "aiChats");
+  assert.equal(resAiFirst.failedSections[0].code, "history_dependency_required");
+  assert.equal((await envA.adapters.aiChatStore.listConversations({ archived: "all" })).length, 0, "aiChats must NOT be written when colliding history is unresolved");
+
+  // Once history is restored first, restoring aiChats second succeeds and links to the deterministic remapped ID!
+  var resHistThen = await fullBackup.restoreBackup(rawBackup, ["history"], envA.adapters);
+  assert.equal(resHistThen.status, "ok");
+  var remappedIdA = resHistThen.historyIdMap.shared;
+  assert.match(remappedIdA, /^reading-remap-[0-9a-f]{32}$/);
+
+  var resAiSecond = await fullBackup.restoreBackup(rawBackup, ["aiChats"], envA.adapters);
+  assert.equal(resAiSecond.status, "ok");
+  assert.deepEqual(resAiSecond.historyIdMap, { shared: remappedIdA });
+  var chatA = await envA.adapters.aiChatStore.getConversation("chat-shared");
+  assert.deepEqual(chatA.readingIds, [remappedIdA]);
+  assert.equal(chatA.readingSnapshots[0].id, remappedIdA);
+  assert.deepEqual(chatA.messages[1].interpretedReadingIds, [remappedIdA]);
+
+  // Repro B: local history is at MAX_RECORDS cap (modeled via bounded MAX_RECORDS=2 with 2 existing records).
+  var cappedRecordsApi = Object.assign({}, historyRecords, { MAX_RECORDS: 2 });
+  var envB = createTestEnvironment({ recordsApi: cappedRecordsApi });
+  await envB.adapters.historyStore.saveRecord(localReading);
+  await envB.adapters.historyStore.saveRecord(makePresetRecord("filler-cap", "2026-10-01T00:00:00.000Z"));
+
+  var resAtCap = await fullBackup.restoreBackup(rawBackup, ["history", "aiChats"], envB.adapters);
+  assert.equal(resAtCap.status, "failed");
+  assert.deepEqual(resAtCap.succeededSections, []);
+  assert.equal(resAtCap.failedSections.length, 2);
+  assert.equal(resAtCap.failedSections[0].section, "history");
+  assert.equal(resAtCap.failedSections[1].section, "aiChats");
+  assert.equal(resAtCap.failedSections[1].code, "history_dependency_failed");
+  assert.equal((await envB.adapters.aiChatStore.listConversations({ archived: "all" })).length, 0, "aiChats must stay deferred when history fails at record cap");
+
+  // Free 1 slot and retry both -> succeeds cleanly with aiChats bound to remapped ID (NOT local major-05)!
+  await envB.adapters.historyStore.deleteRecord("filler-cap");
+  var resAfterFree = await fullBackup.restoreBackup(rawBackup, ["history", "aiChats"], envB.adapters);
+  assert.equal(resAfterFree.status, "ok");
+  assert.deepEqual(resAfterFree.succeededSections, ["history", "aiChats"]);
+  var remappedIdB = resAfterFree.historyIdMap.shared;
+  assert.equal(remappedIdB, remappedIdA, "Deterministic remap ID must be identical across devices");
+  var chatB = await envB.adapters.aiChatStore.getConversation("chat-shared");
+  assert.deepEqual(chatB.readingIds, [remappedIdB]);
+  assert.equal((await envB.adapters.historyStore.getRecord(remappedIdB)).cards[0].cardId, "major-00");
+  assert.equal((await envB.adapters.historyStore.getRecord("shared")).cards[0].cardId, "major-05");
+});
+
+test("Review 2 Fix #2: preserves two independent history IDs with identical createdAt and cards across restore and AI chat links", async function () {
+  var twin1 = makePresetRecord("r1", "2026-11-10T08:00:00.000Z", { question: "Identical reading" });
+  var twin2 = makePresetRecord("r2", "2026-11-10T08:00:00.000Z", { question: "Identical reading" });
+
+  var rawBackup = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T12:30:00.000Z",
+    sections: {
+      history: historyRecords.createExportEnvelope([twin1, twin2], "2026-11-28T12:30:00.000Z"),
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000060000,
+        conversations: [{
+          id: "chat-twins",
+          title: "Comparing r1 and r2",
+          createdAt: 1700000055000,
+          updatedAt: 1700000060000,
+          readingIds: ["r1", "r2"],
+          readingSnapshots: [
+            { id: "r1", layoutMode: "preset", deckType: "tarot", spreadName: "三张牌", positionCount: 1, createdAt: 1700000050000, cards: [{ slotIndex: 0, positionNumber: 1, cardId: "major-00", cardName: "愚者" }] },
+            { id: "r2", layoutMode: "preset", deckType: "tarot", spreadName: "三张牌", positionCount: 1, createdAt: 1700000050000, cards: [{ slotIndex: 0, positionNumber: 1, cardId: "major-00", cardName: "愚者" }] }
+          ],
+          messages: [
+            { id: "m1", role: "user", content: "Compare", createdAt: 1700000056000 },
+            { id: "m2", role: "assistant", content: "Both attached.", createdAt: 1700000060000, interpretedReadingIds: ["r1", "r2"] }
+          ]
+        }]
+      }
+    }
+  });
+
+  // Device already holds r1 -> r1 skips, r2 MUST import under "r2" (NOT collapse into "r1")!
+  var env = createTestEnvironment();
+  await env.adapters.historyStore.saveRecord(twin1);
+
+  var res = await fullBackup.restoreBackup(rawBackup, ["history", "aiChats"], env.adapters);
+  assert.equal(res.status, "ok");
+  assert.deepEqual(res.restored.history, { imported: 1, remapped: 0, skipped: 1 });
+  assert.deepEqual(res.historyIdMap, {});
+  assert.equal((await env.adapters.historyStore.listRecords()).length, 2);
+  assert.ok(await env.adapters.historyStore.getRecord("r1"));
+  assert.ok(await env.adapters.historyStore.getRecord("r2"));
+
+  var chat = await env.adapters.aiChatStore.getConversation("chat-twins");
+  assert.deepEqual(chat.readingIds, ["r1", "r2"]);
+  assert.deepEqual(chat.readingSnapshots.map(function (s) { return s.id; }), ["r1", "r2"]);
+  assert.deepEqual(chat.messages[1].interpretedReadingIds, ["r1", "r2"]);
+
+  // Even when BOTH r1 and r2 collide with DIFFERENT local readings, deterministic IDs remain distinct!
+  var envBothCollide = createTestEnvironment();
+  await envBothCollide.adapters.historyStore.saveRecord(makePresetRecord("r1", "2026-10-01T00:00:00.000Z", { question: "Other 1" }));
+  await envBothCollide.adapters.historyStore.saveRecord(makePresetRecord("r2", "2026-10-02T00:00:00.000Z", { question: "Other 2" }));
+  var resCollide = await fullBackup.restoreBackup(rawBackup, ["history", "aiChats"], envBothCollide.adapters);
+  assert.equal(resCollide.status, "ok");
+  assert.deepEqual(resCollide.restored.history, { imported: 2, remapped: 2, skipped: 0 });
+  assert.notEqual(resCollide.historyIdMap.r1, resCollide.historyIdMap.r2);
+  var chatCollide = await envBothCollide.adapters.aiChatStore.getConversation("chat-twins");
+  assert.deepEqual(chatCollide.readingIds, [resCollide.historyIdMap.r1, resCollide.historyIdMap.r2]);
+  assert.equal(chatCollide.readingSnapshots.length, 2);
+});
+
+test("Review 2 Fix #3: rejects out-of-range numeric timestamps (1.8e18) fail-closed before touching local AI chats or crashing Markdown export", async function () {
+  var env = createTestEnvironment();
+  await env.adapters.aiChatStore.createConversation({
+    id: "chat-safe",
+    title: "Valid local chat",
+    createdAt: 1700000000000,
+    updatedAt: 1700000005000,
+    messages: [{ id: "m1", role: "user", content: "Safe message", createdAt: 1700000005000 }]
+  });
+
+  var badTimestamps = [
+    { id: "chat-safe", createdAt: 1700000000000, updatedAt: 1.8e18, messages: [] },
+    { id: "chat-safe", createdAt: 1.8e18, updatedAt: 1700000005000, messages: [] },
+    { id: "chat-safe", createdAt: 1700000000000, updatedAt: "1800000000000000000", messages: [] },
+    { id: "chat-safe", createdAt: 1700000000000, updatedAt: 8640000000000001, messages: [] },
+    {
+      id: "chat-safe",
+      createdAt: 1700000000000,
+      updatedAt: 1700000010000,
+      messages: [{ id: "m2", role: "user", content: "Bad msg ts", createdAt: 1.8e18 }]
+    }
+  ];
+
+  for (var i = 0; i < badTimestamps.length; i += 1) {
+    var raw = JSON.stringify({
+      format: fullBackup.BACKUP_FORMAT,
+      version: 1,
+      exportedAt: "2026-11-28T13:00:00.000Z",
+      sections: {
+        aiChats: {
+          format: "quareia-ai-chats-backup",
+          version: 1,
+          exportedAt: 1700000010000,
+          conversations: [badTimestamps[i]]
+        }
+      }
+    });
+    assert.throws(function () { fullBackup.parseBackup(raw, env.adapters); }, /valid timestamp/i);
+    await assert.rejects(fullBackup.restoreBackup(raw, ["aiChats"], env.adapters), /valid timestamp/i);
+  }
+
+  // Local conversation remains intact and Markdown export succeeds without RangeError.
+  var kept = await env.adapters.aiChatStore.getConversation("chat-safe");
+  assert.equal(kept.messages.length, 1);
+  assert.equal(kept.messages[0].content, "Safe message");
+  var md = aiChatStoreApi.formatConversationMarkdown(kept, { locale: "en" });
+  assert.match(md, /Safe message/);
+});
+
+test("Review 2 Fix #4: concurrent two-tab restores of the same ID-conflicting backup produce zero duplicate history records", async function () {
+  var sharedIdb = createUnifiedFakeIndexedDB();
+  var sharedStorage = createMemoryStorage();
+  var tab1 = createTestEnvironment({ indexedDB: sharedIdb, storage: sharedStorage });
+  var tab2 = createTestEnvironment({ indexedDB: sharedIdb, storage: sharedStorage });
+
+  await tab1.adapters.historyStore.saveRecord(makePresetRecord("shared", "2026-11-01T10:00:00.000Z", {
+    question: "Local original"
+  }));
+
+  var colliding = makePresetRecord("shared", "2026-11-05T10:00:00.000Z", {
+    question: "Backup colliding",
+    cards: [{
+      cardId: "major-02",
+      cardNumber: "2",
+      cardName: "女祭司",
+      orientation: "upright",
+      slotIndex: 0,
+      positionNumber: 1,
+      positionName: "当下 · Present",
+      layer: null,
+      arcana: "major",
+      suit: ""
+    }]
+  });
+  var rawBackup = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T13:30:00.000Z",
+    sections: {
+      history: historyRecords.createExportEnvelope([colliding], "2026-11-28T13:30:00.000Z"),
+      aiChats: {
+        format: "quareia-ai-chats-backup",
+        version: 1,
+        exportedAt: 1700000070000,
+        conversations: [{
+          id: "chat-race",
+          title: "Concurrent chat",
+          createdAt: 1700000065000,
+          updatedAt: 1700000070000,
+          readingIds: ["shared"],
+          readingSnapshots: [{
+            id: "shared",
+            layoutMode: "preset",
+            deckType: "tarot",
+            spreadName: "三张牌",
+            positionCount: 1,
+            createdAt: 1700000060000,
+            cards: [{ slotIndex: 0, positionNumber: 1, cardId: "major-02", cardName: "女祭司" }]
+          }],
+          messages: [{ id: "m1", role: "user", content: "Hi", createdAt: 1700000070000 }]
+        }]
+      }
+    }
+  });
+
+  var pair = await Promise.all([
+    fullBackup.restoreBackup(rawBackup, ["history", "aiChats"], tab1.adapters),
+    fullBackup.restoreBackup(rawBackup, ["history", "aiChats"], tab2.adapters)
+  ]);
+
+  assert.equal(pair[0].status, "ok");
+  assert.equal(pair[1].status, "ok");
+  assert.equal(pair[0].restored.history.imported + pair[1].restored.history.imported, 1);
+  assert.equal(pair[0].restored.history.remapped + pair[1].restored.history.remapped, 1);
+  assert.equal(pair[0].restored.history.skipped + pair[1].restored.history.skipped, 1);
+  assert.deepEqual(pair[0].historyIdMap, pair[1].historyIdMap);
+
+  var allRecords = await tab1.adapters.historyStore.listRecords();
+  assert.equal(allRecords.length, 2, "Must hold exact 1 local + 1 remapped backup record (zero duplicates)");
+  var chat = await tab1.adapters.aiChatStore.getConversation("chat-race");
+  assert.deepEqual(chat.readingIds, [pair[0].historyIdMap.shared]);
+});
+
+test("Review 2 Fix #5: preferences QuotaExceededError or failed read-back fails restore with preferences_persist_failed and succeeds on retry", async function () {
+  var backing = new Map();
+  var quotaBlocked = true;
+  var flakyStorage = {
+    getItem: function (k) { return backing.has(k) ? backing.get(k) : null; },
+    setItem: function (k, v) {
+      if (quotaBlocked) {
+        var err = new Error("QuotaExceededError");
+        err.name = "QuotaExceededError";
+        throw err;
+      }
+      backing.set(k, String(v));
+    },
+    removeItem: function (k) { backing.delete(k); }
+  };
+
+  var env = createTestEnvironment({ theme: "celestial", locale: "zh-CN", storage: flakyStorage });
+  var raw = JSON.stringify({
+    format: fullBackup.BACKUP_FORMAT,
+    version: 1,
+    exportedAt: "2026-11-28T14:00:00.000Z",
+    sections: {
+      preferences: { theme: "parchment", locale: "en" }
+    }
+  });
+
+  // 1. QuotaExceededError -> status MUST be "failed", code MUST be "preferences_persist_failed", memory unchanged!
+  var failedRes = await fullBackup.restoreBackup(raw, ["preferences"], env.adapters);
+  assert.equal(failedRes.status, "failed");
+  assert.deepEqual(failedRes.succeededSections, []);
+  assert.equal(failedRes.failedSections.length, 1);
+  assert.equal(failedRes.failedSections[0].section, "preferences");
+  assert.equal(failedRes.failedSections[0].code, "preferences_persist_failed");
+  assert.deepEqual(failedRes.appliedPreferences, { theme: null, locale: null });
+  assert.equal(env.adapters.themeApi.getTheme(), "celestial");
+  assert.equal(env.adapters.i18nApi.getLocale(), "zh-CN");
+
+  // 2. Lift quota block and retry -> persists durably and reports status "ok"!
+  quotaBlocked = false;
+  var retryRes = await fullBackup.restoreBackup(raw, ["preferences"], env.adapters);
+  assert.equal(retryRes.status, "ok");
+  assert.deepEqual(retryRes.succeededSections, ["preferences"]);
+  assert.deepEqual(retryRes.failedSections, []);
+  assert.deepEqual(retryRes.appliedPreferences, { theme: "parchment", locale: "en" });
+  assert.equal(backing.get("quareia-divination-theme"), "parchment");
+  assert.equal(backing.get("quareia-divination-locale"), "en");
+  assert.equal(env.adapters.themeApi.getTheme(), "parchment");
+  assert.equal(env.adapters.i18nApi.getLocale(), "en");
+
+  // 3. Silent storage drop (setItem doesn't throw, but getItem doesn't match) -> also fails with preferences_persist_failed!
+  var silentDropStorage = {
+    getItem: function () { return "celestial"; },
+    setItem: function () {},
+    removeItem: function () {}
+  };
+  var envDrop = createTestEnvironment({ theme: "celestial", locale: "zh-CN", storage: silentDropStorage });
+  var dropRes = await fullBackup.restoreBackup(raw, ["preferences"], envDrop.adapters);
+  assert.equal(dropRes.status, "failed");
+  assert.equal(dropRes.failedSections[0].code, "preferences_persist_failed");
 });
 
