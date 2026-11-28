@@ -584,6 +584,14 @@ def run_scenario(pw, base_url, android, classic, width):
             # 4) export_too_large blocks download/save picker & names oversized module.
             verify_review_regressions(page, android, classic, label, exported_json, file_name)
 
+            # Second-pass deep data-integrity & concurrency regressions (#17/#18):
+            # 1) Out-of-range 1.8e18 timestamp rejected fail-closed;
+            # 2) QuotaExceededError on preferences fails cleanly & retries;
+            # 3) aiChats-only before colliding history + 5000-cap history failure defer aiChats;
+            # 4) Two independent identical-content history IDs survive with both AI chat links;
+            # 5) Real two-tab concurrent restore of ID-conflicting backup produces zero duplicates.
+            verify_second_pass_regressions(page, context, url, android, classic, label, exported_json, file_name)
+
             assert not page_errors, (label, page_errors)
             assert not console_errors, (label, console_errors)
             assert not external_requests, (label, external_requests)
@@ -902,6 +910,473 @@ def verify_review_regressions(page, android, classic, label, exported_json, file
 
     page.evaluate("() => { URL.createObjectURL = window.__origCreateObjectURL; }")
     close_backup_dialog(page, android)
+
+
+def verify_second_pass_regressions(page, context, url, android, classic, label, exported_json, file_name):
+    # Clean stores and remove the huge oversize chat from previous check.
+    page.evaluate(
+        """async () => {
+            const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+            await hStore.clearRecords();
+            const aStore = DivinationAiChatStore.createStore();
+            await aStore.clearConversations();
+            DivinationTheme.setTheme("celestial");
+            DivinationI18n.setLocale("zh-CN");
+        }"""
+    )
+
+    open_backup_dialog(page, android, classic)
+
+    # A) Out-of-range numeric timestamp (1.8e18) rejected fail-closed at parse/preview stage.
+    bad_ts_bundle = json.loads(exported_json)
+    bad_ts_bundle["sections"]["aiChats"]["conversations"][0]["updatedAt"] = 1.8e18
+    bad_ts_bundle["sections"]["aiChats"]["conversations"][0]["messages"] = []
+    page.locator("#fullBackupImportInput").set_input_files({
+        "name": "bad-timestamp.json",
+        "mimeType": "application/json",
+        "buffer": json.dumps(bad_ts_bundle).encode("utf-8"),
+    })
+    expect(page.locator("#fullBackupStatus")).to_have_class(re.compile(r"\bis-error\b"))
+    expect(page.locator("#fullBackupPreview")).to_be_hidden()
+
+    # B) QuotaExceededError on localStorage.setItem when restoring preferences -> error status, preview open, retries cleanly.
+    page.evaluate(
+        """() => {
+            window.__origStorageSetItem = Storage.prototype.setItem;
+            Storage.prototype.setItem = function (k, v) {
+                if (k === "quareia-divination-theme" || k === "quareia-divination-locale") {
+                    throw new DOMException("QuotaExceededError", "QuotaExceededError");
+                }
+                return window.__origStorageSetItem.call(this, k, v);
+            };
+        }"""
+    )
+    page.locator("#fullBackupImportInput").set_input_files({
+        "name": file_name,
+        "mimeType": "application/json",
+        "buffer": exported_json.encode("utf-8"),
+    })
+    expect(page.locator("#fullBackupPreview")).to_be_visible()
+    for sec in ("history", "cardNotes", "customSpreads", "aiChats"):
+        page.locator(f'#fullBackupPreviewList input[data-backup-section="{sec}"]').uncheck()
+    page.locator("#fullBackupConfirmBtn").click()
+    expect(page.locator("#fullBackupStatus")).to_have_class(re.compile(r"\bis-error\b"))
+    expect(page.locator("#fullBackupStatus")).not_to_have_class(re.compile(r"\bis-success\b"))
+    expect(page.locator("#fullBackupPreview")).to_be_visible()
+    expect(page.locator('#fullBackupPreviewList input[data-backup-section="preferences"]')).to_be_checked()
+    expect(page.locator("#fullBackupSummary")).to_have_class(re.compile(r"\bis-error\b"))
+    expect(page.locator('#fullBackupSummaryList [data-backup-failure-code="preferences_persist_failed"]')).to_have_count(1)
+    assert page.evaluate("localStorage.getItem('quareia-divination-theme')") == "celestial", label
+
+    # Lift storage quota error and retry directly without re-picking file.
+    page.evaluate("() => { Storage.prototype.setItem = window.__origStorageSetItem; }")
+    page.locator("#fullBackupConfirmBtn").click()
+    expect(page.locator("#fullBackupStatus")).to_have_class(re.compile(r"\bis-success\b"))
+    expect(page.locator("#fullBackupPreview")).to_be_hidden()
+    assert page.evaluate("localStorage.getItem('quareia-divination-theme')") == "parchment", label
+    assert page.evaluate("localStorage.getItem('quareia-divination-locale')") == "en", label
+
+    # C) Colliding history + AI chats dependency guard:
+    #    C1) aiChats-only before colliding history -> history_dependency_required (0 chats written).
+    #    C2) history + aiChats when MAX_RECORDS cap hit -> history fails & aiChats deferred (history_dependency_failed, 0 chats written).
+    #    C3) Lift cap and click Confirm directly -> both succeed and chat links to remapped ID!
+    dep_json = page.evaluate(
+        """async () => {
+            const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+            await hStore.clearRecords();
+            const aStore = DivinationAiChatStore.createStore();
+            await aStore.clearConversations();
+
+            const backupRec = DivinationHistoryRecords.buildReadingRecord({
+                id: "shared-dep-1",
+                createdAt: "2026-11-28T07:00:00.000Z",
+                deckType: "tarot",
+                deckMode: "tarot",
+                deckName: "RWS 塔罗",
+                spreadId: "three-card-horizontal",
+                spreadName: "三张牌阵",
+                orientationMode: "mixed",
+                filterMode: "mixed",
+                overviewMethod: "not-applicable",
+                question: "备份依赖测试记录",
+                positions: [
+                    { number: 1, name: "过去", nameEn: "Past" },
+                    { number: 2, name: "现在", nameEn: "Present" },
+                    { number: 3, name: "未来", nameEn: "Future" }
+                ],
+                entries: [
+                    { slotIndex: 0, orientation: "upright", layer: null, card: tarotDeckFull[0] },
+                    { slotIndex: 1, orientation: "upright", layer: null, card: tarotDeckFull[1] },
+                    { slotIndex: 2, orientation: "upright", layer: null, card: tarotDeckFull[2] }
+                ]
+            });
+            await hStore.saveRecord(backupRec);
+            await aStore.createConversation({
+                id: "chat-dep-1",
+                title: "依赖保护测试对话",
+                createdAt: 1795842100000,
+                updatedAt: 1795842160000,
+                archived: false,
+                pinned: false,
+                skillMode: "auto",
+                readingIds: ["shared-dep-1"],
+                readingSnapshots: [{
+                    id: "shared-dep-1",
+                    layoutMode: "preset",
+                    deckType: "tarot",
+                    spreadId: "three-card-horizontal",
+                    spreadName: "三张牌阵",
+                    positionCount: 3,
+                    orientationMode: "mixed",
+                    filterMode: "mixed",
+                    overviewMethod: "not-applicable",
+                    createdAt: 1795842100000,
+                    question: "备份依赖测试记录",
+                    cards: [{
+                        slotIndex: 0,
+                        positionNumber: 1,
+                        positionName: "过去",
+                        cardId: tarotDeckFull[0].id,
+                        cardName: tarotDeckFull[0].name,
+                        orientation: "upright"
+                    }]
+                }],
+                messages: [
+                    { id: "md-1", role: "user", content: "依赖测试提问", createdAt: 1795842100000 },
+                    { id: "md-2", role: "assistant", content: "依赖测试回答", createdAt: 1795842150000, interpretedReadingIds: ["shared-dep-1"] }
+                ]
+            });
+
+            const exported = await DivinationFullBackup.collectBackup({
+                historyStore: hStore,
+                historyRecords: DivinationHistoryRecords,
+                cardNotesStore: null,
+                customSpreadsLibrary: null,
+                aiChatStore: aStore,
+                aiChatStoreApi: DivinationAiChatStore,
+                themeApi: null,
+                i18nApi: null
+            });
+
+            await hStore.clearRecords();
+            await aStore.clearConversations();
+            const localRec = DivinationHistoryRecords.buildReadingRecord({
+                id: "shared-dep-1",
+                createdAt: "2026-11-21T07:00:00.000Z",
+                deckType: "tarot",
+                deckMode: "tarot",
+                deckName: "RWS 塔罗",
+                spreadId: "three-card-horizontal",
+                spreadName: "三张牌阵",
+                orientationMode: "mixed",
+                filterMode: "mixed",
+                overviewMethod: "not-applicable",
+                question: "本地已有冲突记录",
+                positions: [
+                    { number: 1, name: "过去", nameEn: "Past" },
+                    { number: 2, name: "现在", nameEn: "Present" },
+                    { number: 3, name: "未来", nameEn: "Future" }
+                ],
+                entries: [
+                    { slotIndex: 0, orientation: "upright", layer: null, card: tarotDeckFull[5] },
+                    { slotIndex: 1, orientation: "upright", layer: null, card: tarotDeckFull[6] },
+                    { slotIndex: 2, orientation: "upright", layer: null, card: tarotDeckFull[7] }
+                ]
+            });
+            await hStore.saveRecord(localRec);
+            return exported.json;
+        }"""
+    )
+
+    # C1: aiChats-only before colliding history -> blocked with history_dependency_required
+    page.locator("#fullBackupImportInput").set_input_files({
+        "name": "dep-backup.json",
+        "mimeType": "application/json",
+        "buffer": dep_json.encode("utf-8"),
+    })
+    expect(page.locator("#fullBackupPreview")).to_be_visible()
+    page.locator('#fullBackupPreviewList input[data-backup-section="history"]').uncheck()
+    page.locator("#fullBackupConfirmBtn").click()
+    expect(page.locator("#fullBackupStatus")).to_have_class(re.compile(r"\bis-error\b"))
+    expect(page.locator("#fullBackupPreview")).to_be_visible()
+    expect(page.locator('#fullBackupSummaryList [data-backup-failure-code="history_dependency_required"]')).to_have_count(1)
+    assert page.evaluate("async () => (await DivinationAiChatStore.createStore().listConversations({ archived: 'all' })).length") == 0, label
+
+    # C2: check history too, but simulate hitting MAX_RECORDS cap -> history fails AND aiChats is deferred (history_dependency_failed)!
+    page.evaluate(
+        """() => {
+            window.__origMaxRecords = DivinationHistoryRecords.MAX_RECORDS;
+            DivinationHistoryRecords.MAX_RECORDS = 1;
+        }"""
+    )
+    page.locator('#fullBackupPreviewList input[data-backup-section="history"]').check()
+    page.locator("#fullBackupConfirmBtn").click()
+    expect(page.locator("#fullBackupStatus")).to_have_class(re.compile(r"\bis-error\b"))
+    expect(page.locator("#fullBackupPreview")).to_be_visible()
+    expect(page.locator('#fullBackupPreviewList input[data-backup-section="history"]')).to_be_checked()
+    expect(page.locator('#fullBackupPreviewList input[data-backup-section="aiChats"]')).to_be_checked()
+    expect(page.locator('#fullBackupSummaryList [data-backup-failure-code="history_dependency_failed"]')).to_have_count(1)
+    assert page.evaluate("async () => (await DivinationAiChatStore.createStore().listConversations({ archived: 'all' })).length") == 0, label
+
+    # C3: restore MAX_RECORDS and retry directly -> both succeed with exact remapped ID!
+    page.evaluate("() => { DivinationHistoryRecords.MAX_RECORDS = window.__origMaxRecords; }")
+    page.locator("#fullBackupConfirmBtn").click()
+    expect(page.locator("#fullBackupStatus")).to_have_class(re.compile(r"\bis-success\b"))
+    expect(page.locator("#fullBackupPreview")).to_be_hidden()
+    dep_after = page.evaluate(
+        """async () => {
+            const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+            const aStore = DivinationAiChatStore.createStore();
+            const records = await hStore.listRecords("all");
+            const chats = await aStore.listConversations({ archived: "all" });
+            const imported = records.find(r => r.question === "备份依赖测试记录");
+            const chat = chats.find(c => c.id === "chat-dep-1");
+            return {
+                count: records.length,
+                remappedId: imported && imported.id,
+                chatReadingIds: chat && chat.readingIds,
+                snapshotId: chat && chat.readingSnapshots && chat.readingSnapshots[0] && chat.readingSnapshots[0].id,
+                interpretedIds: chat && chat.messages && chat.messages[1] && chat.messages[1].interpretedReadingIds
+            };
+        }"""
+    )
+    assert dep_after["count"] == 2, (label, dep_after)
+    assert dep_after["remappedId"] and dep_after["remappedId"] != "shared-dep-1", (label, dep_after)
+    assert dep_after["chatReadingIds"] == [dep_after["remappedId"]], (label, dep_after)
+    assert dep_after["snapshotId"] == dep_after["remappedId"], (label, dep_after)
+    assert dep_after["interpretedIds"] == [dep_after["remappedId"]], (label, dep_after)
+
+    # D) Two independent history IDs (r1, r2) with identical createdAt + cards attached to one AI chat:
+    #    Restoring on a device holding r1 must keep BOTH r1 & r2 and BOTH AI chat attachments!
+    twin_json = page.evaluate(
+        """async () => {
+            const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+            await hStore.clearRecords();
+            const aStore = DivinationAiChatStore.createStore();
+            await aStore.clearConversations();
+
+            const common = {
+                createdAt: "2026-11-28T07:30:00.000Z",
+                deckType: "tarot",
+                deckMode: "tarot",
+                deckName: "RWS 塔罗",
+                spreadId: "three-card-horizontal",
+                spreadName: "三张牌阵",
+                orientationMode: "mixed",
+                filterMode: "mixed",
+                overviewMethod: "not-applicable",
+                question: "相同内容双独立ID",
+                positions: [
+                    { number: 1, name: "过去", nameEn: "Past" },
+                    { number: 2, name: "现在", nameEn: "Present" },
+                    { number: 3, name: "未来", nameEn: "Future" }
+                ],
+                entries: [
+                    { slotIndex: 0, orientation: "upright", layer: null, card: tarotDeckFull[2] },
+                    { slotIndex: 1, orientation: "upright", layer: null, card: tarotDeckFull[3] },
+                    { slotIndex: 2, orientation: "upright", layer: null, card: tarotDeckFull[4] }
+                ]
+            };
+            const r1 = DivinationHistoryRecords.buildReadingRecord(Object.assign({ id: "twin-r1" }, common));
+            const r2 = DivinationHistoryRecords.buildReadingRecord(Object.assign({ id: "twin-r2" }, common));
+            await hStore.importRecords([r1, r2]);
+            await aStore.createConversation({
+                id: "chat-twin-1",
+                title: "双附件对话",
+                createdAt: 1795842200000,
+                updatedAt: 1795842260000,
+                archived: false,
+                pinned: false,
+                skillMode: "auto",
+                readingIds: ["twin-r1", "twin-r2"],
+                readingSnapshots: [
+                    {
+                        id: "twin-r1", layoutMode: "preset", deckType: "tarot",
+                        spreadId: "three-card-horizontal", spreadName: "三张牌阵", positionCount: 3,
+                        orientationMode: "mixed", filterMode: "mixed", overviewMethod: "not-applicable",
+                        createdAt: 1795842200000, question: "相同内容双独立ID",
+                        cards: [{ slotIndex: 0, positionNumber: 1, positionName: "过去", cardId: tarotDeckFull[2].id, cardName: tarotDeckFull[2].name, orientation: "upright" }]
+                    },
+                    {
+                        id: "twin-r2", layoutMode: "preset", deckType: "tarot",
+                        spreadId: "three-card-horizontal", spreadName: "三张牌阵", positionCount: 3,
+                        orientationMode: "mixed", filterMode: "mixed", overviewMethod: "not-applicable",
+                        createdAt: 1795842200000, question: "相同内容双独立ID",
+                        cards: [{ slotIndex: 0, positionNumber: 1, positionName: "过去", cardId: tarotDeckFull[2].id, cardName: tarotDeckFull[2].name, orientation: "upright" }]
+                    }
+                ],
+                messages: [
+                    { id: "mt-1", role: "user", content: "对比这两条记录", createdAt: 1795842200000 },
+                    { id: "mt-2", role: "assistant", content: "两条均保留。", createdAt: 1795842250000, interpretedReadingIds: ["twin-r1", "twin-r2"] }
+                ]
+            });
+
+            const exported = await DivinationFullBackup.collectBackup({
+                historyStore: hStore,
+                historyRecords: DivinationHistoryRecords,
+                cardNotesStore: null,
+                customSpreadsLibrary: null,
+                aiChatStore: aStore,
+                aiChatStoreApi: DivinationAiChatStore,
+                themeApi: null,
+                i18nApi: null
+            });
+
+            // Device already holds ONLY twin-r1.
+            await hStore.clearRecords();
+            await aStore.clearConversations();
+            await hStore.saveRecord(r1);
+            return exported.json;
+        }"""
+    )
+    page.locator("#fullBackupImportInput").set_input_files({
+        "name": "twin-backup.json",
+        "mimeType": "application/json",
+        "buffer": twin_json.encode("utf-8"),
+    })
+    expect(page.locator("#fullBackupPreview")).to_be_visible()
+    page.locator("#fullBackupConfirmBtn").click()
+    expect(page.locator("#fullBackupStatus")).to_have_class(re.compile(r"\bis-success\b"))
+    twin_after = page.evaluate(
+        """async () => {
+            const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+            const aStore = DivinationAiChatStore.createStore();
+            const records = await hStore.listRecords("all");
+            const chats = await aStore.listConversations({ archived: "all" });
+            const chat = chats.find(c => c.id === "chat-twin-1");
+            return {
+                ids: records.map(r => r.id).sort(),
+                chatReadingIds: chat && chat.readingIds.slice().sort(),
+                snapshotIds: chat && chat.readingSnapshots.map(s => s.id).sort()
+            };
+        }"""
+    )
+    assert twin_after == {
+        "ids": ["twin-r1", "twin-r2"],
+        "chatReadingIds": ["twin-r1", "twin-r2"],
+        "snapshotIds": ["twin-r1", "twin-r2"],
+    }, (label, twin_after)
+
+    close_backup_dialog(page, android)
+
+    # E) Real two-tab concurrent restore of the same ID-conflicting backup -> exact 1 local + 1 remapped copy (ZERO duplicates)!
+    race_json = page.evaluate(
+        """async () => {
+            const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+            await hStore.clearRecords();
+            const backupRec = DivinationHistoryRecords.buildReadingRecord({
+                id: "shared-race-1",
+                createdAt: "2026-11-28T08:00:00.000Z",
+                deckType: "tarot",
+                deckMode: "tarot",
+                deckName: "RWS 塔罗",
+                spreadId: "three-card-horizontal",
+                spreadName: "三张牌阵",
+                orientationMode: "mixed",
+                filterMode: "mixed",
+                overviewMethod: "not-applicable",
+                question: "双标签页并发恢复备份",
+                positions: [
+                    { number: 1, name: "过去", nameEn: "Past" },
+                    { number: 2, name: "现在", nameEn: "Present" },
+                    { number: 3, name: "未来", nameEn: "Future" }
+                ],
+                entries: [
+                    { slotIndex: 0, orientation: "upright", layer: null, card: tarotDeckFull[8] },
+                    { slotIndex: 1, orientation: "upright", layer: null, card: tarotDeckFull[9] },
+                    { slotIndex: 2, orientation: "upright", layer: null, card: tarotDeckFull[10] }
+                ]
+            });
+            await hStore.saveRecord(backupRec);
+            const exported = await DivinationFullBackup.collectBackup({
+                historyStore: hStore,
+                historyRecords: DivinationHistoryRecords,
+                cardNotesStore: null,
+                customSpreadsLibrary: null,
+                aiChatStore: null,
+                aiChatStoreApi: null,
+                themeApi: null,
+                i18nApi: null
+            });
+            await hStore.clearRecords();
+            const localRec = DivinationHistoryRecords.buildReadingRecord({
+                id: "shared-race-1",
+                createdAt: "2026-11-22T08:00:00.000Z",
+                deckType: "tarot",
+                deckMode: "tarot",
+                deckName: "RWS 塔罗",
+                spreadId: "three-card-horizontal",
+                spreadName: "三张牌阵",
+                orientationMode: "mixed",
+                filterMode: "mixed",
+                overviewMethod: "not-applicable",
+                question: "双标签页并发恢复本地",
+                positions: [
+                    { number: 1, name: "过去", nameEn: "Past" },
+                    { number: 2, name: "现在", nameEn: "Present" },
+                    { number: 3, name: "未来", nameEn: "Future" }
+                ],
+                entries: [
+                    { slotIndex: 0, orientation: "upright", layer: null, card: tarotDeckFull[11] },
+                    { slotIndex: 1, orientation: "upright", layer: null, card: tarotDeckFull[12] },
+                    { slotIndex: 2, orientation: "upright", layer: null, card: tarotDeckFull[13] }
+                ]
+            });
+            await hStore.saveRecord(localRec);
+            return exported.json;
+        }"""
+    )
+
+    page2 = context.new_page()
+    try:
+        page2.set_default_timeout(10000)
+        page2.goto(url)
+        if android:
+            dismiss_android_telemetry(page2)
+
+        # Fire restore simultaneously from Tab 1 and Tab 2 against the same IndexedDB!
+        page.evaluate(
+            """(raw) => {
+                const parsed = DivinationFullBackup.parseBackup(raw, { historyRecords: DivinationHistoryRecords });
+                const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+                window.__tab1Restore = DivinationFullBackup.restoreBackup(parsed, ["history"], {
+                    historyStore: hStore,
+                    historyRecords: DivinationHistoryRecords
+                });
+            }""",
+            race_json,
+        )
+        tab2_res = page2.evaluate(
+            """async (raw) => {
+                const parsed = DivinationFullBackup.parseBackup(raw, { historyRecords: DivinationHistoryRecords });
+                const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+                return DivinationFullBackup.restoreBackup(parsed, ["history"], {
+                    historyStore: hStore,
+                    historyRecords: DivinationHistoryRecords
+                });
+            }""",
+            race_json,
+        )
+        tab1_res = page.evaluate("async () => window.__tab1Restore")
+        assert tab1_res["status"] == "ok", (label, tab1_res)
+        assert tab2_res["status"] == "ok", (label, tab2_res)
+
+        race_after = page.evaluate(
+            """async () => {
+                const hStore = DivinationHistoryStore.createStore({ recordsApi: DivinationHistoryRecords });
+                const records = await hStore.listRecords("all");
+                return {
+                    count: records.length,
+                    questions: records.map(r => r.question).sort()
+                };
+            }"""
+        )
+        assert race_after == {
+            "count": 2,
+            "questions": ["双标签页并发恢复备份", "双标签页并发恢复本地"],
+        }, (label, race_after)
+    finally:
+        page2.close()
 
 
 def run_surface(pw, root_dir, android):

@@ -832,6 +832,9 @@
       "fullBackup.summary.preferencesUnchanged": "界面偏好：与当前设置一致，无需更改",
       "fullBackup.summary.sectionFailed": "{section}：恢复失败（{reason}）",
       "fullBackup.summary.sectionFailedGeneric": "{section}：恢复失败",
+      "fullBackup.failure.historyDependencyFailed": "已暂缓恢复：关联的冲突占卜历史本次未能写入，为避免错误关联到本机其他记录，请在解决历史存储或数量上限后重试。",
+      "fullBackup.failure.historyDependencyRequired": "需要先恢复占卜历史：该备份中的 AI 对话关联了与本机记录冲突的历史 ID，请先恢复占卜历史，或同时勾选「占卜历史」与「AI 对话记录」后重试。",
+      "fullBackup.failure.preferencesPersistFailed": "无法将主题或语言偏好写入本机存储（存储空间可能已满或不可用），已保留勾选以便重试。",
       "fullBackup.summary.warning": "提示：{message}"
     },
     "en": {
@@ -1658,6 +1661,9 @@
       "fullBackup.summary.preferencesUnchanged": "Preferences: already matched current settings",
       "fullBackup.summary.sectionFailed": "{section}: restore failed ({reason})",
       "fullBackup.summary.sectionFailedGeneric": "{section}: restore failed",
+      "fullBackup.failure.historyDependencyFailed": "Deferred: colliding Reading History records failed to write first. To avoid linking chats to the wrong local reading, resolve history storage or limit issues and retry.",
+      "fullBackup.failure.historyDependencyRequired": "Reading History required first: AI chats in this backup reference history IDs that collide with different local readings. Restore Reading History first, or select both Reading History and AI Chats together to retry.",
+      "fullBackup.failure.preferencesPersistFailed": "Could not save Theme/Language preferences to local storage (storage may be full or unavailable). Preferences remain selected so you can retry.",
       "fullBackup.summary.warning": "Notice: {message}"
     }
   };

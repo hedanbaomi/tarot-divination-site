@@ -11,7 +11,7 @@ const android = "android-demo/app/src/main/assets/www";
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 
 test("full-backup UI and CSS stay byte-identical between Web and Android with zero forbidden APIs", () => {
-  for (const rel of ["js/full-backup-ui.js", "css/full-backup.css", "js/custom-spread-ui.js", "js/card-notes.js"]) {
+  for (const rel of ["js/full-backup-ui.js", "css/full-backup.css", "js/custom-spread-ui.js", "js/card-notes.js", "js/history-store.js"]) {
     const webSrc = read(rel);
     const androidSrc = read(path.join(android, rel));
     assert.equal(webSrc, androidSrc, rel + " must match byte-for-byte between Web and Android");
@@ -772,4 +772,226 @@ test("full-backup UI keeps preview open on all-failed/partial restore, supports 
   assert.equal(byId.fullBackupStatus.classList.contains("is-success"), true);
   assert.equal(byId.fullBackupPreview.hidden, true);
   assert.equal(byId.fullBackupSummary.classList.contains("is-error"), false);
+});
+
+test("full-backup UI renders localized copy and retry state for history_dependency_required, history_dependency_failed, and preferences_persist_failed", async () => {
+  function FakeElement(tag, id) {
+    this.tagName = tag.toUpperCase();
+    this.id = id || "";
+    this.className = "";
+    this.textContent = "";
+    this.hidden = false;
+    this.disabled = false;
+    this.checked = false;
+    this.type = "";
+    this.value = "";
+    this.open = false;
+    this.isConnected = true;
+    this.offsetParent = {};
+    this.dataset = {};
+    this.children = [];
+    this.listeners = Object.create(null);
+    this.attributes = Object.create(null);
+    const self = this;
+    this.classList = {
+      contains: function (c) { return self.className.split(/\s+/).filter(Boolean).includes(c); },
+      add: function (c) { if (!this.contains(c)) self.className = (self.className + " " + c).trim(); },
+      remove: function (c) { self.className = self.className.split(/\s+/).filter(function (x) { return x && x !== c; }).join(" "); },
+      toggle: function (c, force) {
+        var on = typeof force === "boolean" ? force : !this.contains(c);
+        if (on) this.add(c); else this.remove(c);
+        return on;
+      }
+    };
+  }
+  FakeElement.prototype.appendChild = function (child) {
+    if (child && child.isFragment) {
+      child.children.forEach(c => this.children.push(c));
+      child.children = [];
+      return child;
+    }
+    this.children.push(child);
+    return child;
+  };
+  FakeElement.prototype.replaceChildren = function (...nodes) {
+    this.children = [];
+    nodes.forEach(n => this.appendChild(n));
+  };
+  FakeElement.prototype.setAttribute = function (k, v) { this.attributes[k] = String(v); };
+  FakeElement.prototype.getAttribute = function (k) { return this.attributes[k] || null; };
+  FakeElement.prototype.removeAttribute = function (k) { delete this.attributes[k]; };
+  FakeElement.prototype.hasAttribute = function (k) { return Object.prototype.hasOwnProperty.call(this.attributes, k); };
+  FakeElement.prototype.addEventListener = function (type, fn) {
+    (this.listeners[type] || (this.listeners[type] = [])).push(fn);
+  };
+  FakeElement.prototype.dispatch = function (type, event = {}) {
+    event.currentTarget = this;
+    event.target = event.target || this;
+    event.preventDefault = event.preventDefault || (() => {});
+    event.stopPropagation = event.stopPropagation || (() => {});
+    (this.listeners[type] || []).slice().forEach(fn => fn(event));
+  };
+  FakeElement.prototype.click = function () { this.dispatch("click"); };
+  FakeElement.prototype.focus = function () {};
+  FakeElement.prototype.remove = function () {};
+  FakeElement.prototype.showModal = function () { this.open = true; };
+  FakeElement.prototype.close = function () { this.open = false; };
+  Object.defineProperty(FakeElement.prototype, "childElementCount", {
+    get() { return this.children.length; }
+  });
+
+  const ids = [
+    "fullBackupOpenBtn", "fullBackupDialog", "fullBackupCloseBtn", "fullBackupDialogTitle",
+    "fullBackupStatus", "fullBackupRefreshBtn", "fullBackupLocalCounts", "fullBackupUnavailable",
+    "fullBackupExportBtn", "fullBackupChooseBtn", "fullBackupImportInput", "fullBackupPreview",
+    "fullBackupPreviewFile", "fullBackupPreviewTime", "fullBackupPreviewList",
+    "fullBackupConfirmBtn", "fullBackupCancelBtn", "fullBackupSummary", "fullBackupSummaryList"
+  ];
+  const byId = Object.create(null);
+  ids.forEach(id => { byId[id] = new FakeElement("div", id); });
+  byId.fullBackupPreview.hidden = true;
+  byId.fullBackupSummary.hidden = true;
+  byId.fullBackupUnavailable.hidden = true;
+
+  const doc = {
+    readyState: "complete",
+    body: new FakeElement("body"),
+    getElementById: (id) => byId[id] || null,
+    createElement: (tag) => new FakeElement(tag),
+    createDocumentFragment: () => Object.assign(new FakeElement("fragment"), { isFragment: true }),
+    addEventListener: () => {}
+  };
+
+  let mode = "depRequired";
+  const fakeCore = {
+    SECTION_KEYS: ["history", "cardNotes", "customSpreads", "aiChats", "preferences"],
+    MAX_BACKUP_BYTES: 16 * 1024 * 1024,
+    async inspectLocalCounts() {
+      return { history: 1, cardNotes: 0, customSpreads: 0, aiChats: 0, preferences: 2, unavailable: [] };
+    },
+    parseBackup() {
+      return {
+        format: "quareia-full-backup",
+        version: 1,
+        exportedAt: "2026-11-28T06:00:00.000Z",
+        sections: {
+          history: { records: [{}] },
+          aiChats: { conversations: [{}] },
+          preferences: { theme: "parchment", locale: "en" }
+        },
+        counts: { history: 1, cardNotes: 0, customSpreads: 0, aiChats: 1, preferences: 2 },
+        availableSections: ["history", "aiChats", "preferences"]
+      };
+    },
+    async restoreBackup() {
+      if (mode === "depRequired") {
+        return {
+          status: "failed",
+          succeededSections: [],
+          failedSections: [{ section: "aiChats", code: "history_dependency_required", message: "aiChats: colliding history required first" }],
+          restored: { aiChats: { imported: 0, updated: 0, skipped: 0 } },
+          appliedPreferences: {},
+          warnings: ["aiChats: colliding history required first"]
+        };
+      }
+      if (mode === "depFailed") {
+        return {
+          status: "failed",
+          succeededSections: [],
+          failedSections: [
+            { section: "history", code: "storage_limit", message: "history: max 5000 records reached" },
+            { section: "aiChats", code: "history_dependency_failed", message: "aiChats: deferred after history failure" }
+          ],
+          restored: {
+            history: { imported: 0, remapped: 0, skipped: 0 },
+            aiChats: { imported: 0, updated: 0, skipped: 0 }
+          },
+          appliedPreferences: {},
+          warnings: ["history: max 5000 records reached", "aiChats: deferred after history failure"]
+        };
+      }
+      return {
+        status: "failed",
+        succeededSections: [],
+        failedSections: [{ section: "preferences", code: "preferences_persist_failed", message: "preferences: QuotaExceededError" }],
+        restored: { preferences: { theme: null, locale: null, applied: 0 } },
+        appliedPreferences: {},
+        warnings: ["preferences: QuotaExceededError"]
+      };
+    }
+  };
+
+  const i18n = require("../js/i18n.js");
+  i18n.setLocale("zh-CN");
+  const context = {
+    document: doc,
+    setTimeout,
+    addEventListener: () => {},
+    dispatchEvent: () => {},
+    CustomEvent: function (type, init) { this.type = type; this.detail = init && init.detail; },
+    DivinationI18n: i18n,
+    DivinationTheme: { getTheme: () => "celestial" },
+    DivinationFullBackup: fakeCore
+  };
+  vm.runInNewContext(read("js/full-backup-ui.js"), context, { filename: "full-backup-ui.js" });
+
+  const ui = context.DivinationFullBackupUi;
+  const settle = () => new Promise(r => setImmediate(r));
+  const getBox = (sec) => byId.fullBackupPreviewList.children
+    .map(li => li.children[0].children[0])
+    .find(box => box.dataset.backupSection === sec);
+
+  byId.fullBackupOpenBtn.click();
+  await settle();
+  byId.fullBackupImportInput.files = [{ name: "dep.json", size: 100, text: async () => "{}" }];
+  byId.fullBackupImportInput.dispatch("change");
+  await settle();
+
+  // 1) history_dependency_required (aiChats only)
+  getBox("history").checked = false; getBox("history").dispatch("change");
+  getBox("preferences").checked = false; getBox("preferences").dispatch("change");
+  mode = "depRequired";
+  byId.fullBackupConfirmBtn.click();
+  await settle();
+  assert.equal(byId.fullBackupStatus.classList.contains("is-error"), true);
+  assert.match(byId.fullBackupStatus.textContent, /需要先恢复占卜历史/);
+  assert.equal(byId.fullBackupPreview.hidden, false);
+  assert.equal(byId.fullBackupSummaryList.children.length, 1);
+  assert.equal(byId.fullBackupSummaryList.children[0].dataset.backupFailureCode, "history_dependency_required");
+  assert.match(byId.fullBackupSummaryList.children[0].textContent, /需要先恢复占卜历史/);
+  i18n.setLocale("en");
+  ui.refreshLanguage();
+  assert.match(byId.fullBackupStatus.textContent, /Reading History required first/);
+  assert.match(byId.fullBackupSummaryList.children[0].textContent, /Reading History required first/);
+
+  // 2) history_dependency_failed (history + aiChats both fail)
+  getBox("history").checked = true; getBox("history").dispatch("change");
+  mode = "depFailed";
+  byId.fullBackupConfirmBtn.click();
+  await settle();
+  assert.equal(byId.fullBackupStatus.classList.contains("is-error"), true);
+  assert.equal(byId.fullBackupPreview.hidden, false);
+  assert.equal(byId.fullBackupSummaryList.children.length, 2);
+  assert.equal(byId.fullBackupSummaryList.children[1].dataset.backupFailureCode, "history_dependency_failed");
+  assert.match(byId.fullBackupSummaryList.children[1].textContent, /Deferred: colliding Reading History/);
+  i18n.setLocale("zh-CN");
+  ui.refreshLanguage();
+  assert.match(byId.fullBackupSummaryList.children[1].textContent, /已暂缓恢复：关联的冲突占卜历史/);
+
+  // 3) preferences_persist_failed
+  getBox("history").checked = false; getBox("history").dispatch("change");
+  getBox("aiChats").checked = false; getBox("aiChats").dispatch("change");
+  getBox("preferences").checked = true; getBox("preferences").dispatch("change");
+  mode = "prefsFailed";
+  byId.fullBackupConfirmBtn.click();
+  await settle();
+  assert.equal(byId.fullBackupStatus.classList.contains("is-error"), true);
+  assert.match(byId.fullBackupStatus.textContent, /无法将主题或语言偏好写入本机存储/);
+  assert.equal(byId.fullBackupPreview.hidden, false);
+  assert.equal(getBox("preferences").checked, true);
+  assert.equal(byId.fullBackupSummaryList.children.length, 1);
+  assert.equal(byId.fullBackupSummaryList.children[0].dataset.backupFailureCode, "preferences_persist_failed");
+  i18n.setLocale("en");
+  ui.refreshLanguage();
+  assert.match(byId.fullBackupStatus.textContent, /Could not save Theme\/Language preferences/);
 });

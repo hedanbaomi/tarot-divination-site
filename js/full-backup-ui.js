@@ -12,6 +12,11 @@
     dusk: "theme.dusk",
     ash: "theme.ash"
   };
+  var FAILURE_CODE_I18N_KEYS = {
+    history_dependency_failed: "fullBackup.failure.historyDependencyFailed",
+    history_dependency_required: "fullBackup.failure.historyDependencyRequired",
+    preferences_persist_failed: "fullBackup.failure.preferencesPersistFailed"
+  };
 
   function buildFileName(date) {
     var d = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
@@ -290,6 +295,19 @@
         return text.slice(prefix.length).trim();
       }
       return text;
+    }
+
+    function failureCodeI18nKey(failure) {
+      if (failure && typeof failure.code === "string" && Object.prototype.hasOwnProperty.call(FAILURE_CODE_I18N_KEYS, failure.code)) {
+        return FAILURE_CODE_I18N_KEYS[failure.code];
+      }
+      return "";
+    }
+
+    function formatFailureReason(sectionKey, failure) {
+      var codeKey = failureCodeI18nKey(failure);
+      if (codeKey) return t(codeKey);
+      return stripSectionPrefix(sectionKey, failure && failure.message);
     }
 
     function resolveRestoreStatus(outcome, selectedSections) {
@@ -667,15 +685,17 @@
       selected.forEach(function (key) {
         var failure = resolved.failedBySection && resolved.failedBySection[key];
         if (failure) {
-          var reason = stripSectionPrefix(key, failure.message);
+          var rawReason = stripSectionPrefix(key, failure.message);
+          var reason = formatFailureReason(key, failure);
           var failLi = doc.createElement("li");
           failLi.className = "full-backup-summary-error";
           failLi.dataset.backupSummarySection = key;
+          if (failure.code) failLi.dataset.backupFailureCode = failure.code;
           failLi.textContent = reason
             ? t("fullBackup.summary.sectionFailed", { section: sectionDisplayName(key), reason: reason })
             : t("fullBackup.summary.sectionFailedGeneric", { section: sectionDisplayName(key) });
           fragment.appendChild(failLi);
-          if (reason) coveredFailureMessages[key + ":" + reason] = true;
+          if (rawReason) coveredFailureMessages[key + ":" + rawReason] = true;
           return;
         }
         var text = formatSectionSummaryLine(key, restored[key], appliedPreferences);
@@ -688,8 +708,14 @@
       warnings.forEach(function (warning) {
         var rawWarning = String(warning);
         var match = rawWarning.match(/^(history|cardNotes|customSpreads|aiChats|preferences)\s*:\s*(.*)$/);
-        if (match && coveredFailureMessages[match[1] + ":" + match[2].trim()]) {
-          return;
+        if (match) {
+          var secKey = match[1];
+          var stripped = match[2].trim();
+          var sectionFailure = resolved.failedBySection && resolved.failedBySection[secKey];
+          if (coveredFailureMessages[secKey + ":" + stripped] ||
+              (sectionFailure && failureCodeI18nKey(sectionFailure))) {
+            return;
+          }
         }
         var li = doc.createElement("li");
         li.className = "full-backup-summary-warning";
@@ -839,7 +865,10 @@
           // Keep preview and selected checkboxes open so the user can retry immediately.
           renderPreview();
           renderRestoreSummary();
-          setStatus("fullBackup.restoreAllFailed", null, "error");
+          var singleFailureKey = resolved.failedSections.length === 1
+            ? failureCodeI18nKey(resolved.failedSections[0])
+            : "";
+          setStatus(singleFailureKey || "fullBackup.restoreAllFailed", null, "error");
         } else if (resolved.status === "partial") {
           // Keep preview open with ONLY the failed section(s) checked for one-click retry.
           var available = Array.isArray(pendingBackup.availableSections)
