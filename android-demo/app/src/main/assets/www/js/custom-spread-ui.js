@@ -1278,10 +1278,18 @@
     syncFieldsFromDraft();
     renderLibrary();
 
+    function importCodeIntoLibrary(code) {
+      var imported = library.importCode(code);
+      renderLibrary();
+      onCatalogueChange();
+      return imported;
+    }
+
     activeController = {
       list: library.list,
       getById: library.getById,
       exportCode: library.exportCode,
+      importCode: importCodeIntoLibrary,
       open: openDialog,
       refreshLanguage: refreshLanguage,
       handleBack: handleBack
@@ -1291,6 +1299,22 @@
 
   global.DivinationCustomSpreadUi = {
     init: init,
+    list: function () {
+      return activeController ? activeController.list() : [];
+    },
+    getById: function (id) {
+      return activeController ? activeController.getById(id) : null;
+    },
+    exportCode: function (id) {
+      return activeController ? activeController.exportCode(id) : null;
+    },
+    importCode: function (code) {
+      if (!activeController) throw new Error("Custom spread UI is not initialized");
+      return activeController.importCode(code);
+    },
+    hasActiveController: function () {
+      return Boolean(activeController);
+    },
     handleBack: function () {
       return activeController ? activeController.handleBack() : false;
     }

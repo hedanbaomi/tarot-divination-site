@@ -11,6 +11,7 @@
       global.DivinationDialog,
       global.DivinationCustomSelects,
       global.DivinationTelemetryNotice,
+      global.DivinationFullBackupUi,
       global.DivinationCustomSpreadUi,
       global.DivinationHistoryUi,
       global.DivinationMenu,
